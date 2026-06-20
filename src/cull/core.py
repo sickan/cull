@@ -47,27 +47,23 @@ def extrahera_previews_batch(nef_filer, ut_dir):
     Returnerar dict: nef_path -> jpg_path (eller None om misslyckades).
     """
     ut_dir = Path(ut_dir)
-    fmt = str(ut_dir / "%f.jpg")
 
-    def kör(filer, tag):
-        # Max ~500 filer per anrop för att undvika ARG_MAX
-        for i in range(0, len(filer), 500):
+    def extrahera_en(nef):
+        ut = ut_dir / (nef.stem + ".jpg")
+        for tag in ("-JpgFromRaw", "-PreviewImage"):
             subprocess.run(
-                ["exiftool", "-b", tag, "-w!", fmt,
-                 *[str(f) for f in filer[i:i + 500]]],
-                stdout=subprocess.DEVNULL,
+                ["exiftool", "-b", tag, str(nef)],
+                stdout=open(ut, "wb"),
                 stderr=subprocess.DEVNULL,
             )
+            if ut.exists() and ut.stat().st_size > 10_000:
+                return
+        # Filen är för liten eller saknas — ta bort skräpet
+        if ut.exists():
+            ut.unlink()
 
-    # Pass 1: JpgFromRaw (full preview på Nikon)
-    kör(nef_filer, "-JpgFromRaw")
-
-    # Pass 2: PreviewImage för de som saknas eller är för små
-    saknas = [n for n in nef_filer
-              if not (ut_dir / (n.stem + ".jpg")).exists()
-              or (ut_dir / (n.stem + ".jpg")).stat().st_size < 10_000]
-    if saknas:
-        kör(saknas, "-PreviewImage")
+    with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
+        list(ex.map(extrahera_en, nef_filer))
 
     return {
         nef: (ut_dir / (nef.stem + ".jpg"))
@@ -172,9 +168,13 @@ def main():
             futures = {ex.submit(_score_en, (nef, jpg)): nef
                        for nef, jpg in giltiga}
             for future in as_completed(futures):
-                nef, p = future.result()
                 klar += 1
                 print(f"  …{klar}/{len(giltiga)}", flush=True)
+                try:
+                    nef, p = future.result()
+                except Exception as e:
+                    print(f"  Fel vid poängsättning: {e}", flush=True)
+                    continue
                 if p is None:
                     continue
                 tid_str = tider.get(nef.name, "")
