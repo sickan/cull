@@ -132,6 +132,19 @@ def hitta_uppdrag_filterpix(root):
 
 # --- Feature-extraktion -------------------------------------------------------
 
+def ar_online_only(path):
+    """
+    True om filen bara finns i molnet (Dropbox/iCloud), inte lokalt.
+    Online-only-filer har 0 allokerade block trots full logisk storlek —
+    detekteras utan att trigga nedladdning.
+    """
+    try:
+        st = path.stat()
+        return st.st_size > 0 and getattr(st, "st_blocks", 1) == 0
+    except OSError:
+        return True
+
+
 def _las_bild(path, env):
     """Läser en JPG direkt, eller extraherar preview ur en NEF. BGR ≤1600px."""
     import cv2
@@ -168,11 +181,15 @@ def features_for_uppdrag(items, modeller, env, progress_namn=""):
     nima = modeller.get("estetik")
 
     X, y = [], []
+    n_online = [0]
     BATCH = 16
     for start in range(0, len(items), BATCH):
         del_items = items[start:start + BATCH]
         bilder, labels = [], []
         for path, lab in del_items:
+            if ar_online_only(path):
+                n_online[0] += 1
+                continue
             img = _las_bild(path, env)
             if img is not None:
                 bilder.append(img)
@@ -194,6 +211,9 @@ def features_for_uppdrag(items, modeller, env, progress_namn=""):
             y.append(lab)
         print(f"    {progress_namn} …{min(start + BATCH, len(items))}/{len(items)}",
               flush=True)
+    if n_online[0]:
+        print(f"    ⚠ {n_online[0]}/{len(items)} bilder online-only (ej "
+              f"nedladdade i Dropbox) — hoppade över.", flush=True)
     return np.array(X, float), np.array(y, int)
 
 
@@ -215,7 +235,7 @@ def _exiftool_env():
 # --- Träning ------------------------------------------------------------------
 
 def traina(root, yolo_modell="yolo11s.pt", rapport=False,
-           max_neg=150, max_uppdrag=None):
+           max_neg=150, max_uppdrag=None, kontroll_bara=False):
     uppdrag = hitta_uppdrag_export(root)
     kalla = "export (Instagram)"
     if not uppdrag:
@@ -227,6 +247,34 @@ def traina(root, yolo_modell="yolo11s.pt", rapport=False,
     if max_uppdrag:
         uppdrag = uppdrag[:max_uppdrag]
     print(f"Hittade {len(uppdrag)} uppdrag ({kalla}).", flush=True)
+
+    # Förkontroll: online-only-tillgänglighet per uppdrag (ingen nedladdning).
+    tillg, helt_online = [], []
+    for namn, items in uppdrag:
+        n = len(items)
+        n_online = sum(1 for p, _ in items if ar_online_only(p))
+        if n_online == n:
+            helt_online.append(namn)
+        elif n_online > 0:
+            tillg.append((namn, n - n_online, n))
+    if helt_online:
+        print(f"\n⚠ {len(helt_online)} uppdrag är HELT online-only och hoppas "
+              f"över — gör dem offline i Dropbox för att inkludera dem:",
+              flush=True)
+        for namn in helt_online[:20]:
+            print(f"    · {namn}", flush=True)
+        if len(helt_online) > 20:
+            print(f"    … och {len(helt_online) - 20} till", flush=True)
+    if tillg:
+        print(f"\n⚠ {len(tillg)} uppdrag delvis online-only "
+              f"(bara lokala bilder används).", flush=True)
+    n_anv = len(uppdrag) - len(helt_online)
+    print(f"\n{n_anv}/{len(uppdrag)} uppdrag har lokala bilder att träna på.",
+          flush=True)
+    if kontroll_bara:
+        return
+    if n_anv == 0:
+        sys.exit("Inga lokala bilder att träna på — gör Dropbox-mappar offline.")
 
     # Balansera: behåll alla positiva + slumpsample negativa per uppdrag.
     random.seed(0)
@@ -319,10 +367,12 @@ def main():
                     help="begränsa antal uppdrag (för test)")
     ap.add_argument("--rapport", action="store_true",
                     help="visa analys men spara ingen modell")
+    ap.add_argument("--kolla", action="store_true",
+                    help="visa bara online-only-status, träna inte")
     args = ap.parse_args()
     traina(Path(args.root).expanduser(), yolo_modell=args.yolo,
            rapport=args.rapport, max_neg=args.max_neg,
-           max_uppdrag=args.max_uppdrag)
+           max_uppdrag=args.max_uppdrag, kontroll_bara=args.kolla)
 
 
 if __name__ == "__main__":
