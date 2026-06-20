@@ -1,5 +1,6 @@
 """Grafiskt gränssnitt för cull — välj katalog och kriterier, se output live."""
 
+import os
 import subprocess
 import sys
 import threading
@@ -229,12 +230,15 @@ def main():
                 root.after(0, uppdatera_progress, int(m.group(1)), int(m.group(2)))
 
         def kör_process():
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                env=env,
             )
             for rad in proc.stdout:
                 root.after(0, hantera_rad, rad)

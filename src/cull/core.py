@@ -126,7 +126,8 @@ def main():
         for i, nef in enumerate(nef_filer, 1):
             preview = extrahera_preview(nef, tmp)
             if preview is None:
-                print(f"  [{i}/{len(nef_filer)}] {nef.name}: ingen preview, hoppar")
+                print(f"  [{i}/{len(nef_filer)}] {nef.name}: ingen preview, hoppar",
+                      flush=True)
                 continue
             p = bas.poangsatt(preview)
             if p is None:
@@ -160,9 +161,7 @@ def main():
                 "tid":        tid_str,
             })
             resultat.append(p)
-
-            if i % 25 == 0:
-                print(f"  …{i}/{len(nef_filer)}")
+            print(f"  …{i}/{len(nef_filer)}", flush=True)
 
     if not resultat:
         sys.exit("Inget kunde poängsättas.")
