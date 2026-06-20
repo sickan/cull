@@ -4,13 +4,19 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cull"
-version = "0.1.0"
+version = "0.2.0"
 description = "Teknisk culling av NEF-filer — skärpa, exponering och ögon-kvalitet"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "opencv-python",
     "numpy",
+]
+
+[project.optional-dependencies]
+ai = [
+    "ultralytics>=8.0",
+    "mediapipe>=0.10",
 ]
 
 [project.scripts]

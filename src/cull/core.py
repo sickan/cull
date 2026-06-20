@@ -2,18 +2,21 @@
 """
 cull — teknisk culling av NEF-uppdrag (macOS)
 
-Går igenom en uppdragskatalog med NEF-filer, extraherar den inbäddade
-JPEG-previewen ur varje fil, poängsätter på skärpa / exponering / ögon,
-grupperar burst-serier och kopierar topp-urvalet (original-NEF) till en
-undermapp 'urval/'.
+Extraherar inbäddad JPEG-preview ur varje NEF, poängsätter på skärpa /
+exponering / ögon och kopierar topp-urvalet till urval/.
+
+Valfritt AI-lager (--ai) aktiverar YOLOv8 + MediaPipe för att ge bonus
+till bilder med armar i luften (målgest), synlig boll och hemmalagsfärg.
 
 Krav:
-  - exiftool      (brew install exiftool)
-  - opencv-python (pip install opencv-python numpy)
+  exiftool (brew install exiftool)
+  opencv-python, numpy (ingår)
+
+AI-tillägg (valfritt):
+  pip install 'cull[ai]'   eller   pipx inject cull ultralytics mediapipe
 """
 
 import argparse
-import os
 import shutil
 import subprocess
 import sys
@@ -26,6 +29,21 @@ try:
 except ImportError:
     sys.exit("Saknar opencv/numpy. Kör: pip install opencv-python numpy")
 
+# --- färgnamn → HSV-intervall (lower, upper) --------------------------------
+
+FARG_HSV = {
+    "röd":    ([0,   100, 100], [10,  255, 255]),
+    "mörkröd":([170, 100, 100], [180, 255, 255]),
+    "blå":    ([100, 100,  80], [130, 255, 255]),
+    "ljusblå":([85,  80,  80], [105, 255, 255]),
+    "gul":    ([20,  100, 100], [35,  255, 255]),
+    "grön":   ([40,  80,  80],  [80,  255, 255]),
+    "vit":    ([0,   0,   180], [180,  30, 255]),
+    "svart":  ([0,   0,   0],   [180, 255,  60]),
+    "orange": ([10,  150, 150], [20,  255, 255]),
+    "lila":   ([130, 80,  80],  [160, 255, 255]),
+}
+
 
 def kontrollera_exiftool():
     if shutil.which("exiftool") is None:
@@ -33,7 +51,6 @@ def kontrollera_exiftool():
 
 
 def extrahera_preview(nef_path, ut_dir):
-    """Plocka största inbäddade JPEG-previewen ur en NEF."""
     ut = Path(ut_dir) / (Path(nef_path).stem + ".jpg")
     for tag in ("-JpgFromRaw", "-PreviewImage"):
         subprocess.run(
@@ -46,12 +63,10 @@ def extrahera_preview(nef_path, ut_dir):
 
 
 def skarpa(gray):
-    """Laplacian-varians — högre = skarpare."""
     return cv2.Laplacian(gray, cv2.CV_64F).var()
 
 
 def exponering(gray):
-    """Straffa urblåst och nedsupen bild. Returnerar 0..1 där 1 är bäst."""
     hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten()
     total = hist.sum()
     klippt_hog = hist[250:].sum() / total
@@ -62,20 +77,19 @@ def exponering(gray):
 
 
 def ogon_ansikten(gray):
-    """Grov detektion: ansikten + öppna ögon. Bonus, inget krav."""
-    f_cascade = cv2.CascadeClassifier(
+    f_cas = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    e_cascade = cv2.CascadeClassifier(
+    e_cas = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_eye.xml")
-    ansikten = f_cascade.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
-    ogon = 0
-    for (x, y, w, h) in ansikten:
-        roi = gray[y:y + h, x:x + w]
-        ogon += len(e_cascade.detectMultiScale(roi, 1.1, 6))
+    ansikten = f_cas.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
+    ogon = sum(
+        len(e_cas.detectMultiScale(gray[y:y+h, x:x+w], 1.1, 6))
+        for (x, y, w, h) in ansikten
+    )
     return len(ansikten), ogon
 
 
-def poangsatt(jpg_path):
+def bas_poangsatt(jpg_path):
     img = cv2.imread(str(jpg_path))
     if img is None:
         return None
@@ -84,21 +98,99 @@ def poangsatt(jpg_path):
         s = 1600 / max(h, w)
         img = cv2.resize(img, (int(w * s), int(h * s)))
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    sk = skarpa(gray)
-    ex = exponering(gray)
-    n_ansikten, n_ogon = ogon_ansikten(gray)
-
+    n_ans, n_ogon = ogon_ansikten(gray)
     return {
-        "skarpa": sk,
-        "exp": ex,
-        "ansikten": n_ansikten,
-        "ogon": n_ogon,
+        "skarpa":   skarpa(gray),
+        "exp":      exponering(gray),
+        "ansikten": n_ans,
+        "ogon":     n_ogon,
+        "_img":     img,
     }
 
 
+# --- AI-lager ----------------------------------------------------------------
+
+def ladda_ai_modeller():
+    """Returnerar (yolo, pose) eller avslutar med felmeddelande."""
+    try:
+        from ultralytics import YOLO
+    except ImportError:
+        sys.exit("AI-läget kräver ultralytics: pipx inject cull ultralytics mediapipe")
+    try:
+        import mediapipe as mp
+    except ImportError:
+        sys.exit("AI-läget kräver mediapipe: pipx inject cull ultralytics mediapipe")
+
+    yolo = YOLO("yolov8n.pt")          # laddas ned automatiskt första gången (~6 MB)
+    pose = mp.solutions.pose.Pose(
+        static_image_mode=True,
+        model_complexity=1,
+        min_detection_confidence=0.4,
+    )
+    return yolo, pose
+
+
+def armar_uppe(pose_results, img_h):
+    """
+    True om minst en person har båda handlederna ovanför axlarna.
+    Används som indikator på målgest / firande.
+    """
+    if not pose_results.pose_landmarks:
+        return False
+    lm = pose_results.pose_landmarks.landmark
+
+    import mediapipe as mp
+    PL = mp.solutions.pose.PoseLandmark
+    try:
+        # y ökar nedåt i bild-koordinater
+        v_axel = (lm[PL.LEFT_SHOULDER].y + lm[PL.RIGHT_SHOULDER].y) / 2
+        v_hand  = min(lm[PL.LEFT_WRIST].y, lm[PL.RIGHT_WRIST].y)
+        return v_hand < v_axel - 0.05   # händerna klart ovanför axellinje
+    except Exception:
+        return False
+
+
+def hemma_farg_andel(img_bgr, farg_namn):
+    """
+    Andel pixlar i bilden som matchar hemmalagsfärgen (0..1).
+    Söker i den nedre 2/3-delen (spelare, inte himmel/publik).
+    """
+    if farg_namn not in FARG_HSV:
+        return 0.0
+    lo, hi = [np.array(x, np.uint8) for x in FARG_HSV[farg_namn]]
+    h = img_bgr.shape[0]
+    roi = img_bgr[h // 3:, :]
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, lo, hi)
+    return mask.sum() / 255 / mask.size
+
+
+def ai_bonus(img_bgr, yolo, pose, hemma_farg):
+    """Returnerar en dict med AI-baserade bonusvärden."""
+    bonus = {"armar": 0.0, "boll": 0.0, "hemma": 0.0}
+
+    # YOLOv8 — leta efter boll (klass 32) och spelare (klass 0)
+    results = yolo(img_bgr, verbose=False)[0]
+    klasser = results.boxes.cls.tolist() if results.boxes else []
+    bonus["boll"] = 0.08 if 32 in klasser else 0.0
+
+    # MediaPipe Pose — armar uppe?
+    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    pose_res = pose.process(rgb)
+    if armar_uppe(pose_res, img_bgr.shape[0]):
+        bonus["armar"] = 0.15
+
+    # Hemmalagsfärg
+    if hemma_farg:
+        andel = hemma_farg_andel(img_bgr, hemma_farg)
+        bonus["hemma"] = min(andel * 2, 0.08)   # max +0.08
+
+    return bonus
+
+
+# --- huvud -------------------------------------------------------------------
+
 def parse_tid(s):
-    """Tolka SubSecDateTimeOriginal till ett Unix-timestamp."""
     try:
         from datetime import datetime
         s = s.replace(":", "-", 2)
@@ -110,18 +202,21 @@ def parse_tid(s):
 def main():
     ap = argparse.ArgumentParser(
         prog="cull",
-        description="Teknisk culling av NEF-filer — väljer skärpa, exponering och ögon-kvalitet.",
+        description="Teknisk culling av NEF-filer.",
     )
-    ap.add_argument("katalog", help="Sökväg till uppdragskatalogen med NEF-filer")
-    ap.add_argument("--topp", type=int, default=None, metavar="N",
-                    help="behåll de N bästa bilderna")
-    ap.add_argument("--andel", type=float, default=0.20, metavar="X",
-                    help="behåll denna andel om --topp ej satt (default: 0.20)")
-    ap.add_argument("--burst-sek", type=float, default=2.0, metavar="S",
-                    help="bilder inom S sekunder räknas som samma serie (default: 2.0)")
-    ap.add_argument("--rapport", action="store_true",
-                    help="poängsätt och skriv lista utan att kopiera något")
+    ap.add_argument("katalog")
+    ap.add_argument("--topp",      type=int,   default=None)
+    ap.add_argument("--andel",     type=float, default=0.20)
+    ap.add_argument("--burst-sek", type=float, default=2.0)
+    ap.add_argument("--rapport",   action="store_true")
+    ap.add_argument("--ai",        action="store_true",
+                    help="aktivera YOLOv8 + MediaPipe (kräver 'cull[ai]')")
+    ap.add_argument("--hemma-farg", default=None, metavar="FÄRG",
+                    help=f"hemmalagsfärg: {', '.join(FARG_HSV)}")
     args = ap.parse_args()
+
+    if args.hemma_farg and not args.ai:
+        print("Tips: --hemma-farg har effekt bara tillsammans med --ai.")
 
     kontrollera_exiftool()
     katalog = Path(args.katalog).expanduser()
@@ -133,6 +228,10 @@ def main():
         sys.exit("Inga NEF-filer i katalogen.")
 
     print(f"{len(nef_filer)} NEF hittade. Extraherar previews och poängsätter…")
+    if args.ai:
+        print("Laddar AI-modeller (YOLOv8 + MediaPipe)…")
+        yolo, pose = ladda_ai_modeller()
+        print("AI-modeller redo.\n")
 
     r = subprocess.run(
         ["exiftool", "-T", "-FileName", "-SubSecDateTimeOriginal",
@@ -152,9 +251,18 @@ def main():
             if preview is None:
                 print(f"  [{i}/{len(nef_filer)}] {nef.name}: ingen preview, hoppar")
                 continue
-            p = poangsatt(preview)
+            p = bas_poangsatt(preview)
             if p is None:
                 continue
+
+            if args.ai:
+                img = p.pop("_img")
+                bonusar = ai_bonus(img, yolo, pose, args.hemma_farg)
+                p.update(bonusar)
+            else:
+                p.pop("_img", None)
+                p.update({"armar": 0.0, "boll": 0.0, "hemma": 0.0})
+
             p["fil"] = nef
             p["tid"] = tider.get(nef.name, "")
             resultat.append(p)
@@ -164,8 +272,9 @@ def main():
     if not resultat:
         sys.exit("Inget kunde poängsättas.")
 
-    sk_varden = np.array([r["skarpa"] for r in resultat])
-    lo, hi = np.percentile(sk_varden, 5), np.percentile(sk_varden, 95)
+    # normalisera skärpa globalt
+    sk = np.array([r["skarpa"] for r in resultat])
+    lo, hi = np.percentile(sk, 5), np.percentile(sk, 95)
     spann = max(hi - lo, 1e-6)
     for r in resultat:
         r["skarpa_n"] = float(np.clip((r["skarpa"] - lo) / spann, 0, 1))
@@ -174,13 +283,20 @@ def main():
         ogon_bonus = 0.0
         if r["ansikten"] > 0:
             ogon_bonus = min(r["ogon"] / (r["ansikten"] * 2), 1.0) * 0.10
-        r["poang"] = 0.55 * r["skarpa_n"] + 0.35 * r["exp"] + ogon_bonus
+        r["poang"] = (
+            0.55 * r["skarpa_n"]
+            + 0.35 * r["exp"]
+            + ogon_bonus
+            + r["armar"]
+            + r["boll"]
+            + r["hemma"]
+        )
 
+    # burst-gruppering
     har_tid = all(parse_tid(r["tid"]) is not None for r in resultat)
     if har_tid:
         resultat.sort(key=lambda r: parse_tid(r["tid"]))
-        grupp = 0
-        forra = None
+        grupp, forra = 0, None
         for r in resultat:
             t = parse_tid(r["tid"])
             if forra is not None and t - forra > args.burst_sek:
@@ -191,7 +307,7 @@ def main():
         for i, r in enumerate(resultat):
             r["grupp"] = i
 
-    n_total = len(resultat)
+    n_total  = len(resultat)
     n_behall = args.topp if args.topp else max(1, round(n_total * args.andel))
 
     basta_per_grupp = {}
@@ -209,12 +325,14 @@ def main():
         valda += rest[:n_behall - len(valda)]
     valda = valda[:n_behall]
 
-    print(f"\nBehåller {len(valda)} av {n_total} "
-          f"({len(basta_per_grupp)} burst-grupper).\n")
-
+    print(f"\nBehåller {len(valda)} av {n_total} ({len(basta_per_grupp)} burst-grupper).\n")
+    print("Topp-urval:")
     for r in sorted(valda, key=lambda r: r["poang"], reverse=True)[:40]:
+        ai_rad = (f"  armar={'ja' if r['armar'] else 'nej'}"
+                  f"  boll={'ja' if r['boll'] else 'nej'}"
+                  f"  hemma={r['hemma']:.2f}") if args.ai else ""
         print(f"  {r['poang']:.3f}  sk {r['skarpa_n']:.2f}  "
-              f"exp {r['exp']:.2f}  ans {r['ansikten']}  {r['fil'].name}")
+              f"exp {r['exp']:.2f}  ans {r['ansikten']}{ai_rad}  {r['fil'].name}")
 
     if args.rapport:
         print("\n(Rapportläge — inget kopierades.)")
