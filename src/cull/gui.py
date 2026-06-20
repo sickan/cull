@@ -334,7 +334,15 @@ def main():
                 progress_var.set(aktuell / total * 100)
                 räknare_var.set(f"{aktuell} / {total}")
 
+        # MediaPipe/TF Lite-telemetri (clearcut) loggar från en bakgrundstråd
+        # vid avstängning, efter att stderr-redirecten stängts. Ofarligt —
+        # filtreras bort så loggen hålls ren.
+        SKRAP = ("clearcut", "Source Location Trace", "portable_clearcut",
+                 "playlog/cplusplus", "Not valid for uploading")
+
         def hantera_rad(rad):
+            if any(s in rad for s in SKRAP):
+                return
             skriv(rad)
             rad_s = rad.strip()
 
