@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -120,11 +121,6 @@ def main():
         sys.exit("Inga NEF-filer i katalogen.")
 
     bevaka = set(args.bevaka.split(",")) if args.bevaka else set()
-
-    if args.ai:
-        devnull = os.open(os.devnull, os.O_WRONLY)
-        os.dup2(devnull, 2)
-        os.close(devnull)
 
     print(f"{len(nef_filer)} NEF hittade.", flush=True)
 
@@ -330,5 +326,16 @@ def main():
         print("XMP-sidecars skrivna med beskärning och upprätnning.")
 
 
+def _main_safe():
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        print("\n--- FELINFORMATION ---", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.exit(1)
+
+
 if __name__ == "__main__":
-    main()
+    _main_safe()

@@ -23,7 +23,7 @@ ocr = [
 ]
 
 [project.scripts]
-cull = "cull.core:main"
+cull = "cull.core:_main_safe"
 cull-gui = "cull.gui:main"
 
 [tool.hatch.build.targets.wheel]
