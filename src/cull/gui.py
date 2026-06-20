@@ -299,7 +299,6 @@ def visa_historik(fönster):
 def main():
     root = tk.Tk()
     root.title(ver.etikett())
-    root.resizable(False, False)
 
     # App-ikon (titelrad/aktivitetsfält)
     ikon = ver.ikon_path()
@@ -674,16 +673,21 @@ def main():
 
     knapp.configure(command=kor)
 
-    # Tvinga fram fönstret längst fram och centrera det (macOS-fix: Tk-fönster
-    # från en icke-bundlad Python hamnar annars bakom/utanför skärmen).
+    # Centrera och tvinga fram fönstret. OBS: sätt INTE resizable(False, False)
+    # på ett tomt fönster — på Tk 9.0/macOS låser det storleken till ~21x52 och
+    # innehåll som läggs till efteråt växer inte fönstret (osynlig app).
     root.update_idletasks()
-    b, h = root.winfo_width(), root.winfo_height()
+    w = max(root.winfo_reqwidth(), 600)
+    h = max(root.winfo_reqheight(), 700)
     sx, sy = root.winfo_screenwidth(), root.winfo_screenheight()
-    root.geometry(f"+{max(0, (sx - b) // 2)}+{max(0, (sy - h) // 3)}")
-    root.deiconify()
+    x = max(0, (sx - w) // 2)
+    y = max(0, (sy - h) // 3)
+    root.geometry(f"{w}x{h}+{x}+{y}")
+    root.minsize(w, h)
+    root.update()
     root.lift()
     root.attributes("-topmost", True)
-    root.after(800, lambda: root.attributes("-topmost", False))
+    root.after(1200, lambda: root.attributes("-topmost", False))
     try:
         root.focus_force()
     except Exception:
