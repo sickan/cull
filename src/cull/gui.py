@@ -6,14 +6,18 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, ttk
 
 FARGER = ["", "blå", "ljusblå", "röd", "mörkröd", "gul", "grön",
           "vit", "svart", "orange", "lila"]
 
-SETTINGS_PATH = Path.home() / ".config" / "cull" / "settings.json"
+CONFIG_DIR    = Path.home() / ".config" / "cull"
+SETTINGS_PATH = CONFIG_DIR / "settings.json"
+HISTORY_PATH  = CONFIG_DIR / "history.json"
 SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "bevaka", "avspark", "topp", "andel", "burst_sek"]
 
@@ -27,13 +31,39 @@ def ladda_installningar():
 
 
 def spara_installningar(vals):
-    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     data = {}
     for k in SETTINGS_KEYS:
         v = vals[k]
         data[k] = v.get() if hasattr(v, "get") else v
     with open(SETTINGS_PATH, "w") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def ladda_historik():
+    try:
+        with open(HISTORY_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def spara_historik(poster):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    with open(HISTORY_PATH, "w") as f:
+        json.dump(poster, f, indent=2, ensure_ascii=False)
+
+
+def lagg_till_historik(urval_mapp, antal):
+    """Lägger till en post överst; tar bort dubbletter och kapar till 50."""
+    poster = ladda_historik()
+    poster = [p for p in poster if p.get("path") != urval_mapp]
+    poster.insert(0, {
+        "path": urval_mapp,
+        "antal": antal,
+        "tid": time.time(),
+    })
+    spara_historik(poster[:50])
 
 
 def bygg_kommando(vals):
@@ -167,6 +197,86 @@ def visa_miniatyrer(fönster, urval_mapp, max_bilder=10):
     threading.Thread(target=ladda_i_bakgrunden, daemon=True).start()
 
 
+def oppna_i_finder(path):
+    if Path(path).exists():
+        subprocess.Popen(["open", str(path)])
+
+
+def visa_historik(fönster):
+    """Fönster med tidigare urval — visa miniatyrer eller öppna i Finder."""
+    poster = ladda_historik()
+
+    topp = tk.Toplevel(fönster)
+    topp.title("Historik — tidigare urval")
+    topp.geometry("620x420")
+
+    if not poster:
+        tk.Label(topp, text="Ingen historik ännu.",
+                 foreground="gray").pack(padx=20, pady=20)
+        return
+
+    canvas = tk.Canvas(topp, highlightthickness=0)
+    scroll = ttk.Scrollbar(topp, orient="vertical", command=canvas.yview)
+    canvas.configure(yscrollcommand=scroll.set)
+    scroll.pack(side="right", fill="y")
+    canvas.pack(side="left", fill="both", expand=True)
+
+    lista = ttk.Frame(canvas, padding=6)
+    canvas.create_window((0, 0), window=lista, anchor="nw")
+
+    def rita():
+        for w in lista.winfo_children():
+            w.destroy()
+        aktuella = ladda_historik()
+        for i, post in enumerate(aktuella):
+            p = post.get("path", "")
+            finns = Path(p).exists()
+            antal = post.get("antal", "?")
+            try:
+                datum = datetime.fromtimestamp(post["tid"]).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                datum = ""
+
+            rad = ttk.Frame(lista, padding=(0, 4))
+            rad.grid(row=2 * i, column=0, sticky="ew")
+
+            mapp = Path(p)
+            # Visa matchnamn (mappens förälder) + urval-mappens namn
+            rubrik = f"{mapp.parent.name}  ›  {mapp.name}"
+            fg = "black" if finns else "#aa0000"
+            ttk.Label(rad, text=rubrik, font=("Helvetica", 12, "bold"),
+                      foreground=fg).grid(row=0, column=0, columnspan=3, sticky="w")
+            info = f"{antal} bilder   ·   {datum}"
+            if not finns:
+                info += "   ·   (saknas)"
+            ttk.Label(rad, text=info, foreground="gray").grid(
+                row=1, column=0, columnspan=3, sticky="w")
+
+            knappar = ttk.Frame(rad)
+            knappar.grid(row=2, column=0, sticky="w", pady=(2, 0))
+            ttk.Button(knappar, text="Visa miniatyrer",
+                       command=lambda pp=p: visa_miniatyrer(fönster, pp),
+                       state="normal" if finns else "disabled").pack(side="left")
+            ttk.Button(knappar, text="Öppna i Finder",
+                       command=lambda pp=p: oppna_i_finder(pp),
+                       state="normal" if finns else "disabled").pack(
+                       side="left", padx=6)
+            ttk.Button(knappar, text="Ta bort",
+                       command=lambda pp=p: ta_bort(pp)).pack(side="left")
+
+            ttk.Separator(lista, orient="horizontal").grid(
+                row=2 * i + 1, column=0, sticky="ew", pady=2)
+
+        lista.update_idletasks()
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+    def ta_bort(path):
+        spara_historik([p for p in ladda_historik() if p.get("path") != path])
+        rita()
+
+    rita()
+
+
 def main():
     root = tk.Tk()
     root.title("cull")
@@ -295,6 +405,9 @@ def main():
     ttk.Button(f_knapp, text="Visa urval…",
                command=visa_befintligt_urval).pack(side="right", padx=6)
 
+    ttk.Button(f_knapp, text="Historik…",
+               command=lambda: visa_historik(root)).pack(side="right")
+
     # --- Logg ---
     f_logg = ttk.LabelFrame(root, text="Output", padding=8)
     f_logg.grid(row=4, column=0, sticky="nsew", **pad)
@@ -335,11 +448,12 @@ def main():
         totalt       = [0]
         pulsande     = [False]
         urval_mapp   = [None]   # fångar "kopierade till: <path>"
+        urval_antal  = [0]
 
         re_total    = re.compile(r"^(\d+) NEF hittade")
         re_framsteg = re.compile(r"…(\d+)/(\d+)")
         re_hoppar   = re.compile(r"\[(\d+)/(\d+)\]")
-        re_urval    = re.compile(r"kopierade till:\s*(.+)$")
+        re_urval    = re.compile(r"(\d+) NEF kopierade till:\s*(.+)$")
 
         PULS_START = ("Laddar AI", "Hämtar metadata", "Extraherar previews",
                       "AI-analys på topp")
@@ -395,7 +509,8 @@ def main():
                 return
             m = re_urval.search(rad_s)
             if m:
-                urval_mapp[0] = m.group(1).strip()
+                urval_antal[0] = int(m.group(1))
+                urval_mapp[0] = m.group(2).strip()
 
         def kör_process():
             env = os.environ.copy()
@@ -429,6 +544,7 @@ def main():
             ))
             root.after(0, lambda: knapp.configure(state="normal"))
             if ok and urval_mapp[0]:
+                lagg_till_historik(urval_mapp[0], urval_antal[0])
                 root.after(500, lambda: visa_miniatyrer(root, urval_mapp[0]))
 
         threading.Thread(target=kör_process, daemon=True).start()
