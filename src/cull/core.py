@@ -111,22 +111,26 @@ def bas_poangsatt(jpg_path):
 # --- AI-lager ----------------------------------------------------------------
 
 def ladda_ai_modeller():
-    """Returnerar (yolo, pose) eller avslutar med felmeddelande."""
+    """Returnerar (yolo, pose_eller_None)."""
     try:
         from ultralytics import YOLO
     except ImportError:
-        sys.exit("AI-läget kräver ultralytics: pipx inject cull ultralytics mediapipe")
+        sys.exit("AI-läget kräver ultralytics: pipx inject cull ultralytics")
+
+    yolo = YOLO("yolov8n.pt")
+
+    pose = None
     try:
         import mediapipe.solutions.pose as mp_pose
-    except ImportError:
-        sys.exit("AI-läget kräver mediapipe: pipx inject cull ultralytics mediapipe")
+        pose = mp_pose.Pose(
+            static_image_mode=True,
+            model_complexity=1,
+            min_detection_confidence=0.4,
+        )
+        print("MediaPipe Pose: aktivt")
+    except Exception as e:
+        print(f"MediaPipe Pose: ej tillgängligt ({e}) — armar-bonus inaktiverad")
 
-    yolo = YOLO("yolov8n.pt")          # laddas ned automatiskt första gången (~6 MB)
-    pose = mp_pose.Pose(
-        static_image_mode=True,
-        model_complexity=1,
-        min_detection_confidence=0.4,
-    )
     return yolo, pose
 
 
@@ -175,10 +179,11 @@ def ai_bonus(img_bgr, yolo, pose, hemma_farg):
     bonus["boll"] = 0.08 if 32 in klasser else 0.0
 
     # MediaPipe Pose — armar uppe?
-    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-    pose_res = pose.process(rgb)
-    if armar_uppe(pose_res, img_bgr.shape[0]):
-        bonus["armar"] = 0.15
+    if pose is not None:
+        rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        pose_res = pose.process(rgb)
+        if armar_uppe(pose_res, img_bgr.shape[0]):
+            bonus["armar"] = 0.15
 
     # Hemmalagsfärg
     if hemma_farg:
