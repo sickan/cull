@@ -42,28 +42,41 @@ def kontrollera_exiftool():
         sys.exit("Saknar exiftool. Kör: brew install exiftool")
 
 
-def extrahera_previews_batch(nef_filer, ut_dir):
+def extrahera_previews_batch(nef_filer, ut_dir, n_workers=N_WORKERS):
     """
-    Extraherar previews från alla NEF i ett fåtal exiftool-anrop.
-    Returnerar dict: nef_path -> jpg_path (eller None om misslyckades).
+    Extraherar previews parallellt. Returnerar dict: nef -> jpg_path | None.
     """
     ut_dir = Path(ut_dir)
+    totalt  = len(nef_filer)
+    klar    = 0
+    lock    = __import__("threading").Lock()
 
     def extrahera_en(nef):
+        nonlocal klar
         ut = ut_dir / (nef.stem + ".jpg")
         for tag in ("-JpgFromRaw", "-PreviewImage"):
-            subprocess.run(
-                ["exiftool", "-b", tag, str(nef)],
-                stdout=open(ut, "wb"),
-                stderr=subprocess.DEVNULL,
-            )
+            try:
+                with open(ut, "wb") as f:
+                    subprocess.run(
+                        ["exiftool", "-b", tag, str(nef)],
+                        stdout=f,
+                        stderr=subprocess.DEVNULL,
+                        timeout=30,
+                    )
+            except Exception:
+                pass
             if ut.exists() and ut.stat().st_size > 10_000:
-                return
-        # Filen är för liten eller saknas — ta bort skräpet
-        if ut.exists():
-            ut.unlink()
+                break
+        else:
+            if ut.exists():
+                ut.unlink()
 
-    with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
+        with lock:
+            klar += 1
+            if klar % 25 == 0 or klar == totalt:
+                print(f"  extraherar …{klar}/{totalt}", flush=True)
+
+    with ThreadPoolExecutor(max_workers=n_workers) as ex:
         list(ex.map(extrahera_en, nef_filer))
 
     return {
