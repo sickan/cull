@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cull"
+version = "0.1.0"
+description = "Teknisk culling av NEF-filer — skärpa, exponering och ögon-kvalitet"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python",
+    "numpy",
+]
+
+[project.scripts]
+cull = "cull.core:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cull"]

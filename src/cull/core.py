@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""
+cull — teknisk culling av NEF-uppdrag (macOS)
+
+Går igenom en uppdragskatalog med NEF-filer, extraherar den inbäddade
+JPEG-previewen ur varje fil, poängsätter på skärpa / exponering / ögon,
+grupperar burst-serier och kopierar topp-urvalet (original-NEF) till en
+undermapp 'urval/'.
+
+Krav:
+  - exiftool      (brew install exiftool)
+  - opencv-python (pip install opencv-python numpy)
+"""
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+try:
+    import cv2
+    import numpy as np
+except ImportError:
+    sys.exit("Saknar opencv/numpy. Kör: pip install opencv-python numpy")
+
+
+def kontrollera_exiftool():
+    if shutil.which("exiftool") is None:
+        sys.exit("Saknar exiftool. Kör: brew install exiftool")
+
+
+def extrahera_preview(nef_path, ut_dir):
+    """Plocka största inbäddade JPEG-previewen ur en NEF."""
+    ut = Path(ut_dir) / (Path(nef_path).stem + ".jpg")
+    for tag in ("-JpgFromRaw", "-PreviewImage"):
+        subprocess.run(
+            ["exiftool", "-b", tag, str(nef_path)],
+            stdout=open(ut, "wb"), stderr=subprocess.DEVNULL
+        )
+        if ut.exists() and ut.stat().st_size > 10000:
+            return ut
+    return None
+
+
+def skarpa(gray):
+    """Laplacian-varians — högre = skarpare."""
+    return cv2.Laplacian(gray, cv2.CV_64F).var()
+
+
+def exponering(gray):
+    """Straffa urblåst och nedsupen bild. Returnerar 0..1 där 1 är bäst."""
+    hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten()
+    total = hist.sum()
+    klippt_hog = hist[250:].sum() / total
+    klippt_lag = hist[:5].sum() / total
+    medel = gray.mean() / 255.0
+    straff = klippt_hog * 2.0 + klippt_lag * 1.5 + abs(medel - 0.45)
+    return max(0.0, 1.0 - straff)
+
+
+def ogon_ansikten(gray):
+    """Grov detektion: ansikten + öppna ögon. Bonus, inget krav."""
+    f_cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    e_cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_eye.xml")
+    ansikten = f_cascade.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
+    ogon = 0
+    for (x, y, w, h) in ansikten:
+        roi = gray[y:y + h, x:x + w]
+        ogon += len(e_cascade.detectMultiScale(roi, 1.1, 6))
+    return len(ansikten), ogon
+
+
+def poangsatt(jpg_path):
+    img = cv2.imread(str(jpg_path))
+    if img is None:
+        return None
+    h, w = img.shape[:2]
+    if max(h, w) > 1600:
+        s = 1600 / max(h, w)
+        img = cv2.resize(img, (int(w * s), int(h * s)))
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    sk = skarpa(gray)
+    ex = exponering(gray)
+    n_ansikten, n_ogon = ogon_ansikten(gray)
+
+    return {
+        "skarpa": sk,
+        "exp": ex,
+        "ansikten": n_ansikten,
+        "ogon": n_ogon,
+    }
+
+
+def parse_tid(s):
+    """Tolka SubSecDateTimeOriginal till ett Unix-timestamp."""
+    try:
+        from datetime import datetime
+        s = s.replace(":", "-", 2)
+        return datetime.fromisoformat(s.strip()).timestamp()
+    except Exception:
+        return None
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="cull",
+        description="Teknisk culling av NEF-filer — väljer skärpa, exponering och ögon-kvalitet.",
+    )
+    ap.add_argument("katalog", help="Sökväg till uppdragskatalogen med NEF-filer")
+    ap.add_argument("--topp", type=int, default=None, metavar="N",
+                    help="behåll de N bästa bilderna")
+    ap.add_argument("--andel", type=float, default=0.20, metavar="X",
+                    help="behåll denna andel om --topp ej satt (default: 0.20)")
+    ap.add_argument("--burst-sek", type=float, default=2.0, metavar="S",
+                    help="bilder inom S sekunder räknas som samma serie (default: 2.0)")
+    ap.add_argument("--rapport", action="store_true",
+                    help="poängsätt och skriv lista utan att kopiera något")
+    args = ap.parse_args()
+
+    kontrollera_exiftool()
+    katalog = Path(args.katalog).expanduser()
+    if not katalog.is_dir():
+        sys.exit(f"Hittar inte katalogen: {katalog}")
+
+    nef_filer = sorted(p for p in katalog.iterdir() if p.suffix.lower() == ".nef")
+    if not nef_filer:
+        sys.exit("Inga NEF-filer i katalogen.")
+
+    print(f"{len(nef_filer)} NEF hittade. Extraherar previews och poängsätter…")
+
+    r = subprocess.run(
+        ["exiftool", "-T", "-FileName", "-SubSecDateTimeOriginal",
+         *[str(p) for p in nef_filer]],
+        capture_output=True, text=True
+    )
+    tider = {}
+    for rad in r.stdout.strip().splitlines():
+        delar = rad.split("\t")
+        if len(delar) >= 2:
+            tider[delar[0]] = delar[1]
+
+    resultat = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, nef in enumerate(nef_filer, 1):
+            preview = extrahera_preview(nef, tmp)
+            if preview is None:
+                print(f"  [{i}/{len(nef_filer)}] {nef.name}: ingen preview, hoppar")
+                continue
+            p = poangsatt(preview)
+            if p is None:
+                continue
+            p["fil"] = nef
+            p["tid"] = tider.get(nef.name, "")
+            resultat.append(p)
+            if i % 25 == 0:
+                print(f"  …{i}/{len(nef_filer)}")
+
+    if not resultat:
+        sys.exit("Inget kunde poängsättas.")
+
+    sk_varden = np.array([r["skarpa"] for r in resultat])
+    lo, hi = np.percentile(sk_varden, 5), np.percentile(sk_varden, 95)
+    spann = max(hi - lo, 1e-6)
+    for r in resultat:
+        r["skarpa_n"] = float(np.clip((r["skarpa"] - lo) / spann, 0, 1))
+
+    for r in resultat:
+        ogon_bonus = 0.0
+        if r["ansikten"] > 0:
+            ogon_bonus = min(r["ogon"] / (r["ansikten"] * 2), 1.0) * 0.10
+        r["poang"] = 0.55 * r["skarpa_n"] + 0.35 * r["exp"] + ogon_bonus
+
+    har_tid = all(parse_tid(r["tid"]) is not None for r in resultat)
+    if har_tid:
+        resultat.sort(key=lambda r: parse_tid(r["tid"]))
+        grupp = 0
+        forra = None
+        for r in resultat:
+            t = parse_tid(r["tid"])
+            if forra is not None and t - forra > args.burst_sek:
+                grupp += 1
+            r["grupp"] = grupp
+            forra = t
+    else:
+        for i, r in enumerate(resultat):
+            r["grupp"] = i
+
+    n_total = len(resultat)
+    n_behall = args.topp if args.topp else max(1, round(n_total * args.andel))
+
+    basta_per_grupp = {}
+    for r in resultat:
+        g = r["grupp"]
+        if g not in basta_per_grupp or r["poang"] > basta_per_grupp[g]["poang"]:
+            basta_per_grupp[g] = r
+
+    valda = sorted(basta_per_grupp.values(), key=lambda r: r["poang"], reverse=True)
+    if len(valda) < n_behall:
+        rest = sorted(
+            [r for r in resultat if r not in valda],
+            key=lambda r: r["poang"], reverse=True
+        )
+        valda += rest[:n_behall - len(valda)]
+    valda = valda[:n_behall]
+
+    print(f"\nBehåller {len(valda)} av {n_total} "
+          f"({len(basta_per_grupp)} burst-grupper).\n")
+
+    for r in sorted(valda, key=lambda r: r["poang"], reverse=True)[:40]:
+        print(f"  {r['poang']:.3f}  sk {r['skarpa_n']:.2f}  "
+              f"exp {r['exp']:.2f}  ans {r['ansikten']}  {r['fil'].name}")
+
+    if args.rapport:
+        print("\n(Rapportläge — inget kopierades.)")
+        return
+
+    ut_dir = katalog / "urval"
+    ut_dir.mkdir(exist_ok=True)
+    for r in valda:
+        shutil.copy2(r["fil"], ut_dir / r["fil"].name)
+        xmp = r["fil"].with_suffix(".xmp")
+        if xmp.exists():
+            shutil.copy2(xmp, ut_dir / xmp.name)
+
+    print(f"\nKlart. {len(valda)} NEF kopierade till: {ut_dir}")
+
+
+if __name__ == "__main__":
+    main()
