@@ -105,7 +105,7 @@ def hamta_metadata(nef_filer):
 def _score_en(args):
     nef, jpg_path = args
     p = bas.poangsatt(jpg_path)
-    return nef, p
+    return nef, jpg_path, p
 
 
 def main():
@@ -180,7 +180,7 @@ def main():
                 klar += 1
                 print(f"  …{klar}/{len(giltiga)}", flush=True)
                 try:
-                    nef, p = future.result()
+                    nef, jpg, p = future.result()
                 except Exception as e:
                     print(f"  Fel vid poängsättning: {e}", flush=True)
                     continue
