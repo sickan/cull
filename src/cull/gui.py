@@ -285,6 +285,16 @@ def main():
     knapp = ttk.Button(f_knapp, text="Kör cull")
     knapp.pack(side="right")
 
+    def visa_befintligt_urval():
+        start = vals["katalog"].get().strip() or "/"
+        d = filedialog.askdirectory(title="Välj urval-mapp att visa",
+                                    initialdir=start)
+        if d:
+            visa_miniatyrer(root, d)
+
+    ttk.Button(f_knapp, text="Visa urval…",
+               command=visa_befintligt_urval).pack(side="right", padx=6)
+
     # --- Logg ---
     f_logg = ttk.LabelFrame(root, text="Output", padding=8)
     f_logg.grid(row=4, column=0, sticky="nsew", **pad)
