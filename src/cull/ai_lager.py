@@ -196,7 +196,7 @@ def bonus(img_bgr, modeller, hemma_farg, bevaka):
 
 
 def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
-                batch_storlek=16):
+                batch_storlek=16, progress_cb=None):
     """
     Kör YOLO i batch för snabbhet, sedan MediaPipe/OCR per bild.
     Skriver bonusar direkt in i resultat_refs-diktarna.
@@ -205,10 +205,15 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
     if yolo is None:
         return
 
-    for start in range(0, len(imgs_bgr), batch_storlek):
+    totalt = len(imgs_bgr)
+    klar   = 0
+    for start in range(0, totalt, batch_storlek):
         batch_imgs = imgs_bgr[start:start + batch_storlek]
         batch_refs = resultat_refs[start:start + batch_storlek]
         yolo_res_list = yolo(batch_imgs, verbose=False)
         for img, ref, yolo_res in zip(batch_imgs, batch_refs, yolo_res_list):
             b = _bonus_fran_yolo(img, yolo_res, modeller, hemma_farg, bevaka)
             ref.update(b)
+        klar += len(batch_imgs)
+        if progress_cb:
+            progress_cb(klar, totalt)

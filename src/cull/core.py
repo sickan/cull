@@ -240,7 +240,9 @@ def main():
 
             from cull.ai_lager import bonus_batch
             bonus_batch(imgs, kandidater, modeller,
-                        args.hemma_farg, bevaka, batch_storlek=16)
+                        args.hemma_farg, bevaka, batch_storlek=16,
+                        progress_cb=lambda klar, tot:
+                            print(f"  AI …{klar}/{tot}", flush=True))
             print(f"AI klar.", flush=True)
 
         # Slutpoäng
