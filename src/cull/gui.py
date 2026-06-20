@@ -363,6 +363,12 @@ def main():
         def kör_process():
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
+            # Säkerställ att Homebrew-binärer (exiftool) hittas även när
+            # appen startats från Finder/Dock med en minimal PATH.
+            extra = ["/opt/homebrew/bin", "/usr/local/bin"]
+            befintlig = env.get("PATH", "").split(os.pathsep)
+            env["PATH"] = os.pathsep.join(
+                [p for p in extra if p not in befintlig] + befintlig)
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
