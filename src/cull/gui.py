@@ -143,9 +143,22 @@ def main():
     ttk.Entry(f_krit, textvariable=vals["burst_sek"], width=8).grid(
         row=8, column=1, sticky="w")
 
+    # --- Progress ---
+    f_progress = ttk.Frame(root)
+    f_progress.grid(row=2, column=0, sticky="ew", padx=10, pady=(4, 0))
+
+    progress_var = tk.DoubleVar(value=0)
+    progress = ttk.Progressbar(f_progress, variable=progress_var,
+                               maximum=100, length=500)
+    progress.pack(side="left", fill="x", expand=True)
+
+    räknare_var = tk.StringVar(value="")
+    ttk.Label(f_progress, textvariable=räknare_var, width=12,
+              anchor="e").pack(side="right")
+
     # --- Kör-knapp ---
     f_knapp = ttk.Frame(root)
-    f_knapp.grid(row=2, column=0, sticky="e", padx=10, pady=4)
+    f_knapp.grid(row=3, column=0, sticky="e", padx=10, pady=4)
 
     status_var = tk.StringVar(value="")
     ttk.Label(f_knapp, textvariable=status_var, foreground="gray").pack(
@@ -156,7 +169,7 @@ def main():
 
     # --- Logg ---
     f_logg = ttk.LabelFrame(root, text="Output", padding=8)
-    f_logg.grid(row=3, column=0, sticky="nsew", **pad)
+    f_logg.grid(row=4, column=0, sticky="nsew", **pad)
 
     logg = tk.Text(f_logg, width=80, height=20, font=("Menlo", 11),
                    state="disabled", wrap="word")
@@ -182,10 +195,38 @@ def main():
 
         knapp.configure(state="disabled")
         status_var.set("Kör…")
+        progress_var.set(0)
+        räknare_var.set("")
         logg.configure(state="normal")
         logg.delete("1.0", "end")
         logg.configure(state="disabled")
         skriv("$ " + " ".join(cmd) + "\n\n")
+
+        totalt = [0]   # mutable för closure
+
+        import re
+        re_total   = re.compile(r"^(\d+) NEF hittade")
+        re_framsteg = re.compile(r"…(\d+)/(\d+)")
+        re_hoppar  = re.compile(r"\[(\d+)/(\d+)\]")
+
+        def uppdatera_progress(aktuell, total):
+            if total > 0:
+                progress_var.set(aktuell / total * 100)
+                räknare_var.set(f"{aktuell} / {total}")
+
+        def hantera_rad(rad):
+            skriv(rad)
+            m = re_total.match(rad.strip())
+            if m:
+                totalt[0] = int(m.group(1))
+                return
+            m = re_framsteg.search(rad)
+            if m:
+                root.after(0, uppdatera_progress, int(m.group(1)), int(m.group(2)))
+                return
+            m = re_hoppar.search(rad)
+            if m:
+                root.after(0, uppdatera_progress, int(m.group(1)), int(m.group(2)))
 
         def kör_process():
             proc = subprocess.Popen(
@@ -196,9 +237,12 @@ def main():
                 bufsize=1,
             )
             for rad in proc.stdout:
-                root.after(0, skriv, rad)
+                root.after(0, hantera_rad, rad)
             proc.wait()
             ok = proc.returncode == 0
+            root.after(0, lambda: progress_var.set(100))
+            root.after(0, lambda: räknare_var.set(
+                f"{totalt[0]} / {totalt[0]}" if totalt[0] else ""))
             root.after(0, lambda: status_var.set("Klart ✓" if ok else "Fel ✗"))
             root.after(0, lambda: skriv(
                 "\n✓ Klar.\n" if ok else "\n✗ Avslutades med fel.\n",
