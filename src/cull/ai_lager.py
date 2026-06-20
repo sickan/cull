@@ -1,16 +1,32 @@
 """AI-lager: YOLOv8, MediaPipe Pose, EasyOCR för tröjnummer."""
 
+import contextlib
 import os
 import sys
 import urllib.request
 from pathlib import Path
 
-# Tysta TensorFlow Lite / MediaPipe / PyTorch-loggar
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
-os.environ.setdefault("GLOG_minloglevel", "3")
+# Tysta TensorFlow Lite / MediaPipe / PyTorch-loggar (Python-nivå)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["GLOG_minloglevel"] = "3"
+os.environ["GRPC_VERBOSITY"] = "ERROR"
 
 import warnings
 warnings.filterwarnings("ignore", message=".*pin_memory.*MPS.*")
+
+
+@contextlib.contextmanager
+def _tysta_stderr():
+    """Stänger av C-nivå stderr (TF Lite / glog) under modellladdning."""
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    old = os.dup(2)
+    os.dup2(devnull, 2)
+    os.close(devnull)
+    try:
+        yield
+    finally:
+        os.dup2(old, 2)
+        os.close(old)
 
 import cv2
 import numpy as np
@@ -56,7 +72,8 @@ def ladda_modeller(med_ocr=False):
 
     try:
         from ultralytics import YOLO
-        modeller["yolo"] = YOLO("yolov8n.pt")
+        with _tysta_stderr():
+            modeller["yolo"] = YOLO("yolov8n.pt")
         print("YOLOv8: aktivt")
     except ImportError:
         sys.exit("AI-läget kräver ultralytics: pipx inject cull ultralytics")
@@ -70,7 +87,8 @@ def ladda_modeller(med_ocr=False):
             num_poses=4,
             min_pose_detection_confidence=0.4,
         )
-        modeller["pose"] = mp_vision.PoseLandmarker.create_from_options(opts)
+        with _tysta_stderr():
+            modeller["pose"] = mp_vision.PoseLandmarker.create_from_options(opts)
         print("MediaPipe Pose: aktivt")
     except Exception as e:
         print(f"MediaPipe Pose: ej tillgängligt ({e})")
@@ -78,7 +96,8 @@ def ladda_modeller(med_ocr=False):
     if med_ocr:
         try:
             import easyocr
-            modeller["ocr"] = easyocr.Reader(["en"], gpu=False, verbose=False)
+            with _tysta_stderr():
+                modeller["ocr"] = easyocr.Reader(["en"], gpu=False, verbose=False)
             print("EasyOCR: aktivt")
         except ImportError:
             print("EasyOCR saknas: pipx inject cull easyocr  (tröjnummer inaktiverat)")
