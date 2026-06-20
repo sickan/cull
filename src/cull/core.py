@@ -242,7 +242,12 @@ def main():
         return
 
     ut_dir = katalog / "urval"
-    ut_dir.mkdir(exist_ok=True)
+    if ut_dir.exists():
+        i = 1
+        while (katalog / f"urval {i}").exists():
+            i += 1
+        ut_dir = katalog / f"urval {i}"
+    ut_dir.mkdir()
 
     for r in valda:
         shutil.copy2(r["fil"], ut_dir / r["fil"].name)
