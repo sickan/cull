@@ -154,6 +154,8 @@ def main():
                          "yolo11m.pt (bäst)")
     ap.add_argument("--estetik",    action="store_true",
                     help="lägg till NIMA-estetikbetyg (kräver pyiqa)")
+    ap.add_argument("--ingen-modell", action="store_true",
+                    help="använd inte den tränade personliga modellen")
     args = ap.parse_args()
 
     kontrollera_exiftool()
@@ -170,6 +172,16 @@ def main():
         sys.exit("Inga NEF-filer i katalogen.")
 
     bevaka = set(args.bevaka.split(",")) if args.bevaka else set()
+
+    # Personlig modell (om tränad) — kräver AI-features för alla bilder.
+    from cull import inlarning
+    modell_paket = None if args.ingen_modell else inlarning.ladda_modell()
+    if modell_paket:
+        args.ai = True
+        args.estetik = True
+        print(f"Personlig modell aktiv "
+              f"({modell_paket['n_valda']} val, "
+              f"{modell_paket['n_uppdrag']} uppdrag).", flush=True)
 
     print(f"{len(nef_filer)} NEF hittade.", flush=True)
 
@@ -233,7 +245,7 @@ def main():
         d = dict(p)
         d.update({
             "armar": 0.0, "boll": 0.0, "hemma": 0.0,
-            "trojnummer": 0.0, "klunga": 0.0, "_yolo": None,
+            "trojnummer": 0.0, "klunga": 0.0, "personer": 0, "_yolo": None,
             "fas": fas_b, "fil": nef, "tid": tid_str, "_jpg": jpg,
         })
         return d
@@ -307,7 +319,9 @@ def main():
         # --- Fas 3: AI på topp 50 % ---
         if args.ai and modeller:
             _t = time.perf_counter()
-            n_kandidater = max(1, int(len(resultat) * AI_KANDIDAT_ANDEL))
+            # Med personlig modell behövs AI-features för ALLA bilder.
+            andel = 1.0 if modell_paket else AI_KANDIDAT_ANDEL
+            n_kandidater = max(1, int(len(resultat) * andel))
             kandidater = sorted(resultat, key=lambda r: r["bas"],
                                 reverse=True)[:n_kandidater]
             n_pose = len(modeller.get("pose_pool", []))
@@ -357,23 +371,29 @@ def main():
             else:
                 r["estetik"] = 0.0
 
-        # Slutpoäng
-        for r in resultat:
-            ogon_b = 0.0
-            if r["ansikten"] > 0:
-                ogon_b = min(r["ogon"] / (r["ansikten"] * 2), 1.0) * 0.10
-            r["poang"] = (
-                0.55 * r["skarpa_n"]
-                + 0.35 * r["exp"]
-                + ogon_b
-                + r["armar"]
-                + r["boll"]
-                + r["hemma"]
-                + r["trojnummer"]
-                + r["klunga"]
-                + r["fas"]
-                + r["estetik"]
-            )
+        # Slutpoäng — personlig modell om tränad, annars handsatta vikter.
+        if modell_paket:
+            inlarning.poangsatt_med_modell(resultat, modell_paket)
+            # Behåll matchfas som liten additiv knuff ovanpå modellpoängen.
+            for r in resultat:
+                r["poang"] += r["fas"]
+        else:
+            for r in resultat:
+                ogon_b = 0.0
+                if r["ansikten"] > 0:
+                    ogon_b = min(r["ogon"] / (r["ansikten"] * 2), 1.0) * 0.10
+                r["poang"] = (
+                    0.55 * r["skarpa_n"]
+                    + 0.35 * r["exp"]
+                    + ogon_b
+                    + r["armar"]
+                    + r["boll"]
+                    + r["hemma"]
+                    + r["trojnummer"]
+                    + r["klunga"]
+                    + r["fas"]
+                    + r["estetik"]
+                )
 
         # Burst-gruppering
         har_tid = all(matchfas.parse_tid(r["tid"]) is not None

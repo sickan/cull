@@ -292,10 +292,11 @@ def _kör_pose(args):
 def _bonus_fran_yolo(img_bgr, yolo_res, pose_res, modeller, hemma_farg, bevaka):
     """Beräknar AI-bonusar givet YOLO- och pose-resultat."""
     b = {"armar": 0.0, "boll": 0.0, "hemma": 0.0, "trojnummer": 0.0,
-         "klunga": 0.0, "_yolo": yolo_res}
+         "klunga": 0.0, "personer": 0, "_yolo": yolo_res}
 
     klasser = yolo_res.boxes.cls.tolist() if yolo_res.boxes else []
     b["boll"] = 0.08 if 32 in klasser else 0.0
+    b["personer"] = sum(1 for c in klasser if int(c) == 0)
 
     # Firande: skalas med antal firande spelare (gruppfirande väger tyngst).
     n_fira = antal_firande(pose_res) if pose_res is not None else 0
