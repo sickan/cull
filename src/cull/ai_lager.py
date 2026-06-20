@@ -77,6 +77,17 @@ def _skapa_pose_detektor():
         return mp_vision.PoseLandmarker.create_from_options(opts)
 
 
+def _valj_device():
+    """Returnerar 'mps' på Apple Silicon, annars 'cpu'."""
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    return "cpu"
+
+
 def ladda_modeller(med_ocr=False, n_pose=None):
     """
     Returnerar dict med laddade modeller.
@@ -86,13 +97,19 @@ def ladda_modeller(med_ocr=False, n_pose=None):
     if n_pose is None:
         n_pose = min(os.cpu_count() or 4, 8)
 
-    modeller = {"yolo": None, "pose_pool": [], "ocr": None}
+    modeller = {"yolo": None, "pose_pool": [], "ocr": None,
+                "device": _valj_device()}
 
     try:
         from ultralytics import YOLO
         with _tysta_stderr():
             modeller["yolo"] = YOLO("yolov8n.pt")
-        print("YOLOv8: aktivt")
+            if modeller["device"] == "mps":
+                try:
+                    modeller["yolo"].to("mps")
+                except Exception:
+                    modeller["device"] = "cpu"
+        print(f"YOLOv8: aktivt ({modeller['device'].upper()})")
     except ImportError:
         sys.exit("AI-läget kräver ultralytics: pipx inject cull ultralytics")
 
@@ -216,6 +233,7 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
     yolo = modeller["yolo"]
     if yolo is None:
         return
+    device = modeller.get("device", "cpu")
 
     # Bygg en pool av pose-detektorer via en kö
     pose_pool = modeller.get("pose_pool", [])
@@ -235,7 +253,7 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
             batch_refs = resultat_refs[start:start + batch_storlek]
 
             # YOLO-batch
-            yolo_res_list = yolo(batch_imgs, verbose=False)
+            yolo_res_list = yolo(batch_imgs, verbose=False, device=device)
 
             # Parallell pose (en tråd per bild, lånar detektor från kön)
             pose_results = [None] * len(batch_imgs)

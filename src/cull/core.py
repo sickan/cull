@@ -37,6 +37,32 @@ N_WORKERS = min(os.cpu_count() or 4, 8)
 # Andel av bilderna (sorterade på baspoäng) som AI körs på
 AI_KANDIDAT_ANDEL = 0.5
 
+# Cache för baspoäng — nyckel = sökväg|mtime|storlek (oföränderlig per NEF)
+import json
+BAS_CACHE_PATH = Path.home() / ".cache" / "cull" / "bas_cache.json"
+
+
+def _cache_nyckel(nef):
+    st = nef.stat()
+    return f"{nef}|{int(st.st_mtime)}|{st.st_size}"
+
+
+def ladda_bas_cache():
+    try:
+        with open(BAS_CACHE_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def spara_bas_cache(cache):
+    try:
+        BAS_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(BAS_CACHE_PATH, "w") as f:
+            json.dump(cache, f)
+    except Exception:
+        pass
+
 
 def kontrollera_exiftool():
     if shutil.which("exiftool") is None:
@@ -130,7 +156,11 @@ def main():
     if not katalog.is_dir():
         sys.exit(f"Hittar inte katalogen: {katalog}")
 
-    nef_filer = sorted(p for p in katalog.iterdir() if p.suffix.lower() == ".nef")
+    # Exkludera macOS AppleDouble-sidecars (._namn.NEF) och andra dolda
+    # filer som dyker upp på exFAT/FAT-diskar — de är inte riktiga bilder.
+    nef_filer = sorted(p for p in katalog.iterdir()
+                       if p.suffix.lower() == ".nef"
+                       and not p.name.startswith("."))
     if not nef_filer:
         sys.exit("Inga NEF-filer i katalogen.")
 
@@ -184,51 +214,67 @@ def main():
                 print(f"  Avspark {args.avspark} — matchfas-bonus aktiv.", flush=True)
     tider_fas["Metadata"] = time.perf_counter() - _t
 
-    # --- Fas 1: Extrahering av previews ---
-    print(f"\nExtraherar previews…", flush=True)
-    _t = time.perf_counter()
+    def _bygg_resultat(nef, p, jpg):
+        tid_str = tider.get(nef.name, "")
+        fas_b = 0.0
+        if avspark_ts and tid_str:
+            ts = matchfas.parse_tid(tid_str)
+            if ts:
+                fas_b = matchfas.fas_bonus(matchfas.matchminut(ts, avspark_ts))
+        d = dict(p)
+        d.update({
+            "armar": 0.0, "boll": 0.0, "hemma": 0.0,
+            "trojnummer": 0.0, "_yolo": None,
+            "fas": fas_b, "fil": nef, "tid": tid_str, "_jpg": jpg,
+        })
+        return d
+
+    # --- Fas 1: Baspoäng (med cache) ---
+    bas_cache = ladda_bas_cache()
+    resultat = []
+    att_poangsatta = []   # NEF utan cacheträff → måste extraheras + poängsättas
+    for nef in nef_filer:
+        c = bas_cache.get(_cache_nyckel(nef))
+        if c:
+            resultat.append(_bygg_resultat(nef, c, None))
+        else:
+            att_poangsatta.append(nef)
+
+    if resultat:
+        print(f"\n{len(resultat)} baspoäng från cache.", flush=True)
+
     with tempfile.TemporaryDirectory() as tmp:
-        preview_map = extrahera_previews_batch(nef_filer, tmp)
-        giltiga = [(nef, jpg) for nef, jpg in preview_map.items() if jpg]
-        tider_fas["Extrahering"] = time.perf_counter() - _t
-        print(f"{len(giltiga)} previews extraherade "
-              f"({len(nef_filer) - len(giltiga)} saknade).\n", flush=True)
+        if att_poangsatta:
+            print(f"\nExtraherar previews ({len(att_poangsatta)} nya)…",
+                  flush=True)
+            _t = time.perf_counter()
+            preview_map = extrahera_previews_batch(att_poangsatta, tmp)
+            giltiga = [(nef, jpg) for nef, jpg in preview_map.items() if jpg]
+            tider_fas["Extrahering"] = time.perf_counter() - _t
+            print(f"{len(giltiga)} previews extraherade "
+                  f"({len(att_poangsatta) - len(giltiga)} saknade).\n",
+                  flush=True)
 
-        # --- Fas 2: Parallell baspoängsättning ---
-        print(f"Baspoängsätter med {N_WORKERS} trådar…", flush=True)
-        _t = time.perf_counter()
-        resultat = []
-        klar = 0
-
-        with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
-            futures = {ex.submit(_score_en, (nef, jpg)): nef
-                       for nef, jpg in giltiga}
-            for future in as_completed(futures):
-                klar += 1
-                print(f"  …{klar}/{len(giltiga)}", flush=True)
-                try:
-                    nef, jpg, p = future.result()
-                except Exception as e:
-                    print(f"  Fel vid poängsättning: {e}", flush=True)
-                    continue
-                if p is None:
-                    continue
-                tid_str = tider.get(nef.name, "")
-                fas_b = 0.0
-                if avspark_ts and tid_str:
-                    ts = matchfas.parse_tid(tid_str)
-                    if ts:
-                        fas_b = matchfas.fas_bonus(
-                            matchfas.matchminut(ts, avspark_ts))
-                p.update({
-                    "armar": 0.0, "boll": 0.0, "hemma": 0.0,
-                    "trojnummer": 0.0, "_yolo": None,
-                    "fas": fas_b, "fil": nef, "tid": tid_str,
-                    "_jpg": jpg,
-                })
-                resultat.append(p)
-
-        tider_fas["Baspoäng"] = time.perf_counter() - _t
+            print(f"Baspoängsätter med {N_WORKERS} trådar…", flush=True)
+            _t = time.perf_counter()
+            klar = 0
+            with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
+                futures = {ex.submit(_score_en, (nef, jpg)): nef
+                           for nef, jpg in giltiga}
+                for future in as_completed(futures):
+                    klar += 1
+                    print(f"  …{klar}/{len(giltiga)}", flush=True)
+                    try:
+                        nef, jpg, p = future.result()
+                    except Exception as e:
+                        print(f"  Fel vid poängsättning: {e}", flush=True)
+                        continue
+                    if p is None:
+                        continue
+                    bas_cache[_cache_nyckel(nef)] = p
+                    resultat.append(_bygg_resultat(nef, p, jpg))
+            tider_fas["Baspoäng"] = time.perf_counter() - _t
+            spara_bas_cache(bas_cache)
 
         if not resultat:
             sys.exit("Inget kunde poängsättas.")
@@ -259,18 +305,29 @@ def main():
             print(f"\nAI-analys på topp {n_kandidater} kandidater "
                   f"(YOLO-batch + {n_pose} pose-trådar)…", flush=True)
 
-            imgs  = []
+            # Kandidater från cachen saknar extraherad preview — fixa nu.
+            saknar = [r for r in kandidater if not r["_jpg"]]
+            if saknar:
+                pm = extrahera_previews_batch([r["fil"] for r in saknar], tmp)
+                for r in saknar:
+                    r["_jpg"] = pm.get(r["fil"])
+
+            imgs, ref_lista = [], []
             for r in kandidater:
+                if not r["_jpg"]:
+                    continue
                 img = cv2.imread(str(r["_jpg"]))
-                if img is not None:
-                    h, w = img.shape[:2]
-                    if max(h, w) > 1600:
-                        s = 1600 / max(h, w)
-                        img = cv2.resize(img, (int(w * s), int(h * s)))
+                if img is None:
+                    continue
+                h, w = img.shape[:2]
+                if max(h, w) > 1600:
+                    s = 1600 / max(h, w)
+                    img = cv2.resize(img, (int(w * s), int(h * s)))
                 imgs.append(img)
+                ref_lista.append(r)
 
             from cull.ai_lager import bonus_batch
-            bonus_batch(imgs, kandidater, modeller,
+            bonus_batch(imgs, ref_lista, modeller,
                         args.hemma_farg, bevaka, batch_storlek=16,
                         progress_cb=lambda klar, tot:
                             print(f"  AI …{klar}/{tot}", flush=True))
@@ -343,6 +400,11 @@ def main():
                   f"{r['fil'].name}")
 
         if args.rapport:
+            if tider_fas:
+                print("\nTid per fas:")
+                for fas, sek in tider_fas.items():
+                    print(f"  {fas:<16} {sek:5.1f} s")
+                print(f"  {'Totalt':<16} {sum(tider_fas.values()):5.1f} s")
             print("\n(Rapportläge — inget kopierades.)")
             return
 
@@ -353,6 +415,14 @@ def main():
                 i += 1
             ut_dir = katalog / f"urval {i}"
         ut_dir.mkdir()
+
+        # XMP behöver previews — extrahera för valda som saknar (cacheträffar).
+        if args.xmp:
+            saknar = [r for r in valda if not r["_jpg"]]
+            if saknar:
+                pm = extrahera_previews_batch([r["fil"] for r in saknar], tmp)
+                for r in saknar:
+                    r["_jpg"] = pm.get(r["fil"])
 
         for r in valda:
             shutil.copy2(r["fil"], ut_dir / r["fil"].name)
