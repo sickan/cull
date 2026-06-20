@@ -110,8 +110,27 @@ def bas_poangsatt(jpg_path):
 
 # --- AI-lager ----------------------------------------------------------------
 
+_POSE_MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/"
+    "pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
+)
+_POSE_MODEL_PATH = Path.home() / ".cache" / "cull" / "pose_landmarker_lite.task"
+
+
+def _hamta_pose_modell():
+    """Laddar ned pose-modellen till ~/.cache/cull/ om den saknas."""
+    if _POSE_MODEL_PATH.exists():
+        return _POSE_MODEL_PATH
+    import urllib.request
+    _POSE_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    print("Laddar ned MediaPipe pose-modell (~3 MB)…")
+    urllib.request.urlretrieve(_POSE_MODEL_URL, _POSE_MODEL_PATH)
+    print("Pose-modell nedladdad.")
+    return _POSE_MODEL_PATH
+
+
 def ladda_ai_modeller():
-    """Returnerar (yolo, pose_eller_None)."""
+    """Returnerar (yolo, pose_detektor_eller_None)."""
     try:
         from ultralytics import YOLO
     except ImportError:
@@ -121,12 +140,16 @@ def ladda_ai_modeller():
 
     pose = None
     try:
-        import mediapipe.solutions.pose as mp_pose
-        pose = mp_pose.Pose(
-            static_image_mode=True,
-            model_complexity=1,
-            min_detection_confidence=0.4,
+        from mediapipe.tasks import python as mp_python
+        from mediapipe.tasks.python import vision as mp_vision
+
+        modell = _hamta_pose_modell()
+        opts = mp_vision.PoseLandmarkerOptions(
+            base_options=mp_python.BaseOptions(model_asset_path=str(modell)),
+            num_poses=4,
+            min_pose_detection_confidence=0.4,
         )
+        pose = mp_vision.PoseLandmarker.create_from_options(opts)
         print("MediaPipe Pose: aktivt")
     except Exception as e:
         print(f"MediaPipe Pose: ej tillgängligt ({e}) — armar-bonus inaktiverad")
@@ -134,24 +157,22 @@ def ladda_ai_modeller():
     return yolo, pose
 
 
-def armar_uppe(pose_results, img_h):
+def armar_uppe(pose_result):
     """
-    True om minst en person har båda handlederna ovanför axlarna.
-    Används som indikator på målgest / firande.
+    True om minst en detekterad person har händerna klart ovanför axlarna.
+    Landmärkes-index: 11=vänster axel, 12=höger axel, 15=vänster handled, 16=höger handled.
+    y ökar nedåt i normaliserade koordinater.
     """
-    if not pose_results.pose_landmarks:
-        return False
-    lm = pose_results.pose_landmarks.landmark
-
-    import mediapipe.solutions.pose as mp_pose
-    PL = mp_pose.PoseLandmark
-    try:
-        # y ökar nedåt i bild-koordinater
-        v_axel = (lm[PL.LEFT_SHOULDER].y + lm[PL.RIGHT_SHOULDER].y) / 2
-        v_hand  = min(lm[PL.LEFT_WRIST].y, lm[PL.RIGHT_WRIST].y)
-        return v_hand < v_axel - 0.05   # händerna klart ovanför axellinje
-    except Exception:
-        return False
+    for landmarker in (pose_result.pose_landmarks or []):
+        lm = landmarker
+        try:
+            v_axel = (lm[11].y + lm[12].y) / 2
+            v_hand = min(lm[15].y, lm[16].y)
+            if v_hand < v_axel - 0.05:
+                return True
+        except (IndexError, AttributeError):
+            continue
+    return False
 
 
 def hemma_farg_andel(img_bgr, farg_namn):
@@ -180,9 +201,11 @@ def ai_bonus(img_bgr, yolo, pose, hemma_farg):
 
     # MediaPipe Pose — armar uppe?
     if pose is not None:
+        import mediapipe as mp
         rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        pose_res = pose.process(rgb)
-        if armar_uppe(pose_res, img_bgr.shape[0]):
+        mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        pose_res = pose.detect(mp_img)
+        if armar_uppe(pose_res):
             bonus["armar"] = 0.15
 
     # Hemmalagsfärg
