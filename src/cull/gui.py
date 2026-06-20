@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, ttk
 
+from cull import version as ver
+
 FARGER = ["", "blå", "ljusblå", "röd", "mörkröd", "gul", "grön",
           "vit", "svart", "orange", "lila"]
 
@@ -296,17 +298,43 @@ def visa_historik(fönster):
 
 def main():
     root = tk.Tk()
-    root.title("cull")
+    root.title(ver.etikett())
     root.resizable(False, False)
+
+    # App-ikon (titelrad/aktivitetsfält)
+    ikon = ver.ikon_path()
+    if ikon:
+        try:
+            root._ikon = tk.PhotoImage(file=str(ikon))
+            root.iconphoto(True, root._ikon)
+        except Exception:
+            pass
 
     pad = {"padx": 10, "pady": 4}
     vals = {}
 
     saved = ladda_installningar()
 
+    # --- Rubrik med logga och version ---
+    f_topp = ttk.Frame(root)
+    f_topp.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
+    logo_p = ver.header_logo_path()
+    if logo_p:
+        try:
+            root._logo = tk.PhotoImage(file=str(logo_p))
+            tk.Label(f_topp, image=root._logo).pack(side="left", padx=(0, 10))
+        except Exception:
+            pass
+    f_titel = ttk.Frame(f_topp)
+    f_titel.pack(side="left", anchor="w")
+    ttk.Label(f_titel, text=ver.APPNAMN,
+              font=("Helvetica", 18, "bold")).pack(anchor="w")
+    ttk.Label(f_titel, text=f"v{ver.version()}  ·  build {ver.BUILD}",
+              foreground="#cc8400").pack(anchor="w")
+
     # --- Katalog ---
     f_katalog = ttk.LabelFrame(root, text="Katalog", padding=8)
-    f_katalog.grid(row=0, column=0, sticky="ew", **pad)
+    f_katalog.grid(row=1, column=0, sticky="ew", **pad)
 
     vals["katalog"] = tk.StringVar(value=saved.get("katalog", ""))
     ttk.Entry(f_katalog, textvariable=vals["katalog"], width=52).grid(
@@ -323,7 +351,7 @@ def main():
 
     # --- Kriterier ---
     f_krit = ttk.LabelFrame(root, text="Kriterier", padding=8)
-    f_krit.grid(row=1, column=0, sticky="ew", **pad)
+    f_krit.grid(row=2, column=0, sticky="ew", **pad)
 
     def rad(parent, etikett, row):
         ttk.Label(parent, text=etikett).grid(row=row, column=0, sticky="w", pady=2)
@@ -417,7 +445,7 @@ def main():
 
     # --- Progress ---
     f_progress = ttk.Frame(root)
-    f_progress.grid(row=2, column=0, sticky="ew", padx=10, pady=(4, 0))
+    f_progress.grid(row=3, column=0, sticky="ew", padx=10, pady=(4, 0))
 
     progress_var = tk.DoubleVar(value=0)
     progress = ttk.Progressbar(f_progress, variable=progress_var,
@@ -430,7 +458,7 @@ def main():
 
     # --- Kör-knapp ---
     f_knapp = ttk.Frame(root)
-    f_knapp.grid(row=3, column=0, sticky="e", padx=10, pady=4)
+    f_knapp.grid(row=4, column=0, sticky="e", padx=10, pady=4)
 
     status_var = tk.StringVar(value="")
     ttk.Label(f_knapp, textvariable=status_var, foreground="gray").pack(
@@ -454,7 +482,7 @@ def main():
 
     # --- Logg ---
     f_logg = ttk.LabelFrame(root, text="Output", padding=8)
-    f_logg.grid(row=4, column=0, sticky="nsew", **pad)
+    f_logg.grid(row=5, column=0, sticky="nsew", **pad)
 
     logg = tk.Text(f_logg, width=80, height=20, font=("Menlo", 11),
                    state="disabled", wrap="word")

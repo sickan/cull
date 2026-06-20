@@ -158,6 +158,9 @@ def main():
                     help="använd inte den tränade personliga modellen")
     args = ap.parse_args()
 
+    from cull import version as ver
+    print(ver.etikett(), flush=True)
+
     kontrollera_exiftool()
     katalog = Path(args.katalog).expanduser()
     if not katalog.is_dir():
