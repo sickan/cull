@@ -673,6 +673,22 @@ def main():
         threading.Thread(target=kör_process, daemon=True).start()
 
     knapp.configure(command=kor)
+
+    # Tvinga fram fönstret längst fram och centrera det (macOS-fix: Tk-fönster
+    # från en icke-bundlad Python hamnar annars bakom/utanför skärmen).
+    root.update_idletasks()
+    b, h = root.winfo_width(), root.winfo_height()
+    sx, sy = root.winfo_screenwidth(), root.winfo_screenheight()
+    root.geometry(f"+{max(0, (sx - b) // 2)}+{max(0, (sy - h) // 3)}")
+    root.deiconify()
+    root.lift()
+    root.attributes("-topmost", True)
+    root.after(800, lambda: root.attributes("-topmost", False))
+    try:
+        root.focus_force()
+    except Exception:
+        pass
+
     root.mainloop()
 
 

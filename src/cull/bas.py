@@ -34,14 +34,20 @@ def exponering(gray):
     return max(0.0, 1.0 - straff)
 
 
+# Ladda Haar-cascaderna en gång vid import (inte per anrop).
+_ANSIKTE = cv2.CascadeClassifier(
+    cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+_OGA = cv2.CascadeClassifier(
+    cv2.data.haarcascades + "haarcascade_eye.xml")
+
+
 def ogon_ansikten(gray):
-    f = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    e = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_eye.xml")
-    ansikten = f.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
+    # Skydd om cascade-filerna saknas/inte kunde läsas.
+    if _ANSIKTE.empty() or _OGA.empty():
+        return 0, 0
+    ansikten = _ANSIKTE.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
     ogon = sum(
-        len(e.detectMultiScale(gray[y:y+h, x:x+w], 1.1, 6))
+        len(_OGA.detectMultiScale(gray[y:y+h, x:x+w], 1.1, 6))
         for (x, y, w, h) in ansikten
     )
     return len(ansikten), ogon
