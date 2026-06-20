@@ -78,6 +78,23 @@ def bygg_kommando(vals):
     return cmd, None
 
 
+def _extrahera_preview(nef, jpg, env):
+    """Extraherar inbäddad JPEG ur en NEF till `jpg`. Returnerar True vid lyckat."""
+    for tag in ("-JpgFromRaw", "-PreviewImage"):
+        try:
+            with open(jpg, "wb") as f:
+                subprocess.run(["exiftool", "-b", tag, str(nef)],
+                               stdout=f, stderr=subprocess.DEVNULL,
+                               timeout=15, env=env)
+        except Exception:
+            pass
+        if jpg.exists() and jpg.stat().st_size > 10_000:
+            return True
+    if jpg.exists():
+        jpg.unlink()
+    return False
+
+
 def visa_miniatyrer(fönster, urval_mapp, max_bilder=10):
     """Öppnar ett fönster med miniatyrer från urval-mappen."""
     try:
@@ -90,62 +107,64 @@ def visa_miniatyrer(fönster, urval_mapp, max_bilder=10):
     if not nef_filer:
         return
 
+    env = os.environ.copy()
+    for p in ("/opt/homebrew/bin", "/usr/local/bin"):
+        if p not in env.get("PATH", "").split(os.pathsep):
+            env["PATH"] = p + os.pathsep + env.get("PATH", "")
+
     topp = tk.Toplevel(fönster)
     topp.title(f"Urval — {mapp.name}")
+    topp.geometry("840x270")
+    # Håll referenser levande på fönstret — annars GC:as PhotoImage och
+    # rutorna blir svarta.
+    topp._bild_refs = []
 
-    canvas = tk.Canvas(topp, bg="#1a1a1a")
+    canvas = tk.Canvas(topp, bg="#1a1a1a", highlightthickness=0)
     scroll_x = ttk.Scrollbar(topp, orient="horizontal", command=canvas.xview)
     canvas.configure(xscrollcommand=scroll_x.set)
-
     scroll_x.pack(side="bottom", fill="x")
     canvas.pack(fill="both", expand=True)
 
     inner = tk.Frame(canvas, bg="#1a1a1a")
     canvas.create_window((0, 0), window=inner, anchor="nw")
 
-    refs = []  # förhindra garbage collection
-
-    def ladda_i_bakgrunden():
-        col = 0
-        for nef in nef_filer[:max_bilder]:
-            jpg = mapp / (nef.stem + ".jpg")
-            # Extrahera preview om jpg inte finns
-            if not jpg.exists():
-                try:
-                    subprocess.run(
-                        ["exiftool", "-b", "-JpgFromRaw", "-w!", "%d%f.jpg", str(nef)],
-                        capture_output=True, timeout=10,
-                    )
-                except Exception:
-                    pass
-            if not jpg.exists():
-                continue
-            try:
-                img = Image.open(jpg)
-                img.thumbnail((220, 160))
-                photo = ImageTk.PhotoImage(img)
-                refs.append(photo)
-                c = col
-                topp.after(0, lambda ph=photo, cc=c, name=nef.name: _placera(ph, cc, name))
-                col += 1
-            except Exception:
-                continue
-
-        def _fixera_scroll():
-            inner.update_idletasks()
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        topp.after(0, _fixera_scroll)
+    status = tk.Label(inner, text="Laddar miniatyrer…", fg="#888888",
+                      bg="#1a1a1a", font=("Menlo", 11))
+    status.grid(row=0, column=0, padx=20, pady=20)
 
     def _placera(photo, col, name):
+        if col == 0:
+            status.destroy()
         f = tk.Frame(inner, bg="#1a1a1a", padx=4, pady=4)
         f.grid(row=0, column=col)
         tk.Label(f, image=photo, bg="#1a1a1a").pack()
         tk.Label(f, text=name, fg="#aaaaaa", bg="#1a1a1a",
                  font=("Menlo", 9)).pack()
+        inner.update_idletasks()
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+    def ladda_i_bakgrunden():
+        col = 0
+        for nef in nef_filer[:max_bilder]:
+            jpg = mapp / (nef.stem + ".jpg")
+            if not (jpg.exists() and jpg.stat().st_size > 10_000):
+                if not _extrahera_preview(nef, jpg, env):
+                    continue
+            try:
+                img = Image.open(jpg)
+                img.thumbnail((220, 160))
+                photo = ImageTk.PhotoImage(img)
+            except Exception:
+                continue
+            topp._bild_refs.append(photo)
+            c = col
+            topp.after(0, lambda ph=photo, cc=c, n=nef.name: _placera(ph, cc, n))
+            col += 1
+        if col == 0:
+            topp.after(0, lambda: status.configure(
+                text="Kunde inte läsa några miniatyrer."))
 
     threading.Thread(target=ladda_i_bakgrunden, daemon=True).start()
-    topp.geometry("800x260")
 
 
 def main():
