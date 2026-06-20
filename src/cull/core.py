@@ -117,12 +117,12 @@ def ladda_ai_modeller():
     except ImportError:
         sys.exit("AI-läget kräver ultralytics: pipx inject cull ultralytics mediapipe")
     try:
-        import mediapipe as mp
+        import mediapipe.solutions.pose as mp_pose
     except ImportError:
         sys.exit("AI-läget kräver mediapipe: pipx inject cull ultralytics mediapipe")
 
     yolo = YOLO("yolov8n.pt")          # laddas ned automatiskt första gången (~6 MB)
-    pose = mp.solutions.pose.Pose(
+    pose = mp_pose.Pose(
         static_image_mode=True,
         model_complexity=1,
         min_detection_confidence=0.4,
@@ -139,8 +139,8 @@ def armar_uppe(pose_results, img_h):
         return False
     lm = pose_results.pose_landmarks.landmark
 
-    import mediapipe as mp
-    PL = mp.solutions.pose.PoseLandmark
+    import mediapipe.solutions.pose as mp_pose
+    PL = mp_pose.PoseLandmark
     try:
         # y ökar nedåt i bild-koordinater
         v_axel = (lm[PL.LEFT_SHOULDER].y + lm[PL.RIGHT_SHOULDER].y) / 2
