@@ -203,31 +203,60 @@ def main():
         logg.configure(state="disabled")
         skriv("$ " + " ".join(cmd) + "\n\n")
 
-        totalt = [0]   # mutable för closure
+        totalt    = [0]
+        pulsande  = [False]   # True när vi är i ett okänt-längd-steg
+        puls_job  = [None]
 
         import re
-        re_total   = re.compile(r"^(\d+) NEF hittade")
+        re_total    = re.compile(r"^(\d+) NEF hittade")
         re_framsteg = re.compile(r"…(\d+)/(\d+)")
-        re_hoppar  = re.compile(r"\[(\d+)/(\d+)\]")
+        re_hoppar   = re.compile(r"\[(\d+)/(\d+)\]")
+
+        # Rader som startar ett okänt-längd-steg (indeterminate)
+        PULS_START = ("Laddar AI", "Hämtar metadata", "Extraherar previews",
+                      "AI-analys på topp")
+        # Rader som avslutar ett sådant steg
+        PULS_STOPP = ("AI-modeller redo", "Avspark", "previews extraherade",
+                      "AI klar", "Baspoängsätter")
+
+        def starta_puls():
+            pulsande[0] = True
+            progress["mode"] = "indeterminate"
+            progress.start(12)
+
+        def stoppa_puls():
+            if pulsande[0]:
+                pulsande[0] = False
+                progress.stop()
+                progress["mode"] = "determinate"
 
         def uppdatera_progress(aktuell, total):
+            stoppa_puls()
             if total > 0:
                 progress_var.set(aktuell / total * 100)
                 räknare_var.set(f"{aktuell} / {total}")
 
         def hantera_rad(rad):
             skriv(rad)
-            m = re_total.match(rad.strip())
+            rad_s = rad.strip()
+
+            if any(rad_s.startswith(p) for p in PULS_START):
+                starta_puls()
+                return
+            if any(p in rad_s for p in PULS_STOPP):
+                stoppa_puls()
+
+            m = re_total.match(rad_s)
             if m:
                 totalt[0] = int(m.group(1))
                 return
             m = re_framsteg.search(rad)
             if m:
-                root.after(0, uppdatera_progress, int(m.group(1)), int(m.group(2)))
+                uppdatera_progress(int(m.group(1)), int(m.group(2)))
                 return
             m = re_hoppar.search(rad)
             if m:
-                root.after(0, uppdatera_progress, int(m.group(1)), int(m.group(2)))
+                uppdatera_progress(int(m.group(1)), int(m.group(2)))
 
         def kör_process():
             env = os.environ.copy()
@@ -244,6 +273,7 @@ def main():
                 root.after(0, hantera_rad, rad)
             proc.wait()
             ok = proc.returncode == 0
+            root.after(0, stoppa_puls)
             root.after(0, lambda: progress_var.set(100))
             root.after(0, lambda: räknare_var.set(
                 f"{totalt[0]} / {totalt[0]}" if totalt[0] else ""))
