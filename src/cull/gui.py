@@ -20,7 +20,9 @@ SETTINGS_PATH = CONFIG_DIR / "settings.json"
 HISTORY_PATH  = CONFIG_DIR / "history.json"
 SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "bevaka", "avspark", "topp", "andel", "burst_sek",
-                 "yolo", "estetik"]
+                 "yolo", "estetik", "modell"]
+
+MODELL_PATH = Path.home() / ".config" / "cull" / "modell.pkl"
 
 YOLO_MODELLER = ["yolov8n.pt", "yolo11s.pt", "yolo11m.pt"]
 
@@ -83,6 +85,9 @@ def bygg_kommando(vals):
             cmd += ["--yolo", yolo]
         if vals["estetik"].get():
             cmd.append("--estetik")
+
+    if not vals["modell"].get():
+        cmd.append("--ingen-modell")
 
     farg = vals["hemma_farg"].get()
     if farg:
@@ -400,6 +405,16 @@ def main():
                     variable=vals["estetik"]).grid(
         row=11, column=0, columnspan=3, sticky="w", pady=2)
 
+    # Personlig modell
+    finns_modell = MODELL_PATH.exists()
+    vals["modell"] = tk.BooleanVar(value=saved.get("modell", True))
+    etikett = ("Personlig modell  (tränad på dina FilterPix-val)"
+               if finns_modell else
+               "Personlig modell  (ingen tränad ännu — kör Träna modell…)")
+    ttk.Checkbutton(f_krit, text=etikett, variable=vals["modell"],
+                    state="normal" if finns_modell else "disabled").grid(
+        row=12, column=0, columnspan=3, sticky="w", pady=2)
+
     # --- Progress ---
     f_progress = ttk.Frame(root)
     f_progress.grid(row=2, column=0, sticky="ew", padx=10, pady=(4, 0))
@@ -456,6 +471,57 @@ def main():
 
     logg.tag_configure("fel", foreground="#cc0000")
     logg.tag_configure("klar", foreground="#007700")
+
+    def trana_modell():
+        rot = filedialog.askdirectory(
+            title="Välj rotkatalog med dina FilterPix-urval",
+            initialdir=vals["katalog"].get().strip() or "/")
+        if not rot:
+            return
+        cmd = [sys.executable, "-m", "cull.inlarning", rot]
+        knapp.configure(state="disabled")
+        trana_knapp.configure(state="disabled")
+        status_var.set("Tränar modell…")
+        logg.configure(state="normal")
+        logg.delete("1.0", "end")
+        logg.configure(state="disabled")
+        skriv("$ " + " ".join(cmd) + "\n\n")
+        progress["mode"] = "indeterminate"
+        progress.start(12)
+
+        SKRAP = ("clearcut", "Source Location", "playlog",
+                 "landmark_projection", "Loading pretrained")
+
+        def kör():
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
+            for p in ("/opt/homebrew/bin", "/usr/local/bin"):
+                if p not in env.get("PATH", "").split(os.pathsep):
+                    env["PATH"] = p + os.pathsep + env.get("PATH", "")
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True,
+                                    bufsize=1, env=env)
+            for rad in proc.stdout:
+                if not any(s in rad for s in SKRAP):
+                    root.after(0, skriv, rad)
+            proc.wait()
+            ok = proc.returncode == 0
+            root.after(0, progress.stop)
+            root.after(0, lambda: progress.configure(mode="determinate"))
+            root.after(0, lambda: progress_var.set(0))
+            root.after(0, lambda: status_var.set(
+                "Modell tränad ✓" if ok else "Tränings­fel ✗"))
+            root.after(0, lambda: skriv(
+                "\n✓ Klar.\n" if ok else "\n✗ Avslutades med fel.\n",
+                "klar" if ok else "fel"))
+            root.after(0, lambda: knapp.configure(state="normal"))
+            root.after(0, lambda: trana_knapp.configure(state="normal"))
+
+        threading.Thread(target=kör, daemon=True).start()
+
+    trana_knapp = ttk.Button(f_knapp, text="Träna modell…",
+                             command=trana_modell)
+    trana_knapp.pack(side="right", padx=6)
 
     def kor():
         cmd, fel = bygg_kommando(vals)
