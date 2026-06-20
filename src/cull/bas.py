@@ -46,5 +46,4 @@ def poangsatt(jpg_path):
         "exp":      exponering(gray),
         "ansikten": n_ans,
         "ogon":     n_ogon,
-        "_img":     img,
     }

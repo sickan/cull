@@ -157,17 +157,10 @@ def las_trojnummer(img_bgr, yolo_results, ocr, bevaka):
     return False
 
 
-def bonus(img_bgr, modeller, hemma_farg, bevaka):
-    """Räknar ihop alla AI-bonusar för en bild."""
+def _bonus_fran_yolo(img_bgr, yolo_res, modeller, hemma_farg, bevaka):
+    """Beräknar AI-bonusar givet ett redan kört YOLO-resultat."""
     b = {"armar": 0.0, "boll": 0.0, "hemma": 0.0, "trojnummer": 0.0,
-         "_yolo": None}
-
-    yolo = modeller["yolo"]
-    if yolo is None:
-        return b
-
-    yolo_res = yolo(img_bgr, verbose=False)[0]
-    b["_yolo"] = yolo_res
+         "_yolo": yolo_res}
 
     klasser = yolo_res.boxes.cls.tolist() if yolo_res.boxes else []
     b["boll"] = 0.08 if 32 in klasser else 0.0
@@ -190,3 +183,32 @@ def bonus(img_bgr, modeller, hemma_farg, bevaka):
             b["trojnummer"] = 0.12
 
     return b
+
+
+def bonus(img_bgr, modeller, hemma_farg, bevaka):
+    """AI-bonusar för en enskild bild."""
+    yolo = modeller["yolo"]
+    if yolo is None:
+        return {"armar": 0.0, "boll": 0.0, "hemma": 0.0, "trojnummer": 0.0,
+                "_yolo": None}
+    yolo_res = yolo(img_bgr, verbose=False)[0]
+    return _bonus_fran_yolo(img_bgr, yolo_res, modeller, hemma_farg, bevaka)
+
+
+def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
+                batch_storlek=16):
+    """
+    Kör YOLO i batch för snabbhet, sedan MediaPipe/OCR per bild.
+    Skriver bonusar direkt in i resultat_refs-diktarna.
+    """
+    yolo = modeller["yolo"]
+    if yolo is None:
+        return
+
+    for start in range(0, len(imgs_bgr), batch_storlek):
+        batch_imgs = imgs_bgr[start:start + batch_storlek]
+        batch_refs = resultat_refs[start:start + batch_storlek]
+        yolo_res_list = yolo(batch_imgs, verbose=False)
+        for img, ref, yolo_res in zip(batch_imgs, batch_refs, yolo_res_list):
+            b = _bonus_fran_yolo(img, yolo_res, modeller, hemma_farg, bevaka)
+            ref.update(b)
