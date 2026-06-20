@@ -143,7 +143,26 @@ def main():
         from cull import ai_lager
         print("Laddar AI-modeller…", flush=True)
         modeller = ai_lager.ladda_modeller(med_ocr=bool(bevaka))
-        print("AI-modeller redo.\n", flush=True)
+        print("AI-modeller redo.", flush=True)
+
+    # --- Sammanfattning av aktiva kriterier ---
+    print("\nAktiva kriterier:", flush=True)
+    if args.ai:
+        print("  ✓ Skärpa + exponering + ögon (alltid)", flush=True)
+        print("  ✓ AI: armar i luften (MediaPipe Pose)", flush=True)
+        print("  ✓ AI: boll synlig (YOLOv8)", flush=True)
+        if args.hemma_farg:
+            print(f"  ✓ AI: hemmalagsfärg — {args.hemma_farg}", flush=True)
+        if bevaka:
+            print(f"  ✓ AI: tröjnummer — {', '.join(sorted(bevaka))} (EasyOCR)", flush=True)
+    else:
+        print("  ✓ Skärpa + exponering + ögon", flush=True)
+    if args.avspark:
+        print(f"  ✓ Matchfas — avspark {args.avspark}", flush=True)
+    if args.xmp:
+        print("  ✓ XMP-sidecars (crop + upprätnning)", flush=True)
+    n_behall_est = args.topp if args.topp else f"~{int(len(nef_filer) * args.andel)}"
+    print(f"  Urval: {n_behall_est} bilder av {len(nef_filer)}\n", flush=True)
 
     # --- Metadata (tidsstämplar) ---
     print("Hämtar metadata…", flush=True)
@@ -158,7 +177,7 @@ def main():
             ref_dt = datetime.fromtimestamp(forsta_tid)
             avspark_ts = matchfas.parse_avspark(args.avspark, ref_dt)
             if avspark_ts:
-                print(f"Avspark {args.avspark} — matchfas-bonus aktiv.", flush=True)
+                print(f"  Avspark {args.avspark} — matchfas-bonus aktiv.", flush=True)
 
     # --- Fas 1: Batch-extrahering av previews ---
     print(f"\nExtraherar previews (batch)…", flush=True)
