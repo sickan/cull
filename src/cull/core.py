@@ -12,6 +12,7 @@ OCR:  pipx inject cull easyocr
 """
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -97,6 +98,13 @@ def main():
 
     bevaka = set(args.bevaka.split(",")) if args.bevaka else set()
     med_ocr = bool(bevaka)
+
+    # MediaPipe/TF kör bakgrundstrådar som skriver telemetri till stderr.
+    # All vår output går till stdout — stäng stderr permanent vid AI-körning.
+    if args.ai:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, 2)
+        os.close(devnull)
 
     print(f"{len(nef_filer)} NEF hittade. Extraherar previews och poängsätter…")
 
