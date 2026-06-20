@@ -1,8 +1,13 @@
 """AI-lager: YOLOv8, MediaPipe Pose, EasyOCR för tröjnummer."""
 
+import os
 import sys
 import urllib.request
 from pathlib import Path
+
+# Tysta TensorFlow Lite / MediaPipe-loggar
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+os.environ.setdefault("GLOG_minloglevel", "3")
 
 import cv2
 import numpy as np
