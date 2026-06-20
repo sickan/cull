@@ -1,19 +1,14 @@
-#!/usr/bin/env python3
 """
 cull — teknisk culling av NEF-uppdrag (macOS)
 
-Extraherar inbäddad JPEG-preview ur varje NEF, poängsätter på skärpa /
-exponering / ögon och kopierar topp-urvalet till urval/.
+Användning:
+  cull <katalog>
+  cull <katalog> --topp 30 --ai --hemma-farg blå --bevaka 9,11
+  cull <katalog> --avspark 19:00 --xmp --rapport
 
-Valfritt AI-lager (--ai) aktiverar YOLOv8 + MediaPipe för att ge bonus
-till bilder med armar i luften (målgest), synlig boll och hemmalagsfärg.
-
-Krav:
-  exiftool (brew install exiftool)
-  opencv-python, numpy (ingår)
-
-AI-tillägg (valfritt):
-  pip install 'cull[ai]'   eller   pipx inject cull ultralytics mediapipe
+Krav: exiftool (brew install exiftool)
+AI:   pipx inject cull ultralytics mediapipe
+OCR:  pipx inject cull easyocr
 """
 
 import argparse
@@ -21,28 +16,16 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 try:
-    import cv2
     import numpy as np
 except ImportError:
-    sys.exit("Saknar opencv/numpy. Kör: pip install opencv-python numpy")
+    sys.exit("Saknar numpy. Kör: pip install numpy")
 
-# --- färgnamn → HSV-intervall (lower, upper) --------------------------------
-
-FARG_HSV = {
-    "röd":    ([0,   100, 100], [10,  255, 255]),
-    "mörkröd":([170, 100, 100], [180, 255, 255]),
-    "blå":    ([100, 100,  80], [130, 255, 255]),
-    "ljusblå":([85,  80,  80], [105, 255, 255]),
-    "gul":    ([20,  100, 100], [35,  255, 255]),
-    "grön":   ([40,  80,  80],  [80,  255, 255]),
-    "vit":    ([0,   0,   180], [180,  30, 255]),
-    "svart":  ([0,   0,   0],   [180, 255,  60]),
-    "orange": ([10,  150, 150], [20,  255, 255]),
-    "lila":   ([130, 80,  80],  [160, 255, 255]),
-}
+from cull import bas, matchfas, xmp_writer
+from cull.ai_lager import FARG_NAMN
 
 
 def kontrollera_exiftool():
@@ -62,205 +45,8 @@ def extrahera_preview(nef_path, ut_dir):
     return None
 
 
-def skarpa(gray):
-    return cv2.Laplacian(gray, cv2.CV_64F).var()
-
-
-def exponering(gray):
-    hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten()
-    total = hist.sum()
-    klippt_hog = hist[250:].sum() / total
-    klippt_lag = hist[:5].sum() / total
-    medel = gray.mean() / 255.0
-    straff = klippt_hog * 2.0 + klippt_lag * 1.5 + abs(medel - 0.45)
-    return max(0.0, 1.0 - straff)
-
-
-def ogon_ansikten(gray):
-    f_cas = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    e_cas = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_eye.xml")
-    ansikten = f_cas.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
-    ogon = sum(
-        len(e_cas.detectMultiScale(gray[y:y+h, x:x+w], 1.1, 6))
-        for (x, y, w, h) in ansikten
-    )
-    return len(ansikten), ogon
-
-
-def bas_poangsatt(jpg_path):
-    img = cv2.imread(str(jpg_path))
-    if img is None:
-        return None
-    h, w = img.shape[:2]
-    if max(h, w) > 1600:
-        s = 1600 / max(h, w)
-        img = cv2.resize(img, (int(w * s), int(h * s)))
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    n_ans, n_ogon = ogon_ansikten(gray)
-    return {
-        "skarpa":   skarpa(gray),
-        "exp":      exponering(gray),
-        "ansikten": n_ans,
-        "ogon":     n_ogon,
-        "_img":     img,
-    }
-
-
-# --- AI-lager ----------------------------------------------------------------
-
-_POSE_MODEL_URL = (
-    "https://storage.googleapis.com/mediapipe-models/"
-    "pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
-)
-_POSE_MODEL_PATH = Path.home() / ".cache" / "cull" / "pose_landmarker_lite.task"
-
-
-def _hamta_pose_modell():
-    """Laddar ned pose-modellen till ~/.cache/cull/ om den saknas."""
-    if _POSE_MODEL_PATH.exists():
-        return _POSE_MODEL_PATH
-    import urllib.request
-    _POSE_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    print("Laddar ned MediaPipe pose-modell (~3 MB)…")
-    urllib.request.urlretrieve(_POSE_MODEL_URL, _POSE_MODEL_PATH)
-    print("Pose-modell nedladdad.")
-    return _POSE_MODEL_PATH
-
-
-def ladda_ai_modeller():
-    """Returnerar (yolo, pose_detektor_eller_None)."""
-    try:
-        from ultralytics import YOLO
-    except ImportError:
-        sys.exit("AI-läget kräver ultralytics: pipx inject cull ultralytics")
-
-    yolo = YOLO("yolov8n.pt")
-
-    pose = None
-    try:
-        from mediapipe.tasks import python as mp_python
-        from mediapipe.tasks.python import vision as mp_vision
-
-        modell = _hamta_pose_modell()
-        opts = mp_vision.PoseLandmarkerOptions(
-            base_options=mp_python.BaseOptions(model_asset_path=str(modell)),
-            num_poses=4,
-            min_pose_detection_confidence=0.4,
-        )
-        pose = mp_vision.PoseLandmarker.create_from_options(opts)
-        print("MediaPipe Pose: aktivt")
-    except Exception as e:
-        print(f"MediaPipe Pose: ej tillgängligt ({e}) — armar-bonus inaktiverad")
-
-    return yolo, pose
-
-
-def armar_uppe(pose_result):
-    """
-    True om minst en detekterad person har händerna klart ovanför axlarna.
-    Landmärkes-index: 11=vänster axel, 12=höger axel, 15=vänster handled, 16=höger handled.
-    y ökar nedåt i normaliserade koordinater.
-    """
-    for landmarker in (pose_result.pose_landmarks or []):
-        lm = landmarker
-        try:
-            v_axel = (lm[11].y + lm[12].y) / 2
-            v_hand = min(lm[15].y, lm[16].y)
-            if v_hand < v_axel - 0.05:
-                return True
-        except (IndexError, AttributeError):
-            continue
-    return False
-
-
-def hemma_farg_andel(img_bgr, farg_namn):
-    """
-    Andel pixlar i bilden som matchar hemmalagsfärgen (0..1).
-    Söker i den nedre 2/3-delen (spelare, inte himmel/publik).
-    """
-    if farg_namn not in FARG_HSV:
-        return 0.0
-    lo, hi = [np.array(x, np.uint8) for x in FARG_HSV[farg_namn]]
-    h = img_bgr.shape[0]
-    roi = img_bgr[h // 3:, :]
-    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lo, hi)
-    return mask.sum() / 255 / mask.size
-
-
-def ai_bonus(img_bgr, yolo, pose, hemma_farg):
-    """Returnerar en dict med AI-baserade bonusvärden."""
-    bonus = {"armar": 0.0, "boll": 0.0, "hemma": 0.0}
-
-    # YOLOv8 — leta efter boll (klass 32) och spelare (klass 0)
-    results = yolo(img_bgr, verbose=False)[0]
-    klasser = results.boxes.cls.tolist() if results.boxes else []
-    bonus["boll"] = 0.08 if 32 in klasser else 0.0
-
-    # MediaPipe Pose — armar uppe?
-    if pose is not None:
-        import mediapipe as mp
-        rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        pose_res = pose.detect(mp_img)
-        if armar_uppe(pose_res):
-            bonus["armar"] = 0.15
-
-    # Hemmalagsfärg
-    if hemma_farg:
-        andel = hemma_farg_andel(img_bgr, hemma_farg)
-        bonus["hemma"] = min(andel * 2, 0.08)   # max +0.08
-
-    return bonus
-
-
-# --- huvud -------------------------------------------------------------------
-
-def parse_tid(s):
-    try:
-        from datetime import datetime
-        s = s.replace(":", "-", 2)
-        return datetime.fromisoformat(s.strip()).timestamp()
-    except Exception:
-        return None
-
-
-def main():
-    ap = argparse.ArgumentParser(
-        prog="cull",
-        description="Teknisk culling av NEF-filer.",
-    )
-    ap.add_argument("katalog")
-    ap.add_argument("--topp",      type=int,   default=None)
-    ap.add_argument("--andel",     type=float, default=0.20)
-    ap.add_argument("--burst-sek", type=float, default=2.0)
-    ap.add_argument("--rapport",   action="store_true")
-    ap.add_argument("--ai",        action="store_true",
-                    help="aktivera YOLOv8 + MediaPipe (kräver 'cull[ai]')")
-    ap.add_argument("--hemma-farg", default=None, metavar="FÄRG",
-                    help=f"hemmalagsfärg: {', '.join(FARG_HSV)}")
-    args = ap.parse_args()
-
-    if args.hemma_farg and not args.ai:
-        print("Tips: --hemma-farg har effekt bara tillsammans med --ai.")
-
-    kontrollera_exiftool()
-    katalog = Path(args.katalog).expanduser()
-    if not katalog.is_dir():
-        sys.exit(f"Hittar inte katalogen: {katalog}")
-
-    nef_filer = sorted(p for p in katalog.iterdir() if p.suffix.lower() == ".nef")
-    if not nef_filer:
-        sys.exit("Inga NEF-filer i katalogen.")
-
-    print(f"{len(nef_filer)} NEF hittade. Extraherar previews och poängsätter…")
-    if args.ai:
-        print("Laddar AI-modeller (YOLOv8 + MediaPipe)…")
-        yolo, pose = ladda_ai_modeller()
-        print("AI-modeller redo.\n")
-
+def hamta_metadata(nef_filer):
+    """Hämtar filnamn och tidsstämpel för alla NEF i ett svep."""
     r = subprocess.run(
         ["exiftool", "-T", "-FileName", "-SubSecDateTimeOriginal",
          *[str(p) for p in nef_filer]],
@@ -271,6 +57,69 @@ def main():
         delar = rad.split("\t")
         if len(delar) >= 2:
             tider[delar[0]] = delar[1]
+    return tider
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="cull",
+        description="Teknisk culling av NEF-filer.",
+    )
+    ap.add_argument("katalog")
+    ap.add_argument("--topp",       type=int,   default=None,
+                    help="behåll N bästa")
+    ap.add_argument("--andel",      type=float, default=0.20,
+                    help="behåll denna andel (default 0.20)")
+    ap.add_argument("--burst-sek",  type=float, default=2.0,
+                    help="burst-gräns i sekunder (default 2.0)")
+    ap.add_argument("--rapport",    action="store_true",
+                    help="poängsätt utan att kopiera")
+    ap.add_argument("--ai",         action="store_true",
+                    help="aktivera YOLOv8 + MediaPipe")
+    ap.add_argument("--hemma-farg", default=None, metavar="FÄRG",
+                    help=f"hemmalagsfärg: {', '.join(FARG_NAMN)}")
+    ap.add_argument("--bevaka",     default=None, metavar="9,11",
+                    help="tröjnummer att prioritera (kräver --ai, easyocr)")
+    ap.add_argument("--avspark",    default=None, metavar="HH:MM",
+                    help="avsparktid för matchfas-bonus")
+    ap.add_argument("--xmp",        action="store_true",
+                    help="skriv XMP-sidecars med crop och upprätnning")
+    args = ap.parse_args()
+
+    kontrollera_exiftool()
+    katalog = Path(args.katalog).expanduser()
+    if not katalog.is_dir():
+        sys.exit(f"Hittar inte katalogen: {katalog}")
+
+    nef_filer = sorted(p for p in katalog.iterdir() if p.suffix.lower() == ".nef")
+    if not nef_filer:
+        sys.exit("Inga NEF-filer i katalogen.")
+
+    bevaka = set(args.bevaka.split(",")) if args.bevaka else set()
+    med_ocr = bool(bevaka)
+
+    print(f"{len(nef_filer)} NEF hittade. Extraherar previews och poängsätter…")
+
+    if args.ai:
+        from cull import ai_lager
+        print("Laddar AI-modeller…")
+        modeller = ai_lager.ladda_modeller(med_ocr=med_ocr)
+        print()
+
+    tider = hamta_metadata(nef_filer)
+
+    # Referensdatum för avspark (från första bildens tidsstämpel)
+    avspark_ts = None
+    if args.avspark:
+        forsta_tid = next(
+            (matchfas.parse_tid(t) for t in tider.values() if matchfas.parse_tid(t)),
+            None
+        )
+        if forsta_tid:
+            ref_dt = datetime.fromtimestamp(forsta_tid)
+            avspark_ts = matchfas.parse_avspark(args.avspark, ref_dt)
+            if avspark_ts:
+                print(f"Avspark satt till {args.avspark} — matchfas-bonus aktiv.\n")
 
     resultat = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -279,34 +128,53 @@ def main():
             if preview is None:
                 print(f"  [{i}/{len(nef_filer)}] {nef.name}: ingen preview, hoppar")
                 continue
-            p = bas_poangsatt(preview)
+            p = bas.poangsatt(preview)
             if p is None:
                 continue
 
-            if args.ai:
-                img = p.pop("_img")
-                bonusar = ai_bonus(img, yolo, pose, args.hemma_farg)
-                p.update(bonusar)
-            else:
-                p.pop("_img", None)
-                p.update({"armar": 0.0, "boll": 0.0, "hemma": 0.0})
+            img = p.pop("_img")
 
-            p["fil"] = nef
-            p["tid"] = tider.get(nef.name, "")
+            # AI-bonusar
+            ai_b = {"armar": 0.0, "boll": 0.0, "hemma": 0.0,
+                    "trojnummer": 0.0, "_yolo": None}
+            if args.ai:
+                ai_b = ai_lager.bonus(img, modeller, args.hemma_farg, bevaka)
+
+            # Matchfas-bonus
+            fas_b = 0.0
+            tid_str = tider.get(nef.name, "")
+            if avspark_ts and tid_str:
+                ts = matchfas.parse_tid(tid_str)
+                if ts:
+                    fas_b = matchfas.fas_bonus(matchfas.matchminut(ts, avspark_ts))
+
+            p.update({
+                "armar":      ai_b["armar"],
+                "boll":       ai_b["boll"],
+                "hemma":      ai_b["hemma"],
+                "trojnummer": ai_b["trojnummer"],
+                "fas":        fas_b,
+                "_yolo":      ai_b.get("_yolo"),
+                "_img_bgr":   img if args.xmp else None,
+                "fil":        nef,
+                "tid":        tid_str,
+            })
             resultat.append(p)
+
             if i % 25 == 0:
                 print(f"  …{i}/{len(nef_filer)}")
 
     if not resultat:
         sys.exit("Inget kunde poängsättas.")
 
-    # normalisera skärpa globalt
+    # Normalisera skärpa globalt
     sk = np.array([r["skarpa"] for r in resultat])
     lo, hi = np.percentile(sk, 5), np.percentile(sk, 95)
     spann = max(hi - lo, 1e-6)
     for r in resultat:
         r["skarpa_n"] = float(np.clip((r["skarpa"] - lo) / spann, 0, 1))
 
+    # Sammanvägd poäng
     for r in resultat:
         ogon_bonus = 0.0
         if r["ansikten"] > 0:
@@ -318,15 +186,17 @@ def main():
             + r["armar"]
             + r["boll"]
             + r["hemma"]
+            + r["trojnummer"]
+            + r["fas"]
         )
 
-    # burst-gruppering
-    har_tid = all(parse_tid(r["tid"]) is not None for r in resultat)
+    # Burst-gruppering
+    har_tid = all(matchfas.parse_tid(r["tid"]) is not None for r in resultat)
     if har_tid:
-        resultat.sort(key=lambda r: parse_tid(r["tid"]))
+        resultat.sort(key=lambda r: matchfas.parse_tid(r["tid"]))
         grupp, forra = 0, None
         for r in resultat:
-            t = parse_tid(r["tid"])
+            t = matchfas.parse_tid(r["tid"])
             if forra is not None and t - forra > args.burst_sek:
                 grupp += 1
             r["grupp"] = grupp
@@ -356,11 +226,16 @@ def main():
     print(f"\nBehåller {len(valda)} av {n_total} ({len(basta_per_grupp)} burst-grupper).\n")
     print("Topp-urval:")
     for r in sorted(valda, key=lambda r: r["poang"], reverse=True)[:40]:
-        ai_rad = (f"  armar={'ja' if r['armar'] else 'nej'}"
-                  f"  boll={'ja' if r['boll'] else 'nej'}"
-                  f"  hemma={r['hemma']:.2f}") if args.ai else ""
+        bonusar = ""
+        if args.ai or avspark_ts:
+            bonusar = (
+                f"  armar={'ja' if r['armar'] else 'nej'}"
+                f"  boll={'ja' if r['boll'] else 'nej'}"
+                f"  nr={'ja' if r['trojnummer'] else 'nej'}"
+                f"  fas={r['fas']:.2f}"
+            )
         print(f"  {r['poang']:.3f}  sk {r['skarpa_n']:.2f}  "
-              f"exp {r['exp']:.2f}  ans {r['ansikten']}{ai_rad}  {r['fil'].name}")
+              f"exp {r['exp']:.2f}  ans {r['ansikten']}{bonusar}  {r['fil'].name}")
 
     if args.rapport:
         print("\n(Rapportläge — inget kopierades.)")
@@ -368,13 +243,24 @@ def main():
 
     ut_dir = katalog / "urval"
     ut_dir.mkdir(exist_ok=True)
+
     for r in valda:
         shutil.copy2(r["fil"], ut_dir / r["fil"].name)
-        xmp = r["fil"].with_suffix(".xmp")
-        if xmp.exists():
-            shutil.copy2(xmp, ut_dir / xmp.name)
+
+        # XMP — skriv ny sidecar med crop + upprätnning
+        if args.xmp and r["_img_bgr"] is not None:
+            crop   = xmp_writer.berakna_crop(r["_yolo"], r["_img_bgr"].shape)
+            vinkel = xmp_writer.berakna_uppratning(r["_img_bgr"])
+            xmp_writer.skriv_xmp(ut_dir / r["fil"].name, crop=crop, vinkel=vinkel)
+        else:
+            # Kopiera befintlig XMP-sidecar om den finns
+            xmp = r["fil"].with_suffix(".xmp")
+            if xmp.exists():
+                shutil.copy2(xmp, ut_dir / xmp.name)
 
     print(f"\nKlart. {len(valda)} NEF kopierade till: {ut_dir}")
+    if args.xmp:
+        print(f"XMP-sidecars skrivna med beskärning och upprätnning.")
 
 
 if __name__ == "__main__":
