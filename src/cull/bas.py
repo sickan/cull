@@ -5,7 +5,23 @@ import numpy as np
 
 
 def skarpa(gray):
-    return cv2.Laplacian(gray, cv2.CV_64F).var()
+    """
+    Mäter skärpa som max av nio överlappande patches (3×3 rutnät).
+    Belönar bilder där motivet är skarpt oavsett var i bilden det befinner sig,
+    utan att bokeh-bakgrund sänker poängen.
+    """
+    h, w = gray.shape
+    ph, pw = h // 2, w // 2
+    bast = 0.0
+    for row in range(3):
+        for col in range(3):
+            y1 = row * h // 4
+            x1 = col * w // 4
+            patch = gray[y1:y1 + ph, x1:x1 + pw]
+            v = cv2.Laplacian(patch, cv2.CV_64F).var()
+            if v > bast:
+                bast = v
+    return bast
 
 
 def exponering(gray):

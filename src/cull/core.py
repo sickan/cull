@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -164,8 +165,11 @@ def main():
     n_behall_est = args.topp if args.topp else f"~{int(len(nef_filer) * args.andel)}"
     print(f"  Urval: {n_behall_est} bilder av {len(nef_filer)}\n", flush=True)
 
+    tider_fas = {}   # tidmätning per fas
+
     # --- Metadata (tidsstämplar) ---
     print("Hämtar metadata…", flush=True)
+    _t = time.perf_counter()
     tider = hamta_metadata(nef_filer)
 
     avspark_ts = None
@@ -178,17 +182,21 @@ def main():
             avspark_ts = matchfas.parse_avspark(args.avspark, ref_dt)
             if avspark_ts:
                 print(f"  Avspark {args.avspark} — matchfas-bonus aktiv.", flush=True)
+    tider_fas["Metadata"] = time.perf_counter() - _t
 
-    # --- Fas 1: Batch-extrahering av previews ---
-    print(f"\nExtraherar previews (batch)…", flush=True)
+    # --- Fas 1: Extrahering av previews ---
+    print(f"\nExtraherar previews…", flush=True)
+    _t = time.perf_counter()
     with tempfile.TemporaryDirectory() as tmp:
         preview_map = extrahera_previews_batch(nef_filer, tmp)
         giltiga = [(nef, jpg) for nef, jpg in preview_map.items() if jpg]
+        tider_fas["Extrahering"] = time.perf_counter() - _t
         print(f"{len(giltiga)} previews extraherade "
               f"({len(nef_filer) - len(giltiga)} saknade).\n", flush=True)
 
         # --- Fas 2: Parallell baspoängsättning ---
         print(f"Baspoängsätter med {N_WORKERS} trådar…", flush=True)
+        _t = time.perf_counter()
         resultat = []
         klar = 0
 
@@ -220,6 +228,8 @@ def main():
                 })
                 resultat.append(p)
 
+        tider_fas["Baspoäng"] = time.perf_counter() - _t
+
         if not resultat:
             sys.exit("Inget kunde poängsättas.")
 
@@ -241,11 +251,13 @@ def main():
 
         # --- Fas 3: AI på topp 50 % ---
         if args.ai and modeller:
+            _t = time.perf_counter()
             n_kandidater = max(1, int(len(resultat) * AI_KANDIDAT_ANDEL))
             kandidater = sorted(resultat, key=lambda r: r["bas"],
                                 reverse=True)[:n_kandidater]
+            n_pose = len(modeller.get("pose_pool", []))
             print(f"\nAI-analys på topp {n_kandidater} kandidater "
-                  f"(batch-YOLO + MediaPipe)…", flush=True)
+                  f"(YOLO-batch + {n_pose} pose-trådar)…", flush=True)
 
             imgs  = []
             for r in kandidater:
@@ -262,6 +274,7 @@ def main():
                         args.hemma_farg, bevaka, batch_storlek=16,
                         progress_cb=lambda klar, tot:
                             print(f"  AI …{klar}/{tot}", flush=True))
+            tider_fas["AI"] = time.perf_counter() - _t
             print(f"AI klar.", flush=True)
 
         # Slutpoäng
@@ -355,9 +368,18 @@ def main():
                 if xmp.exists():
                     shutil.copy2(xmp, ut_dir / xmp.name)
 
+    # Tidrapport
+    if tider_fas:
+        print("\nTid per fas:")
+        for fas, sek in tider_fas.items():
+            print(f"  {fas:<16} {sek:5.1f} s")
+        print(f"  {'Totalt':<16} {sum(tider_fas.values()):5.1f} s")
+
     print(f"\nKlart. {len(valda)} NEF kopierade till: {ut_dir}")
     if args.xmp:
         print("XMP-sidecars skrivna med beskärning och upprätnning.")
+
+    subprocess.Popen(["open", str(ut_dir)])
 
 
 def _main_safe():

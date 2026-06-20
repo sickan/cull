@@ -1,15 +1,39 @@
 """Grafiskt gränssnitt för cull — välj katalog och kriterier, se output live."""
 
+import json
 import os
+import re
 import subprocess
 import sys
 import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, ttk
-
 
 FARGER = ["", "blå", "ljusblå", "röd", "mörkröd", "gul", "grön",
           "vit", "svart", "orange", "lila"]
+
+SETTINGS_PATH = Path.home() / ".config" / "cull" / "settings.json"
+SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
+                 "bevaka", "avspark", "topp", "andel", "burst_sek"]
+
+
+def ladda_installningar():
+    try:
+        with open(SETTINGS_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def spara_installningar(vals):
+    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    data = {}
+    for k in SETTINGS_KEYS:
+        v = vals[k]
+        data[k] = v.get() if hasattr(v, "get") else v
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 def bygg_kommando(vals):
@@ -54,6 +78,76 @@ def bygg_kommando(vals):
     return cmd, None
 
 
+def visa_miniatyrer(fönster, urval_mapp, max_bilder=10):
+    """Öppnar ett fönster med miniatyrer från urval-mappen."""
+    try:
+        from PIL import Image, ImageTk
+    except ImportError:
+        return  # Pillow saknas — hoppa över miniatyrer
+
+    mapp = Path(urval_mapp)
+    nef_filer = sorted(mapp.glob("*.NEF")) + sorted(mapp.glob("*.nef"))
+    if not nef_filer:
+        return
+
+    topp = tk.Toplevel(fönster)
+    topp.title(f"Urval — {mapp.name}")
+
+    canvas = tk.Canvas(topp, bg="#1a1a1a")
+    scroll_x = ttk.Scrollbar(topp, orient="horizontal", command=canvas.xview)
+    canvas.configure(xscrollcommand=scroll_x.set)
+
+    scroll_x.pack(side="bottom", fill="x")
+    canvas.pack(fill="both", expand=True)
+
+    inner = tk.Frame(canvas, bg="#1a1a1a")
+    canvas.create_window((0, 0), window=inner, anchor="nw")
+
+    refs = []  # förhindra garbage collection
+
+    def ladda_i_bakgrunden():
+        col = 0
+        for nef in nef_filer[:max_bilder]:
+            jpg = mapp / (nef.stem + ".jpg")
+            # Extrahera preview om jpg inte finns
+            if not jpg.exists():
+                try:
+                    subprocess.run(
+                        ["exiftool", "-b", "-JpgFromRaw", "-w!", "%d%f.jpg", str(nef)],
+                        capture_output=True, timeout=10,
+                    )
+                except Exception:
+                    pass
+            if not jpg.exists():
+                continue
+            try:
+                img = Image.open(jpg)
+                img.thumbnail((220, 160))
+                photo = ImageTk.PhotoImage(img)
+                refs.append(photo)
+                c = col
+                topp.after(0, lambda ph=photo, cc=c, name=nef.name: _placera(ph, cc, name))
+                col += 1
+            except Exception:
+                continue
+
+        def _fixera_scroll():
+            inner.update_idletasks()
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        topp.after(0, _fixera_scroll)
+
+    def _placera(photo, col, name):
+        f = tk.Frame(inner, bg="#1a1a1a", padx=4, pady=4)
+        f.grid(row=0, column=col)
+        tk.Label(f, image=photo, bg="#1a1a1a").pack()
+        tk.Label(f, text=name, fg="#aaaaaa", bg="#1a1a1a",
+                 font=("Menlo", 9)).pack()
+
+    threading.Thread(target=ladda_i_bakgrunden, daemon=True).start()
+    topp.geometry("800x260")
+
+
 def main():
     root = tk.Tk()
     root.title("cull")
@@ -62,16 +156,20 @@ def main():
     pad = {"padx": 10, "pady": 4}
     vals = {}
 
+    saved = ladda_installningar()
+
     # --- Katalog ---
     f_katalog = ttk.LabelFrame(root, text="Katalog", padding=8)
     f_katalog.grid(row=0, column=0, sticky="ew", **pad)
 
-    vals["katalog"] = tk.StringVar()
+    vals["katalog"] = tk.StringVar(value=saved.get("katalog", ""))
     ttk.Entry(f_katalog, textvariable=vals["katalog"], width=52).grid(
         row=0, column=0, padx=(0, 6))
 
     def valj_katalog():
-        d = filedialog.askdirectory(title="Välj uppdragskatalog")
+        initial = vals["katalog"].get().strip() or "/"
+        d = filedialog.askdirectory(title="Välj uppdragskatalog",
+                                    initialdir=initial)
         if d:
             vals["katalog"].set(d)
 
@@ -85,19 +183,19 @@ def main():
         ttk.Label(parent, text=etikett).grid(row=row, column=0, sticky="w", pady=2)
 
     # AI
-    vals["ai"] = tk.BooleanVar(value=True)
+    vals["ai"] = tk.BooleanVar(value=saved.get("ai", True))
     ttk.Checkbutton(f_krit, text="AI  (YOLOv8 + MediaPipe Pose)",
                     variable=vals["ai"]).grid(row=0, column=0, columnspan=2,
                                               sticky="w", pady=2)
 
     # XMP
-    vals["xmp"] = tk.BooleanVar(value=False)
+    vals["xmp"] = tk.BooleanVar(value=saved.get("xmp", False))
     ttk.Checkbutton(f_krit, text="Skriv XMP-sidecars  (beskärning + upprätnning)",
                     variable=vals["xmp"]).grid(row=1, column=0, columnspan=2,
                                                sticky="w", pady=2)
 
     # Rapport
-    vals["rapport"] = tk.BooleanVar(value=False)
+    vals["rapport"] = tk.BooleanVar(value=saved.get("rapport", False))
     ttk.Checkbutton(f_krit, text="Rapportläge  (poängsätt, kopiera inget)",
                     variable=vals["rapport"]).grid(row=2, column=0, columnspan=2,
                                                    sticky="w", pady=2)
@@ -107,14 +205,14 @@ def main():
 
     # Hemmalagsfärg
     rad(f_krit, "Hemmalagsfärg", 4)
-    vals["hemma_farg"] = tk.StringVar()
+    vals["hemma_farg"] = tk.StringVar(value=saved.get("hemma_farg", ""))
     ttk.Combobox(f_krit, textvariable=vals["hemma_farg"],
                  values=FARGER, width=14, state="readonly").grid(
         row=4, column=1, sticky="w")
 
     # Bevaka tröjnummer
     rad(f_krit, "Bevaka tröjnummer", 5)
-    vals["bevaka"] = tk.StringVar()
+    vals["bevaka"] = tk.StringVar(value=saved.get("bevaka", ""))
     ttk.Entry(f_krit, textvariable=vals["bevaka"], width=16).grid(
         row=5, column=1, sticky="w")
     ttk.Label(f_krit, text="  t.ex. 9,11", foreground="gray").grid(
@@ -122,7 +220,7 @@ def main():
 
     # Avspark
     rad(f_krit, "Avspark", 6)
-    vals["avspark"] = tk.StringVar()
+    vals["avspark"] = tk.StringVar(value=saved.get("avspark", ""))
     ttk.Entry(f_krit, textvariable=vals["avspark"], width=8).grid(
         row=6, column=1, sticky="w")
     ttk.Label(f_krit, text="  HH:MM", foreground="gray").grid(
@@ -132,15 +230,15 @@ def main():
     rad(f_krit, "Behåll", 7)
     f_behall = ttk.Frame(f_krit)
     f_behall.grid(row=7, column=1, columnspan=2, sticky="w")
-    vals["topp"] = tk.StringVar()
-    vals["andel"] = tk.StringVar(value="0.20")
+    vals["topp"] = tk.StringVar(value=saved.get("topp", ""))
+    vals["andel"] = tk.StringVar(value=saved.get("andel", "0.20"))
     ttk.Entry(f_behall, textvariable=vals["topp"], width=6).pack(side="left")
     ttk.Label(f_behall, text=" bilder  eller  andel ").pack(side="left")
     ttk.Entry(f_behall, textvariable=vals["andel"], width=6).pack(side="left")
 
     # Burst-sek
     rad(f_krit, "Burst-gräns (sek)", 8)
-    vals["burst_sek"] = tk.StringVar(value="2.0")
+    vals["burst_sek"] = tk.StringVar(value=saved.get("burst_sek", "2.0"))
     ttk.Entry(f_krit, textvariable=vals["burst_sek"], width=8).grid(
         row=8, column=1, sticky="w")
 
@@ -194,6 +292,8 @@ def main():
             status_var.set(fel)
             return
 
+        spara_installningar(vals)
+
         knapp.configure(state="disabled")
         status_var.set("Kör…")
         progress_var.set(0)
@@ -203,19 +303,17 @@ def main():
         logg.configure(state="disabled")
         skriv("$ " + " ".join(cmd) + "\n\n")
 
-        totalt    = [0]
-        pulsande  = [False]   # True när vi är i ett okänt-längd-steg
-        puls_job  = [None]
+        totalt       = [0]
+        pulsande     = [False]
+        urval_mapp   = [None]   # fångar "kopierade till: <path>"
 
-        import re
         re_total    = re.compile(r"^(\d+) NEF hittade")
         re_framsteg = re.compile(r"…(\d+)/(\d+)")
         re_hoppar   = re.compile(r"\[(\d+)/(\d+)\]")
+        re_urval    = re.compile(r"kopierade till:\s*(.+)$")
 
-        # Rader som startar ett okänt-längd-steg (indeterminate)
         PULS_START = ("Laddar AI", "Hämtar metadata", "Extraherar previews",
                       "AI-analys på topp")
-        # Rader som avslutar ett sådant steg
         PULS_STOPP = ("AI-modeller redo", "Avspark", "previews extraherade",
                       "AI klar", "Baspoängsätter")
 
@@ -257,6 +355,10 @@ def main():
             m = re_hoppar.search(rad)
             if m:
                 uppdatera_progress(int(m.group(1)), int(m.group(2)))
+                return
+            m = re_urval.search(rad_s)
+            if m:
+                urval_mapp[0] = m.group(1).strip()
 
         def kör_process():
             env = os.environ.copy()
@@ -283,6 +385,8 @@ def main():
                 "klar" if ok else "fel"
             ))
             root.after(0, lambda: knapp.configure(state="normal"))
+            if ok and urval_mapp[0]:
+                root.after(500, lambda: visa_miniatyrer(root, urval_mapp[0]))
 
         threading.Thread(target=kör_process, daemon=True).start()
 

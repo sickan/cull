@@ -63,12 +63,30 @@ def _hamta_pose_modell():
     return _POSE_MODEL_PATH
 
 
-def ladda_modeller(med_ocr=False):
+def _skapa_pose_detektor():
+    """Skapar en ny PoseLandmarker-instans (en per tråd i poolen)."""
+    from mediapipe.tasks import python as mp_python
+    from mediapipe.tasks.python import vision as mp_vision
+    modell = _hamta_pose_modell()
+    opts = mp_vision.PoseLandmarkerOptions(
+        base_options=mp_python.BaseOptions(model_asset_path=str(modell)),
+        num_poses=4,
+        min_pose_detection_confidence=0.4,
+    )
+    with _tysta_stderr():
+        return mp_vision.PoseLandmarker.create_from_options(opts)
+
+
+def ladda_modeller(med_ocr=False, n_pose=None):
     """
     Returnerar dict med laddade modeller.
-    Kraschar inte om enskild modell saknas — rapporterar och fortsätter.
+    n_pose: antal parallella pose-detektorer (default = CPU-kärnor, max 8).
     """
-    modeller = {"yolo": None, "pose": None, "ocr": None}
+    import os
+    if n_pose is None:
+        n_pose = min(os.cpu_count() or 4, 8)
+
+    modeller = {"yolo": None, "pose_pool": [], "ocr": None}
 
     try:
         from ultralytics import YOLO
@@ -79,17 +97,11 @@ def ladda_modeller(med_ocr=False):
         sys.exit("AI-läget kräver ultralytics: pipx inject cull ultralytics")
 
     try:
-        from mediapipe.tasks import python as mp_python
-        from mediapipe.tasks.python import vision as mp_vision
-        modell = _hamta_pose_modell()
-        opts = mp_vision.PoseLandmarkerOptions(
-            base_options=mp_python.BaseOptions(model_asset_path=str(modell)),
-            num_poses=4,
-            min_pose_detection_confidence=0.4,
-        )
-        with _tysta_stderr():
-            modeller["pose"] = mp_vision.PoseLandmarker.create_from_options(opts)
-        print("MediaPipe Pose: aktivt")
+        pool = []
+        for _ in range(n_pose):
+            pool.append(_skapa_pose_detektor())
+        modeller["pose_pool"] = pool
+        print(f"MediaPipe Pose: aktivt ({n_pose} detektorer)")
     except Exception as e:
         print(f"MediaPipe Pose: ej tillgängligt ({e})")
 
@@ -157,23 +169,26 @@ def las_trojnummer(img_bgr, yolo_results, ocr, bevaka):
     return False
 
 
-def _bonus_fran_yolo(img_bgr, yolo_res, modeller, hemma_farg, bevaka):
-    """Beräknar AI-bonusar givet ett redan kört YOLO-resultat."""
+def _kör_pose(args):
+    """Kör pose-detektion i en tråd med en dedikerad detektor från poolen."""
+    img_bgr, pose_detektor = args
+    import mediapipe as mp
+    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    with _tysta_stderr():
+        return pose_detektor.detect(mp_img)
+
+
+def _bonus_fran_yolo(img_bgr, yolo_res, pose_res, modeller, hemma_farg, bevaka):
+    """Beräknar AI-bonusar givet YOLO- och pose-resultat."""
     b = {"armar": 0.0, "boll": 0.0, "hemma": 0.0, "trojnummer": 0.0,
          "_yolo": yolo_res}
 
     klasser = yolo_res.boxes.cls.tolist() if yolo_res.boxes else []
     b["boll"] = 0.08 if 32 in klasser else 0.0
 
-    pose = modeller["pose"]
-    if pose is not None:
-        import mediapipe as mp
-        rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        with _tysta_stderr():
-            pose_res = pose.detect(mp_img)
-        if armar_uppe(pose_res):
-            b["armar"] = 0.15
+    if pose_res is not None and armar_uppe(pose_res):
+        b["armar"] = 0.15
 
     if hemma_farg:
         b["hemma"] = min(hemma_farg_andel(img_bgr, hemma_farg) * 2, 0.08)
@@ -185,35 +200,57 @@ def _bonus_fran_yolo(img_bgr, yolo_res, modeller, hemma_farg, bevaka):
     return b
 
 
-def bonus(img_bgr, modeller, hemma_farg, bevaka):
-    """AI-bonusar för en enskild bild."""
-    yolo = modeller["yolo"]
-    if yolo is None:
-        return {"armar": 0.0, "boll": 0.0, "hemma": 0.0, "trojnummer": 0.0,
-                "_yolo": None}
-    yolo_res = yolo(img_bgr, verbose=False)[0]
-    return _bonus_fran_yolo(img_bgr, yolo_res, modeller, hemma_farg, bevaka)
-
-
 def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
                 batch_storlek=16, progress_cb=None):
     """
-    Kör YOLO i batch för snabbhet, sedan MediaPipe/OCR per bild.
+    Kör YOLO i batch + parallell MediaPipe pose per bild.
     Skriver bonusar direkt in i resultat_refs-diktarna.
     """
+    from concurrent.futures import ThreadPoolExecutor
+    from queue import Queue
+
     yolo = modeller["yolo"]
     if yolo is None:
         return
 
+    # Bygg en pool av pose-detektorer via en kö
+    pose_pool = modeller.get("pose_pool", [])
+    pose_kö = Queue()
+    for d in pose_pool:
+        pose_kö.put(d)
+
     totalt = len(imgs_bgr)
     klar   = 0
+
     for start in range(0, totalt, batch_storlek):
         batch_imgs = imgs_bgr[start:start + batch_storlek]
         batch_refs = resultat_refs[start:start + batch_storlek]
+
+        # YOLO-batch
         yolo_res_list = yolo(batch_imgs, verbose=False)
-        for img, ref, yolo_res in zip(batch_imgs, batch_refs, yolo_res_list):
-            b = _bonus_fran_yolo(img, yolo_res, modeller, hemma_farg, bevaka)
+
+        # Parallell pose (en tråd per bild, lånar detektor från kön)
+        pose_results = [None] * len(batch_imgs)
+        if pose_pool:
+            def kör_en_pose(idx_img):
+                idx, img = idx_img
+                det = pose_kö.get()
+                try:
+                    return idx, _kör_pose((img, det))
+                finally:
+                    pose_kö.put(det)
+
+            n_workers = min(len(pose_pool), len(batch_imgs))
+            with ThreadPoolExecutor(max_workers=n_workers) as ex:
+                for idx, res in ex.map(kör_en_pose, enumerate(batch_imgs)):
+                    pose_results[idx] = res
+
+        for img, ref, yolo_res, pose_res in zip(
+                batch_imgs, batch_refs, yolo_res_list, pose_results):
+            b = _bonus_fran_yolo(img, yolo_res, pose_res, modeller,
+                                 hemma_farg, bevaka)
             ref.update(b)
+
         klar += len(batch_imgs)
         if progress_cb:
             progress_cb(klar, totalt)
