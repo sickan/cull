@@ -170,13 +170,17 @@ def las_trojnummer(img_bgr, yolo_results, ocr, bevaka):
 
 
 def _kör_pose(args):
-    """Kör pose-detektion i en tråd med en dedikerad detektor från poolen."""
+    """Kör pose-detektion i en tråd med en dedikerad detektor från poolen.
+
+    OBS: ingen fd-nivå-tystande här — `_tysta_stderr` manipulerar den
+    process-globala fd 2 och är inte trådsäker (kapplöpning ger
+    "Bad file descriptor" när flera pose-trådar kör samtidigt).
+    """
     img_bgr, pose_detektor = args
     import mediapipe as mp
     rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
     mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-    with _tysta_stderr():
-        return pose_detektor.detect(mp_img)
+    return pose_detektor.detect(mp_img)
 
 
 def _bonus_fran_yolo(img_bgr, yolo_res, pose_res, modeller, hemma_farg, bevaka):
@@ -222,35 +226,39 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
     totalt = len(imgs_bgr)
     klar   = 0
 
-    for start in range(0, totalt, batch_storlek):
-        batch_imgs = imgs_bgr[start:start + batch_storlek]
-        batch_refs = resultat_refs[start:start + batch_storlek]
+    # En enda fd-nivå-redirect runt hela loopen (anropas bara från
+    # huvudtråden) tystar C-nivå-varningar från MediaPipe/TF Lite utan den
+    # trådosäkra per-bild-varianten som gav "Bad file descriptor".
+    with _tysta_stderr():
+        for start in range(0, totalt, batch_storlek):
+            batch_imgs = imgs_bgr[start:start + batch_storlek]
+            batch_refs = resultat_refs[start:start + batch_storlek]
 
-        # YOLO-batch
-        yolo_res_list = yolo(batch_imgs, verbose=False)
+            # YOLO-batch
+            yolo_res_list = yolo(batch_imgs, verbose=False)
 
-        # Parallell pose (en tråd per bild, lånar detektor från kön)
-        pose_results = [None] * len(batch_imgs)
-        if pose_pool:
-            def kör_en_pose(idx_img):
-                idx, img = idx_img
-                det = pose_kö.get()
-                try:
-                    return idx, _kör_pose((img, det))
-                finally:
-                    pose_kö.put(det)
+            # Parallell pose (en tråd per bild, lånar detektor från kön)
+            pose_results = [None] * len(batch_imgs)
+            if pose_pool:
+                def kör_en_pose(idx_img):
+                    idx, img = idx_img
+                    det = pose_kö.get()
+                    try:
+                        return idx, _kör_pose((img, det))
+                    finally:
+                        pose_kö.put(det)
 
-            n_workers = min(len(pose_pool), len(batch_imgs))
-            with ThreadPoolExecutor(max_workers=n_workers) as ex:
-                for idx, res in ex.map(kör_en_pose, enumerate(batch_imgs)):
-                    pose_results[idx] = res
+                n_workers = min(len(pose_pool), len(batch_imgs))
+                with ThreadPoolExecutor(max_workers=n_workers) as ex:
+                    for idx, res in ex.map(kör_en_pose, enumerate(batch_imgs)):
+                        pose_results[idx] = res
 
-        for img, ref, yolo_res, pose_res in zip(
-                batch_imgs, batch_refs, yolo_res_list, pose_results):
-            b = _bonus_fran_yolo(img, yolo_res, pose_res, modeller,
-                                 hemma_farg, bevaka)
-            ref.update(b)
+            for img, ref, yolo_res, pose_res in zip(
+                    batch_imgs, batch_refs, yolo_res_list, pose_results):
+                b = _bonus_fran_yolo(img, yolo_res, pose_res, modeller,
+                                     hemma_farg, bevaka)
+                ref.update(b)
 
-        klar += len(batch_imgs)
-        if progress_cb:
-            progress_cb(klar, totalt)
+            klar += len(batch_imgs)
+            if progress_cb:
+                progress_cb(klar, totalt)
