@@ -133,7 +133,11 @@ def visa_miniatyrer(fönster, urval_mapp, max_bilder=10):
         return  # Pillow saknas — hoppa över miniatyrer
 
     mapp = Path(urval_mapp)
-    nef_filer = sorted(mapp.glob("*.NEF")) + sorted(mapp.glob("*.nef"))
+    # Exkludera macOS AppleDouble-skuggfiler (._namn.NEF) som dyker upp på
+    # exFAT/FAT-diskar och sorteras före de riktiga filerna.
+    nef_filer = sorted(p for p in mapp.iterdir()
+                       if p.suffix.lower() == ".nef"
+                       and not p.name.startswith("."))
     if not nef_filer:
         return
 
