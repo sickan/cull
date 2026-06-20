@@ -177,7 +177,9 @@ def bonus(img_bgr, modeller, hemma_farg, bevaka):
         import mediapipe as mp
         rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        if armar_uppe(pose.detect(mp_img)):
+        with _tysta_stderr():
+            pose_res = pose.detect(mp_img)
+        if armar_uppe(pose_res):
             b["armar"] = 0.15
 
     if hemma_farg:
