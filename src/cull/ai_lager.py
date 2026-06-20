@@ -5,9 +5,12 @@ import sys
 import urllib.request
 from pathlib import Path
 
-# Tysta TensorFlow Lite / MediaPipe-loggar
+# Tysta TensorFlow Lite / MediaPipe / PyTorch-loggar
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 os.environ.setdefault("GLOG_minloglevel", "3")
+
+import warnings
+warnings.filterwarnings("ignore", message=".*pin_memory.*MPS.*")
 
 import cv2
 import numpy as np
