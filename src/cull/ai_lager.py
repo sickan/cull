@@ -160,17 +160,82 @@ def nima_poang(img_bgr, metric, device):
 
 # --- poängsättning -----------------------------------------------------------
 
-def armar_uppe(pose_result):
-    """True om någon person har händerna klart ovanför axlarna."""
+def antal_firande(pose_result):
+    """
+    Räknar personer som gör en firande-gest: arm uppe ELLER utbredd åt sidan.
+    Fångar fler målfiranden än enbart 'arm ovanför axel' (utbredda armar,
+    knytnäve i luften, en arm upp m.m.).
+    """
+    n = 0
     for lm in (pose_result.pose_landmarks or []):
         try:
-            v_axel = (lm[11].y + lm[12].y) / 2
-            v_hand = min(lm[15].y, lm[16].y)
-            if v_hand < v_axel - 0.05:
-                return True
+            axel_y = (lm[11].y + lm[12].y) / 2
+            hand_y = min(lm[15].y, lm[16].y)
+            arm_upp = hand_y < axel_y - 0.05
+
+            # Utbredda armar: handled tydligt utanför axelbredden i sidled.
+            axelbredd = abs(lm[11].x - lm[12].x) + 1e-6
+            vänster_kant = min(lm[11].x, lm[12].x)
+            höger_kant = max(lm[11].x, lm[12].x)
+            arm_ut = (lm[15].x < vänster_kant - 0.6 * axelbredd or
+                      lm[16].x > höger_kant + 0.6 * axelbredd)
+
+            if arm_upp or arm_ut:
+                n += 1
         except (IndexError, AttributeError):
             continue
-    return False
+    return n
+
+
+def klunga_bonus(yolo_results):
+    """
+    Bonus för en tät klunga av spelare (≥3) — typiskt målmobbning/kram efter
+    mål, som fångas även när inga armar är uppe. Returnerar upp till 0.10.
+    """
+    if yolo_results is None or yolo_results.boxes is None:
+        return 0.0
+    personer = [box.tolist() for box, cls in
+                zip(yolo_results.boxes.xyxy, yolo_results.boxes.cls)
+                if int(cls) == 0]
+    if len(personer) < 3:
+        return 0.0
+
+    # Kräv att lådorna FAKTISKT överlappar i 2D (kram/mobbning) — inte bara
+    # ligger i samma höjdband, vilket är vanligt i normalt spel.
+    def overlappar(a, b):
+        ov_x = min(a[2], b[2]) - max(a[0], b[0])
+        ov_y = min(a[3], b[3]) - max(a[1], b[1])
+        if ov_x <= 0 or ov_y <= 0:
+            return False
+        minbredd = min(a[2] - a[0], b[2] - b[0]) + 1e-6
+        # Tydlig sidoöverlappning, inte bara att kanterna nuddar.
+        return ov_x > 0.25 * minbredd
+
+    # Största gruppen av personer som hänger ihop via överlapp (graf-komponent).
+    n = len(personer)
+    grann = [[j for j in range(n) if j != i and overlappar(personer[i], personer[j])]
+             for i in range(n)]
+    besökt = [False] * n
+    störst = 0
+    for i in range(n):
+        if besökt[i]:
+            continue
+        stack, storlek = [i], 0
+        besökt[i] = True
+        while stack:
+            k = stack.pop()
+            storlek += 1
+            for m in grann[k]:
+                if not besökt[m]:
+                    besökt[m] = True
+                    stack.append(m)
+        störst = max(störst, storlek)
+
+    if störst >= 4:
+        return 0.10
+    if störst >= 3:
+        return 0.06
+    return 0.0
 
 
 def hemma_farg_andel(img_bgr, farg_namn):
@@ -227,13 +292,20 @@ def _kör_pose(args):
 def _bonus_fran_yolo(img_bgr, yolo_res, pose_res, modeller, hemma_farg, bevaka):
     """Beräknar AI-bonusar givet YOLO- och pose-resultat."""
     b = {"armar": 0.0, "boll": 0.0, "hemma": 0.0, "trojnummer": 0.0,
-         "_yolo": yolo_res}
+         "klunga": 0.0, "_yolo": yolo_res}
 
     klasser = yolo_res.boxes.cls.tolist() if yolo_res.boxes else []
     b["boll"] = 0.08 if 32 in klasser else 0.0
 
-    if pose_res is not None and armar_uppe(pose_res):
-        b["armar"] = 0.15
+    # Firande: skalas med antal firande spelare (gruppfirande väger tyngst).
+    n_fira = antal_firande(pose_res) if pose_res is not None else 0
+    if n_fira >= 1:
+        b["armar"] = min(0.15 + 0.05 * (n_fira - 1), 0.25)
+
+    # Klunga förstärker ENDAST när det redan finns en firande-gest — annars
+    # skulle vanlig spelarträngsel (hörnor, närkamper) också belönas.
+    if n_fira >= 1:
+        b["klunga"] = klunga_bonus(yolo_res)
 
     if hemma_farg:
         b["hemma"] = min(hemma_farg_andel(img_bgr, hemma_farg) * 2, 0.08)

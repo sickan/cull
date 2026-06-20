@@ -187,7 +187,7 @@ def main():
     print("\nAktiva kriterier:", flush=True)
     if args.ai:
         print("  ✓ Skärpa + exponering + ögon (alltid)", flush=True)
-        print("  ✓ AI: armar i luften (MediaPipe Pose)", flush=True)
+        print("  ✓ AI: målfirande — armar + klunga (MediaPipe + YOLO)", flush=True)
         print(f"  ✓ AI: boll/spelare ({args.yolo})", flush=True)
         if args.hemma_farg:
             print(f"  ✓ AI: hemmalagsfärg — {args.hemma_farg}", flush=True)
@@ -233,7 +233,7 @@ def main():
         d = dict(p)
         d.update({
             "armar": 0.0, "boll": 0.0, "hemma": 0.0,
-            "trojnummer": 0.0, "_yolo": None,
+            "trojnummer": 0.0, "klunga": 0.0, "_yolo": None,
             "fas": fas_b, "fil": nef, "tid": tid_str, "_jpg": jpg,
         })
         return d
@@ -370,6 +370,7 @@ def main():
                 + r["boll"]
                 + r["hemma"]
                 + r["trojnummer"]
+                + r["klunga"]
                 + r["fas"]
                 + r["estetik"]
             )
@@ -415,7 +416,8 @@ def main():
         for r in sorted(valda, key=lambda r: r["poang"], reverse=True)[:40]:
             ai_rad = ""
             if args.ai:
-                ai_rad = (f"  armar={'ja' if r['armar'] else 'nej'}"
+                ai_rad = (f"  fira={r['armar']:.2f}"
+                          f"  klunga={r['klunga']:.2f}"
                           f"  boll={'ja' if r['boll'] else 'nej'}"
                           f"  nr={'ja' if r['trojnummer'] else 'nej'}"
                           f"  fas={r['fas']:.2f}")
