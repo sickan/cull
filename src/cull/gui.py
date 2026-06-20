@@ -19,7 +19,10 @@ CONFIG_DIR    = Path.home() / ".config" / "cull"
 SETTINGS_PATH = CONFIG_DIR / "settings.json"
 HISTORY_PATH  = CONFIG_DIR / "history.json"
 SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
-                 "bevaka", "avspark", "topp", "andel", "burst_sek"]
+                 "bevaka", "avspark", "topp", "andel", "burst_sek",
+                 "yolo", "estetik"]
+
+YOLO_MODELLER = ["yolov8n.pt", "yolo11s.pt", "yolo11m.pt"]
 
 
 def ladda_installningar():
@@ -75,6 +78,11 @@ def bygg_kommando(vals):
 
     if vals["ai"].get():
         cmd.append("--ai")
+        yolo = vals["yolo"].get().strip()
+        if yolo:
+            cmd += ["--yolo", yolo]
+        if vals["estetik"].get():
+            cmd.append("--estetik")
 
     farg = vals["hemma_farg"].get()
     if farg:
@@ -317,7 +325,7 @@ def main():
 
     # AI
     vals["ai"] = tk.BooleanVar(value=saved.get("ai", True))
-    ttk.Checkbutton(f_krit, text="AI  (YOLOv8 + MediaPipe Pose)",
+    ttk.Checkbutton(f_krit, text="AI  (YOLO + MediaPipe Pose)",
                     variable=vals["ai"]).grid(row=0, column=0, columnspan=2,
                                               sticky="w", pady=2)
 
@@ -374,6 +382,23 @@ def main():
     vals["burst_sek"] = tk.StringVar(value=saved.get("burst_sek", "2.0"))
     ttk.Entry(f_krit, textvariable=vals["burst_sek"], width=8).grid(
         row=8, column=1, sticky="w")
+
+    ttk.Separator(f_krit, orient="horizontal").grid(
+        row=9, column=0, columnspan=3, sticky="ew", pady=6)
+
+    # YOLO-modell
+    rad(f_krit, "YOLO-modell", 10)
+    vals["yolo"] = tk.StringVar(value=saved.get("yolo", "yolo11s.pt"))
+    ttk.Combobox(f_krit, textvariable=vals["yolo"], values=YOLO_MODELLER,
+                 width=14, state="readonly").grid(row=10, column=1, sticky="w")
+    ttk.Label(f_krit, text="  n=snabb · s=balans · m=bäst",
+              foreground="gray").grid(row=10, column=2, sticky="w")
+
+    # NIMA-estetik
+    vals["estetik"] = tk.BooleanVar(value=saved.get("estetik", False))
+    ttk.Checkbutton(f_krit, text="NIMA-estetikbetyg  (lärt bildkvalitetsmått)",
+                    variable=vals["estetik"]).grid(
+        row=11, column=0, columnspan=3, sticky="w", pady=2)
 
     # --- Progress ---
     f_progress = ttk.Frame(root)

@@ -88,28 +88,31 @@ def _valj_device():
     return "cpu"
 
 
-def ladda_modeller(med_ocr=False, n_pose=None):
+def ladda_modeller(med_ocr=False, n_pose=None, yolo_modell="yolo11s.pt",
+                   med_estetik=False):
     """
     Returnerar dict med laddade modeller.
-    n_pose: antal parallella pose-detektorer (default = CPU-kärnor, max 8).
+    n_pose:       antal parallella pose-detektorer (default = CPU-kärnor, max 8).
+    yolo_modell:  vikt-fil för YOLO (yolov8n.pt = snabb, yolo11s/m.pt = bättre).
+    med_estetik:  ladda NIMA-estetikmodell (kräver pyiqa).
     """
     import os
     if n_pose is None:
         n_pose = min(os.cpu_count() or 4, 8)
 
     modeller = {"yolo": None, "pose_pool": [], "ocr": None,
-                "device": _valj_device()}
+                "estetik": None, "device": _valj_device()}
 
     try:
         from ultralytics import YOLO
         with _tysta_stderr():
-            modeller["yolo"] = YOLO("yolov8n.pt")
+            modeller["yolo"] = YOLO(yolo_modell)
             if modeller["device"] == "mps":
                 try:
                     modeller["yolo"].to("mps")
                 except Exception:
                     modeller["device"] = "cpu"
-        print(f"YOLOv8: aktivt ({modeller['device'].upper()})")
+        print(f"YOLO ({yolo_modell}): aktivt ({modeller['device'].upper()})")
     except ImportError:
         sys.exit("AI-läget kräver ultralytics: pipx inject cull ultralytics")
 
@@ -131,7 +134,28 @@ def ladda_modeller(med_ocr=False, n_pose=None):
         except ImportError:
             print("EasyOCR saknas: pipx inject cull easyocr  (tröjnummer inaktiverat)")
 
+    if med_estetik:
+        try:
+            import pyiqa
+            with _tysta_stderr():
+                modeller["estetik"] = pyiqa.create_metric(
+                    "nima", device=modeller["device"])
+            print(f"NIMA-estetik: aktivt ({modeller['device'].upper()})")
+        except ImportError:
+            print("NIMA saknas: pipx inject cull pyiqa  (estetik inaktiverat)")
+        except Exception as e:
+            print(f"NIMA: ej tillgängligt ({e})")
+
     return modeller
+
+
+def nima_poang(img_bgr, metric, device):
+    """Returnerar NIMA-estetikpoäng (~1–10, högre bättre) för en BGR-bild."""
+    import torch
+    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    t = torch.from_numpy(rgb).permute(2, 0, 1).float().unsqueeze(0) / 255.0
+    with torch.no_grad():
+        return float(metric(t.to(device)).item())
 
 
 # --- poängsättning -----------------------------------------------------------
@@ -234,6 +258,7 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
     if yolo is None:
         return
     device = modeller.get("device", "cpu")
+    estetik = modeller.get("estetik")
 
     # Bygg en pool av pose-detektorer via en kö
     pose_pool = modeller.get("pose_pool", [])
@@ -276,6 +301,11 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
                 b = _bonus_fran_yolo(img, yolo_res, pose_res, modeller,
                                      hemma_farg, bevaka)
                 ref.update(b)
+                if estetik is not None:
+                    try:
+                        ref["nima"] = nima_poang(img, estetik, device)
+                    except Exception:
+                        ref["nima"] = None
 
             klar += len(batch_imgs)
             if progress_cb:

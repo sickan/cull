@@ -149,6 +149,11 @@ def main():
     ap.add_argument("--bevaka",     default=None, metavar="9,11")
     ap.add_argument("--avspark",    default=None, metavar="HH:MM")
     ap.add_argument("--xmp",        action="store_true")
+    ap.add_argument("--yolo",       default="yolo11s.pt", metavar="MODELL",
+                    help="YOLO-vikt: yolov8n.pt (snabb), yolo11s.pt (balans), "
+                         "yolo11m.pt (bäst)")
+    ap.add_argument("--estetik",    action="store_true",
+                    help="lägg till NIMA-estetikbetyg (kräver pyiqa)")
     args = ap.parse_args()
 
     kontrollera_exiftool()
@@ -173,7 +178,9 @@ def main():
     if args.ai:
         from cull import ai_lager
         print("Laddar AI-modeller…", flush=True)
-        modeller = ai_lager.ladda_modeller(med_ocr=bool(bevaka))
+        modeller = ai_lager.ladda_modeller(med_ocr=bool(bevaka),
+                                           yolo_modell=args.yolo,
+                                           med_estetik=args.estetik)
         print("AI-modeller redo.", flush=True)
 
     # --- Sammanfattning av aktiva kriterier ---
@@ -181,11 +188,13 @@ def main():
     if args.ai:
         print("  ✓ Skärpa + exponering + ögon (alltid)", flush=True)
         print("  ✓ AI: armar i luften (MediaPipe Pose)", flush=True)
-        print("  ✓ AI: boll synlig (YOLOv8)", flush=True)
+        print(f"  ✓ AI: boll/spelare ({args.yolo})", flush=True)
         if args.hemma_farg:
             print(f"  ✓ AI: hemmalagsfärg — {args.hemma_farg}", flush=True)
         if bevaka:
             print(f"  ✓ AI: tröjnummer — {', '.join(sorted(bevaka))} (EasyOCR)", flush=True)
+        if args.estetik:
+            print("  ✓ AI: NIMA-estetikbetyg", flush=True)
     else:
         print("  ✓ Skärpa + exponering + ögon", flush=True)
     if args.avspark:
@@ -334,6 +343,20 @@ def main():
             tider_fas["AI"] = time.perf_counter() - _t
             print(f"AI klar.", flush=True)
 
+        # Normalisera NIMA-estetik (om beräknad) över kandidaterna → bonus.
+        nima_varden = [r["nima"] for r in resultat
+                       if r.get("nima") is not None]
+        if nima_varden:
+            nl = np.percentile(nima_varden, 5)
+            nh = np.percentile(nima_varden, 95)
+            nspann = max(nh - nl, 1e-6)
+        for r in resultat:
+            if r.get("nima") is not None and nima_varden:
+                r["estetik"] = float(
+                    np.clip((r["nima"] - nl) / nspann, 0, 1)) * 0.15
+            else:
+                r["estetik"] = 0.0
+
         # Slutpoäng
         for r in resultat:
             ogon_b = 0.0
@@ -348,6 +371,7 @@ def main():
                 + r["hemma"]
                 + r["trojnummer"]
                 + r["fas"]
+                + r["estetik"]
             )
 
         # Burst-gruppering
@@ -395,6 +419,8 @@ def main():
                           f"  boll={'ja' if r['boll'] else 'nej'}"
                           f"  nr={'ja' if r['trojnummer'] else 'nej'}"
                           f"  fas={r['fas']:.2f}")
+                if args.estetik and r.get("nima") is not None:
+                    ai_rad += f"  nima={r['nima']:.1f}"
             print(f"  {r['poang']:.3f}  sk {r['skarpa_n']:.2f}  "
                   f"exp {r['exp']:.2f}  ans {r['ansikten']}{ai_rad}  "
                   f"{r['fil'].name}")
