@@ -1,8 +1,46 @@
 """Generera XMP-sidecars med upprätning (rätning av lutande horisont)."""
 
+import re
 import cv2
 import numpy as np
 from pathlib import Path
+
+# Preset-metadata som inte hör hemma i en bild-sidecar (bara presethantering).
+_PRESET_DROPPA_ATTR = {
+    "PresetType", "Cluster", "UUID", "SupportsAmount2", "SupportsAmount",
+    "SupportsColor", "SupportsMonochrome", "SupportsHighDynamicRange",
+    "SupportsNormalDynamicRange", "SupportsSceneReferred",
+    "SupportsOutputReferred", "RequiresRGBTables", "ShowInPresets",
+    "ShowInQuickActions", "CameraModelRestriction", "Copyright",
+    "ContactInfo", "HasSettings",
+}
+_PRESET_DROPPA_ELEM = {"Name", "ShortName", "SortName", "Group", "Description"}
+
+
+def las_preset(path):
+    """Läser ett Camera Raw/Lightroom-preset (.xmp) och returnerar
+    {'attrs': {namn: värde}, 'inner': 'nästlad xml'} — develop-inställningar,
+    tonkurva och Look. Preset-metadata (namn, UUID, Supports…) filtreras bort.
+    Returnerar None om filen inte kan läsas/tolkas."""
+    try:
+        txt = Path(path).read_text(encoding="utf-8")
+    except Exception:
+        return None
+    # Yttre rdf:Description: första öppningstaggen → SISTA stängningen
+    # (greedy, så vi inte stannar vid Look-blockets egna </rdf:Description>).
+    m = re.search(r"<rdf:Description\b([^>]*)>(.*)</rdf:Description>", txt, re.S)
+    if not m:
+        return None
+    attr_blob, inner = m.group(1), m.group(2)
+    attrs = {}
+    for namn, val in re.findall(r"crs:(\w+)\s*=\s*\"([^\"]*)\"", attr_blob):
+        if namn not in _PRESET_DROPPA_ATTR:
+            attrs[namn] = val
+    for elem in _PRESET_DROPPA_ELEM:
+        inner = re.sub(rf"<crs:{elem}\b.*?</crs:{elem}>", "", inner, flags=re.S)
+    if not attrs:
+        return None
+    return {"attrs": attrs, "inner": inner.strip()}
 
 XMP_MALL = """\
 <?xpacket begin='\xef\xbb\xbf' id='W5M0MpCehiHzreSzNTczkc9d'?>
@@ -68,9 +106,41 @@ def brus_av_iso(iso):
     return (38, 55, 40)
 
 
+PRESET_MALL = """\
+<?xpacket begin='\xef\xbb\xbf' id='W5M0MpCehiHzreSzNTczkc9d'?>
+<x:xmpmeta xmlns:x='adobe:ns:meta/' x:xmptk='cull'>
+  <rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>
+    <rdf:Description rdf:about=''
+      xmlns:crs='http://ns.adobe.com/camera-raw-settings/1.0/'
+{attr}>{inner}
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end='w'?>"""
+
+
+def _bygg_med_preset(preset, over, has_crop, top, left, bottom, right, vinkel):
+    """Presetets develop-look som bas, med våra per-bild-värden som override."""
+    attrs = dict(preset["attrs"])
+    attrs["HasCrop"] = has_crop
+    attrs["CropTop"] = f"{top:.6f}"
+    attrs["CropLeft"] = f"{left:.6f}"
+    attrs["CropBottom"] = f"{bottom:.6f}"
+    attrs["CropRight"] = f"{right:.6f}"
+    attrs["CropAngle"] = "0"
+    attrs["CropConstrainToWarp"] = "0"
+    attrs["StraightenAngle"] = f"{vinkel:.2f}"
+    attrs.setdefault("Version", "15.0")
+    attrs.setdefault("ProcessVersion", "11.0")
+    attrs.update(over)   # våra värden vinner över presetets
+    rader = "\n".join(f"      crs:{k}='{v}'" for k, v in attrs.items())
+    inner = ("\n" + preset["inner"]) if preset.get("inner") else ""
+    return PRESET_MALL.format(attr=rader, inner=inner)
+
+
 def skriv_xmp(nef_path, crop=None, vinkel=0.0,
               exposure=None, temperatur=None, tint=None, profil=None,
-              iso=None, objektiv=False):
+              iso=None, objektiv=False, preset=None, exp_bump=0.0):
     """Skriver en XMP-sidecar bredvid NEF-filen.
 
     exposure:    relativ EV-justering (crs:Exposure2012), eller None.
@@ -79,7 +149,12 @@ def skriv_xmp(nef_path, crop=None, vinkel=0.0,
     profil:      kameraprofil (crs:CameraProfile), t.ex. 'Camera Neutral'.
     iso:         EXIF-ISO → ISO-baserad brusreducering, eller None.
     objektiv:    True → aktivera objektivprofil-korrigering (crs:LensProfileEnable).
+    preset:      parsat husstil-preset (las_preset) som bakas in, eller None.
+    exp_bump:    generell EV-knuff ovanpå exposure.
     """
+    exp_final = (exposure or 0.0) + (exp_bump or 0.0)
+    skriv_exp = exposure is not None or abs(exp_bump or 0.0) > 0.005
+
     if crop:
         top, left, bottom, right = crop
         has_crop = "True"
@@ -87,31 +162,37 @@ def skriv_xmp(nef_path, crop=None, vinkel=0.0,
         top, left, bottom, right = 0.0, 0.0, 1.0, 1.0
         has_crop = "False"
 
-    rader = []
+    # Per-bild-värden (ordning bevaras → samma utdata som tidigare).
+    over = {}
     if profil:
-        rader.append(f"crs:CameraProfile='{profil}'")
-    if exposure is not None:
-        rader.append(f"crs:Exposure2012='{exposure:+.2f}'")
+        over["CameraProfile"] = profil
+    if skriv_exp:
+        over["Exposure2012"] = f"{exp_final:+.2f}"
     if temperatur is not None:
-        rader.append("crs:WhiteBalance='Custom'")
-        rader.append(f"crs:Temperature='{int(round(temperatur))}'")
-        rader.append(f"crs:Tint='{int(round(tint or 0))}'")
+        over["WhiteBalance"] = "Custom"
+        over["Temperature"] = str(int(round(temperatur)))
+        over["Tint"] = str(int(round(tint or 0)))
     nr = brus_av_iso(iso)
     if nr:
         lum, farg, detalj = nr
-        rader.append(f"crs:LuminanceSmoothing='{lum}'")
-        rader.append(f"crs:LuminanceNoiseReductionDetail='{detalj}'")
-        rader.append(f"crs:ColorNoiseReduction='{farg}'")
+        over["LuminanceSmoothing"] = str(lum)
+        over["LuminanceNoiseReductionDetail"] = str(detalj)
+        over["ColorNoiseReduction"] = str(farg)
     if objektiv:
-        rader.append("crs:LensProfileEnable='1'")
-        rader.append("crs:LensProfileSetup='LensDefaults'")
-    extra = ("\n      " + "\n      ".join(rader)) if rader else ""
+        over["LensProfileEnable"] = "1"
+        over["LensProfileSetup"] = "LensDefaults"
 
-    innehall = XMP_MALL.format(
-        has_crop=has_crop,
-        top=top, left=left, bottom=bottom, right=right,
-        vinkel=vinkel, extra=extra,
-    )
+    if preset:
+        innehall = _bygg_med_preset(preset, over, has_crop,
+                                    top, left, bottom, right, vinkel)
+    else:
+        rader = [f"crs:{k}='{v}'" for k, v in over.items()]
+        extra = ("\n      " + "\n      ".join(rader)) if rader else ""
+        innehall = XMP_MALL.format(
+            has_crop=has_crop,
+            top=top, left=left, bottom=bottom, right=right,
+            vinkel=vinkel, extra=extra,
+        )
     xmp_path = Path(nef_path).with_suffix(".xmp")
     xmp_path.write_text(innehall, encoding="utf-8")
     return xmp_path

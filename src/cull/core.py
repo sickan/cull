@@ -468,6 +468,12 @@ def main():
     ap.add_argument("--xmp-justering", action="store_true",
                     help="skriv exponering + WB/tint i XMP (från ansikts-"
                          "exponering och uppmätt färgstick)")
+    ap.add_argument("--husstil", default=None, metavar="PRESET.xmp",
+                    help="baka in ett Camera Raw/Lightroom-preset (.xmp) i varje "
+                         "sidecar — din egen look på alla bilder direkt")
+    ap.add_argument("--exp-bump", type=float, default=0.0, metavar="EV",
+                    help="generell exponeringsknuff (EV) ovanpå allt annat, "
+                         "t.ex. 0.5")
     ap.add_argument("--ingen-ai-cache", action="store_true",
                     help="hoppa över AI-feature-cachen (tvinga omräkning)")
     ap.add_argument("--limpa-ai-cache", action="store_true",
@@ -1011,7 +1017,15 @@ def main():
                     ut_dir = katalog / f"{bas} {i}"
             ut_dir.mkdir()
 
-        gör_xmp = args.xmp or args.xmp_justering
+        husstil = xmp_writer.las_preset(args.husstil) if args.husstil else None
+        if args.husstil and husstil is None:
+            print(f"  Varning: kunde inte läsa husstil-preset {args.husstil} "
+                  "— hoppar över.", flush=True)
+        elif husstil:
+            print(f"  Husstil: bakar in {Path(args.husstil).stem} i sidecars."
+                  + (f" Exp-knuff {args.exp_bump:+.2f} EV." if args.exp_bump else ""),
+                  flush=True)
+        gör_xmp = args.xmp or args.xmp_justering or husstil or args.exp_bump
 
         # XMP behöver previews — extrahera för valda som saknar (cacheträffar).
         if gör_xmp:
@@ -1066,20 +1080,24 @@ def main():
                                 tint = delta_tint
                 # Kameraprofil (Nikon Neutral), ISO-brus och objektivkorr
                 # gäller raw, inte JPG (JPG är redan kamera-processad).
+                # Med husstil styr presetets Look profilen → sätt inte Neutral.
                 är_raw = r["fil"].suffix.lower() in RAW_SUFFIX
-                profil = "Camera Neutral" if är_raw else None
+                profil = ("Camera Neutral"
+                          if är_raw and not husstil else None)
                 iso = objektiv = None
                 if args.xmp_justering and är_raw:
                     iso = iso_karta.get(r["fil"])
                     objektiv = True
-                if (args.xmp or exposure is not None or temperatur is not None
+                if (args.xmp or husstil or args.exp_bump
+                        or exposure is not None or temperatur is not None
                         or iso is not None):
                     xmp_writer.skriv_xmp(ut_dir / r["fil"].name,
                                          crop=crop, vinkel=vinkel,
                                          exposure=exposure,
                                          temperatur=temperatur, tint=tint,
                                          profil=profil,
-                                         iso=iso, objektiv=bool(objektiv))
+                                         iso=iso, objektiv=bool(objektiv),
+                                         preset=husstil, exp_bump=args.exp_bump)
             else:
                 xmp = r["fil"].with_suffix(".xmp")
                 if xmp.exists():

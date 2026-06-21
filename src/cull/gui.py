@@ -26,9 +26,21 @@ SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "firande_boost", "garanti_firande", "snabb",
                  "xmp_justering", "oppna", "export_rot", "trana_rot",
                  "iptc", "fotograf", "bevaka_på", "garanti_bevaka",
-                 "export_overskriv"]
+                 "export_overskriv", "husstil", "exp_bump"]
 
 OPPNA_VAL = ["Auto", "Lightroom", "DxO PureRAW", "Finder", "Inget"]
+
+# Camera Raw/Lightroom-presets (.xmp) → husstil-dropdown.
+PRESET_DIR = (Path.home() / "Library" / "Application Support" / "Adobe"
+              / "CameraRaw" / "Settings")
+
+
+def _lista_presets():
+    """Namn på .xmp-presets i Adobe CameraRaw/Settings (utan ändelse)."""
+    try:
+        return sorted(p.stem for p in PRESET_DIR.glob("*.xmp"))
+    except Exception:
+        return []
 
 MODELL_PATH = Path.home() / ".config" / "cull" / "modell.pkl"
 AKTIV_PATH    = Path.home() / ".cache" / "cull" / "aktiv_inlarning.json"
@@ -226,6 +238,17 @@ def bygg_kommando(vals):
 
     if vals["xmp_justering"].get():
         cmd.append("--xmp-justering")
+
+    husstil = vals["husstil"].get().strip()
+    if husstil and husstil != "(ingen)":
+        cmd += ["--husstil", str(PRESET_DIR / f"{husstil}.xmp")]
+
+    try:
+        bump = float(str(vals["exp_bump"].get()).replace(",", "."))
+    except (ValueError, AttributeError):
+        bump = 0.0
+    if abs(bump) > 0.005:
+        cmd += ["--exp-bump", f"{bump:.2f}"]
 
     oppna = vals["oppna"].get().strip().lower()
     oppna = {"dxo pureraw": "dxo"}.get(oppna, oppna)
@@ -998,6 +1021,20 @@ def main():
     ttk.Checkbutton(f_katalog, text="XMP: leveransklar",
                     variable=vals["xmp_justering"]).grid(
         row=10, column=1, columnspan=2, sticky="w", pady=2)
+
+    # Husstil-preset (bakas in i varje sidecar) + generell exp-knuff
+    presets = _lista_presets()
+    vals["husstil"] = tk.StringVar(value=saved.get("husstil", "(ingen)"))
+    f_hus = ttk.Frame(f_katalog)
+    f_hus.grid(row=11, column=0, columnspan=3, sticky="w", pady=(2, 0))
+    ttk.Label(f_hus, text="Husstil:").pack(side="left")
+    ttk.Combobox(f_hus, textvariable=vals["husstil"],
+                 values=["(ingen)"] + presets,
+                 width=18, state="readonly").pack(side="left", padx=(4, 0))
+    ttk.Label(f_hus, text="Exp-knuff EV:").pack(side="left", padx=(12, 0))
+    vals["exp_bump"] = tk.StringVar(value=saved.get("exp_bump", "0.5"))
+    ttk.Spinbox(f_hus, textvariable=vals["exp_bump"], from_=-2.0, to=2.0,
+                increment=0.1, width=5).pack(side="left", padx=(4, 0))
 
     # --- Flik: Urval (kriterier) ---
     f_krit = ttk.Frame(notebook, padding=8)
