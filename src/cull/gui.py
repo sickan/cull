@@ -25,7 +25,8 @@ SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "yolo", "estetik", "modell", "sport", "matchinfo",
                  "firande_boost", "garanti_firande", "snabb",
                  "xmp_justering", "oppna", "export_rot", "trana_rot",
-                 "iptc", "fotograf", "bevaka_på", "garanti_bevaka"]
+                 "iptc", "fotograf", "bevaka_på", "garanti_bevaka",
+                 "export_overskriv"]
 
 OPPNA_VAL = ["Auto", "Lightroom", "DxO PureRAW", "Finder", "Inget"]
 
@@ -165,6 +166,9 @@ def bygg_kommando(vals):
     matchinfo = vals["matchinfo"].get().strip()
     if matchinfo:
         cmd += ["--ut-namn", matchinfo]
+
+    if vals["export_overskriv"].get():
+        cmd.append("--export-overskriv")
 
     export_rot = vals["export_rot"].get().strip()
     if export_rot:
@@ -954,6 +958,12 @@ def main():
     ttk.Label(f_katalog,
               text="tom = urval i källkatalogen · annars <rot>/<matchinfo>/<kameratyp>/",
               foreground="gray").grid(row=6, column=1, columnspan=2, sticky="w")
+    vals["export_overskriv"] = tk.BooleanVar(
+        value=saved.get("export_overskriv", False))
+    ttk.Checkbutton(f_katalog,
+                    text="Skriv över befintligt urval (ingen Z8 2, Z8 3 …)",
+                    variable=vals["export_overskriv"]).grid(
+        row=6, column=0, sticky="w")
 
     # IPTC-bildtexter (match/datum/lag/arena ur Matchinfo) + fotografnamn
     vals["iptc"] = tk.BooleanVar(value=saved.get("iptc", False))

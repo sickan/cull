@@ -437,6 +437,9 @@ def main():
     ap.add_argument("--export-rot", default=None, metavar="MAPP",
                     help="exportera till MAPP/<matchinfo>/<kameratyp>/ istället "
                          "för en undermapp i källkatalogen")
+    ap.add_argument("--export-overskriv", action="store_true",
+                    help="skriv över befintlig urvalsmapp istället för att räkna "
+                         "upp (Z8 2, Z8 3 …) — undviker dubblettmappar vid omkörning")
     ap.add_argument("--iptc", action="store_true",
                     help="skriv IPTC-bildtexter (match/datum/lag/arena) i filerna")
     ap.add_argument("--fotograf", default=None, metavar="NAMN",
@@ -956,10 +959,14 @@ def main():
             bas_dir = rot / match_namn
             ut_dir = bas_dir / kam
             if ut_dir.exists():
-                i = 2   # finns redan → Z8, Z8 2, Z8 3, …
-                while (bas_dir / f"{kam} {i}").exists():
-                    i += 1
-                ut_dir = bas_dir / f"{kam} {i}"
+                if args.export_overskriv:
+                    shutil.rmtree(ut_dir)
+                    print(f"  (skriver över befintlig mapp {ut_dir})", flush=True)
+                else:
+                    i = 2   # finns redan → Z8, Z8 2, Z8 3, …
+                    while (bas_dir / f"{kam} {i}").exists():
+                        i += 1
+                    ut_dir = bas_dir / f"{kam} {i}"
             try:
                 ut_dir.mkdir(parents=True)
             except OSError as e:
@@ -972,11 +979,15 @@ def main():
             else:
                 ut_dir = katalog / "urval"
             if ut_dir.exists():
-                i = 2   # finns redan → urval, urval 2, urval 3, …
-                bas = ut_dir.name
-                while (katalog / f"{bas} {i}").exists():
-                    i += 1
-                ut_dir = katalog / f"{bas} {i}"
+                if args.export_overskriv:
+                    shutil.rmtree(ut_dir)
+                    print(f"  (skriver över befintlig mapp {ut_dir})", flush=True)
+                else:
+                    i = 2   # finns redan → urval, urval 2, urval 3, …
+                    bas = ut_dir.name
+                    while (katalog / f"{bas} {i}").exists():
+                        i += 1
+                    ut_dir = katalog / f"{bas} {i}"
             ut_dir.mkdir()
 
         gör_xmp = args.xmp or args.xmp_justering
