@@ -34,6 +34,15 @@ except ImportError:
 from cull import bas, matchfas, xmp_writer
 from cull.ai_lager import FARG_NAMN
 
+# Stödda raw-format. Alla går genom samma exiftool-preview-väg (-JpgFromRaw/
+# -PreviewImage), så stöd = att filtypen tas med i filfiltret.
+# NEF (Nikon), DNG (Ricoh GR m.fl.), CR3/CR2 (Canon), ARW (Sony),
+# RAF (Fujifilm), RW2 (Panasonic), ORF (Olympus/OM).
+RAW_SUFFIX = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf"}
+# JPG kan också cullas — då är filen själv sin egen "preview".
+JPG_SUFFIX = {".jpg", ".jpeg"}
+BILD_SUFFIX = RAW_SUFFIX | JPG_SUFFIX
+
 # Antal CPU-kärnor att använda för parallell baspoängsättning
 N_WORKERS = min(os.cpu_count() or 4, 8)
 # Andel av bilderna (sorterade på baspoäng) som AI körs på
@@ -104,8 +113,9 @@ def _logga_korning(katalog, ut_dir, resultat, valda):
 
 
 def _cache_nyckel(nef):
-    st = nef.stat()
-    return f"{nef}|{int(st.st_mtime)}|{st.st_size}"
+    # Nyckel på storlek (inte mtime) — Dropbox m.fl. ändrar mtime vid omsynk
+    # men inte storleken, och raw redigeras aldrig på plats. Stabil cache.
+    return f"{nef}|{nef.stat().st_size}"
 
 
 def ladda_bas_cache():
@@ -200,7 +210,8 @@ def _kameratyp(nef_filer, env):
         model = str(json.loads(rå)[0].get("Model", ""))
     except Exception:
         return None
-    for märke in ("NIKON", "CANON", "SONY", "FUJIFILM", "PANASONIC"):
+    for märke in ("NIKON", "CANON", "SONY", "FUJIFILM", "PANASONIC",
+                  "RICOH", "OLYMPUS", "OM DIGITAL SOLUTIONS", "OM SYSTEM"):
         model = model.upper().replace(märke, "")
     kort = model.replace(" ", "").strip()
     return kort or None
@@ -291,6 +302,10 @@ def extrahera_previews_batch(nef_filer, ut_dir, n_workers=N_WORKERS):
     klar    = 0
     lock    = __import__("threading").Lock()
 
+    # JPG-filer är redan sin egen "preview" — ingen extraktion behövs.
+    raw_filer = [n for n in nef_filer if n.suffix.lower() not in JPG_SUFFIX]
+    totalt = len(raw_filer)
+
     def extrahera_en(nef):
         nonlocal klar
         ut = ut_dir / (nef.stem + ".jpg")
@@ -317,15 +332,15 @@ def extrahera_previews_batch(nef_filer, ut_dir, n_workers=N_WORKERS):
                 print(f"  extraherar …{klar}/{totalt}", flush=True)
 
     with ThreadPoolExecutor(max_workers=n_workers) as ex:
-        list(ex.map(extrahera_en, nef_filer))
+        list(ex.map(extrahera_en, raw_filer))
 
-    return {
-        nef: (ut_dir / (nef.stem + ".jpg"))
-        if (ut_dir / (nef.stem + ".jpg")).exists()
-           and (ut_dir / (nef.stem + ".jpg")).stat().st_size > 10_000
-        else None
-        for nef in nef_filer
-    }
+    def _preview(nef):
+        if nef.suffix.lower() in JPG_SUFFIX:
+            return nef               # JPG = sin egen preview
+        jpg = ut_dir / (nef.stem + ".jpg")
+        return jpg if jpg.exists() and jpg.stat().st_size > 10_000 else None
+
+    return {nef: _preview(nef) for nef in nef_filer}
 
 
 def hamta_metadata(nef_filer):
@@ -425,10 +440,11 @@ def main():
     # Exkludera macOS AppleDouble-sidecars (._namn.NEF) och andra dolda
     # filer som dyker upp på exFAT/FAT-diskar — de är inte riktiga bilder.
     nef_filer = sorted(p for p in katalog.iterdir()
-                       if p.suffix.lower() == ".nef"
+                       if p.suffix.lower() in BILD_SUFFIX
                        and not p.name.startswith("."))
     if not nef_filer:
-        sys.exit("Inga NEF-filer i katalogen.")
+        sys.exit("Inga bildfiler i katalogen (raw: NEF/DNG/CR3/ARW/RAF/RW2/ORF "
+                 "eller JPG).")
 
     bevaka = set(args.bevaka.split(",")) if args.bevaka else set()
 
@@ -460,7 +476,7 @@ def main():
               f"({modell_paket['n_valda']} val, "
               f"{modell_paket['n_uppdrag']} uppdrag{sport_info}).", flush=True)
 
-    print(f"{len(nef_filer)} NEF hittade.", flush=True)
+    print(f"{len(nef_filer)} bildfiler hittade.", flush=True)
 
     # --- Ladda AI-modeller ---
     modeller = None
@@ -961,10 +977,13 @@ def main():
                         vinkel = xmp_writer.berakna_uppratning(img)
                     if args.xmp_justering:
                         exposure = _vb.ansikts_exponering_ev(img, ansikte_c)
-                        bas_k = as_shot.get(r["fil"])
-                        if (delta_k or delta_tint) and bas_k:
-                            temperatur = bas_k + delta_k
-                            tint = delta_tint
+                        # Absolut WB (Kelvin) gäller bara raw — för JPG använder
+                        # Lightroom relativa reglage, så hoppa över WB där.
+                        if r["fil"].suffix.lower() in RAW_SUFFIX:
+                            bas_k = as_shot.get(r["fil"])
+                            if (delta_k or delta_tint) and bas_k:
+                                temperatur = bas_k + delta_k
+                                tint = delta_tint
                 if (args.xmp or exposure is not None or temperatur is not None):
                     xmp_writer.skriv_xmp(ut_dir / r["fil"].name,
                                          crop=crop, vinkel=vinkel,

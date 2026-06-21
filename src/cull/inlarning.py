@@ -49,6 +49,9 @@ from cull import bas
 MODELL_PATH = Path.home() / ".config" / "cull" / "modell.pkl"
 TRAIN_CACHE_DIR = Path.home() / ".cache" / "cull" / "train_features"
 OKAND_PATH = Path.home() / ".cache" / "cull" / "sport_okand.json"
+# Raw-format som extraheras via exiftool-preview (samma som core.RAW_SUFFIX).
+_RAW_SUFFIX = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf"}
+
 # Aktiv inlärning: användarens manuella behåll/förkasta-etiketter (stem → 0/1).
 MANUELLA_PATH = Path.home() / ".config" / "cull" / "manuella_etiketter.json"
 
@@ -361,7 +364,7 @@ def hitta_uppdrag_export(root):
 def _nef_stems(mapp, rekursivt=False):
     it = mapp.rglob("*") if rekursivt else mapp.iterdir()
     return {p.stem for p in it
-            if p.suffix.lower() == ".nef" and not p.name.startswith(".")}
+            if p.suffix.lower() in _RAW_SUFFIX and not p.name.startswith(".")}
 
 
 def hitta_uppdrag_filterpix(root):
@@ -384,7 +387,7 @@ def hitta_uppdrag_filterpix(root):
             if cam.name.startswith(".") or cam.name.lower().startswith("urval"):
                 continue
             nefs = [p for p in cam.iterdir()
-                    if p.suffix.lower() == ".nef" and not p.name.startswith(".")]
+                    if p.suffix.lower() in _RAW_SUFFIX and not p.name.startswith(".")]
             if not ({p.stem for p in nefs} & vald):
                 continue
             items = [(p, 1 if p.stem in vald else 0) for p in nefs]
@@ -408,9 +411,9 @@ def ar_online_only(path):
 
 
 def _las_bild(path, env):
-    """Läser en JPG direkt, eller extraherar preview ur en NEF. BGR ≤1600px."""
+    """Läser en JPG direkt, eller extraherar preview ur en rawfil. BGR ≤1600px."""
     import cv2
-    if path.suffix.lower() == ".nef":
+    if path.suffix.lower() in _RAW_SUFFIX:
         with tempfile.TemporaryDirectory() as tmp:
             jpg = Path(tmp) / (path.stem + ".jpg")
             for tag in ("-JpgFromRaw", "-PreviewImage"):
@@ -525,11 +528,13 @@ def _shoot_fingerprint(namn, items):
     h.update(("|".join(FEATURES)).encode())   # cache-version = feature-set
     h.update(namn.encode())
     for path, lab in sorted(items, key=lambda t: str(t[0])):
+        # Storlek istället för mtime → cachen överlever Dropbox-omsynk
+        # (mtime ändras vid av-/återhydrering, men storleken är stabil).
         try:
-            mtime = int(path.stat().st_mtime)
+            storlek = path.stat().st_size
         except OSError:
-            mtime = 0
-        h.update(f"{path}|{mtime}|{lab}".encode())
+            storlek = 0
+        h.update(f"{path}|{storlek}|{lab}".encode())
     return h.hexdigest()[:16]
 
 

@@ -103,6 +103,18 @@ def lagg_till_historik(urval_mapp, antal):
     spara_historik(poster[:50])
 
 
+def _lightroom_finns():
+    """True om Lightroom Classic/CC är installerat (för att hoppa över
+    miniatyr-popupen när urvalet ändå öppnas i Lightroom)."""
+    for app in ("/Applications/Adobe Lightroom Classic/Adobe Lightroom Classic.app",
+                "/Applications/Adobe Lightroom Classic.app",
+                "/Applications/Adobe Lightroom/Adobe Lightroom.app",
+                "/Applications/Adobe Lightroom.app"):
+        if Path(app).exists():
+            return True
+    return False
+
+
 def _omonterad_disk(path):
     """Diskens namn om sökvägen ligger på en omonterad /Volumes-disk, annars None."""
     delar = Path(path).parts
@@ -1507,7 +1519,13 @@ def main():
             root.after(0, lambda: knapp.configure(state="normal"))
             if ok and urval_mapp[0]:
                 lagg_till_historik(urval_mapp[0], urval_antal[0])
-                root.after(500, lambda: visa_miniatyrer(root, urval_mapp[0]))
+                # Hoppa över miniatyr-popupen när urvalet ändå öppnas i
+                # Lightroom — annars dyker både LR och preview-fönstret upp.
+                läge = vals["oppna"].get().strip().lower()
+                till_lr = läge == "lightroom" or (läge == "auto"
+                                                  and _lightroom_finns())
+                if not till_lr:
+                    root.after(500, lambda: visa_miniatyrer(root, urval_mapp[0]))
 
         threading.Thread(target=kör_process, daemon=True).start()
 
