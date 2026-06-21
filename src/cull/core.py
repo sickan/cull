@@ -273,11 +273,28 @@ def _hitta_lightroom():
     return None
 
 
-def oppna_resultat(ut_dir, lr_mapp, lage="auto"):
-    """Öppnar resultatet. Lightroom öppnas mot matchroten (lr_mapp) så hela
-    matchen kan importeras; Finder öppnar den faktiska urvalsmappen (ut_dir).
-    Lägen: 'lightroom', 'finder', 'inget', 'auto' (=Lightroom om installerat)."""
+def _hitta_dxo():
+    """Returnerar appsökväg för installerat DxO PureRAW (nyaste först), eller None."""
+    import glob
+    träffar = sorted(glob.glob("/Applications/DxO PureRAW*.app"), reverse=True)
+    return träffar[0] if träffar else None
+
+
+def oppna_resultat(ut_dir, lr_mapp, kopierade, lage="auto"):
+    """Öppnar resultatet:
+      lightroom/auto → matchroten (lr_mapp) för import av hela matchen
+      dxo            → de valda filerna i DxO PureRAW (avbrusa behållarna)
+      finder         → urvalsmappen (ut_dir)
+      inget          → gör inget."""
     if lage == "inget":
+        return
+    if lage == "dxo":
+        dxo = _hitta_dxo()
+        if dxo:
+            subprocess.Popen(["open", "-a", dxo] + [str(p) for p in kopierade])
+            return
+        print("  (DxO PureRAW hittades inte — öppnar i Finder istället.)", flush=True)
+        subprocess.Popen(["open", str(ut_dir)])
         return
     lr = _hitta_lightroom()
     if lage in ("auto", "lightroom") and lr:
@@ -411,8 +428,9 @@ def main():
                     help="snabbläge: dyr AI bara på topp 40 %% (snabb leverans, "
                          "lägre recall — för när beställaren väntar)")
     ap.add_argument("--oppna", default="auto",
-                    choices=["auto", "lightroom", "finder", "inget"],
-                    help="öppna urvalet efteråt (auto=Lightroom om installerat)")
+                    choices=["auto", "lightroom", "dxo", "finder", "inget"],
+                    help="öppna urvalet efteråt (auto=Lightroom om installerat, "
+                         "dxo=DxO PureRAW på de valda filerna)")
     ap.add_argument("--export-rot", default=None, metavar="MAPP",
                     help="exportera till MAPP/<matchinfo>/<kameratyp>/ istället "
                          "för en undermapp i källkatalogen")
@@ -679,6 +697,10 @@ def main():
                         post = ai_cache.get(_ai_cache_nyckel(r["fil"], ai_ver, sport))
                     except OSError:
                         post = None
+                    # Cachad UTAN OCR men vi bevakar nummer nu → analysera om
+                    # (annars skulle tröjnummer-detekteringen tyst hoppas över).
+                    if post is not None and bevaka and not post.get("_ocr"):
+                        post = None
                     if post is not None:
                         for k in AI_FEAT_KEYS:
                             r[k] = post.get(k, 0.0)
@@ -752,6 +774,7 @@ def main():
                     try:
                         post = {k: r.get(k) for k in AI_FEAT_KEYS}
                         post["_nummer"] = r.get("_nummer", [])
+                        post["_ocr"] = bool(bevaka)   # OCR övervägdes denna körning
                         ai_cache[_ai_cache_nyckel(r["fil"], ai_ver, sport)] = post
                     except OSError:
                         continue
@@ -971,7 +994,9 @@ def main():
                 print(f"  XMP-WB: as-shot {delta_k:+.0f}K, tint {delta_tint:+.0f} "
                       f"(uppmätt färgstick).", flush=True)
 
-        for r in valda:
+        print(f"\nExporterar {len(valda)} filer (kopierar + XMP)…", flush=True)
+        _t = time.perf_counter()
+        for i, r in enumerate(valda, 1):
             shutil.copy2(r["fil"], ut_dir / r["fil"].name)
             if gör_xmp:
                 img = cv2.imread(str(r["_jpg"])) if r["_jpg"] else None
@@ -1004,12 +1029,18 @@ def main():
                 xmp = r["fil"].with_suffix(".xmp")
                 if xmp.exists():
                     shutil.copy2(xmp, ut_dir / xmp.name)
+            if i % 3 == 0 or i == len(valda):
+                print(f"  kopierar …{i}/{len(valda)}", flush=True)
+        tider_fas["Export"] = time.perf_counter() - _t
 
         # IPTC-bildtexter på de exporterade filerna (match-gemensam metadata).
         if args.iptc:
+            print("Skriver IPTC-bildtexter…", flush=True)
+            _t = time.perf_counter()
             kopierade = [ut_dir / r["fil"].name for r in valda]
             n_iptc = _skriv_iptc(kopierade, args.ut_namn, sport,
                                  args.fotograf, _exif_env())
+            tider_fas["IPTC"] = time.perf_counter() - _t
             print(f"IPTC-bildtexter skrivna på {n_iptc} filer."
                   if n_iptc else
                   "IPTC hoppades över (matchinfo saknas?).", flush=True)
@@ -1031,8 +1062,11 @@ def main():
     # Lightroom öppnas mot matchroten (matchinfo-mappen) — med export-rot är
     # det ut_dir.parent (ovanför kameramappen), annars urvalsmappen själv.
     lr_mapp = ut_dir.parent if args.export_rot else ut_dir
-    oppna_resultat(ut_dir, lr_mapp, args.oppna)
-    if (_hitta_lightroom() and args.oppna in ("auto", "lightroom")):
+    kopierade = [ut_dir / r["fil"].name for r in valda]
+    oppna_resultat(ut_dir, lr_mapp, kopierade, args.oppna)
+    if args.oppna == "dxo" and _hitta_dxo():
+        print(f"Öppnar {len(kopierade)} filer i DxO PureRAW.")
+    elif _hitta_lightroom() and args.oppna in ("auto", "lightroom"):
         print(f"Öppnar matchen i Lightroom: {lr_mapp}")
     else:
         print("Öppnar urvalsmappen.")

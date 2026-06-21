@@ -27,7 +27,7 @@ SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "xmp_justering", "oppna", "export_rot", "trana_rot",
                  "iptc", "fotograf", "bevaka_på"]
 
-OPPNA_VAL = ["Auto", "Lightroom", "Finder", "Inget"]
+OPPNA_VAL = ["Auto", "Lightroom", "DxO PureRAW", "Finder", "Inget"]
 
 MODELL_PATH = Path.home() / ".config" / "cull" / "modell.pkl"
 AKTIV_PATH    = Path.home() / ".cache" / "cull" / "aktiv_inlarning.json"
@@ -220,6 +220,7 @@ def bygg_kommando(vals):
         cmd.append("--xmp-justering")
 
     oppna = vals["oppna"].get().strip().lower()
+    oppna = {"dxo pureraw": "dxo"}.get(oppna, oppna)
     if oppna and oppna != "auto":
         cmd += ["--oppna", oppna]
 
@@ -1427,15 +1428,15 @@ def main():
         urval_mapp   = [None]   # fångar "kopierade till: <path>"
         urval_antal  = [0]
 
-        re_total    = re.compile(r"^(\d+) NEF hittade")
+        re_total    = re.compile(r"^(\d+) (?:NEF|bildfiler) hittade")
         re_framsteg = re.compile(r"…(\d+)/(\d+)")
         re_hoppar   = re.compile(r"\[(\d+)/(\d+)\]")
         re_urval    = re.compile(r"(\d+) NEF kopierade till:\s*(.+)$")
 
         PULS_START = ("Laddar AI", "Hämtar metadata", "Extraherar previews",
-                      "AI-analys på topp")
+                      "AI-analys på topp", "Skriver IPTC")
         PULS_STOPP = ("AI-modeller redo", "Avspark", "previews extraherade",
-                      "AI klar", "Baspoängsätter")
+                      "AI klar", "Baspoängsätter", "IPTC-bildtexter skrivna")
 
         def starta_puls():
             pulsande[0] = True
@@ -1522,12 +1523,12 @@ def main():
             root.after(0, lambda: knapp.configure(state="normal"))
             if ok and urval_mapp[0]:
                 lagg_till_historik(urval_mapp[0], urval_antal[0])
-                # Hoppa över miniatyr-popupen när urvalet ändå öppnas i
-                # Lightroom — annars dyker både LR och preview-fönstret upp.
+                # Hoppa över miniatyr-popupen när urvalet ändå öppnas i en
+                # extern app (LR/DxO) — annars dyker både den och popupen upp.
                 läge = vals["oppna"].get().strip().lower()
-                till_lr = läge == "lightroom" or (läge == "auto"
-                                                  and _lightroom_finns())
-                if not till_lr:
+                till_app = (läge in ("lightroom", "dxo pureraw")
+                            or (läge == "auto" and _lightroom_finns()))
+                if not till_app:
                     root.after(500, lambda: visa_miniatyrer(root, urval_mapp[0]))
 
         threading.Thread(target=kör_process, daemon=True).start()
