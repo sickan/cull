@@ -50,14 +50,33 @@ def berakna_uppratning(img_bgr):
     return float(np.clip(-float(np.median(vinklar)), -5.0, 5.0))
 
 
+def brus_av_iso(iso):
+    """Mappar ISO till (luminans-NR, färg-NR, luminans-detalj) för crs.
+
+    Konservativt – sportredaktörer vill ha kvar lite korn. Returnerar None
+    under ~1600 (kamerans/LR:s standard räcker)."""
+    if not iso or iso < 1600:
+        return None
+    if iso < 3200:
+        return (10, 25, 50)
+    if iso < 6400:
+        return (18, 30, 50)
+    if iso < 12800:
+        return (28, 40, 50)
+    return (38, 55, 40)
+
+
 def skriv_xmp(nef_path, crop=None, vinkel=0.0,
-              exposure=None, temperatur=None, tint=None, profil=None):
+              exposure=None, temperatur=None, tint=None, profil=None,
+              iso=None, objektiv=False):
     """Skriver en XMP-sidecar bredvid NEF-filen.
 
     exposure:    relativ EV-justering (crs:Exposure2012), eller None.
     temperatur:  absolut Kelvin (crs:Temperature, WhiteBalance=Custom), eller None.
     tint:        absolut tint (crs:Tint), används med temperatur.
     profil:      kameraprofil (crs:CameraProfile), t.ex. 'Camera Neutral'.
+    iso:         EXIF-ISO → ISO-baserad brusreducering, eller None.
+    objektiv:    True → aktivera objektivprofil-korrigering (crs:LensProfileEnable).
     """
     if crop:
         top, left, bottom, right = crop
@@ -75,6 +94,15 @@ def skriv_xmp(nef_path, crop=None, vinkel=0.0,
         rader.append("crs:WhiteBalance='Custom'")
         rader.append(f"crs:Temperature='{int(round(temperatur))}'")
         rader.append(f"crs:Tint='{int(round(tint or 0))}'")
+    nr = brus_av_iso(iso)
+    if nr:
+        lum, farg, detalj = nr
+        rader.append(f"crs:LuminanceSmoothing='{lum}'")
+        rader.append(f"crs:LuminanceNoiseReductionDetail='{detalj}'")
+        rader.append(f"crs:ColorNoiseReduction='{farg}'")
+    if objektiv:
+        rader.append("crs:LensProfileEnable='1'")
+        rader.append("crs:LensProfileSetup='LensDefaults'")
     extra = ("\n      " + "\n      ".join(rader)) if rader else ""
 
     innehall = XMP_MALL.format(

@@ -192,6 +192,27 @@ def _as_shot_kelvin_batch(nef_paths, env):
     return ut
 
 
+def _iso_batch(nef_paths, env):
+    """Läser EXIF-ISO för flera filer i ett anrop. Returnerar {Path: iso}."""
+    if not nef_paths:
+        return {}
+    cmd = ["exiftool", "-j", "-ISO"] + [str(p) for p in nef_paths]
+    ut = {}
+    try:
+        rå = subprocess.run(cmd, capture_output=True, text=True, env=env).stdout
+        for post in json.loads(rå):
+            iso = post.get("ISO")
+            if isinstance(iso, list):
+                iso = iso[0] if iso else None
+            try:
+                ut[Path(post["SourceFile"])] = int(iso)
+            except (TypeError, ValueError):
+                pass
+    except Exception:
+        pass
+    return ut
+
+
 def _exif_env():
     env = os.environ.copy()
     for p in ("/opt/homebrew/bin", "/usr/local/bin"):
@@ -1003,6 +1024,7 @@ def main():
         # Justeringsdata (exponering per bild + uppdrags-gemensam WB-korr).
         _vb = ansikte_c = None
         as_shot = {}
+        iso_karta = {}
         delta_k = delta_tint = 0.0
         if args.xmp_justering:
             from cull import vitbalans as _vb
@@ -1014,6 +1036,8 @@ def main():
                 if _p not in env_wb.get("PATH", "").split(os.pathsep):
                     env_wb["PATH"] = _p + os.pathsep + env_wb.get("PATH", "")
             as_shot = _as_shot_kelvin_batch([r["fil"] for r in valda], env_wb)
+            iso_karta = _iso_batch([r["fil"] for r in valda
+                                    if r["fil"].suffix.lower() in RAW_SUFFIX], env_wb)
             if delta_k or delta_tint:
                 print(f"  XMP-WB: as-shot {delta_k:+.0f}K, tint {delta_tint:+.0f} "
                       f"(uppmätt färgstick).", flush=True)
@@ -1040,15 +1064,22 @@ def main():
                             if (delta_k or delta_tint) and bas_k:
                                 temperatur = bas_k + delta_k
                                 tint = delta_tint
-                # Kameraprofil (Nikon Neutral) gäller raw, inte JPG.
-                profil = ("Camera Neutral"
-                          if r["fil"].suffix.lower() in RAW_SUFFIX else None)
-                if (args.xmp or exposure is not None or temperatur is not None):
+                # Kameraprofil (Nikon Neutral), ISO-brus och objektivkorr
+                # gäller raw, inte JPG (JPG är redan kamera-processad).
+                är_raw = r["fil"].suffix.lower() in RAW_SUFFIX
+                profil = "Camera Neutral" if är_raw else None
+                iso = objektiv = None
+                if args.xmp_justering and är_raw:
+                    iso = iso_karta.get(r["fil"])
+                    objektiv = True
+                if (args.xmp or exposure is not None or temperatur is not None
+                        or iso is not None):
                     xmp_writer.skriv_xmp(ut_dir / r["fil"].name,
                                          crop=crop, vinkel=vinkel,
                                          exposure=exposure,
                                          temperatur=temperatur, tint=tint,
-                                         profil=profil)
+                                         profil=profil,
+                                         iso=iso, objektiv=bool(objektiv))
             else:
                 xmp = r["fil"].with_suffix(".xmp")
                 if xmp.exists():

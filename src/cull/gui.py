@@ -995,7 +995,7 @@ def main():
     ttk.Checkbutton(f_katalog, text="XMP-sidecars (upprätning)",
                     variable=vals["xmp"]).grid(row=10, column=0, sticky="w", pady=2)
     vals["xmp_justering"] = tk.BooleanVar(value=saved.get("xmp_justering", False))
-    ttk.Checkbutton(f_katalog, text="XMP: auto exp/WB",
+    ttk.Checkbutton(f_katalog, text="XMP: leveransklar",
                     variable=vals["xmp_justering"]).grid(
         row=10, column=1, columnspan=2, sticky="w", pady=2)
 
