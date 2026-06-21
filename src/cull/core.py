@@ -424,6 +424,9 @@ def main():
                     help="justera firande-vikten: +1..+3 mer firande, -1..-3 mindre")
     ap.add_argument("--garanti-firande", type=int, default=0, metavar="N",
                     help="reservera N platser för bilder med högst firande-score")
+    ap.add_argument("--garanti-bevaka", type=int, default=0, metavar="N",
+                    help="reservera N platser för de bästa bilderna på bevakat "
+                         "tröjnummer (kräver --bevaka)")
     ap.add_argument("--snabb", action="store_true",
                     help="snabbläge: dyr AI bara på topp 40 %% (snabb leverans, "
                          "lägre recall — för när beställaren väntar)")
@@ -891,23 +894,33 @@ def main():
             valda += rest[:n_behall - len(valda)]
         valda = valda[:n_behall]
 
-        # Garantiplatser för firande: reservera N platser för de bilder med
-        # starkast firandesignal som inte redan finns i urvalet.
-        if args.garanti_firande > 0 and args.ai:
+        # Garantiplatser: reservera platser för firande och/eller bevakade
+        # tröjnummer — de bästa sådana bilderna tas in även om de inte rankar
+        # in på egen hand. Slås samman så de inte tränger ut varandra.
+        firande_g, bevaka_g = [], []
+        if args.ai:
             valda_filer = {r["fil"] for r in valda}
-            garanti_kandidater = sorted(
-                [r for r in resultat if r["fil"] not in valda_filer],
-                key=lambda r: r.get("armar", 0.0) + r.get("klunga", 0.0),
-                reverse=True
-            )
-            garanti = [r for r in garanti_kandidater
-                       if r.get("armar", 0.0) + r.get("klunga", 0.0) > 0.0
-                       ][:args.garanti_firande]
-            if garanti:
-                # Ersätt de lägst-poängsatta bilderna i urvalet
-                valda = sorted(valda, key=lambda r: r["poang"], reverse=True)
-                valda = valda[:max(0, n_behall - len(garanti))] + garanti
-                print(f"Garantiplatser: {len(garanti)} firande-bild(er) tillagd(a).")
+            if args.garanti_firande > 0:
+                firande_g = sorted(
+                    [r for r in resultat if r["fil"] not in valda_filer
+                     and r.get("armar", 0.0) + r.get("klunga", 0.0) > 0.0],
+                    key=lambda r: r.get("armar", 0.0) + r.get("klunga", 0.0),
+                    reverse=True)[:args.garanti_firande]
+            if args.garanti_bevaka > 0 and bevaka:
+                redan = valda_filer | {r["fil"] for r in firande_g}
+                bevaka_g = sorted(
+                    [r for r in resultat if r["fil"] not in redan
+                     and set(r.get("_nummer", [])) & bevaka],
+                    key=lambda r: r["poang"], reverse=True)[:args.garanti_bevaka]
+        garanterade = firande_g + bevaka_g
+        if garanterade:
+            g_filer = {r["fil"] for r in garanterade}
+            behalls = sorted([r for r in valda if r["fil"] not in g_filer],
+                             key=lambda r: r["poang"], reverse=True)
+            valda = behalls[:max(0, n_behall - len(garanterade))] + garanterade
+            delar = ([f"{len(firande_g)} firande"] if firande_g else []) + \
+                    ([f"{len(bevaka_g)} på bevakat nummer"] if bevaka_g else [])
+            print(f"Garantiplatser: {', '.join(delar)} tillagd(a).")
 
         print(f"\nBehåller {len(valda)} av {n_total} "
               f"({len(basta_per_grupp)} burst-grupper).\n")

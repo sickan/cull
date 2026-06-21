@@ -25,7 +25,7 @@ SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "yolo", "estetik", "modell", "sport", "matchinfo",
                  "firande_boost", "garanti_firande", "snabb",
                  "xmp_justering", "oppna", "export_rot", "trana_rot",
-                 "iptc", "fotograf", "bevaka_på"]
+                 "iptc", "fotograf", "bevaka_på", "garanti_bevaka"]
 
 OPPNA_VAL = ["Auto", "Lightroom", "DxO PureRAW", "Finder", "Inget"]
 
@@ -186,6 +186,10 @@ def bygg_kommando(vals):
     garanti = int(vals["garanti_firande"].get())
     if garanti > 0:
         cmd += ["--garanti-firande", str(garanti)]
+
+    garanti_b = int(vals["garanti_bevaka"].get())
+    if garanti_b > 0:
+        cmd += ["--garanti-bevaka", str(garanti_b)]
 
     if vals["snabb"].get():
         cmd.append("--snabb")
@@ -1135,6 +1139,21 @@ def main():
     ttk.Label(f_krit, text="  reserverade platser för firande",
               foreground="gray").grid(row=16, column=2, sticky="w", padx=(28, 0))
     _upd_garanti(saved.get("garanti_firande", 0))
+
+    # Garanterade platser för bevakat tröjnummer
+    rad(f_krit, "Garanti spelare", 17)
+    vals["garanti_bevaka"] = tk.IntVar(value=saved.get("garanti_bevaka", 0))
+    garanti_b_label = tk.StringVar(value="0")
+    def _upd_garanti_b(v):
+        garanti_b_label.set(str(int(float(v))))
+    ttk.Scale(f_krit, from_=0, to=5, orient="horizontal",
+              variable=vals["garanti_bevaka"], command=_upd_garanti_b,
+              length=120).grid(row=17, column=1, sticky="w")
+    ttk.Label(f_krit, textvariable=garanti_b_label, width=4,
+              anchor="w").grid(row=17, column=2, sticky="w")
+    ttk.Label(f_krit, text="  platser för bevakat tröjnummer",
+              foreground="gray").grid(row=17, column=2, sticky="w", padx=(28, 0))
+    _upd_garanti_b(saved.get("garanti_bevaka", 0))
 
     # --- Träning ---
     OKAND_PATH = Path.home() / ".cache" / "cull" / "sport_okand.json"

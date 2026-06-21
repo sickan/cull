@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cull"
-version = "1.2.4"
+version = "1.2.5"
 description = "Dalecarlia Photo Cull — AI-driven culling av sportfoton (NEF)"
 readme = "README.md"
 requires-python = ">=3.10"
