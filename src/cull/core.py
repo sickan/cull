@@ -991,11 +991,15 @@ def main():
                             if (delta_k or delta_tint) and bas_k:
                                 temperatur = bas_k + delta_k
                                 tint = delta_tint
+                # Kameraprofil (Nikon Neutral) gäller raw, inte JPG.
+                profil = ("Camera Neutral"
+                          if r["fil"].suffix.lower() in RAW_SUFFIX else None)
                 if (args.xmp or exposure is not None or temperatur is not None):
                     xmp_writer.skriv_xmp(ut_dir / r["fil"].name,
                                          crop=crop, vinkel=vinkel,
                                          exposure=exposure,
-                                         temperatur=temperatur, tint=tint)
+                                         temperatur=temperatur, tint=tint,
+                                         profil=profil)
             else:
                 xmp = r["fil"].with_suffix(".xmp")
                 if xmp.exists():

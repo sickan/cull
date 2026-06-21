@@ -51,12 +51,13 @@ def berakna_uppratning(img_bgr):
 
 
 def skriv_xmp(nef_path, crop=None, vinkel=0.0,
-              exposure=None, temperatur=None, tint=None):
+              exposure=None, temperatur=None, tint=None, profil=None):
     """Skriver en XMP-sidecar bredvid NEF-filen.
 
     exposure:    relativ EV-justering (crs:Exposure2012), eller None.
     temperatur:  absolut Kelvin (crs:Temperature, WhiteBalance=Custom), eller None.
     tint:        absolut tint (crs:Tint), används med temperatur.
+    profil:      kameraprofil (crs:CameraProfile), t.ex. 'Camera Neutral'.
     """
     if crop:
         top, left, bottom, right = crop
@@ -66,6 +67,8 @@ def skriv_xmp(nef_path, crop=None, vinkel=0.0,
         has_crop = "False"
 
     rader = []
+    if profil:
+        rader.append(f"crs:CameraProfile='{profil}'")
     if exposure is not None:
         rader.append(f"crs:Exposure2012='{exposure:+.2f}'")
     if temperatur is not None:
