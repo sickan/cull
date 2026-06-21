@@ -1,9 +1,9 @@
 """Varumärke, version och build för Dalecarlia Photo Cull."""
 
+from datetime import datetime
 from pathlib import Path
 
 APPNAMN = "Dalecarlia Photo Cull"
-BUILD = "2026-06-20"
 
 
 def version():
@@ -14,8 +14,18 @@ def version():
         return "0.0.0"
 
 
+def build():
+    """Build-datum = den installerade kodens tidsstämpel. Uppdateras därför
+    automatiskt vid varje 'pipx install' utan att behöva hårdkodas."""
+    try:
+        ts = Path(__file__).stat().st_mtime
+        return datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    except Exception:
+        return datetime.now().strftime("%Y-%m-%d")
+
+
 def etikett():
-    return f"{APPNAMN}  v{version()}  (build {BUILD})"
+    return f"{APPNAMN}  v{version()}  (build {build()})"
 
 
 def ikon_path():

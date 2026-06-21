@@ -34,20 +34,73 @@ def exponering(gray):
     return max(0.0, 1.0 - straff)
 
 
-# Ladda Haar-cascaderna en gång vid import (inte per anrop).
-_ANSIKTE = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-_OGA = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_eye.xml")
+def motljus(gray):
+    """
+    Motljus-indikator i [0,1]: hög när kanterna (bakgrund/himmel) är klart
+    ljusare än bildens mitt (motivet), vilket ger siluett/rim-ljus.
+    Neutralt signalvärde — modellen lär sig om det är önskvärt eller inte.
+    """
+    h, w = gray.shape
+    mh, mw = h // 4, w // 4
+    mitt = gray[mh:h - mh, mw:w - mw]
+    if mitt.size == 0:
+        return 0.0
+    mask = np.ones_like(gray, dtype=bool)
+    mask[mh:h - mh, mw:w - mw] = False
+    kant = gray[mask]
+    diff = (kant.mean() - mitt.mean()) / 255.0
+    # Förstärk även av andelen utbrända kantpixlar (bakgrundsljus).
+    utbrant = (kant > 230).mean()
+    return float(np.clip(diff * 1.5 + utbrant * 0.5, 0.0, 1.0))
+
+
+def rorelse_riktning(gray):
+    """
+    Riktnings-anisotropi i [0,1] via struktur-tensorns koherens.
+    Hög = starkt riktad gradient (panorering/svep), låg = isotropisk
+    (skarp detalj eller ostrukturerad skakning). Tillsammans med 'skarpa'
+    kan modellen skilja medveten panorering från kameraskak.
+    """
+    gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+    jxx = float(np.mean(gx * gx))
+    jyy = float(np.mean(gy * gy))
+    jxy = float(np.mean(gx * gy))
+    spar = jxx + jyy
+    if spar < 1e-6:
+        return 0.0
+    koherens = ((jxx - jyy) ** 2 + 4.0 * jxy * jxy) ** 0.5 / spar
+    return float(np.clip(koherens, 0.0, 1.0))
+
+
+# Haar-cascadernas sökvägar. CascadeClassifier.detectMultiScale är INTE
+# trådsäker — flera trådar som delar samma objekt kraschar med
+# "getScaleData"-assertion. Därför hålls en egen instans per tråd.
+_ANSIKTE_XML = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+_OGA_XML = cv2.data.haarcascades + "haarcascade_eye.xml"
+
+import threading
+_tls = threading.local()
+
+
+def _cascades():
+    """Returnerar (ansikte, öga)-cascade för den anropande tråden."""
+    par = getattr(_tls, "casc", None)
+    if par is None:
+        par = (cv2.CascadeClassifier(_ANSIKTE_XML),
+               cv2.CascadeClassifier(_OGA_XML))
+        _tls.casc = par
+    return par
 
 
 def ogon_ansikten(gray):
+    ansikte, oga = _cascades()
     # Skydd om cascade-filerna saknas/inte kunde läsas.
-    if _ANSIKTE.empty() or _OGA.empty():
+    if ansikte.empty() or oga.empty():
         return 0, 0
-    ansikten = _ANSIKTE.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
+    ansikten = ansikte.detectMultiScale(gray, 1.1, 5, minSize=(40, 40))
     ogon = sum(
-        len(_OGA.detectMultiScale(gray[y:y+h, x:x+w], 1.1, 6))
+        len(oga.detectMultiScale(gray[y:y+h, x:x+w], 1.1, 6))
         for (x, y, w, h) in ansikten
     )
     return len(ansikten), ogon
@@ -68,4 +121,6 @@ def poangsatt(jpg_path):
         "exp":      exponering(gray),
         "ansikten": n_ans,
         "ogon":     n_ogon,
+        "motljus":  motljus(gray),
+        "rorelse":  rorelse_riktning(gray),
     }

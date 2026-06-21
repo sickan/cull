@@ -13,6 +13,8 @@ OCR:  pipx inject cull easyocr
 
 import argparse
 import os
+import random
+import re
 import shutil
 import subprocess
 import sys
@@ -36,10 +38,69 @@ from cull.ai_lager import FARG_NAMN
 N_WORKERS = min(os.cpu_count() or 4, 8)
 # Andel av bilderna (sorterade på baspoäng) som AI körs på
 AI_KANDIDAT_ANDEL = 0.5
+# Snabbläge: dyr AI körs bara på denna andel även med personlig modell
+# (medveten recall-mot-fart-avvägning för leverans när beställaren väntar).
+SNABB_ANDEL = 0.4
 
 # Cache för baspoäng — nyckel = sökväg|mtime|storlek (oföränderlig per NEF)
 import json
-BAS_CACHE_PATH = Path.home() / ".cache" / "cull" / "bas_cache.json"
+# v2: baspoängen innehåller nu motljus + rörelse-riktning → ny cachefil.
+BAS_CACHE_PATH = Path.home() / ".cache" / "cull" / "bas_cache_v2.json"
+
+# Aktiv inlärning: osäkra bilder (modell-p nära 0.5) sparas för manuell etikett.
+AKTIV_PATH = Path.home() / ".cache" / "cull" / "aktiv_inlarning.json"
+AKTIV_THUMB_DIR = Path.home() / ".cache" / "cull" / "aktiv_thumbs"
+# Körningshistorik med poängfördelning (för histogram + jämför körningar).
+KOR_HIST_PATH = Path.home() / ".config" / "cull" / "kor_historik.json"
+
+
+def _spara_aktiv_inlarning(resultat, katalog, n=12):
+    """Sparar de mest osäkra bilderna (modell-p närmast 0.5) + thumbnails,
+    så GUI kan be användaren etikettera dem (aktiv inlärning)."""
+    kand = [r for r in resultat if r.get("modell_p") is not None and r.get("_jpg")]
+    if not kand:
+        return
+    kand.sort(key=lambda r: abs(r["modell_p"] - 0.5))
+    osakra = kand[:n]
+    AKTIV_THUMB_DIR.mkdir(parents=True, exist_ok=True)
+    poster = []
+    for r in osakra:
+        thumb = AKTIV_THUMB_DIR / (r["fil"].stem + ".jpg")
+        try:
+            shutil.copy2(r["_jpg"], thumb)
+        except Exception:
+            continue
+        poster.append({"nef": str(r["fil"]), "thumb": str(thumb),
+                       "stem": r["fil"].stem, "modell_p": round(r["modell_p"], 4)})
+    if poster:
+        AKTIV_PATH.parent.mkdir(parents=True, exist_ok=True)
+        AKTIV_PATH.write_text(
+            json.dumps({"katalog": str(katalog), "bilder": poster},
+                       ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _logga_korning(katalog, ut_dir, resultat, valda):
+    """Loggar poängfördelning + urval för histogram och körningsjämförelse."""
+    poäng = sorted(float(r["poang"]) for r in resultat)
+    valda_namn = [r["fil"].name for r in
+                  sorted(valda, key=lambda r: r["poang"], reverse=True)]
+    post = {
+        "tid": datetime.now().isoformat(timespec="seconds"),
+        "katalog": str(katalog),
+        "ut_dir": str(ut_dir),
+        "n_total": len(resultat),
+        "n_valda": len(valda),
+        "poang": [round(p, 4) for p in poäng],
+        "valda": valda_namn,
+    }
+    try:
+        hist = json.loads(KOR_HIST_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        hist = []
+    hist.append(post)
+    hist = hist[-50:]
+    KOR_HIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    KOR_HIST_PATH.write_text(json.dumps(hist, ensure_ascii=False), encoding="utf-8")
 
 
 def _cache_nyckel(nef):
@@ -62,6 +123,158 @@ def spara_bas_cache(cache):
             json.dump(cache, f)
     except Exception:
         pass
+
+
+# AI-feature-cache per bild: sparar de dyra, parameter-oberoende AI-signalerna
+# så att omkörning av samma shoot (t.ex. justera reglage) slipper YOLO/pose/
+# face/NIMA på nytt. Används bara när personlig modell är aktiv — då påverkar
+# inte --hemma-farg/--bevaka poängen, så cachen kan inte ge fel resultat.
+import hashlib as _hashlib
+from cull.clip_lager import CLIP_FEATURES as _CLIP_FEATURES
+AI_CACHE_PATH = Path.home() / ".cache" / "cull" / "ai_cache.json"
+AI_FEAT_KEYS = ["armar", "klunga", "boll", "personer", "vast",
+                "bakgrund", "keeper", "ogonkontakt", "nima"] + _CLIP_FEATURES
+
+
+def _ai_feat_version():
+    from cull import inlarning
+    return _hashlib.sha1("|".join(inlarning.FEATURES).encode()).hexdigest()[:8]
+
+
+def _ai_cache_nyckel(nef, ver, sport=""):
+    # CLIP-features beror på sporten (promptmallar) → ingår i nyckeln.
+    return f"{_cache_nyckel(nef)}|v{ver}|{sport or ''}"
+
+
+def ladda_ai_cache():
+    try:
+        with open(AI_CACHE_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def spara_ai_cache(cache):
+    try:
+        AI_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(AI_CACHE_PATH, "w") as f:
+            json.dump(cache, f)
+    except Exception:
+        pass
+
+
+def _as_shot_kelvin_batch(nef_paths, env):
+    """Läser kamerans as-shot-vitbalans (Kelvin) för flera NEF i ett anrop.
+    Returnerar {Path: kelvin}. Saknas värdet utelämnas filen."""
+    if not nef_paths:
+        return {}
+    cmd = ["exiftool", "-j", "-WhiteBalance"] + [str(p) for p in nef_paths]
+    ut = {}
+    try:
+        rå = subprocess.run(cmd, capture_output=True, text=True, env=env).stdout
+        for post in json.loads(rå):
+            wb = str(post.get("WhiteBalance", ""))
+            m = re.search(r"(\d{4,5})\s*K", wb)
+            if m:
+                ut[Path(post["SourceFile"])] = int(m.group(1))
+    except Exception:
+        pass
+    return ut
+
+
+def _exif_env():
+    env = os.environ.copy()
+    for p in ("/opt/homebrew/bin", "/usr/local/bin"):
+        if p not in env.get("PATH", "").split(os.pathsep):
+            env["PATH"] = p + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def _kameratyp(nef_filer, env):
+    """Kort kameranamn (Z8, D5, D850…) ur EXIF Model, annars None."""
+    if not nef_filer:
+        return None
+    try:
+        rå = subprocess.run(["exiftool", "-j", "-Model", str(nef_filer[0])],
+                            capture_output=True, text=True, env=env).stdout
+        model = str(json.loads(rå)[0].get("Model", ""))
+    except Exception:
+        return None
+    for märke in ("NIKON", "CANON", "SONY", "FUJIFILM", "PANASONIC"):
+        model = model.upper().replace(märke, "")
+    kort = model.replace(" ", "").strip()
+    return kort or None
+
+
+def _iptc_metadata(matchinfo, sport):
+    """Bygger {caption, keywords, datum, arena} ur matchinfo-strängen."""
+    caption = (matchinfo or "").strip()
+    home = away = arena = datum = ""
+    m = re.match(r"^(.*?)\s+-\s+(.*?)(?:\s+\d+-\d+|\s*$)", caption)
+    if m:
+        home, away = m.group(1).strip(), m.group(2).strip()
+    md = re.search(r"\b(20\d{2})(\d{2})(\d{2})\b", caption)
+    if md:
+        datum = f"{md.group(1)}:{md.group(2)}:{md.group(3)}"
+        arena = caption[md.end():].strip(" -")
+    keywords = [k for k in (home, away, sport if sport and sport != "okänd"
+                            else "", arena) if k]
+    return {"caption": caption, "keywords": keywords,
+            "datum": datum, "arena": arena}
+
+
+def _skriv_iptc(nef_paths, matchinfo, sport, fotograf, env):
+    """Skriver match-gemensam IPTC/XMP-metadata till alla exporterade NEF:er."""
+    if not nef_paths or not (matchinfo or "").strip():
+        return 0
+    md = _iptc_metadata(matchinfo, sport)
+    cmd = ["exiftool", "-overwrite_original", "-sep", ", ",
+           f"-XMP-dc:Description={md['caption']}",
+           f"-IPTC:Caption-Abstract={md['caption']}",
+           f"-XMP-photoshop:Headline={md['caption']}"]
+    if md["keywords"]:
+        kw = ", ".join(md["keywords"])
+        cmd += [f"-XMP-dc:Subject={kw}", f"-IPTC:Keywords={kw}"]
+    if md["arena"]:
+        cmd += [f"-XMP-Iptc4xmpCore:Location={md['arena']}",
+                f"-IPTC:Sub-location={md['arena']}"]
+    if md["datum"]:
+        cmd += [f"-XMP-photoshop:DateCreated={md['datum']}",
+                f"-IPTC:DateCreated={md['datum'].replace(':', '')}"]
+    if fotograf:
+        cmd += [f"-XMP-dc:Creator={fotograf}", f"-IPTC:By-line={fotograf}"]
+    cmd += [str(p) for p in nef_paths]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        return len(nef_paths) if r.returncode == 0 else 0
+    except Exception:
+        return 0
+
+
+def _hitta_lightroom():
+    """Returnerar appnamnet för installerad Lightroom Classic/CC, eller None."""
+    for app in ("/Applications/Adobe Lightroom Classic/Adobe Lightroom Classic.app",
+                "/Applications/Adobe Lightroom Classic.app",
+                "/Applications/Adobe Lightroom/Adobe Lightroom.app",
+                "/Applications/Adobe Lightroom.app"):
+        if Path(app).exists():
+            return app
+    return None
+
+
+def oppna_resultat(ut_dir, lr_mapp, lage="auto"):
+    """Öppnar resultatet. Lightroom öppnas mot matchroten (lr_mapp) så hela
+    matchen kan importeras; Finder öppnar den faktiska urvalsmappen (ut_dir).
+    Lägen: 'lightroom', 'finder', 'inget', 'auto' (=Lightroom om installerat)."""
+    if lage == "inget":
+        return
+    lr = _hitta_lightroom()
+    if lage in ("auto", "lightroom") and lr:
+        subprocess.Popen(["open", "-a", lr, str(lr_mapp)])
+        return
+    if lage == "lightroom" and not lr:
+        print("  (Lightroom hittades inte — öppnar i Finder istället.)", flush=True)
+    subprocess.Popen(["open", str(ut_dir)])
 
 
 def kontrollera_exiftool():
@@ -156,14 +369,57 @@ def main():
                     help="lägg till NIMA-estetikbetyg (kräver pyiqa)")
     ap.add_argument("--ingen-modell", action="store_true",
                     help="använd inte den tränade personliga modellen")
+    ap.add_argument("--sport", default=None,
+                    metavar="SPORT",
+                    help="sport: handboll, fotboll, volleyboll, innebandy "
+                         "(auto-detekteras om ej angiven)")
+    ap.add_argument("--ut-namn", default=None, metavar="NAMN",
+                    help="namn på urvalsmappen, t.ex. 'LUGI Sävehof 28-25 (13-12) 20260410'")
+    ap.add_argument("--firande-boost", type=int, default=0, metavar="N",
+                    help="justera firande-vikten: +1..+3 mer firande, -1..-3 mindre")
+    ap.add_argument("--garanti-firande", type=int, default=0, metavar="N",
+                    help="reservera N platser för bilder med högst firande-score")
+    ap.add_argument("--snabb", action="store_true",
+                    help="snabbläge: dyr AI bara på topp 40 %% (snabb leverans, "
+                         "lägre recall — för när beställaren väntar)")
+    ap.add_argument("--oppna", default="auto",
+                    choices=["auto", "lightroom", "finder", "inget"],
+                    help="öppna urvalet efteråt (auto=Lightroom om installerat)")
+    ap.add_argument("--export-rot", default=None, metavar="MAPP",
+                    help="exportera till MAPP/<matchinfo>/<kameratyp>/ istället "
+                         "för en undermapp i källkatalogen")
+    ap.add_argument("--iptc", action="store_true",
+                    help="skriv IPTC-bildtexter (match/datum/lag/arena) i filerna")
+    ap.add_argument("--fotograf", default=None, metavar="NAMN",
+                    help="fotografens namn → IPTC By-line/Creator (med --iptc)")
+    ap.add_argument("--xmp-justering", action="store_true",
+                    help="skriv exponering + WB/tint i XMP (från ansikts-"
+                         "exponering och uppmätt färgstick)")
+    ap.add_argument("--ingen-ai-cache", action="store_true",
+                    help="hoppa över AI-feature-cachen (tvinga omräkning)")
+    ap.add_argument("--limpa-ai-cache", action="store_true",
+                    help="töm AI-feature-cachen och avsluta")
     args = ap.parse_args()
 
     from cull import version as ver
     print(ver.etikett(), flush=True)
 
+    if args.limpa_ai_cache:
+        try:
+            AI_CACHE_PATH.unlink()
+            print(f"AI-cache tömd: {AI_CACHE_PATH}", flush=True)
+        except FileNotFoundError:
+            print("Ingen AI-cache att tömma.", flush=True)
+        return
+
     kontrollera_exiftool()
     katalog = Path(args.katalog).expanduser()
     if not katalog.is_dir():
+        delar = katalog.parts
+        if (len(delar) >= 3 and delar[1] == "Volumes"
+                and not (Path("/Volumes") / delar[2]).exists()):
+            sys.exit(f"Disken '{delar[2]}' är inte monterad. "
+                     f"Anslut den och försök igen.")
         sys.exit(f"Hittar inte katalogen: {katalog}")
 
     # Exkludera macOS AppleDouble-sidecars (._namn.NEF) och andra dolda
@@ -179,12 +435,30 @@ def main():
     # Personlig modell (om tränad) — kräver AI-features för alla bilder.
     from cull import inlarning
     modell_paket = None if args.ingen_modell else inlarning.ladda_modell()
+
+    if args.sport:
+        sport = args.sport.lower()
+    else:
+        # Röstning: nyckelord + resultatmönster + bildanalys (NEF-stickprov)
+        # + webb-sökning. Allt cachas — andra körningen på samma match är snabb.
+        prov_items = [(p, 0) for p in random.sample(nef_filer, min(6, len(nef_filer)))]
+        cull_env = os.environ.copy()
+        for _p in ("/opt/homebrew/bin", "/usr/local/bin"):
+            if _p not in cull_env.get("PATH", "").split(os.pathsep):
+                cull_env["PATH"] = _p + os.pathsep + cull_env.get("PATH", "")
+        sport = inlarning.detektera_sport(
+            katalog.parent.name or katalog.name,
+            items=prov_items, webb=True, env=cull_env)
+
     if modell_paket:
         args.ai = True
         args.estetik = True
+        sport_modeller = modell_paket.get("sport_modeller", {})
+        sport_info = (f", {sport}-modell" if sport in sport_modeller
+                      else f", {sport} (kombinerad)")
         print(f"Personlig modell aktiv "
               f"({modell_paket['n_valda']} val, "
-              f"{modell_paket['n_uppdrag']} uppdrag).", flush=True)
+              f"{modell_paket['n_uppdrag']} uppdrag{sport_info}).", flush=True)
 
     print(f"{len(nef_filer)} NEF hittade.", flush=True)
 
@@ -195,7 +469,9 @@ def main():
         print("Laddar AI-modeller…", flush=True)
         modeller = ai_lager.ladda_modeller(med_ocr=bool(bevaka),
                                            yolo_modell=args.yolo,
-                                           med_estetik=args.estetik)
+                                           med_estetik=args.estetik,
+                                           med_ogon=bool(modell_paket),
+                                           med_clip=bool(modell_paket))
         print("AI-modeller redo.", flush=True)
 
     # --- Sammanfattning av aktiva kriterier ---
@@ -227,7 +503,17 @@ def main():
     tider = hamta_metadata(nef_filer)
 
     avspark_ts = None
-    if args.avspark:
+    if args.avspark and args.avspark.lower() == "auto":
+        alla_ts = [matchfas.parse_tid(t) for t in tider.values()]
+        avspark_ts = matchfas.uppskatta_avspark([t for t in alla_ts if t])
+        if avspark_ts:
+            print(f"  Avspark (auto) uppskattad till "
+                  f"{datetime.fromtimestamp(avspark_ts):%H:%M} — matchfas-bonus aktiv.",
+                  flush=True)
+        else:
+            print("  Avspark (auto): kunde inte uppskattas ur tidsstämplar "
+                  "— matchfas avstängd.", flush=True)
+    elif args.avspark:
         forsta_tid = next(
             (matchfas.parse_tid(t) for t in tider.values()
              if matchfas.parse_tid(t)), None)
@@ -245,10 +531,13 @@ def main():
             ts = matchfas.parse_tid(tid_str)
             if ts:
                 fas_b = matchfas.fas_bonus(matchfas.matchminut(ts, avspark_ts))
-        d = dict(p)
+        # Defaults för basfeatures som äldre cache-poster kan sakna.
+        d = {"motljus": 0.0, "rorelse": 0.0}
+        d.update(p)
         d.update({
             "armar": 0.0, "boll": 0.0, "hemma": 0.0,
-            "trojnummer": 0.0, "klunga": 0.0, "personer": 0, "_yolo": None,
+            "trojnummer": 0.0, "klunga": 0.0, "personer": 0, "vast": 0,
+            "bakgrund": 0.0, "keeper": 0.0, "ogonkontakt": 0.0, "_yolo": None,
             "fas": fas_b, "fil": nef, "tid": tid_str, "_jpg": jpg,
         })
         return d
@@ -319,27 +608,62 @@ def main():
         for r in resultat:
             r["bas"] = bas_poang(r)
 
-        # --- Fas 3: AI på topp 50 % ---
+        # --- Fas 3: AI på topp-kandidater ---
+        vb_rapport = None   # vitbalans-/färgstick-rapport (sätts om AI körs)
         if args.ai and modeller:
             _t = time.perf_counter()
-            # Med personlig modell behövs AI-features för ALLA bilder.
-            andel = 1.0 if modell_paket else AI_KANDIDAT_ANDEL
+            # Med personlig modell behövs AI-features för ALLA bilder — utom i
+            # snabbläge, då dyr AI medvetet begränsas till topp SNABB_ANDEL.
+            if args.snabb:
+                andel = SNABB_ANDEL
+            elif modell_paket:
+                andel = 1.0
+            else:
+                andel = AI_KANDIDAT_ANDEL
             n_kandidater = max(1, int(len(resultat) * andel))
+            if args.snabb:
+                print(f"  ⚡ Snabbläge: dyr AI körs på topp {n_kandidater} "
+                      f"({SNABB_ANDEL:.0%}) — resten rankas på baspoäng.",
+                      flush=True)
             kandidater = sorted(resultat, key=lambda r: r["bas"],
                                 reverse=True)[:n_kandidater]
             n_pose = len(modeller.get("pose_pool", []))
             print(f"\nAI-analys på topp {n_kandidater} kandidater "
                   f"(YOLO-batch + {n_pose} pose-trådar)…", flush=True)
 
-            # Kandidater från cachen saknar extraherad preview — fixa nu.
-            saknar = [r for r in kandidater if not r["_jpg"]]
+            # AI-feature-cache (bara med personlig modell — se helpers ovan).
+            anv_ai_cache = bool(modell_paket) and not args.ingen_ai_cache
+            ai_ver = _ai_feat_version()
+            ai_cache = ladda_ai_cache() if anv_ai_cache else {}
+            n_cache = 0
+
+            kvar = []
+            for r in kandidater:
+                if anv_ai_cache:
+                    try:
+                        post = ai_cache.get(_ai_cache_nyckel(r["fil"], ai_ver, sport))
+                    except OSError:
+                        post = None
+                    if post is not None:
+                        for k in AI_FEAT_KEYS:
+                            r[k] = post.get(k, 0.0)
+                        n_cache += 1
+                        continue
+                kvar.append(r)
+
+            if n_cache:
+                print(f"  {n_cache} kandidater från AI-cache, "
+                      f"{len(kvar)} analyseras.", flush=True)
+
+            # Kandidater som behöver AI och saknar preview — extrahera nu.
+            saknar = [r for r in kvar if not r["_jpg"]]
             if saknar:
                 pm = extrahera_previews_batch([r["fil"] for r in saknar], tmp)
                 for r in saknar:
                     r["_jpg"] = pm.get(r["fil"])
 
             imgs, ref_lista = [], []
-            for r in kandidater:
+            for r in kvar:
                 if not r["_jpg"]:
                     continue
                 img = cv2.imread(str(r["_jpg"]))
@@ -352,13 +676,61 @@ def main():
                 imgs.append(img)
                 ref_lista.append(r)
 
-            from cull.ai_lager import bonus_batch
-            bonus_batch(imgs, ref_lista, modeller,
-                        args.hemma_farg, bevaka, batch_storlek=16,
-                        progress_cb=lambda klar, tot:
-                            print(f"  AI …{klar}/{tot}", flush=True))
+            # CLIP-text-features (sport-specifika prompter) byggs en gång.
+            clip_text = None
+            if modeller.get("clip") is not None:
+                from cull import clip_lager
+                try:
+                    clip_text = clip_lager.bygg_text_features(
+                        modeller["clip"], sport)
+                except Exception:
+                    clip_text = None
+
+            if imgs:
+                from cull.ai_lager import bonus_batch
+                ai_tider = {}
+                bonus_batch(imgs, ref_lista, modeller,
+                            args.hemma_farg, bevaka, batch_storlek=16,
+                            progress_cb=lambda klar, tot:
+                                print(f"  AI …{klar}/{tot}", flush=True),
+                            clip_text=clip_text, tider=ai_tider)
+                for k, v in sorted(ai_tider.items(), key=lambda kv: -kv[1]):
+                    tider_fas[k] = v
+                    print(f"  · {k:<14} {v:5.1f} s", flush=True)
+
+            # Spara nyberäknade AI-features till cachen.
+            if anv_ai_cache and ref_lista:
+                for r in ref_lista:
+                    try:
+                        ai_cache[_ai_cache_nyckel(r["fil"], ai_ver, sport)] = {
+                            k: r.get(k) for k in AI_FEAT_KEYS}
+                    except OSError:
+                        continue
+                spara_ai_cache(ai_cache)
+
             tider_fas["AI"] = time.perf_counter() - _t
             print(f"AI klar.", flush=True)
+
+            # Vitbalans-/färgstick-stickprov (hud + vitpunkt) på redan
+            # avkodade bilder — gratis på kalla körningar; vid cache-träff
+            # avkodas ett litet stickprov ur kandidaterna.
+            try:
+                from cull import vitbalans
+                from cull.bas import _cascades
+                prov_imgs = list(imgs)
+                if not prov_imgs:
+                    for r in kandidater[:20]:
+                        if r.get("_jpg"):
+                            im = cv2.imread(str(r["_jpg"]))
+                            if im is not None:
+                                prov_imgs.append(im)
+                ansikte_c, _ = _cascades()
+                vb_rapport = vitbalans.analysera(prov_imgs, ansikte_c)
+                txt = vitbalans.formattera(vb_rapport)
+                if txt:
+                    print("\n" + txt, flush=True)
+            except Exception as e:
+                print(f"  (vitbalans-analys hoppades över: {e})", flush=True)
 
         # Normalisera NIMA-estetik (om beräknad) över kandidaterna → bonus.
         nima_varden = [r["nima"] for r in resultat
@@ -376,7 +748,7 @@ def main():
 
         # Slutpoäng — personlig modell om tränad, annars handsatta vikter.
         if modell_paket:
-            inlarning.poangsatt_med_modell(resultat, modell_paket)
+            inlarning.poangsatt_med_modell(resultat, modell_paket, sport=sport)
             # Behåll matchfas som liten additiv knuff ovanpå modellpoängen.
             for r in resultat:
                 r["poang"] += r["fas"]
@@ -397,6 +769,20 @@ def main():
                     + r["fas"]
                     + r["estetik"]
                 )
+
+        # Firande-boost: varje steg (±1) lägger till/drar av 0.05 × firandesignal.
+        if args.firande_boost != 0 and args.ai:
+            boost_per_steg = 0.05
+            for r in resultat:
+                firande_signal = r.get("armar", 0.0) + r.get("klunga", 0.0)
+                r["poang"] += args.firande_boost * boost_per_steg * firande_signal
+
+        # Väst-straff: bilder med uppvärmningsvästar trycks ned visuellt.
+        if args.ai:
+            for r in resultat:
+                n_vast = r.get("vast", 0)
+                if n_vast > 0:
+                    r["poang"] -= 0.08 * min(n_vast, 3)
 
         # Burst-gruppering
         har_tid = all(matchfas.parse_tid(r["tid"]) is not None
@@ -433,6 +819,24 @@ def main():
             valda += rest[:n_behall - len(valda)]
         valda = valda[:n_behall]
 
+        # Garantiplatser för firande: reservera N platser för de bilder med
+        # starkast firandesignal som inte redan finns i urvalet.
+        if args.garanti_firande > 0 and args.ai:
+            valda_filer = {r["fil"] for r in valda}
+            garanti_kandidater = sorted(
+                [r for r in resultat if r["fil"] not in valda_filer],
+                key=lambda r: r.get("armar", 0.0) + r.get("klunga", 0.0),
+                reverse=True
+            )
+            garanti = [r for r in garanti_kandidater
+                       if r.get("armar", 0.0) + r.get("klunga", 0.0) > 0.0
+                       ][:args.garanti_firande]
+            if garanti:
+                # Ersätt de lägst-poängsatta bilderna i urvalet
+                valda = sorted(valda, key=lambda r: r["poang"], reverse=True)
+                valda = valda[:max(0, n_behall - len(garanti))] + garanti
+                print(f"Garantiplatser: {len(garanti)} firande-bild(er) tillagd(a).")
+
         print(f"\nBehåller {len(valda)} av {n_total} "
               f"({len(basta_per_grupp)} burst-grupper).\n")
         print("Topp-urval:")
@@ -459,35 +863,131 @@ def main():
             print("\n(Rapportläge — inget kopierades.)")
             return
 
-        ut_dir = katalog / "urval"
-        if ut_dir.exists():
-            i = 1
-            while (katalog / f"urval {i}").exists():
-                i += 1
-            ut_dir = katalog / f"urval {i}"
-        ut_dir.mkdir()
+        def _sanera(s):
+            return s.replace("/", "-").replace(":", ".").strip()
+
+        if args.export_rot:
+            # Struktur: <rot>/<matchinfo>/<kameratyp>/
+            rot = Path(args.export_rot).expanduser()
+            match_namn = _sanera(args.ut_namn) if args.ut_namn else \
+                (katalog.parent.name or katalog.name)
+            kam = _kameratyp(nef_filer, _exif_env()) or katalog.name
+            bas_dir = rot / match_namn
+            ut_dir = bas_dir / kam
+            if ut_dir.exists():
+                i = 2   # finns redan → Z8, Z8 2, Z8 3, …
+                while (bas_dir / f"{kam} {i}").exists():
+                    i += 1
+                ut_dir = bas_dir / f"{kam} {i}"
+            try:
+                ut_dir.mkdir(parents=True)
+            except OSError as e:
+                sys.exit(f"Kan inte skapa exportmappen {ut_dir}: {e}. "
+                         f"Är export-disken ansluten och skrivbar?")
+            print(f"Exporterar till: {ut_dir}", flush=True)
+        else:
+            if args.ut_namn:
+                ut_dir = katalog / _sanera(args.ut_namn)
+            else:
+                ut_dir = katalog / "urval"
+            if ut_dir.exists():
+                i = 2   # finns redan → urval, urval 2, urval 3, …
+                bas = ut_dir.name
+                while (katalog / f"{bas} {i}").exists():
+                    i += 1
+                ut_dir = katalog / f"{bas} {i}"
+            ut_dir.mkdir()
+
+        gör_xmp = args.xmp or args.xmp_justering
 
         # XMP behöver previews — extrahera för valda som saknar (cacheträffar).
-        if args.xmp:
+        if gör_xmp:
             saknar = [r for r in valda if not r["_jpg"]]
             if saknar:
                 pm = extrahera_previews_batch([r["fil"] for r in saknar], tmp)
                 for r in saknar:
                     r["_jpg"] = pm.get(r["fil"])
 
+        # Beskärning kräver YOLO — kör om för cacheträffar som saknar _yolo.
+        if args.xmp:
+            utan_yolo = [r for r in valda if r["_jpg"] and r.get("_yolo") is None]
+            if utan_yolo and modeller and modeller.get("yolo"):
+                bil = []
+                for r in utan_yolo:
+                    im = cv2.imread(str(r["_jpg"]))
+                    if im is None:
+                        bil.append(None); continue
+                    h, w = im.shape[:2]
+                    if max(h, w) > 1600:
+                        s = 1600 / max(h, w)
+                        im = cv2.resize(im, (int(w * s), int(h * s)))
+                    bil.append(im)
+                giltiga = [(r, im) for r, im in zip(utan_yolo, bil) if im is not None]
+                if giltiga:
+                    res = modeller["yolo"]([im for _, im in giltiga],
+                                           verbose=False,
+                                           device=modeller.get("device", "cpu"))
+                    for (r, _), yr in zip(giltiga, res):
+                        r["_yolo"] = yr
+
+        # Justeringsdata (exponering per bild + uppdrags-gemensam WB-korr).
+        _vb = ansikte_c = None
+        as_shot = {}
+        delta_k = delta_tint = 0.0
+        if args.xmp_justering:
+            from cull import vitbalans as _vb
+            from cull.bas import _cascades as _csc
+            ansikte_c, _ = _csc()
+            delta_k, delta_tint = _vb.korrigering(vb_rapport)
+            env_wb = os.environ.copy()
+            for _p in ("/opt/homebrew/bin", "/usr/local/bin"):
+                if _p not in env_wb.get("PATH", "").split(os.pathsep):
+                    env_wb["PATH"] = _p + os.pathsep + env_wb.get("PATH", "")
+            as_shot = _as_shot_kelvin_batch([r["fil"] for r in valda], env_wb)
+            if delta_k or delta_tint:
+                print(f"  XMP-WB: as-shot {delta_k:+.0f}K, tint {delta_tint:+.0f} "
+                      f"(uppmätt färgstick).", flush=True)
+
         for r in valda:
             shutil.copy2(r["fil"], ut_dir / r["fil"].name)
-            if args.xmp:
-                img = cv2.imread(str(r["_jpg"]))
+            if gör_xmp:
+                img = cv2.imread(str(r["_jpg"])) if r["_jpg"] else None
+                crop = None
+                vinkel = 0.0
+                exposure = temperatur = tint = None
                 if img is not None:
-                    crop   = xmp_writer.berakna_crop(r["_yolo"], img.shape)
-                    vinkel = xmp_writer.berakna_uppratning(img)
+                    if args.xmp:
+                        crop = xmp_writer.berakna_crop(r["_yolo"], img.shape)
+                        vinkel = xmp_writer.berakna_uppratning(img)
+                    if args.xmp_justering:
+                        exposure = _vb.ansikts_exponering_ev(img, ansikte_c)
+                        bas_k = as_shot.get(r["fil"])
+                        if (delta_k or delta_tint) and bas_k:
+                            temperatur = bas_k + delta_k
+                            tint = delta_tint
+                if (args.xmp or exposure is not None or temperatur is not None):
                     xmp_writer.skriv_xmp(ut_dir / r["fil"].name,
-                                         crop=crop, vinkel=vinkel)
+                                         crop=crop, vinkel=vinkel,
+                                         exposure=exposure,
+                                         temperatur=temperatur, tint=tint)
             else:
                 xmp = r["fil"].with_suffix(".xmp")
                 if xmp.exists():
                     shutil.copy2(xmp, ut_dir / xmp.name)
+
+        # IPTC-bildtexter på de exporterade filerna (match-gemensam metadata).
+        if args.iptc:
+            kopierade = [ut_dir / r["fil"].name for r in valda]
+            n_iptc = _skriv_iptc(kopierade, args.ut_namn, sport,
+                                 args.fotograf, _exif_env())
+            print(f"IPTC-bildtexter skrivna på {n_iptc} filer."
+                  if n_iptc else
+                  "IPTC hoppades över (matchinfo saknas?).", flush=True)
+
+        # Aktiv inlärning + körningslogg (kräver previews i tmp → inom with-blocket)
+        if modell_paket:
+            _spara_aktiv_inlarning(resultat, katalog)
+        _logga_korning(katalog, ut_dir, resultat, valda)
 
     # Tidrapport
     if tider_fas:
@@ -499,8 +999,17 @@ def main():
     print(f"\nKlart. {len(valda)} NEF kopierade till: {ut_dir}")
     if args.xmp:
         print("XMP-sidecars skrivna med beskärning och upprätnning.")
+    if args.xmp_justering:
+        print("XMP-sidecars med exponering/WB skrivna.")
 
-    subprocess.Popen(["open", str(ut_dir)])
+    # Lightroom öppnas mot matchroten (matchinfo-mappen) — med export-rot är
+    # det ut_dir.parent (ovanför kameramappen), annars urvalsmappen själv.
+    lr_mapp = ut_dir.parent if args.export_rot else ut_dir
+    oppna_resultat(ut_dir, lr_mapp, args.oppna)
+    if (_hitta_lightroom() and args.oppna in ("auto", "lightroom")):
+        print(f"Öppnar matchen i Lightroom: {lr_mapp}")
+    else:
+        print("Öppnar urvalsmappen.")
 
 
 def _main_safe():

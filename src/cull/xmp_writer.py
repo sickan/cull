@@ -17,7 +17,7 @@ XMP_MALL = """\
       crs:CropRight='{right:.6f}'
       crs:CropAngle='0'
       crs:CropConstrainToWarp='0'
-      crs:StraightenAngle='{vinkel:.2f}'
+      crs:StraightenAngle='{vinkel:.2f}'{extra}
     />
   </rdf:RDF>
 </x:xmpmeta>
@@ -206,8 +206,14 @@ def berakna_crop(yolo_results, img_shape, marginal=0.10):
     return basta_crop
 
 
-def skriv_xmp(nef_path, crop=None, vinkel=0.0):
-    """Skriver en XMP-sidecar bredvid NEF-filen."""
+def skriv_xmp(nef_path, crop=None, vinkel=0.0,
+              exposure=None, temperatur=None, tint=None):
+    """Skriver en XMP-sidecar bredvid NEF-filen.
+
+    exposure:    relativ EV-justering (crs:Exposure2012), eller None.
+    temperatur:  absolut Kelvin (crs:Temperature, WhiteBalance=Custom), eller None.
+    tint:        absolut tint (crs:Tint), används med temperatur.
+    """
     if crop:
         top, left, bottom, right = crop
         has_crop = "True"
@@ -215,10 +221,19 @@ def skriv_xmp(nef_path, crop=None, vinkel=0.0):
         top, left, bottom, right = 0.0, 0.0, 1.0, 1.0
         has_crop = "False"
 
+    rader = []
+    if exposure is not None:
+        rader.append(f"crs:Exposure2012='{exposure:+.2f}'")
+    if temperatur is not None:
+        rader.append("crs:WhiteBalance='Custom'")
+        rader.append(f"crs:Temperature='{int(round(temperatur))}'")
+        rader.append(f"crs:Tint='{int(round(tint or 0))}'")
+    extra = ("\n      " + "\n      ".join(rader)) if rader else ""
+
     innehall = XMP_MALL.format(
         has_crop=has_crop,
         top=top, left=left, bottom=bottom, right=right,
-        vinkel=vinkel,
+        vinkel=vinkel, extra=extra,
     )
     xmp_path = Path(nef_path).with_suffix(".xmp")
     xmp_path.write_text(innehall, encoding="utf-8")
