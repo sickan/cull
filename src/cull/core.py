@@ -363,6 +363,19 @@ def _score_en(args):
     return nef, jpg_path, p
 
 
+def _skriv_tidrapport(tider_fas):
+    """Skriver 'Tid per fas'. AI:-delsteg är en nedbrytning av AI-bucketen och
+    indenteras + räknas INTE in i Totalt (annars dubbelräknas de)."""
+    if not tider_fas:
+        return
+    print("\nTid per fas:")
+    for fas, sek in tider_fas.items():
+        prefix = "    " if fas.startswith("AI:") else "  "
+        print(f"{prefix}{fas:<16} {sek:5.1f} s")
+    total = sum(s for f, s in tider_fas.items() if not f.startswith("AI:"))
+    print(f"  {'Totalt':<16} {total:5.1f} s")
+
+
 def main():
     ap = argparse.ArgumentParser(prog="cull",
                                  description="Teknisk culling av NEF-filer.")
@@ -481,16 +494,20 @@ def main():
 
     print(f"{len(nef_filer)} bildfiler hittade.", flush=True)
 
+    tider_fas = {}   # tidmätning per fas (init före modell-laddningen)
+
     # --- Ladda AI-modeller ---
     modeller = None
     if args.ai:
         from cull import ai_lager
         print("Laddar AI-modeller…", flush=True)
+        _t = time.perf_counter()
         modeller = ai_lager.ladda_modeller(med_ocr=bool(bevaka),
                                            yolo_modell=args.yolo,
                                            med_estetik=args.estetik,
                                            med_ogon=bool(modell_paket),
                                            med_clip=bool(modell_paket))
+        tider_fas["Modell-laddning"] = time.perf_counter() - _t
         print("AI-modeller redo.", flush=True)
 
     # --- Sammanfattning av aktiva kriterier ---
@@ -510,11 +527,9 @@ def main():
     if args.avspark:
         print(f"  ✓ Matchfas — avspark {args.avspark}", flush=True)
     if args.xmp:
-        print("  ✓ XMP-sidecars (crop + upprätnning)", flush=True)
+        print("  ✓ XMP-sidecars (upprätning)", flush=True)
     n_behall_est = args.topp if args.topp else f"~{int(len(nef_filer) * args.andel)}"
     print(f"  Urval: {n_behall_est} bilder av {len(nef_filer)}\n", flush=True)
-
-    tider_fas = {}   # tidmätning per fas
 
     # --- Metadata (tidsstämplar) ---
     print("Hämtar metadata…", flush=True)
@@ -682,10 +697,13 @@ def main():
             # Kandidater som behöver AI och saknar preview — extrahera nu.
             saknar = [r for r in kvar if not r["_jpg"]]
             if saknar:
+                _t = time.perf_counter()
                 pm = extrahera_previews_batch([r["fil"] for r in saknar], tmp)
                 for r in saknar:
                     r["_jpg"] = pm.get(r["fil"])
+                tider_fas["AI:extrahering"] = time.perf_counter() - _t
 
+            _t = time.perf_counter()
             imgs, ref_lista = [], []
             for r in kvar:
                 if not r["_jpg"]:
@@ -699,6 +717,8 @@ def main():
                     img = cv2.resize(img, (int(w * s), int(h * s)))
                 imgs.append(img)
                 ref_lista.append(r)
+            if kvar:
+                tider_fas["AI:avkodning"] = time.perf_counter() - _t
 
             # CLIP-text-features (sport-specifika prompter) byggs en gång.
             clip_text = None
@@ -884,11 +904,7 @@ def main():
                   f"{r['fil'].name}")
 
         if args.rapport:
-            if tider_fas:
-                print("\nTid per fas:")
-                for fas, sek in tider_fas.items():
-                    print(f"  {fas:<16} {sek:5.1f} s")
-                print(f"  {'Totalt':<16} {sum(tider_fas.values()):5.1f} s")
+            _skriv_tidrapport(tider_fas)
             print("\n(Rapportläge — inget kopierades.)")
             return
 
@@ -937,28 +953,6 @@ def main():
                 for r in saknar:
                     r["_jpg"] = pm.get(r["fil"])
 
-        # Beskärning kräver YOLO — kör om för cacheträffar som saknar _yolo.
-        if args.xmp:
-            utan_yolo = [r for r in valda if r["_jpg"] and r.get("_yolo") is None]
-            if utan_yolo and modeller and modeller.get("yolo"):
-                bil = []
-                for r in utan_yolo:
-                    im = cv2.imread(str(r["_jpg"]))
-                    if im is None:
-                        bil.append(None); continue
-                    h, w = im.shape[:2]
-                    if max(h, w) > 1600:
-                        s = 1600 / max(h, w)
-                        im = cv2.resize(im, (int(w * s), int(h * s)))
-                    bil.append(im)
-                giltiga = [(r, im) for r, im in zip(utan_yolo, bil) if im is not None]
-                if giltiga:
-                    res = modeller["yolo"]([im for _, im in giltiga],
-                                           verbose=False,
-                                           device=modeller.get("device", "cpu"))
-                    for (r, _), yr in zip(giltiga, res):
-                        r["_yolo"] = yr
-
         # Justeringsdata (exponering per bild + uppdrags-gemensam WB-korr).
         _vb = ansikte_c = None
         as_shot = {}
@@ -986,7 +980,7 @@ def main():
                 exposure = temperatur = tint = None
                 if img is not None:
                     if args.xmp:
-                        crop = xmp_writer.berakna_crop(r["_yolo"], img.shape)
+                        # Beskärning struken (gav dåliga crops) — bara upprätning.
                         vinkel = xmp_writer.berakna_uppratning(img)
                     if args.xmp_justering:
                         exposure = _vb.ansikts_exponering_ev(img, ansikte_c)
@@ -1022,15 +1016,11 @@ def main():
         _logga_korning(katalog, ut_dir, resultat, valda)
 
     # Tidrapport
-    if tider_fas:
-        print("\nTid per fas:")
-        for fas, sek in tider_fas.items():
-            print(f"  {fas:<16} {sek:5.1f} s")
-        print(f"  {'Totalt':<16} {sum(tider_fas.values()):5.1f} s")
+    _skriv_tidrapport(tider_fas)
 
     print(f"\nKlart. {len(valda)} NEF kopierade till: {ut_dir}")
     if args.xmp:
-        print("XMP-sidecars skrivna med beskärning och upprätnning.")
+        print("XMP-sidecars skrivna med upprätning.")
     if args.xmp_justering:
         print("XMP-sidecars med exponering/WB skrivna.")
 

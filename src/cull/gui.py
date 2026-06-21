@@ -25,7 +25,7 @@ SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "yolo", "estetik", "modell", "sport", "matchinfo",
                  "firande_boost", "garanti_firande", "snabb",
                  "xmp_justering", "oppna", "export_rot", "trana_rot",
-                 "iptc", "fotograf"]
+                 "iptc", "fotograf", "bevaka_på"]
 
 OPPNA_VAL = ["Auto", "Lightroom", "Finder", "Inget"]
 
@@ -195,7 +195,7 @@ def bygg_kommando(vals):
         cmd += ["--hemma-farg", farg]
 
     bevaka = vals["bevaka"].get().strip()
-    if bevaka:
+    if vals["bevaka_på"].get() and bevaka:
         cmd += ["--bevaka", bevaka]
 
     avspark = vals["avspark"].get().strip()
@@ -977,7 +977,7 @@ def main():
 
     # XMP
     vals["xmp"] = tk.BooleanVar(value=saved.get("xmp", False))
-    ttk.Checkbutton(f_krit, text="Skriv XMP-sidecars  (beskärning + upprätnning)",
+    ttk.Checkbutton(f_krit, text="Skriv XMP-sidecars  (upprätning)",
                     variable=vals["xmp"]).grid(row=1, column=0, columnspan=2,
                                                sticky="w", pady=2)
 
@@ -1017,13 +1017,16 @@ def main():
                  values=FARGER, width=14, state="readonly").grid(
         row=4, column=1, sticky="w")
 
-    # Bevaka tröjnummer
-    rad(f_krit, "Bevaka tröjnummer", 5)
+    # Bevaka tröjnummer — opt-in via kryssruta (OCR är långsam på första körningen)
+    vals["bevaka_på"] = tk.BooleanVar(value=saved.get("bevaka_på", False))
+    ttk.Checkbutton(f_krit, text="Bevaka tröjnummer",
+                    variable=vals["bevaka_på"]).grid(
+        row=5, column=0, sticky="w", pady=2)
     vals["bevaka"] = tk.StringVar(value=saved.get("bevaka", ""))
     ttk.Entry(f_krit, textvariable=vals["bevaka"], width=16).grid(
         row=5, column=1, sticky="w")
-    ttk.Label(f_krit, text="  t.ex. 9,11", foreground="gray").grid(
-        row=5, column=2, sticky="w")
+    ttk.Label(f_krit, text="  t.ex. 9,11  ·  OCR (långsamt)",
+              foreground="gray").grid(row=5, column=2, sticky="w")
 
     # Avspark
     rad(f_krit, "Avspark", 6)

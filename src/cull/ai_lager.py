@@ -442,6 +442,9 @@ def detektera_nummer(img_bgr, yolo_results, ocr, max_personer=5):
     nummer; små/avlägsna spelare ger ändå inget). Returnerar mängden avlästa
     siffersträngar — parameter-oberoende, så den kan cachas och jämföras mot
     valfri bevakningslista i efterhand.
+
+    (Apple Vision testades men läser tröjnummer för otillförlitligt — fel/del-
+    siffror — så EasyOCR är kvar som enda motor.)
     """
     if ocr is None or yolo_results is None or yolo_results.boxes is None:
         return set()
@@ -679,6 +682,7 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
                 _tic("AI:CLIP", t0)
 
             t0 = perf_counter()
+            ocr_batch = 0.0   # OCR-tid i denna batch (dras av cv2/övrigt-bucketen)
             for i, (img, ref, yolo_res, pose_res, face_res) in enumerate(zip(
                     batch_imgs, batch_refs, yolo_res_list, pose_results,
                     face_results)):
@@ -695,7 +699,7 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
                     ref["_nummer"] = sorted(nummer)
                     ref["trojnummer"] = 0.12 if nummer & set(bevaka) else 0.0
                     ocr_klar += 1
-                    _tic("AI:OCR", t_ocr)
+                    ocr_batch += perf_counter() - t_ocr
                 if estetik is not None:
                     if nima_vals is not None and i < len(nima_vals):
                         ref["nima"] = nima_vals[i]
@@ -706,7 +710,11 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
                             ref["nima"] = None
                 if clip_vals is not None and i < len(clip_vals):
                     ref.update(clip_vals[i])
-            _tic("AI:cv2/övrigt", t0)
+            # OCR har egen rad → exkludera den ur cv2/övrigt (ingen dubbelräkning).
+            if ocr_batch:
+                t["AI:OCR"] = t.get("AI:OCR", 0.0) + ocr_batch
+            t["AI:cv2/övrigt"] = (t.get("AI:cv2/övrigt", 0.0)
+                                  + (perf_counter() - t0) - ocr_batch)
 
             klar += len(batch_imgs)
             if progress_cb:
