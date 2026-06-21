@@ -964,14 +964,13 @@ def main():
               foreground="gray").grid(row=6, column=1, columnspan=2, sticky="w")
     vals["export_overskriv"] = tk.BooleanVar(
         value=saved.get("export_overskriv", False))
-    ttk.Checkbutton(f_katalog,
-                    text="Skriv över befintligt urval (ingen Z8 2, Z8 3 …)",
+    ttk.Checkbutton(f_katalog, text="Skriv över",
                     variable=vals["export_overskriv"]).grid(
         row=6, column=0, sticky="w")
 
     # IPTC-bildtexter (match/datum/lag/arena ur Matchinfo) + fotografnamn
     vals["iptc"] = tk.BooleanVar(value=saved.get("iptc", False))
-    ttk.Checkbutton(f_katalog, text="Skriv IPTC-bildtexter",
+    ttk.Checkbutton(f_katalog, text="IPTC-bildtexter",
                     variable=vals["iptc"]).grid(row=7, column=0, sticky="w",
                                                 pady=(4, 0))
     f_fotograf = ttk.Frame(f_katalog)
@@ -981,6 +980,25 @@ def main():
     ttk.Entry(f_fotograf, textvariable=vals["fotograf"], width=28).pack(
         side="left", padx=(4, 0))
 
+    ttk.Separator(f_katalog, orient="horizontal").grid(
+        row=8, column=0, columnspan=3, sticky="ew", pady=(8, 4))
+
+    # Öppna efteråt + XMP-sidecars (leverans)
+    vals["oppna"] = tk.StringVar(value=saved.get("oppna", "Auto"))
+    f_oppna = ttk.Frame(f_katalog)
+    f_oppna.grid(row=9, column=0, columnspan=2, sticky="w")
+    ttk.Label(f_oppna, text="Öppna efteråt:").pack(side="left")
+    ttk.Combobox(f_oppna, textvariable=vals["oppna"], values=OPPNA_VAL,
+                 width=12, state="readonly").pack(side="left", padx=(4, 0))
+
+    vals["xmp"] = tk.BooleanVar(value=saved.get("xmp", False))
+    ttk.Checkbutton(f_katalog, text="XMP-sidecars (upprätning)",
+                    variable=vals["xmp"]).grid(row=10, column=0, sticky="w", pady=2)
+    vals["xmp_justering"] = tk.BooleanVar(value=saved.get("xmp_justering", False))
+    ttk.Checkbutton(f_katalog, text="XMP: auto exp/WB",
+                    variable=vals["xmp_justering"]).grid(
+        row=10, column=1, columnspan=2, sticky="w", pady=2)
+
     # --- Flik: Urval (kriterier) ---
     f_krit = ttk.Frame(notebook, padding=8)
     notebook.add(f_krit, text="  Urval  ")
@@ -988,46 +1006,19 @@ def main():
     def rad(parent, etikett, row):
         ttk.Label(parent, text=etikett).grid(row=row, column=0, sticky="w", pady=2)
 
-    # AI
+    # AI + lägen (XMP/öppna ligger på Leverans-fliken)
     vals["ai"] = tk.BooleanVar(value=saved.get("ai", True))
-    ttk.Checkbutton(f_krit, text="AI  (YOLO + MediaPipe Pose)",
-                    variable=vals["ai"]).grid(row=0, column=0, columnspan=2,
-                                              sticky="w", pady=2)
-
-    # XMP
-    vals["xmp"] = tk.BooleanVar(value=saved.get("xmp", False))
-    ttk.Checkbutton(f_krit, text="Skriv XMP-sidecars  (upprätning)",
-                    variable=vals["xmp"]).grid(row=1, column=0, columnspan=2,
-                                               sticky="w", pady=2)
-
-    # XMP-justering: exponering + WB/tint från ansikts-/färgstick-analysen
-    vals["xmp_justering"] = tk.BooleanVar(value=saved.get("xmp_justering", False))
-    ttk.Checkbutton(f_krit, text="XMP: auto exponering + vitbalans",
-                    variable=vals["xmp_justering"]).grid(
-        row=1, column=2, columnspan=2, sticky="w", pady=2)
-
-    # Öppna efteråt: Lightroom / Finder
-    vals["oppna"] = tk.StringVar(value=saved.get("oppna", "Auto"))
-    f_oppna = ttk.Frame(f_krit)
-    f_oppna.grid(row=0, column=2, columnspan=2, sticky="w")
-    ttk.Label(f_oppna, text="Öppna efteråt:").pack(side="left")
-    ttk.Combobox(f_oppna, textvariable=vals["oppna"], values=OPPNA_VAL,
-                 width=10, state="readonly").pack(side="left", padx=(4, 0))
-
-    # Rapport
-    vals["rapport"] = tk.BooleanVar(value=saved.get("rapport", False))
-    ttk.Checkbutton(f_krit, text="Rapportläge  (poängsätt, kopiera inget)",
-                    variable=vals["rapport"]).grid(row=2, column=0, columnspan=2,
-                                                   sticky="w", pady=2)
-
-    # Snabbläge — dyr AI bara på topp 40 % (snabb leverans, lägre recall)
+    ttk.Checkbutton(f_krit, text="AI", variable=vals["ai"]).grid(
+        row=0, column=0, columnspan=2, sticky="w", pady=2)
     vals["snabb"] = tk.BooleanVar(value=saved.get("snabb", False))
-    ttk.Checkbutton(f_krit, text="⚡ Snabbläge  (dyr AI på topp 40 %, för brådska)",
-                    variable=vals["snabb"]).grid(row=2, column=2, columnspan=2,
-                                                 sticky="w", pady=2)
+    ttk.Checkbutton(f_krit, text="⚡ Snabbläge", variable=vals["snabb"]).grid(
+        row=0, column=2, columnspan=2, sticky="w", pady=2)
+    vals["rapport"] = tk.BooleanVar(value=saved.get("rapport", False))
+    ttk.Checkbutton(f_krit, text="Rapportläge", variable=vals["rapport"]).grid(
+        row=1, column=0, columnspan=2, sticky="w", pady=2)
 
     ttk.Separator(f_krit, orient="horizontal").grid(
-        row=3, column=0, columnspan=2, sticky="ew", pady=6)
+        row=3, column=0, columnspan=4, sticky="ew", pady=6)
 
     # Hemmalagsfärg
     rad(f_krit, "Hemmalagsfärg", 4)
@@ -1057,7 +1048,7 @@ def main():
     ttk.Button(f_avspark, text="Auto", width=6,
                command=lambda: vals["avspark"].set("auto")).pack(
         side="left", padx=(8, 0))
-    ttk.Label(f_avspark, text="(uppskatta ur tidsstämplar)",
+    ttk.Label(f_avspark, text="(auto)",
               foreground="gray").pack(side="left", padx=(4, 0))
 
     # Topp / Andel
@@ -1097,7 +1088,7 @@ def main():
 
     # NIMA-estetik
     vals["estetik"] = tk.BooleanVar(value=saved.get("estetik", False))
-    ttk.Checkbutton(f_krit, text="NIMA-estetikbetyg  (lärt bildkvalitetsmått)",
+    ttk.Checkbutton(f_krit, text="NIMA-estetik",
                     variable=vals["estetik"]).grid(
         row=12, column=0, columnspan=3, sticky="w", pady=2)
 
@@ -1150,7 +1141,7 @@ def main():
     sl2.grid(row=16, column=1, sticky="w")
     ttk.Label(f_krit, textvariable=garanti_label, width=4,
               anchor="w").grid(row=16, column=2, sticky="w")
-    ttk.Label(f_krit, text="  reserverade platser för firande",
+    ttk.Label(f_krit, text="  platser",
               foreground="gray").grid(row=16, column=2, sticky="w", padx=(28, 0))
     _upd_garanti(saved.get("garanti_firande", 0))
 
@@ -1165,7 +1156,7 @@ def main():
               length=120).grid(row=17, column=1, sticky="w")
     ttk.Label(f_krit, textvariable=garanti_b_label, width=4,
               anchor="w").grid(row=17, column=2, sticky="w")
-    ttk.Label(f_krit, text="  platser för bevakat tröjnummer",
+    ttk.Label(f_krit, text="  platser",
               foreground="gray").grid(row=17, column=2, sticky="w", padx=(28, 0))
     _upd_garanti_b(saved.get("garanti_bevaka", 0))
 
@@ -1392,9 +1383,13 @@ def main():
         if d:
             visa_miniatyrer(root, d)
 
-    # Vänster: analys-/granskningsverktyg
-    f_verktyg = ttk.Frame(f_knapp)
-    f_verktyg.pack(side="left")
+    # Granskningsverktyg → Modell-fliken (relaterar till modell/aktiv inlärning)
+    ttk.Separator(f_trana, orient="horizontal").grid(
+        row=2, column=0, columnspan=5, sticky="ew", pady=(10, 4))
+    ttk.Label(f_trana, text="Granskning", foreground="gray").grid(
+        row=3, column=0, sticky="w")
+    f_verktyg = ttk.Frame(f_trana)
+    f_verktyg.grid(row=4, column=0, columnspan=5, sticky="w", pady=(2, 0))
     for txt, cmd in (
         ("Granska osäkra…", lambda: visa_aktiv_inlarning(root)),
         ("Jämför par…",     lambda: visa_jamforelse(root, vals)),
