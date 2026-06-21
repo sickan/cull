@@ -436,30 +436,36 @@ def hemma_farg_andel(img_bgr, farg_namn):
     return mask.sum() / 255 / mask.size
 
 
-def las_trojnummer(img_bgr, yolo_results, ocr, bevaka):
+def detektera_nummer(img_bgr, yolo_results, ocr, max_personer=5):
     """
-    Kör OCR på varje person-crop från YOLO.
-    Returnerar True om ett bevakat tröjnummer hittas.
+    OCR:ar ENBART de största spelar-cropparna (närmast kameran → läsbara
+    nummer; små/avlägsna spelare ger ändå inget). Returnerar mängden avlästa
+    siffersträngar — parameter-oberoende, så den kan cachas och jämföras mot
+    valfri bevakningslista i efterhand.
     """
-    if ocr is None or not bevaka or yolo_results is None:
-        return False
-
-    h, w = img_bgr.shape[:2]
+    if ocr is None or yolo_results is None or yolo_results.boxes is None:
+        return set()
+    personer = []
     for box, cls in zip(yolo_results.boxes.xyxy, yolo_results.boxes.cls):
         if int(cls) != 0:   # klass 0 = person
             continue
         x1, y1, x2, y2 = map(int, box.tolist())
-        # Fokusera på ryggnumret — övre 2/3 av personcroppen
-        y_mid = y1 + (y2 - y1) * 2 // 3
-        crop = img_bgr[y1:y_mid, x1:x2]
+        personer.append(((x2 - x1) * (y2 - y1), x1, y1, x2, y2))
+    personer.sort(reverse=True)   # störst (närmast) först
+
+    nummer = set()
+    for _, x1, y1, x2, y2 in personer[:max_personer]:
+        if (x2 - x1) < 24 or (y2 - y1) < 48:   # för liten → oläsbart
+            continue
+        y_mid = y1 + (y2 - y1) * 2 // 3        # ryggnumret = övre 2/3
+        crop = img_bgr[max(0, y1):y_mid, max(0, x1):x2]
         if crop.size == 0:
             continue
-        resultat = ocr.readtext(crop, allowlist="0123456789", detail=0)
-        for text in resultat:
+        for text in ocr.readtext(crop, allowlist="0123456789", detail=0):
             text = text.strip()
-            if text in bevaka:
-                return True
-    return False
+            if text:
+                nummer.add(text)
+    return nummer
 
 
 # MediaPipe face-mesh-index för ögonkontakt (EAR + frontalitet)
@@ -532,7 +538,7 @@ def _bonus_fran_yolo(img_bgr, yolo_res, pose_res, modeller, hemma_farg, bevaka):
     """Beräknar AI-bonusar givet YOLO- och pose-resultat."""
     b = {"armar": 0.0, "boll": 0.0, "hemma": 0.0, "trojnummer": 0.0,
          "klunga": 0.0, "personer": 0, "vast": 0, "bakgrund": 0.0,
-         "keeper": 0.0, "_yolo": yolo_res}
+         "keeper": 0.0, "_nummer": [], "_yolo": yolo_res}
 
     klasser = yolo_res.boxes.cls.tolist() if yolo_res.boxes else []
     b["boll"] = 0.08 if 32 in klasser else 0.0
@@ -551,9 +557,8 @@ def _bonus_fran_yolo(img_bgr, yolo_res, pose_res, modeller, hemma_farg, bevaka):
     if hemma_farg:
         b["hemma"] = min(hemma_farg_andel(img_bgr, hemma_farg) * 2, 0.08)
 
-    if bevaka and modeller["ocr"]:
-        if las_trojnummer(img_bgr, yolo_res, modeller["ocr"], bevaka):
-            b["trojnummer"] = 0.12
+    # OBS: tröjnummer-OCR görs INTE här utan i bonus_batch, begränsat till
+    # topp-kandidaterna (OCR är dyrt och påverkar bara slututvalet).
 
     b["vast"] = vast_straff(img_bgr, yolo_res)
     b["bakgrund"] = bakgrundskontrast(img_bgr, yolo_res)
@@ -562,7 +567,8 @@ def _bonus_fran_yolo(img_bgr, yolo_res, pose_res, modeller, hemma_farg, bevaka):
 
 
 def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
-                batch_storlek=16, progress_cb=None, clip_text=None, tider=None):
+                batch_storlek=16, progress_cb=None, clip_text=None, tider=None,
+                ocr_max=60):
     """
     Kör YOLO i batch + parallell MediaPipe pose per bild.
     Skriver bonusar direkt in i resultat_refs-diktarna.
@@ -584,6 +590,8 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
     device = modeller.get("device", "cpu")
     estetik = modeller.get("estetik")
     clip_pak = modeller.get("clip")
+    ocr = modeller.get("ocr")
+    ocr_klar = 0   # tröjnummer-OCR görs bara på de ocr_max första (bästa baspoäng)
 
     # Bygg en pool av pose-detektorer via en kö
     pose_pool = modeller.get("pose_pool", [])
@@ -679,6 +687,15 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
                 b["ogonkontakt"] = (ogonkontakt_score(face_res)
                                     if face_res is not None else 0.0)
                 ref.update(b)
+                # Tröjnummer-OCR: bara på de bästa baspoängs-kandidaterna
+                # (refs kommer i baspoängsordning). Dyrt → begränsat.
+                if bevaka and ocr is not None and ocr_klar < ocr_max:
+                    t_ocr = perf_counter()
+                    nummer = detektera_nummer(img, yolo_res, ocr)
+                    ref["_nummer"] = sorted(nummer)
+                    ref["trojnummer"] = 0.12 if nummer & set(bevaka) else 0.0
+                    ocr_klar += 1
+                    _tic("AI:OCR", t_ocr)
                 if estetik is not None:
                     if nima_vals is not None and i < len(nima_vals):
                         ref["nima"] = nima_vals[i]

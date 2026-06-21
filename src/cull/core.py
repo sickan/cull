@@ -366,7 +366,7 @@ def _score_en(args):
 def main():
     ap = argparse.ArgumentParser(prog="cull",
                                  description="Teknisk culling av NEF-filer.")
-    ap.add_argument("katalog")
+    ap.add_argument("katalog", nargs="?")   # valfri vid --limpa-ai-cache
     ap.add_argument("--topp",       type=int,   default=None)
     ap.add_argument("--andel",      type=float, default=0.20)
     ap.add_argument("--burst-sek",  type=float, default=2.0)
@@ -426,6 +426,9 @@ def main():
         except FileNotFoundError:
             print("Ingen AI-cache att tömma.", flush=True)
         return
+
+    if not args.katalog:
+        ap.error("katalog krävs (utom vid --limpa-ai-cache)")
 
     kontrollera_exiftool()
     katalog = Path(args.katalog).expanduser()
@@ -553,7 +556,8 @@ def main():
         d.update({
             "armar": 0.0, "boll": 0.0, "hemma": 0.0,
             "trojnummer": 0.0, "klunga": 0.0, "personer": 0, "vast": 0,
-            "bakgrund": 0.0, "keeper": 0.0, "ogonkontakt": 0.0, "_yolo": None,
+            "bakgrund": 0.0, "keeper": 0.0, "ogonkontakt": 0.0,
+            "_nummer": [], "_yolo": None,
             "fas": fas_b, "fil": nef, "tid": tid_str, "_jpg": jpg,
         })
         return d
@@ -663,6 +667,10 @@ def main():
                     if post is not None:
                         for k in AI_FEAT_KEYS:
                             r[k] = post.get(k, 0.0)
+                        # Tröjnummer från cachade avlästa nummer (slipper OCR).
+                        r["_nummer"] = post.get("_nummer", [])
+                        r["trojnummer"] = (0.12 if bevaka
+                                           and set(r["_nummer"]) & bevaka else 0.0)
                         n_cache += 1
                         continue
                 kvar.append(r)
@@ -705,21 +713,26 @@ def main():
             if imgs:
                 from cull.ai_lager import bonus_batch
                 ai_tider = {}
+                # OCR (tröjnummer) bara på topp-kandidaterna efter baspoäng —
+                # täcker slututvalet med marginal utan att OCR:a hela uppdraget.
+                n_behall_ung = args.topp or max(1, round(len(resultat) * args.andel))
+                ocr_max = max(60, 3 * n_behall_ung)
                 bonus_batch(imgs, ref_lista, modeller,
                             args.hemma_farg, bevaka, batch_storlek=16,
                             progress_cb=lambda klar, tot:
                                 print(f"  AI …{klar}/{tot}", flush=True),
-                            clip_text=clip_text, tider=ai_tider)
+                            clip_text=clip_text, tider=ai_tider, ocr_max=ocr_max)
                 for k, v in sorted(ai_tider.items(), key=lambda kv: -kv[1]):
                     tider_fas[k] = v
                     print(f"  · {k:<14} {v:5.1f} s", flush=True)
 
-            # Spara nyberäknade AI-features till cachen.
+            # Spara nyberäknade AI-features till cachen (+ avlästa tröjnummer).
             if anv_ai_cache and ref_lista:
                 for r in ref_lista:
                     try:
-                        ai_cache[_ai_cache_nyckel(r["fil"], ai_ver, sport)] = {
-                            k: r.get(k) for k in AI_FEAT_KEYS}
+                        post = {k: r.get(k) for k in AI_FEAT_KEYS}
+                        post["_nummer"] = r.get("_nummer", [])
+                        ai_cache[_ai_cache_nyckel(r["fil"], ai_ver, sport)] = post
                     except OSError:
                         continue
                 spara_ai_cache(ai_cache)
