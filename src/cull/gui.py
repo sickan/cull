@@ -746,9 +746,13 @@ def main():
     ttk.Label(f_titel, text=f"v{ver.version()}  ·  build {ver.build()}",
               foreground="#cc8400").pack(anchor="w")
 
-    # --- Katalog ---
-    f_katalog = ttk.LabelFrame(root, text="Katalog", padding=4)
-    f_katalog.grid(row=1, column=0, sticky="ew", **pad)
+    # --- Flikar (Urval / Leverans / Modell) ---
+    notebook = ttk.Notebook(root)
+    notebook.grid(row=1, column=0, sticky="nsew", **pad)
+
+    # --- Flik: Leverans (källkatalog, matchinfo, export, IPTC) ---
+    f_katalog = ttk.Frame(notebook, padding=8)
+    notebook.add(f_katalog, text="  Leverans  ")
 
     # 3-kolumners grid: col 0 = etikett, col 1 = entry (stretchar), col 2 = knapp
     f_katalog.columnconfigure(1, weight=1)
@@ -977,9 +981,9 @@ def main():
     ttk.Entry(f_fotograf, textvariable=vals["fotograf"], width=28).pack(
         side="left", padx=(4, 0))
 
-    # --- Kriterier ---
-    f_krit = ttk.LabelFrame(root, text="Kriterier", padding=4)
-    f_krit.grid(row=2, column=0, sticky="ew", **pad)
+    # --- Flik: Urval (kriterier) ---
+    f_krit = ttk.Frame(notebook, padding=8)
+    notebook.add(f_krit, text="  Urval  ")
 
     def rad(parent, etikett, row):
         ttk.Label(parent, text=etikett).grid(row=row, column=0, sticky="w", pady=2)
@@ -1170,9 +1174,11 @@ def main():
     SPORT_WEBB_CACHE = Path.home() / ".cache" / "cull" / "sport_cache.json"
     SPORTER_VAL = ["handboll", "fotboll", "volleyboll", "innebandy"]
 
-    f_trana = ttk.LabelFrame(root, text="Modellträning", padding=4)
-    f_trana.grid(row=3, column=0, sticky="ew", **pad)
+    # --- Flik: Modell (träning) ---
+    f_trana = ttk.Frame(notebook, padding=8)
+    notebook.add(f_trana, text="  Modell  ")
     f_trana.columnconfigure(1, weight=1)
+    notebook.select(f_krit)   # öppna på Urval-fliken
 
     trana_status_var = tk.StringVar(value="")
     ttk.Label(f_trana, textvariable=trana_status_var,
@@ -1362,7 +1368,7 @@ def main():
 
     # --- Progress ---
     f_progress = ttk.Frame(root)
-    f_progress.grid(row=5, column=0, sticky="ew", padx=10, pady=(4, 0))
+    f_progress.grid(row=2, column=0, sticky="ew", padx=10, pady=(4, 0))
 
     progress_var = tk.DoubleVar(value=0)
     progress = ttk.Progressbar(f_progress, variable=progress_var,
@@ -1375,7 +1381,7 @@ def main():
 
     # --- Knapprad: granskningsverktyg (vänster) + huvudåtgärder (höger) ---
     f_knapp = ttk.Frame(root)
-    f_knapp.grid(row=6, column=0, sticky="ew", padx=10, pady=4)
+    f_knapp.grid(row=3, column=0, sticky="ew", padx=10, pady=4)
 
     status_var = tk.StringVar(value="")
 
@@ -1410,7 +1416,7 @@ def main():
 
     # --- Logg ---
     f_logg = ttk.LabelFrame(root, text="Output", padding=4)
-    f_logg.grid(row=7, column=0, sticky="nsew", **pad)
+    f_logg.grid(row=4, column=0, sticky="nsew", **pad)
 
     logg = tk.Text(f_logg, width=80, height=8, font=("Menlo", 11),
                    state="disabled", wrap="word")
@@ -1423,7 +1429,7 @@ def main():
     f_logg.columnconfigure(0, weight=1)
     f_logg.rowconfigure(0, weight=1)
     root.columnconfigure(0, weight=1)
-    root.rowconfigure(7, weight=3, minsize=200)
+    root.rowconfigure(4, weight=3, minsize=200)   # loggen (under flikarna)
 
     def skriv(text, tag=None):
         logg.configure(state="normal")
