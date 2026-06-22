@@ -27,6 +27,40 @@ def _cgimage(path):
     return Quartz.CGImageSourceCreateImageAtIndex(src, 0, None)
 
 
+def saliens_bbox(path):
+    """Apple Vision uppmärksamhets-saliens → motivets ruta (x0,y0,x1,y1)
+    normaliserad med origo uppe till vänster, eller None. Används för att
+    beskära innehållsmedvetet (klipp aldrig bort motivet)."""
+    try:
+        import Vision
+    except Exception:
+        return None
+    cg = _cgimage(path)
+    if cg is None:
+        return None
+    try:
+        handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(
+            cg, None)
+        req = Vision.VNGenerateAttentionBasedSaliencyImageRequest.alloc().init()
+        if not handler.performRequests_error_([req], None):
+            return None
+        res = req.results()
+        if not res:
+            return None
+        objs = res[0].salientObjects()
+        if not objs:
+            return None
+        # Union av alla salienta rutor (Vision-koord: origo nere till vänster).
+        x0 = min(o.boundingBox().origin.x for o in objs)
+        y0b = min(o.boundingBox().origin.y for o in objs)
+        x1 = max(o.boundingBox().origin.x + o.boundingBox().size.width for o in objs)
+        y1b = max(o.boundingBox().origin.y + o.boundingBox().size.height for o in objs)
+        # → origo uppe till vänster
+        return (float(x0), float(1.0 - y1b), float(x1), float(1.0 - y0b))
+    except Exception:
+        return None
+
+
 def _cgimage_av_bytes(data):
     import Quartz
     from Foundation import NSData

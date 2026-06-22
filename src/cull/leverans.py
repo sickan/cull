@@ -33,11 +33,44 @@ def _storsta_inskrivna(w, h, vinkel_grader):
     return wr, hr
 
 
-def rakta(img, vinkel):
-    """Roterar för upprätning och beskär bort kilarna (gyro-vinkeln bakas in)."""
+def _ryms_i_inskriven(w, h, vinkel, bbox_px):
+    """True om motivets ruta (pixlar) ryms i den centrerade max-inskrivna
+    rektangeln för given vinkel."""
+    wr, hr = _storsta_inskrivna(w, h, vinkel)
+    cx0, cy0 = (w - wr) / 2.0, (h - hr) / 2.0
+    cx1, cy1 = cx0 + wr, cy0 + hr
+    return (bbox_px[0] >= cx0 and bbox_px[1] >= cy0
+            and bbox_px[2] <= cx1 and bbox_px[3] <= cy1)
+
+
+def _vinkel_som_bevarar(w, h, vinkel, bbox_px, tolerans=0.03):
+    """Största |vinkel| (samma tecken) vars kil-beskärning INTE klipper motivet.
+    bbox_px får krympas med tolerans (liten kantklipp tillåten). 0 om inget går."""
+    # Krymp motivrutan något — en hand precis vid kanten ska inte blockera helt.
+    mx, my = tolerans * w, tolerans * h
+    bb = (bbox_px[0] + mx, bbox_px[1] + my, bbox_px[2] - mx, bbox_px[3] - my)
+    steg = abs(vinkel)
+    while steg > 0.05:
+        if _ryms_i_inskriven(w, h, steg, bb):
+            return math.copysign(steg, vinkel)
+        steg -= 0.2
+    return 0.0
+
+
+def rakta(img, vinkel, bbox_norm=None):
+    """Roterar för upprätning och beskär bort kilarna. Innehållsmedvetet:
+    om kil-beskärningen skulle klippa motivet (bbox_norm, normaliserad) kapas
+    vinkeln tills motivet ryms — hellre lite kvarvarande lutning än bortklippt
+    motiv."""
     if vinkel is None or abs(vinkel) < 0.05:
         return img
     h, w = img.shape[:2]
+    if bbox_norm is not None:
+        bbox_px = (bbox_norm[0] * w, bbox_norm[1] * h,
+                   bbox_norm[2] * w, bbox_norm[3] * h)
+        vinkel = _vinkel_som_bevarar(w, h, vinkel, bbox_px)
+        if abs(vinkel) < 0.05:
+            return img
     M = cv2.getRotationMatrix2D((w / 2, h / 2), vinkel, 1.0)
     rot = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC,
                          borderMode=cv2.BORDER_REPLICATE)
@@ -75,18 +108,30 @@ def exportera(jobb, ut_dir, profil, logg=print):
     """jobb: lista av {namn (utfil-stem), jpg (full preview-path), vinkel (gyro
     eller None)}. Skriver leverans-JPEG till ut_dir enligt profil. Returnerar
     listan med skapade filer."""
+    from cull import vision_lager
     ut_dir = Path(ut_dir)
     ut_dir.mkdir(parents=True, exist_ok=True)
     skapade = []
+    kapade = 0
     for j in jobb:
         img = cv2.imread(str(j["jpg"])) if j.get("jpg") else None
         if img is None:
             continue
-        img = rakta(img, j.get("vinkel"))
+        vinkel = j.get("vinkel")
+        # Innehållsmedveten upprätning: hitta motivet, klipp aldrig bort det.
+        bbox = vision_lager.saliens_bbox(j["jpg"]) if vinkel else None
+        if vinkel and bbox is not None:
+            h, w = img.shape[:2]
+            sänkt = _vinkel_som_bevarar(
+                w, h, vinkel, (bbox[0]*w, bbox[1]*h, bbox[2]*w, bbox[3]*h))
+            if abs(sänkt) + 0.05 < abs(vinkel):
+                kapade += 1
+        img = rakta(img, vinkel, bbox)
         img = passa_i_box(img, profil["max_w"], profil["max_h"])
         ut = ut_dir / f"{j['namn']}.jpg"
         spara_under_storlek(img, ut, profil["max_mb"])
         skapade.append(ut)
     logg(f"  Leverans ({profil.get('_namn', '?')}): {len(skapade)} JPEG "
-         f"≤{profil['max_w']}×{profil['max_h']}, ≤{profil['max_mb']:.0f} MB.")
+         f"≤{profil['max_w']}×{profil['max_h']}, ≤{profil['max_mb']:.0f} MB."
+         + (f" Rätning dämpad på {kapade} för att bevara motivet." if kapade else ""))
     return skapade
