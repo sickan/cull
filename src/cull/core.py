@@ -194,9 +194,9 @@ def _as_shot_kelvin_batch(nef_paths, env):
     return ut
 
 
-# Tecken på kamerans RollAngle → crs:StraightenAngle. Verifieras på en bild;
-# vänd till +1.0 om upprätningen blir åt fel håll.
-ROLL_TECKEN = -1.0
+# Tecken på kamerans RollAngle → crs:CropAngle. Verifierat i Lightroom:
+# +1.0 ger rätt riktning (-1.0 rätade åt fel håll).
+ROLL_TECKEN = 1.0
 
 
 def _roll_batch(nef_paths, env):
