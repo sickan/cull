@@ -524,10 +524,10 @@ def kor_efterbehandling(args, katalog):
           "(ingen omculling).", flush=True)
     sport = (args.sport or "okänd").lower()
     matchinfo = args.ut_namn or katalog.name
+    namn_per_fil = bildtext_per_fil = None   # delas med leveranssteget nedan
 
     # IPTC + roster (spelarnamn per bild ur cachade tröjnummer).
     if args.iptc:
-        namn_per_fil = None
         rost = {}
         from cull import roster as _roster
         if args.roster:
@@ -594,6 +594,35 @@ def kor_efterbehandling(args, katalog):
         print(f"  Sidecars skrivna ({etikett}, {args.exp_bump:+.2f} EV) på "
               f"{n} filer." + (f" Upprätning: {ratning}." if ratning else ""),
               flush=True)
+
+    # Leveransfärdiga JPEG (snabbflöde) enligt profil — gyro-rätat, skalat,
+    # komprimerat. IPTC + ev. AI-bildtext bakas in på leverans-JPEG:erna.
+    if args.leverans:
+        from cull import leverans as _lev
+        prof = _lev.PROFILER.get(args.leverans.upper())
+        if not prof:
+            print(f"  Okänd leveransprofil: {args.leverans} "
+                  f"(finns: {', '.join(_lev.PROFILER)}).", flush=True)
+        else:
+            prof = dict(prof, _namn=args.leverans.upper())
+            raw = [f for f in filer if f.suffix.lower() in RAW_SUFFIX]
+            roll_karta = _roll_batch(raw, _exif_env())
+            lev_dir = katalog / f"_leverans_{args.leverans.upper()}"
+            with tempfile.TemporaryDirectory() as tmp:
+                pm = extrahera_previews_batch(raw, Path(tmp)) if raw else {}
+                jobb = [{"namn": f.stem,
+                         "jpg": (f if f.suffix.lower() in JPG_SUFFIX else pm.get(f)),
+                         "vinkel": roll_karta.get(f)} for f in filer]
+                skapade = _lev.exportera(jobb, lev_dir, prof, print)
+            # IPTC/bildtext på leverans-JPEG (samma texter, omnyckladе per stem).
+            if args.iptc and skapade:
+                npf = {lev_dir / f"{f.stem}.jpg": v
+                       for f, v in (namn_per_fil or {}).items()} or None
+                bpf = {lev_dir / f"{f.stem}.jpg": v
+                       for f, v in (bildtext_per_fil or {}).items()} or None
+                _skriv_iptc(skapade, matchinfo, sport, args.fotograf,
+                            _exif_env(), npf, bpf)
+            print(f"  Leverans klar: {lev_dir}", flush=True)
 
     print("Klart.", flush=True)
 
@@ -675,6 +704,9 @@ def main():
                     metavar="MODELL",
                     help="modell för bildtext-AI (claude-opus-4-8 (std), "
                          "claude-haiku-4-5 = billigast, claude-sonnet-4-6)")
+    ap.add_argument("--leverans", default=None, metavar="PROFIL",
+                    help="producera leveransfärdiga JPEG enligt en profil "
+                         "(t.ex. CEV) — gyro-rätat, skalat, komprimerat")
     ap.add_argument("--ingen-ai-cache", action="store_true",
                     help="hoppa över AI-feature-cachen (tvinga omräkning)")
     ap.add_argument("--limpa-ai-cache", action="store_true",
@@ -1253,8 +1285,8 @@ def main():
                   flush=True)
         gör_xmp = args.xmp or args.xmp_justering or husstil or args.exp_bump
 
-        # XMP och bildtext-AI behöver previews — extrahera för valda som saknar.
-        if gör_xmp or args.bildtext_ai:
+        # XMP, bildtext-AI och leverans behöver previews — extrahera de som saknar.
+        if gör_xmp or args.bildtext_ai or args.leverans:
             saknar = [r for r in valda if not r["_jpg"]]
             if saknar:
                 pm = extrahera_previews_batch([r["fil"] for r in saknar], tmp)
@@ -1288,7 +1320,7 @@ def main():
         gyro_n = [0]
         roll_karta = (_roll_batch([r["fil"] for r in valda
                                    if r["fil"].suffix.lower() in RAW_SUFFIX],
-                                  _exif_env()) if args.xmp else {})
+                                  _exif_env()) if (args.xmp or args.leverans) else {})
         for i, r in enumerate(valda, 1):
             shutil.copy2(r["fil"], ut_dir / r["fil"].name)
             if gör_xmp:
@@ -1349,11 +1381,11 @@ def main():
 
         # IPTC-bildtexter på de exporterade filerna (match-gemensam metadata,
         # + spelarnamn per bild om en roster är angiven).
+        namn_per_fil = bildtext_per_fil = None   # delas med leverans nedan
         if args.iptc:
             print("Skriver IPTC-bildtexter…", flush=True)
             _t = time.perf_counter()
             kopierade = [ut_dir / r["fil"].name for r in valda]
-            namn_per_fil = None
             rost = {}
             if args.roster:
                 from cull import roster as _roster
@@ -1386,6 +1418,33 @@ def main():
             print(f"IPTC-bildtexter skrivna på {n_iptc} filer."
                   if n_iptc else
                   "IPTC hoppades över (matchinfo saknas?).", flush=True)
+
+        # Leveransfärdiga JPEG (snabbflöde) enligt profil — gyro-rätat, skalat,
+        # komprimerat, med IPTC/bildtext på leverans-JPEG:erna.
+        if args.leverans:
+            from cull import leverans as _lev
+            prof = _lev.PROFILER.get(args.leverans.upper())
+            if not prof:
+                print(f"  Okänd leveransprofil: {args.leverans} "
+                      f"(finns: {', '.join(_lev.PROFILER)}).", flush=True)
+            else:
+                prof = dict(prof, _namn=args.leverans.upper())
+                lev_dir = ut_dir / f"_leverans_{args.leverans.upper()}"
+                jobb = [{"namn": r["fil"].stem, "jpg": r.get("_jpg"),
+                         "vinkel": roll_karta.get(r["fil"])} for r in valda]
+                skapade = _lev.exportera(jobb, lev_dir, prof, print)
+                if args.iptc and skapade:
+                    npf = {lev_dir / f"{r['fil'].stem}.jpg":
+                           (namn_per_fil or {}).get(ut_dir / r["fil"].name, "")
+                           for r in valda}
+                    bpf = {lev_dir / f"{r['fil'].stem}.jpg":
+                           (bildtext_per_fil or {}).get(ut_dir / r["fil"].name, "")
+                           for r in valda}
+                    _skriv_iptc(skapade, args.ut_namn, sport, args.fotograf,
+                                _exif_env(),
+                                {k: v for k, v in npf.items() if v} or None,
+                                {k: v for k, v in bpf.items() if v} or None)
+                print(f"  Leverans klar: {lev_dir}", flush=True)
 
         # Aktiv inlärning + körningslogg (kräver previews i tmp → inom with-blocket)
         if modell_paket:

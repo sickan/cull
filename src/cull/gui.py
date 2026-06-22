@@ -27,7 +27,7 @@ SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "xmp_justering", "oppna", "export_rot", "trana_rot",
                  "iptc", "fotograf", "bevaka_på", "garanti_bevaka",
                  "export_overskriv", "husstil", "exp_bump", "roster",
-                 "bildtext_ai", "bildtext_modell"]
+                 "bildtext_ai", "bildtext_modell", "leverans"]
 
 OPPNA_VAL = ["Auto", "Lightroom", "DxO PureRAW", "Finder", "Inget"]
 
@@ -268,6 +268,10 @@ def bygg_kommando(vals):
         modell = BILDTEXT_MODELLER.get(vals["bildtext_modell"].get().strip())
         if modell:
             cmd += ["--bildtext-modell", modell]
+
+    lev = vals["leverans"].get().strip()
+    if lev and lev != "(ingen)":
+        cmd += ["--leverans", lev]
 
     oppna = vals["oppna"].get().strip().lower()
     oppna = {"dxo pureraw": "dxo"}.get(oppna, oppna)
@@ -1081,6 +1085,16 @@ def main():
                  values=list(BILDTEXT_MODELLER), width=18,
                  state="readonly").pack(side="left", padx=(6, 0))
 
+    # Leveransprofil (snabbflöde: leveransfärdig JPG ur urvalet)
+    from cull.leverans import PROFILER as _LEVPROF
+    vals["leverans"] = tk.StringVar(value=saved.get("leverans", "(ingen)"))
+    f_lev = ttk.Frame(f_katalog)
+    f_lev.grid(row=14, column=0, columnspan=3, sticky="w", pady=(2, 0))
+    ttk.Label(f_lev, text="Leverans-JPG:").pack(side="left")
+    ttk.Combobox(f_lev, textvariable=vals["leverans"],
+                 values=["(ingen)"] + list(_LEVPROF), width=12,
+                 state="readonly").pack(side="left", padx=(4, 0))
+
     # --- Flik: Urval (kriterier) ---
     f_krit = ttk.Frame(notebook, padding=8)
     notebook.add(f_krit, text="  Urval  ")
@@ -1547,6 +1561,9 @@ def main():
                 mdl = BILDTEXT_MODELLER.get(vals["bildtext_modell"].get().strip())
                 if mdl:
                     cmd += ["--bildtext-modell", mdl]
+            lev = vals["leverans"].get().strip()
+            if lev and lev != "(ingen)":
+                cmd += ["--leverans", lev]
             hus = vals["husstil"].get().strip()
             if hus and hus != "(ingen)":
                 cmd += ["--husstil", str(PRESET_DIR / f"{hus}.xmp")]
