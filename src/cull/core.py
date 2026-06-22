@@ -267,6 +267,21 @@ def _uppratningsvinkel(jpg_path, img, roll=None):
     return 0.0, None
 
 
+def _stjarnor_av_poang(valda):
+    """Stjärnbetyg (2-5) per bild utifrån helhetspoängens percentil i urvalet —
+    starkast = 5★, garanti/svagast = 2★. Lightroom läser xmp:Rating."""
+    if not valda:
+        return {}
+    poäng = sorted(r["poang"] for r in valda)
+    n = len(poäng)
+    ut = {}
+    for r in valda:
+        import bisect
+        p = bisect.bisect_right(poäng, r["poang"]) / n
+        ut[r["fil"]] = 5 if p >= 0.80 else 4 if p >= 0.55 else 3 if p >= 0.30 else 2
+    return ut
+
+
 def _rakt_bevarande(jpg_path, vinkel):
     """Dämpar upprätningsvinkeln så motivet inte beskärs för hårt — estetik
     före perfekt vinkel. Använder Vision-saliens; oförändrad om inget motiv
@@ -731,6 +746,9 @@ def main():
     ap.add_argument("--leverans", default=None, metavar="PROFIL",
                     help="producera leveransfärdiga JPEG enligt en profil "
                          "(t.ex. CEV) — gyro-rätat, skalat, komprimerat")
+    ap.add_argument("--stjarnor", action="store_true",
+                    help="sätt stjärnbetyg (xmp:Rating 2-5) i sidecaren utifrån "
+                         "helhetspoängen → Lightroom visar dem")
     ap.add_argument("--ingen-ai-cache", action="store_true",
                     help="hoppa över AI-feature-cachen (tvinga omräkning)")
     ap.add_argument("--limpa-ai-cache", action="store_true",
@@ -1350,9 +1368,11 @@ def main():
         roll_karta = (_roll_batch([r["fil"] for r in valda
                                    if r["fil"].suffix.lower() in RAW_SUFFIX],
                                   _exif_env()) if (args.xmp or args.leverans) else {})
+        rating_karta = _stjarnor_av_poang(valda) if args.stjarnor else {}
         for i, r in enumerate(valda, 1):
             shutil.copy2(r["fil"], ut_dir / r["fil"].name)
-            if gör_xmp:
+            rating = rating_karta.get(r["fil"])
+            if gör_xmp or rating is not None:
                 img = cv2.imread(str(r["_jpg"])) if r["_jpg"] else None
                 crop = None
                 vinkel = 0.0
@@ -1393,14 +1413,15 @@ def main():
                         objektiv = True
                 if (args.xmp or husstil or args.exp_bump
                         or exposure is not None or temperatur is not None
-                        or iso is not None):
+                        or iso is not None or rating is not None):
                     xmp_writer.skriv_xmp(ut_dir / r["fil"].name,
                                          crop=crop, vinkel=vinkel,
                                          exposure=exposure,
                                          temperatur=temperatur, tint=tint,
                                          profil=profil,
                                          iso=iso, objektiv=bool(objektiv),
-                                         preset=husstil, exp_bump=args.exp_bump)
+                                         preset=husstil, exp_bump=args.exp_bump,
+                                         rating=rating)
             else:
                 xmp = r["fil"].with_suffix(".xmp")
                 if xmp.exists():
@@ -1408,6 +1429,11 @@ def main():
             if i % 3 == 0 or i == len(valda):
                 print(f"  kopierar …{i}/{len(valda)}", flush=True)
         tider_fas["Export"] = time.perf_counter() - _t
+        if rating_karta:
+            from collections import Counter
+            f = Counter(rating_karta.values())
+            print("  Stjärnor: " + "  ".join(f"{s}★×{f[s]}"
+                  for s in (5, 4, 3, 2) if f.get(s)), flush=True)
         if args.xmp and (gyro_n[0] or vision_n[0]):
             hough_n = len(valda) - gyro_n[0] - vision_n[0]
             print(f"  Upprätning: {gyro_n[0]} via kamerans gyro (RollAngle), "

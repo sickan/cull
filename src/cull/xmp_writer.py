@@ -48,6 +48,7 @@ XMP_MALL = """\
   <rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>
     <rdf:Description rdf:about=''
       xmlns:crs='http://ns.adobe.com/camera-raw-settings/1.0/'
+      xmlns:xmp='http://ns.adobe.com/xap/1.0/'{rating_attr}
       crs:Version='15.0'
       crs:ProcessVersion='11.0'
       crs:HasCrop='{has_crop}'
@@ -112,6 +113,7 @@ PRESET_MALL = """\
   <rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>
     <rdf:Description rdf:about=''
       xmlns:crs='http://ns.adobe.com/camera-raw-settings/1.0/'
+      xmlns:xmp='http://ns.adobe.com/xap/1.0/'{rating_attr}
 {attr}>{inner}
     </rdf:Description>
   </rdf:RDF>
@@ -120,7 +122,7 @@ PRESET_MALL = """\
 
 
 def _bygg_med_preset(preset, over, has_crop, top, left, bottom, right,
-                     crop_angle, constrain):
+                     crop_angle, constrain, rating_attr=""):
     """Presetets develop-look som bas, med våra per-bild-värden som override."""
     attrs = dict(preset["attrs"])
     attrs["HasCrop"] = has_crop
@@ -136,12 +138,12 @@ def _bygg_med_preset(preset, over, has_crop, top, left, bottom, right,
     attrs.update(over)   # våra värden vinner över presetets
     rader = "\n".join(f"      crs:{k}='{v}'" for k, v in attrs.items())
     inner = ("\n" + preset["inner"]) if preset.get("inner") else ""
-    return PRESET_MALL.format(attr=rader, inner=inner)
+    return PRESET_MALL.format(attr=rader, inner=inner, rating_attr=rating_attr)
 
 
 def skriv_xmp(nef_path, crop=None, vinkel=0.0,
               exposure=None, temperatur=None, tint=None, profil=None,
-              iso=None, objektiv=False, preset=None, exp_bump=0.0):
+              iso=None, objektiv=False, preset=None, exp_bump=0.0, rating=None):
     """Skriver en XMP-sidecar bredvid NEF-filen.
 
     exposure:    relativ EV-justering (crs:Exposure2012), eller None.
@@ -167,6 +169,8 @@ def skriv_xmp(nef_path, crop=None, vinkel=0.0,
         has_crop = "True" if rakta else "False"
     crop_angle = vinkel if rakta else 0.0
     constrain = "1" if rakta else "0"
+    rating_attr = (f"\n      xmp:Rating='{int(rating)}'"
+                   if rating else "")
 
     # Per-bild-värden (ordning bevaras → samma utdata som tidigare).
     over = {}
@@ -191,7 +195,7 @@ def skriv_xmp(nef_path, crop=None, vinkel=0.0,
     if preset:
         innehall = _bygg_med_preset(preset, over, has_crop,
                                     top, left, bottom, right,
-                                    crop_angle, constrain)
+                                    crop_angle, constrain, rating_attr)
     else:
         rader = [f"crs:{k}='{v}'" for k, v in over.items()]
         extra = ("\n      " + "\n      ".join(rader)) if rader else ""
@@ -199,6 +203,7 @@ def skriv_xmp(nef_path, crop=None, vinkel=0.0,
             has_crop=has_crop,
             top=top, left=left, bottom=bottom, right=right,
             crop_angle=crop_angle, constrain=constrain, extra=extra,
+            rating_attr=rating_attr,
         )
     xmp_path = Path(nef_path).with_suffix(".xmp")
     xmp_path.write_text(innehall, encoding="utf-8")
