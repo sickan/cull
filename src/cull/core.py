@@ -194,6 +194,33 @@ def _as_shot_kelvin_batch(nef_paths, env):
     return ut
 
 
+# Tecken på kamerans RollAngle → crs:StraightenAngle. Verifieras på en bild;
+# vänd till +1.0 om upprätningen blir åt fel håll.
+ROLL_TECKEN = -1.0
+
+
+def _roll_batch(nef_paths, env):
+    """Läser kamerans RollAngle (gyro-lutning, grader) för flera filer i ett
+    anrop. Returnerar {Path: grader}. Moderna Nikon (Z8/D5…) har den; äldre
+    kroppar (D3S/Df) saknar den → utelämnas (fallback till Vision/Hough)."""
+    if not nef_paths:
+        return {}
+    cmd = ["exiftool", "-j", "-RollAngle"] + [str(p) for p in nef_paths]
+    ut = {}
+    try:
+        rå = subprocess.run(cmd, capture_output=True, text=True, env=env).stdout
+        for post in json.loads(rå):
+            try:
+                grader = float(post.get("RollAngle"))
+            except (TypeError, ValueError):
+                continue
+            if abs(grader) <= 10.0:
+                ut[Path(post["SourceFile"])] = ROLL_TECKEN * grader
+    except Exception:
+        pass
+    return ut
+
+
 def _iso_batch(nef_paths, env):
     """Läser EXIF-ISO för flera filer i ett anrop. Returnerar {Path: iso}."""
     if not nef_paths:
@@ -218,9 +245,11 @@ def _iso_batch(nef_paths, env):
 _VISION_OK = None
 
 
-def _uppratningsvinkel(jpg_path, img):
-    """Upprätningsvinkel: Apple Vision-horisont först (pålitligare, på Neural
-    Engine), Hough-linjer som fallback. Returnerar (grader, motor)."""
+def _uppratningsvinkel(jpg_path, img, roll=None):
+    """Upprätningsvinkel: kamerans gyro-RollAngle först (exakt, ur NEF), sedan
+    Apple Vision-horisont, Hough-linjer sist. Returnerar (grader, motor)."""
+    if roll is not None:
+        return roll, "gyro"
     global _VISION_OK
     if _VISION_OK is None:
         try:
@@ -542,14 +571,16 @@ def kor_efterbehandling(args, katalog):
         preset = xmp_writer.las_preset(args.husstil) if args.husstil else None
         raw = [f for f in filer if f.suffix.lower() in RAW_SUFFIX]
         iso_karta = _iso_batch(raw, _exif_env()) if args.husstil else {}
+        roll_karta = _roll_batch(raw, _exif_env())
         with tempfile.TemporaryDirectory() as tmp:
             pm = extrahera_previews_batch(raw, Path(tmp)) if raw else {}
-            n = vis = 0
+            n = vis = gyr = 0
             for f in filer:
                 är_raw = f.suffix.lower() in RAW_SUFFIX
                 jpg = f if f.suffix.lower() in JPG_SUFFIX else pm.get(f)
-                vinkel, motor = _uppratningsvinkel(jpg, None)
+                vinkel, motor = _uppratningsvinkel(jpg, None, roll_karta.get(f))
                 vis += 1 if motor == "vision" else 0
+                gyr += 1 if motor == "gyro" else 0
                 xmp_writer.skriv_xmp(
                     f, vinkel=vinkel,
                     profil=("Camera Neutral" if är_raw and not preset else None),
@@ -558,8 +589,10 @@ def kor_efterbehandling(args, katalog):
                     preset=preset, exp_bump=args.exp_bump)
                 n += 1
         etikett = (Path(args.husstil).stem if args.husstil else "exp-knuff")
+        ratning = ", ".join(t for t in (
+            f"{gyr} gyro" if gyr else "", f"{vis} Vision" if vis else "") if t)
         print(f"  Sidecars skrivna ({etikett}, {args.exp_bump:+.2f} EV) på "
-              f"{n} filer." + (f" Upprätning via Vision på {vis}." if vis else ""),
+              f"{n} filer." + (f" Upprätning: {ratning}." if ratning else ""),
               flush=True)
 
     print("Klart.", flush=True)
@@ -1252,6 +1285,10 @@ def main():
         print(f"\nExporterar {len(valda)} filer (kopierar + XMP)…", flush=True)
         _t = time.perf_counter()
         vision_n = [0]
+        gyro_n = [0]
+        roll_karta = (_roll_batch([r["fil"] for r in valda
+                                   if r["fil"].suffix.lower() in RAW_SUFFIX],
+                                  _exif_env()) if args.xmp else {})
         for i, r in enumerate(valda, 1):
             shutil.copy2(r["fil"], ut_dir / r["fil"].name)
             if gör_xmp:
@@ -1261,9 +1298,12 @@ def main():
                 exposure = temperatur = tint = None
                 if args.xmp:
                     # Beskärning struken (gav dåliga crops) — bara upprätning.
-                    vinkel, motor = _uppratningsvinkel(r.get("_jpg"), img)
+                    vinkel, motor = _uppratningsvinkel(
+                        r.get("_jpg"), img, roll_karta.get(r["fil"]))
                     if motor == "vision":
                         vision_n[0] += 1
+                    elif motor == "gyro":
+                        gyro_n[0] += 1
                 if img is not None:
                     if args.xmp_justering:
                         exposure = _vb.ansikts_exponering_ev(img, ansikte_c)
@@ -1301,9 +1341,11 @@ def main():
             if i % 3 == 0 or i == len(valda):
                 print(f"  kopierar …{i}/{len(valda)}", flush=True)
         tider_fas["Export"] = time.perf_counter() - _t
-        if args.xmp and vision_n[0]:
-            print(f"  Upprätning: {vision_n[0]} via Apple Vision-horisont, "
-                  f"{len(valda) - vision_n[0]} via Hough.", flush=True)
+        if args.xmp and (gyro_n[0] or vision_n[0]):
+            hough_n = len(valda) - gyro_n[0] - vision_n[0]
+            print(f"  Upprätning: {gyro_n[0]} via kamerans gyro (RollAngle), "
+                  f"{vision_n[0]} via Vision-horisont, {hough_n} via Hough.",
+                  flush=True)
 
         # IPTC-bildtexter på de exporterade filerna (match-gemensam metadata,
         # + spelarnamn per bild om en roster är angiven).
