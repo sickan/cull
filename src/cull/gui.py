@@ -1369,6 +1369,8 @@ def main():
         spara_trana_rot(rot)   # persistera tränings-roten (separat från match)
 
         cmd = [sys.executable, "-m", "cull.inlarning", rot, "--max-neg", "100"]
+        if vals["estetik"].get():
+            cmd += ["--estetik-motor", vals["estetik_motor"].get().strip().lower()]
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         for p in ("/opt/homebrew/bin", "/usr/local/bin"):

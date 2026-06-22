@@ -27,15 +27,21 @@ def _cgimage(path):
     return Quartz.CGImageSourceCreateImageAtIndex(src, 0, None)
 
 
-def estetik_poang(path):
-    """Apple Vision estetikpoäng: overallScore i [-1, 1] (högre = snyggare),
-    samt is_utility (True för skärmdumpar/dokument/kvitton). Returnerar
-    (score, is_utility) eller None."""
+def _cgimage_av_bytes(data):
+    import Quartz
+    from Foundation import NSData
+    nsd = NSData.dataWithBytes_length_(data, len(data))
+    src = Quartz.CGImageSourceCreateWithData(nsd, None)
+    if not src:
+        return None
+    return Quartz.CGImageSourceCreateImageAtIndex(src, 0, None)
+
+
+def _estetik_av_cg(cg):
     try:
         import Vision
     except Exception:
         return None
-    cg = _cgimage(path)
     if cg is None:
         return None
     try:
@@ -51,6 +57,22 @@ def estetik_poang(path):
         return float(o.overallScore()), bool(o.isUtility())
     except Exception:
         return None
+
+
+def estetik_poang(path):
+    """Apple Vision estetikpoäng ur en fil: overallScore i [-1, 1] (högre =
+    snyggare) + is_utility. Returnerar (score, is_utility) eller None."""
+    return _estetik_av_cg(_cgimage(path))
+
+
+def estetik_poang_bgr(img_bgr):
+    """Som estetik_poang men ur en cv2-BGR-bild (in-minnes, ingen temp-fil) —
+    för träningens batchade bilder."""
+    import cv2
+    ok, buf = cv2.imencode(".jpg", img_bgr, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not ok:
+        return None
+    return _estetik_av_cg(_cgimage_av_bytes(buf.tobytes()))
 
 
 def horisont_vinkel(path, max_grader=8.0):

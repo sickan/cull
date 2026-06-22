@@ -322,9 +322,11 @@ def _frame_id(namn):
     return tok.replace("_", "").upper()
 
 
-def _ai(yolo_modell="yolo11s.pt"):
+def _ai(yolo_modell="yolo11s.pt", estetik_motor="nima"):
     from cull import ai_lager
-    return ai_lager.ladda_modeller(yolo_modell=yolo_modell, med_estetik=True,
+    # Vision-motorn behöver ingen pyiqa-modell (estetik räknas ur bilderna).
+    return ai_lager.ladda_modeller(yolo_modell=yolo_modell,
+                                   med_estetik=(estetik_motor != "vision"),
                                    med_ogon=True, med_clip=True, n_pose=1)
 
 
@@ -436,7 +438,8 @@ def _las_bild(path, env):
     return img
 
 
-def features_for_uppdrag(items, modeller, env, progress_namn="", sport=None):
+def features_for_uppdrag(items, modeller, env, progress_namn="", sport=None,
+                         estetik_motor="nima"):
     """items = [(path, label)]. Returnerar (X, y, stems) med råa features."""
     import cv2
     from cull.ai_lager import (_bonus_fran_yolo, _kör_pose, _kör_face,
@@ -493,7 +496,11 @@ def features_for_uppdrag(items, modeller, env, progress_namn="", sport=None):
             pres = _kör_pose((img, pose)) if pose is not None else None
             fres = _kör_face((img, face)) if face is not None else None
             b = _bonus_fran_yolo(img, yres, pres, modeller, None, set())
-            if nima_vals is not None and j < len(nima_vals):
+            if estetik_motor == "vision":
+                from cull import vision_lager
+                sc = vision_lager.estetik_poang_bgr(img)
+                nv = (sc[0] + 1.0) * 4.5 + 1.0 if sc is not None else 0.0
+            elif nima_vals is not None and j < len(nima_vals):
                 nv = nima_vals[j]
             else:
                 nv = nima_poang(img, nima, dev) if nima is not None else 0.0
@@ -520,12 +527,13 @@ def features_for_uppdrag(items, modeller, env, progress_namn="", sport=None):
     return np.array(X, float), np.array(y, int), np.array(stems, dtype=object)
 
 
-def _shoot_fingerprint(namn, items):
+def _shoot_fingerprint(namn, items, estetik_motor="nima"):
     """SHA1-fingeravtryck av exakt de filer som ska extraheras.
-    Inkluderar FEATURES-uppsättningen så att cachen ogiltigförklaras
-    automatiskt när nya features läggs till."""
+    Inkluderar FEATURES-uppsättningen + estetikmotorn så att cachen
+    ogiltigförklaras när features ändras eller motorn byts (nima vs vision)."""
     h = hashlib.sha1()
     h.update(("|".join(FEATURES)).encode())   # cache-version = feature-set
+    h.update(f"est:{estetik_motor}".encode())
     h.update(namn.encode())
     for path, lab in sorted(items, key=lambda t: str(t[0])):
         # Storlek istället för mtime → cachen överlever Dropbox-omsynk
@@ -577,7 +585,7 @@ def _exiftool_env():
 
 def traina(root, yolo_modell="yolo11s.pt", rapport=False,
            max_neg=150, max_uppdrag=None, kontroll_bara=False,
-           limpa_cache=False):
+           limpa_cache=False, estetik_motor="nima"):
     if limpa_cache:
         import shutil
         if TRAIN_CACHE_DIR.exists():
@@ -643,7 +651,7 @@ def traina(root, yolo_modell="yolo11s.pt", rapport=False,
         uppdrag[i] = (namn, pos + neg)
 
     # Kolla vilka uppdrag som behöver extraheras (cache-miss).
-    fingerprints = {namn: _shoot_fingerprint(namn, items)
+    fingerprints = {namn: _shoot_fingerprint(namn, items, estetik_motor)
                     for namn, items in uppdrag}
     n_miss = sum(1 for namn, _ in uppdrag
                  if namn not in helt_online
@@ -677,14 +685,15 @@ def traina(root, yolo_modell="yolo11s.pt", rapport=False,
         else:
             if modeller is None:
                 print("\nLaddar AI-modeller…", flush=True)
-                modeller = _ai(yolo_modell)
+                modeller = _ai(yolo_modell, estetik_motor)
             n_pos = sum(l for _, l in items)
             sport = detektera_sport(namn, items=items, env=env)
             print(f"\n[{k}/{n_anv}] {namn}  ({len(items)} bilder, "
                   f"{n_pos} valda, {sport})…", flush=True)
             X, y, stems = features_for_uppdrag(items, modeller, env,
                                                progress_namn=namn[:18],
-                                               sport=sport)
+                                               sport=sport,
+                                               estetik_motor=estetik_motor)
             if len(X) > 0 and y.sum() > 0:
                 _spara_i_cache(fp, X, y, stems)
         if len(X) == 0 or y.sum() == 0:
@@ -866,6 +875,9 @@ def main():
     ap.add_argument("root", nargs="?",
                     help="rotkatalog (export- eller FilterPix-träd)")
     ap.add_argument("--yolo", default="yolo11s.pt", metavar="MODELL")
+    ap.add_argument("--estetik-motor", default="nima", choices=["nima", "vision"],
+                    help="estetikmotor i träningen: nima (pyiqa, std) eller "
+                         "vision (Apple Vision) — måste matcha cull-körningen")
     ap.add_argument("--max-neg", type=int, default=150,
                     help="max antal ej-valda per uppdrag (balans/fart)")
     ap.add_argument("--max-uppdrag", type=int, default=None,
@@ -883,7 +895,7 @@ def main():
     traina(root, yolo_modell=args.yolo,
            rapport=args.rapport, max_neg=args.max_neg,
            max_uppdrag=args.max_uppdrag, kontroll_bara=args.kolla,
-           limpa_cache=args.limpa_cache)
+           limpa_cache=args.limpa_cache, estetik_motor=args.estetik_motor)
 
 
 if __name__ == "__main__":
