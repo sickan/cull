@@ -22,7 +22,7 @@ SETTINGS_PATH = CONFIG_DIR / "settings.json"
 HISTORY_PATH  = CONFIG_DIR / "history.json"
 SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "bevaka", "avspark", "topp", "andel", "burst_sek",
-                 "yolo", "estetik", "modell", "sport", "matchinfo",
+                 "yolo", "estetik", "estetik_motor", "modell", "sport", "matchinfo",
                  "firande_boost", "garanti_firande", "snabb",
                  "xmp_justering", "oppna", "export_rot", "trana_rot",
                  "iptc", "fotograf", "bevaka_på", "garanti_bevaka",
@@ -175,6 +175,7 @@ def bygg_kommando(vals):
             cmd += ["--yolo", yolo]
         if vals["estetik"].get():
             cmd.append("--estetik")
+            cmd += ["--estetik-motor", vals["estetik_motor"].get().strip().lower()]
 
     if not vals["modell"].get():
         cmd.append("--ingen-modell")
@@ -1167,11 +1168,15 @@ def main():
     ttk.Label(f_krit, text="  välj rätt sportmodell",
               foreground="gray").grid(row=11, column=2, sticky="w")
 
-    # NIMA-estetik
+    # Estetik + motor (NIMA = pyiqa/MPS, Vision = Apple, snabbt/Neural Engine)
     vals["estetik"] = tk.BooleanVar(value=saved.get("estetik", False))
-    ttk.Checkbutton(f_krit, text="NIMA-estetik",
-                    variable=vals["estetik"]).grid(
-        row=12, column=0, columnspan=3, sticky="w", pady=2)
+    f_est = ttk.Frame(f_krit)
+    f_est.grid(row=12, column=0, columnspan=3, sticky="w", pady=2)
+    ttk.Checkbutton(f_est, text="Estetik", variable=vals["estetik"]).pack(side="left")
+    vals["estetik_motor"] = tk.StringVar(value=saved.get("estetik_motor", "NIMA"))
+    ttk.Combobox(f_est, textvariable=vals["estetik_motor"],
+                 values=["NIMA", "Vision"], width=8,
+                 state="readonly").pack(side="left", padx=(6, 0))
 
     # Personlig modell
     finns_modell = MODELL_PATH.exists()

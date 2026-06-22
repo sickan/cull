@@ -151,9 +151,11 @@ def _ai_feat_version():
     return _hashlib.sha1("|".join(inlarning.FEATURES).encode()).hexdigest()[:8]
 
 
-def _ai_cache_nyckel(nef, ver, sport=""):
+def _ai_cache_nyckel(nef, ver, sport="", estetik_motor=""):
     # CLIP-features beror på sporten (promptmallar) → ingår i nyckeln.
-    return f"{_cache_nyckel(nef)}|v{ver}|{sport or ''}"
+    # Vision-estetik separeras från NIMA så deras nima-värden inte blandas.
+    bas = f"{_cache_nyckel(nef)}|v{ver}|{sport or ''}"
+    return bas + ("|vis" if estetik_motor == "vision" else "")
 
 
 def ladda_ai_cache():
@@ -581,7 +583,10 @@ def main():
                     help="YOLO-vikt: yolov8n.pt (snabb), yolo11s.pt (balans), "
                          "yolo11m.pt (bäst)")
     ap.add_argument("--estetik",    action="store_true",
-                    help="lägg till NIMA-estetikbetyg (kräver pyiqa)")
+                    help="lägg till estetikbetyg")
+    ap.add_argument("--estetik-motor", default="nima", choices=["nima", "vision"],
+                    help="estetikmotor: nima (pyiqa/MPS, std) eller vision "
+                         "(Apple Vision, snabbt på Neural Engine, inget pyiqa)")
     ap.add_argument("--ingen-modell", action="store_true",
                     help="använd inte den tränade personliga modellen")
     ap.add_argument("--sport", default=None,
@@ -720,11 +725,17 @@ def main():
         from cull import ai_lager
         print("Laddar AI-modeller…", flush=True)
         _t = time.perf_counter()
+        # Vision-motorn behöver ingen pyiqa-modell (estetik räknas ur filerna).
+        med_nima = args.estetik and args.estetik_motor != "vision"
         modeller = ai_lager.ladda_modeller(med_ocr=bool(bevaka),
                                            yolo_modell=args.yolo,
-                                           med_estetik=args.estetik,
+                                           med_estetik=med_nima,
                                            med_ogon=bool(modell_paket),
                                            med_clip=bool(modell_paket))
+        if args.estetik and args.estetik_motor == "vision":
+            from cull import vision_lager as _vis
+            print(f"Vision-estetik: {'aktivt (Neural Engine)' if _vis.tillganglig() else 'EJ tillgängligt'}",
+                  flush=True)
         tider_fas["Modell-laddning"] = time.perf_counter() - _t
         print("AI-modeller redo.", flush=True)
 
@@ -887,6 +898,7 @@ def main():
             # AI-feature-cache (bara med personlig modell — se helpers ovan).
             anv_ai_cache = bool(modell_paket) and not args.ingen_ai_cache
             ai_ver = _ai_feat_version()
+            _est_motor = args.estetik_motor if args.estetik else ""
             ai_cache = ladda_ai_cache() if anv_ai_cache else {}
             n_cache = 0
 
@@ -894,7 +906,8 @@ def main():
             for r in kandidater:
                 if anv_ai_cache:
                     try:
-                        post = ai_cache.get(_ai_cache_nyckel(r["fil"], ai_ver, sport))
+                        post = ai_cache.get(_ai_cache_nyckel(
+                            r["fil"], ai_ver, sport, _est_motor))
                     except OSError:
                         post = None
                     # Cachad UTAN OCR men vi bevakar nummer nu → analysera om
@@ -968,6 +981,18 @@ def main():
                     tider_fas[k] = v
                     print(f"  · {k:<14} {v:5.1f} s", flush=True)
 
+                # Vision-estetik → nima-slot, skalad −1..1 → 1..10 (jämförbar
+                # med NIMA för percentil-bonusen och modellen).
+                if args.estetik and args.estetik_motor == "vision":
+                    from cull import vision_lager as _vis
+                    _tv = time.perf_counter()
+                    for r in ref_lista:
+                        jpg = r.get("_jpg")
+                        sc = _vis.estetik_poang(jpg) if jpg else None
+                        if sc is not None:
+                            r["nima"] = (sc[0] + 1.0) * 4.5 + 1.0
+                    tider_fas["AI:Vision-estetik"] = time.perf_counter() - _tv
+
             # Spara nyberäknade AI-features till cachen (+ avlästa tröjnummer).
             if anv_ai_cache and ref_lista:
                 for r in ref_lista:
@@ -975,7 +1000,8 @@ def main():
                         post = {k: r.get(k) for k in AI_FEAT_KEYS}
                         post["_nummer"] = r.get("_nummer", [])
                         post["_ocr"] = bool(bevaka)   # OCR övervägdes denna körning
-                        ai_cache[_ai_cache_nyckel(r["fil"], ai_ver, sport)] = post
+                        ai_cache[_ai_cache_nyckel(
+                            r["fil"], ai_ver, sport, _est_motor)] = post
                     except OSError:
                         continue
                 spara_ai_cache(ai_cache)

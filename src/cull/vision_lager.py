@@ -27,6 +27,32 @@ def _cgimage(path):
     return Quartz.CGImageSourceCreateImageAtIndex(src, 0, None)
 
 
+def estetik_poang(path):
+    """Apple Vision estetikpoäng: overallScore i [-1, 1] (högre = snyggare),
+    samt is_utility (True för skärmdumpar/dokument/kvitton). Returnerar
+    (score, is_utility) eller None."""
+    try:
+        import Vision
+    except Exception:
+        return None
+    cg = _cgimage(path)
+    if cg is None:
+        return None
+    try:
+        handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(
+            cg, None)
+        req = Vision.VNCalculateImageAestheticsScoresRequest.alloc().init()
+        if not handler.performRequests_error_([req], None):
+            return None
+        res = req.results()
+        if not res:
+            return None
+        o = res[0]
+        return float(o.overallScore()), bool(o.isUtility())
+    except Exception:
+        return None
+
+
 def horisont_vinkel(path, max_grader=8.0):
     """Returnerar upprätningsvinkel i grader (crs:StraightenAngle-konvention),
     eller None om Vision inte hittar en horisont."""
