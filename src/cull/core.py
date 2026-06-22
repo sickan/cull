@@ -213,6 +213,29 @@ def _iso_batch(nef_paths, env):
     return ut
 
 
+_VISION_OK = None
+
+
+def _uppratningsvinkel(jpg_path, img):
+    """Upprätningsvinkel: Apple Vision-horisont först (pålitligare, på Neural
+    Engine), Hough-linjer som fallback. Returnerar (grader, motor)."""
+    global _VISION_OK
+    if _VISION_OK is None:
+        try:
+            from cull import vision_lager
+            _VISION_OK = vision_lager.tillganglig()
+        except Exception:
+            _VISION_OK = False
+    if jpg_path and _VISION_OK:
+        from cull import vision_lager
+        v = vision_lager.horisont_vinkel(jpg_path)
+        if v is not None:
+            return v, "vision"
+    if img is not None:
+        return xmp_writer.berakna_uppratning(img), "hough"
+    return 0.0, None
+
+
 def _exif_env():
     env = os.environ.copy()
     for p in ("/opt/homebrew/bin", "/usr/local/bin"):
@@ -511,25 +534,31 @@ def kor_efterbehandling(args, katalog):
         print(f"  IPTC skrivet på {n} filer." if n
               else "  IPTC hoppades över (matchinfo saknas?).", flush=True)
 
-    # Husstil-preset / exponeringsknuff → nya sidecars (utan upprätning,
-    # som kräver bildanalys; presetets look + exponering är huvuddelen).
+    # Husstil-preset / exponeringsknuff → nya sidecars. Upprätning via Apple
+    # Vision-horisont (kräver bara filen) när den hittar en horisont.
     if args.husstil or args.exp_bump:
         preset = xmp_writer.las_preset(args.husstil) if args.husstil else None
         raw = [f for f in filer if f.suffix.lower() in RAW_SUFFIX]
         iso_karta = _iso_batch(raw, _exif_env()) if args.husstil else {}
-        n = 0
-        for f in filer:
-            är_raw = f.suffix.lower() in RAW_SUFFIX
-            xmp_writer.skriv_xmp(
-                f, vinkel=0.0,
-                profil=("Camera Neutral" if är_raw and not preset else None),
-                iso=(iso_karta.get(f) if är_raw and args.husstil else None),
-                objektiv=(är_raw and bool(args.husstil)),
-                preset=preset, exp_bump=args.exp_bump)
-            n += 1
+        with tempfile.TemporaryDirectory() as tmp:
+            pm = extrahera_previews_batch(raw, Path(tmp)) if raw else {}
+            n = vis = 0
+            for f in filer:
+                är_raw = f.suffix.lower() in RAW_SUFFIX
+                jpg = f if f.suffix.lower() in JPG_SUFFIX else pm.get(f)
+                vinkel, motor = _uppratningsvinkel(jpg, None)
+                vis += 1 if motor == "vision" else 0
+                xmp_writer.skriv_xmp(
+                    f, vinkel=vinkel,
+                    profil=("Camera Neutral" if är_raw and not preset else None),
+                    iso=(iso_karta.get(f) if är_raw and args.husstil else None),
+                    objektiv=(är_raw and bool(args.husstil)),
+                    preset=preset, exp_bump=args.exp_bump)
+                n += 1
         etikett = (Path(args.husstil).stem if args.husstil else "exp-knuff")
-        print(f"  Sidecars skrivna ({etikett}, "
-              f"{args.exp_bump:+.2f} EV) på {n} filer.", flush=True)
+        print(f"  Sidecars skrivna ({etikett}, {args.exp_bump:+.2f} EV) på "
+              f"{n} filer." + (f" Upprätning via Vision på {vis}." if vis else ""),
+              flush=True)
 
     print("Klart.", flush=True)
 
@@ -1196,6 +1225,7 @@ def main():
 
         print(f"\nExporterar {len(valda)} filer (kopierar + XMP)…", flush=True)
         _t = time.perf_counter()
+        vision_n = [0]
         for i, r in enumerate(valda, 1):
             shutil.copy2(r["fil"], ut_dir / r["fil"].name)
             if gör_xmp:
@@ -1203,10 +1233,12 @@ def main():
                 crop = None
                 vinkel = 0.0
                 exposure = temperatur = tint = None
+                if args.xmp:
+                    # Beskärning struken (gav dåliga crops) — bara upprätning.
+                    vinkel, motor = _uppratningsvinkel(r.get("_jpg"), img)
+                    if motor == "vision":
+                        vision_n[0] += 1
                 if img is not None:
-                    if args.xmp:
-                        # Beskärning struken (gav dåliga crops) — bara upprätning.
-                        vinkel = xmp_writer.berakna_uppratning(img)
                     if args.xmp_justering:
                         exposure = _vb.ansikts_exponering_ev(img, ansikte_c)
                         # Absolut WB (Kelvin) gäller bara raw — för JPG använder
@@ -1243,6 +1275,9 @@ def main():
             if i % 3 == 0 or i == len(valda):
                 print(f"  kopierar …{i}/{len(valda)}", flush=True)
         tider_fas["Export"] = time.perf_counter() - _t
+        if args.xmp and vision_n[0]:
+            print(f"  Upprätning: {vision_n[0]} via Apple Vision-horisont, "
+                  f"{len(valda) - vision_n[0]} via Hough.", flush=True)
 
         # IPTC-bildtexter på de exporterade filerna (match-gemensam metadata,
         # + spelarnamn per bild om en roster är angiven).
