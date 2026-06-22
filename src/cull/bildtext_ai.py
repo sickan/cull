@@ -19,10 +19,21 @@ MAX_PARALLELLA = 5
 SYSTEM = (
     "Du är bildredaktör för sportbilder och skriver bildtexter på svenska för "
     "pressbruk. Skriv EN kort, saklig bildtext i presens som beskriver vad som "
-    "händer i bilden. Använd matchkontexten och spelarnamn/tröjnummer om de ges. "
-    "Hitta inte på namn, lag, resultat eller händelser som inte syns i bilden "
-    "eller framgår av kontexten. Svara endast med själva bildtexten — inga "
-    "citattecken, ingen inledning, ingen förklaring."
+    "händer i bilden.\n"
+    "Regler:\n"
+    "- Använd ENDAST det du ser i bilden och det som ges i matchkontexten. "
+    "Hitta ALDRIG på turnering, tävling, insats, omgång eller sammanhang "
+    "(t.ex. 'VM-kval', 'final', 'seriematch') som inte uttryckligen ges.\n"
+    "- Resultatet i matchkontexten är slutresultatet — tolka det INTE som att "
+    "ett enskilt jubel i bilden är slutsegern. Skriv 'jublar' eller 'firar en "
+    "poäng', inte 'firar segern', om det inte tydligt är slutsignalen.\n"
+    "- Skriv ALDRIG ut något personnamn — inte ens om du tror dig känna igen "
+    "spelaren. Använd bara tröjnummer och lag. Spelarnamn får bara förekomma om "
+    "de uttryckligen ges i kontexten.\n"
+    "- Ange tröjnummer och vilket lag (utifrån tröjfärg/kontext) när det syns. "
+    "Gissa aldrig ett tröjnummer — utelämna det om siffran är otydlig.\n"
+    "- En enda mening. Svara endast med själva bildtexten — inga citattecken, "
+    "ingen inledning, ingen förklaring."
 )
 
 
@@ -53,12 +64,14 @@ def _bild_base64(jpg_path):
     return base64.b64encode(buf.tobytes()).decode("ascii")
 
 
-def _kontext(matchinfo, sport, nummer, namn):
+def _kontext(matchinfo, sport, hemma_farg, nummer, namn):
     rader = []
     if matchinfo:
         rader.append(f"Match: {matchinfo}")
     if sport and sport != "okänd":
         rader.append(f"Sport: {sport}")
+    if hemma_farg:
+        rader.append(f"Hemmalaget spelar i {hemma_farg}.")
     if namn:
         rader.append(f"Spelare i bild (namn och tröjnummer): {namn}")
     elif nummer:
@@ -67,8 +80,8 @@ def _kontext(matchinfo, sport, nummer, namn):
     return "\n".join(rader)
 
 
-def generera_bildtexter(jobb, matchinfo, sport, modell=MODELL_STANDARD,
-                        logg=print):
+def generera_bildtexter(jobb, matchinfo, sport, hemma_farg=None,
+                        modell=MODELL_STANDARD, logg=print):
     """jobb: lista av {id, jpg, nummer, namn}. Returnerar {id: bildtext}.
 
     id som inte kunde genereras utelämnas. Tomt resultat vid saknad nyckel/SDK."""
@@ -77,7 +90,8 @@ def generera_bildtexter(jobb, matchinfo, sport, modell=MODELL_STANDARD,
              "installerat — hoppar över.")
         return {}
     import anthropic
-    klient = anthropic.Anthropic()
+    # Fler återförsök än standard (2) — tål tillfällig 529-överbelastning.
+    klient = anthropic.Anthropic(max_retries=6)
 
     def en(j):
         b64 = _bild_base64(j["jpg"]) if j.get("jpg") else None
@@ -86,7 +100,7 @@ def generera_bildtexter(jobb, matchinfo, sport, modell=MODELL_STANDARD,
         innehall = [
             {"type": "image", "source": {"type": "base64",
                                          "media_type": "image/jpeg", "data": b64}},
-            {"type": "text", "text": _kontext(matchinfo, sport,
+            {"type": "text", "text": _kontext(matchinfo, sport, hemma_farg,
                                               j.get("nummer"), j.get("namn"))},
         ]
         svar = klient.messages.create(

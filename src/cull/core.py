@@ -501,7 +501,8 @@ def kor_efterbehandling(args, katalog):
                          "namn": (namn_per_fil or {}).get(f, "")}
                         for f in filer]
                 bildtext_per_fil = bildtext_ai.generera_bildtexter(
-                    jobb, matchinfo, sport, args.bildtext_modell, print)
+                    jobb, matchinfo, sport, args.hemma_farg,
+                    args.bildtext_modell, print)
         n = _skriv_iptc(filer, matchinfo, sport, args.fotograf,
                         _exif_env(), namn_per_fil, bildtext_per_fil)
         print(f"  IPTC skrivet på {n} filer." if n
@@ -1266,7 +1267,8 @@ def main():
                          "namn": (namn_per_fil or {}).get(ut_dir / r["fil"].name, "")}
                         for r in valda]
                 bildtext_per_fil = bildtext_ai.generera_bildtexter(
-                    jobb, args.ut_namn, sport, args.bildtext_modell, print)
+                    jobb, args.ut_namn, sport, args.hemma_farg,
+                    args.bildtext_modell, print)
             n_iptc = _skriv_iptc(kopierade, args.ut_namn, sport,
                                  args.fotograf, _exif_env(), namn_per_fil,
                                  bildtext_per_fil)

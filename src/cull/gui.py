@@ -1555,6 +1555,12 @@ def main():
             mi = vals["matchinfo"].get().strip()
             if mi:
                 cmd += ["--ut-namn", mi]
+            sp = vals["sport"].get()
+            if sp and sp.lower() != "auto":
+                cmd += ["--sport", sp.lower()]
+            hf = vals["hemma_farg"].get().strip()
+            if hf:
+                cmd += ["--hemma-farg", hf]
             fel = None
         else:
             cmd, fel = bygg_kommando(vals)
