@@ -255,12 +255,15 @@ def _iptc_metadata(matchinfo, sport):
             "datum": datum, "arena": arena}
 
 
-def _skriv_iptc(nef_paths, matchinfo, sport, fotograf, env, namn_per_fil=None):
+def _skriv_iptc(nef_paths, matchinfo, sport, fotograf, env, namn_per_fil=None,
+                bildtext_per_fil=None):
     """Skriver IPTC/XMP-metadata till de exporterade filerna.
 
-    namn_per_fil: {Path: 'Emma Andersson (10), …'} → spelarnamn läggs till i
-    bildtexten per bild (roster). Utan den skrivs match-gemensam metadata i ett
-    enda anrop."""
+    namn_per_fil:     {Path: 'Emma Andersson (10), …'} → spelarnamn läggs till i
+                      bildtexten per bild (roster).
+    bildtext_per_fil: {Path: 'färdig bildtext'} → ersätter HELA bildtexten per
+                      bild (Claude vision-bildtext); vinner över namn_per_fil.
+    Utan per-fil-data skrivs match-gemensam metadata i ett enda anrop."""
     if not nef_paths or not (matchinfo or "").strip():
         return 0
     md = _iptc_metadata(matchinfo, sport)
@@ -278,11 +281,14 @@ def _skriv_iptc(nef_paths, matchinfo, sport, fotograf, env, namn_per_fil=None):
         gem += [f"-XMP-dc:Creator={fotograf}", f"-IPTC:By-line={fotograf}"]
 
     def _bildtext(p):
+        ai = (bildtext_per_fil or {}).get(p, "")
+        if ai:
+            return ai
         namn = (namn_per_fil or {}).get(p, "")
         return f"{md['caption']} — {namn}" if namn else md["caption"]
 
     try:
-        if namn_per_fil:
+        if namn_per_fil or bildtext_per_fil:
             # Per-fil-bildtext (roster) → ett anrop per fil.
             n = 0
             for p in nef_paths:
@@ -481,8 +487,23 @@ def kor_efterbehandling(args, katalog):
                     träff += 1 if namn_per_fil[f] else 0
                 print(f"  Roster: {len(rost)} spelare, namn på {träff} bilder "
                       "(tröjnummer ur cachen).", flush=True)
+        bildtext_per_fil = None
+        if args.bildtext_ai:
+            from cull import bildtext_ai
+            idx = _nummer_index()
+            with tempfile.TemporaryDirectory() as tmp:
+                raw = [f for f in filer if f.suffix.lower() in RAW_SUFFIX]
+                pm = extrahera_previews_batch(raw, Path(tmp)) if raw else {}
+                jobb = [{"id": f,
+                         "jpg": (f if f.suffix.lower() in JPG_SUFFIX
+                                 else pm.get(f)),
+                         "nummer": idx.get((f.name, str(f.stat().st_size)), []),
+                         "namn": (namn_per_fil or {}).get(f, "")}
+                        for f in filer]
+                bildtext_per_fil = bildtext_ai.generera_bildtexter(
+                    jobb, matchinfo, sport, args.bildtext_modell, print)
         n = _skriv_iptc(filer, matchinfo, sport, args.fotograf,
-                        _exif_env(), namn_per_fil)
+                        _exif_env(), namn_per_fil, bildtext_per_fil)
         print(f"  IPTC skrivet på {n} filer." if n
               else "  IPTC hoppades över (matchinfo saknas?).", flush=True)
 
@@ -574,7 +595,15 @@ def main():
                          "per bild (kräver --iptc och avlästa tröjnummer)")
     ap.add_argument("--efterbehandla", action="store_true",
                     help="kör om leveranssteg (--iptc/--roster/--husstil/"
-                         "--exp-bump) på en REDAN exporterad mapp utan att culla om")
+                         "--exp-bump/--bildtext-ai) på en REDAN exporterad mapp "
+                         "utan att culla om")
+    ap.add_argument("--bildtext-ai", action="store_true",
+                    help="skriv publiceringsfärdig svensk bildtext per bild via "
+                         "Claude (kräver --iptc, ANTHROPIC_API_KEY; kostar/bild)")
+    ap.add_argument("--bildtext-modell", default="claude-opus-4-8",
+                    metavar="MODELL",
+                    help="modell för bildtext-AI (claude-opus-4-8 (std), "
+                         "claude-haiku-4-5 = billigast, claude-sonnet-4-6)")
     ap.add_argument("--ingen-ai-cache", action="store_true",
                     help="hoppa över AI-feature-cachen (tvinga omräkning)")
     ap.add_argument("--limpa-ai-cache", action="store_true",
@@ -1132,8 +1161,8 @@ def main():
                   flush=True)
         gör_xmp = args.xmp or args.xmp_justering or husstil or args.exp_bump
 
-        # XMP behöver previews — extrahera för valda som saknar (cacheträffar).
-        if gör_xmp:
+        # XMP och bildtext-AI behöver previews — extrahera för valda som saknar.
+        if gör_xmp or args.bildtext_ai:
             saknar = [r for r in valda if not r["_jpg"]]
             if saknar:
                 pm = extrahera_previews_batch([r["fil"] for r in saknar], tmp)
@@ -1228,8 +1257,19 @@ def main():
                     n_namn = sum(1 for v in namn_per_fil.values() if v)
                     print(f"  Roster: {len(rost)} spelare, namn på {n_namn} bilder.",
                           flush=True)
+            bildtext_per_fil = None
+            if args.bildtext_ai:
+                from cull import bildtext_ai
+                jobb = [{"id": ut_dir / r["fil"].name,
+                         "jpg": r.get("_jpg"),
+                         "nummer": r.get("_nummer", []),
+                         "namn": (namn_per_fil or {}).get(ut_dir / r["fil"].name, "")}
+                        for r in valda]
+                bildtext_per_fil = bildtext_ai.generera_bildtexter(
+                    jobb, args.ut_namn, sport, args.bildtext_modell, print)
             n_iptc = _skriv_iptc(kopierade, args.ut_namn, sport,
-                                 args.fotograf, _exif_env(), namn_per_fil)
+                                 args.fotograf, _exif_env(), namn_per_fil,
+                                 bildtext_per_fil)
             tider_fas["IPTC"] = time.perf_counter() - _t
             print(f"IPTC-bildtexter skrivna på {n_iptc} filer."
                   if n_iptc else

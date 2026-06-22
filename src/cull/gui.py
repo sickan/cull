@@ -26,9 +26,17 @@ SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "firande_boost", "garanti_firande", "snabb",
                  "xmp_justering", "oppna", "export_rot", "trana_rot",
                  "iptc", "fotograf", "bevaka_på", "garanti_bevaka",
-                 "export_overskriv", "husstil", "exp_bump", "roster"]
+                 "export_overskriv", "husstil", "exp_bump", "roster",
+                 "bildtext_ai", "bildtext_modell"]
 
 OPPNA_VAL = ["Auto", "Lightroom", "DxO PureRAW", "Finder", "Inget"]
+
+# Bildtext-AI-modeller (etikett → modell-ID).
+BILDTEXT_MODELLER = {
+    "Opus 4.8 (bäst)": "claude-opus-4-8",
+    "Haiku 4.5 (billig)": "claude-haiku-4-5",
+    "Sonnet 4.6": "claude-sonnet-4-6",
+}
 
 # Camera Raw/Lightroom-presets (.xmp) → husstil-dropdown.
 PRESET_DIR = (Path.home() / "Library" / "Application Support" / "Adobe"
@@ -253,6 +261,12 @@ def bygg_kommando(vals):
     roster = vals["roster"].get().strip()
     if roster:
         cmd += ["--roster", roster]
+
+    if vals["bildtext_ai"].get():
+        cmd.append("--bildtext-ai")
+        modell = BILDTEXT_MODELLER.get(vals["bildtext_modell"].get().strip())
+        if modell:
+            cmd += ["--bildtext-modell", modell]
 
     oppna = vals["oppna"].get().strip().lower()
     oppna = {"dxo pureraw": "dxo"}.get(oppna, oppna)
@@ -1054,6 +1068,18 @@ def main():
             vals["roster"].set(f)
     ttk.Button(f_rost, text="Välj…", command=valj_roster).pack(side="left", padx=(4, 0))
 
+    # Claude vision-bildtexter (per bild; kräver IPTC + ANTHROPIC_API_KEY)
+    vals["bildtext_ai"] = tk.BooleanVar(value=saved.get("bildtext_ai", False))
+    f_btai = ttk.Frame(f_katalog)
+    f_btai.grid(row=13, column=0, columnspan=3, sticky="w", pady=(2, 0))
+    ttk.Checkbutton(f_btai, text="Bildtext-AI (Claude)",
+                    variable=vals["bildtext_ai"]).pack(side="left")
+    vals["bildtext_modell"] = tk.StringVar(
+        value=saved.get("bildtext_modell", list(BILDTEXT_MODELLER)[0]))
+    ttk.Combobox(f_btai, textvariable=vals["bildtext_modell"],
+                 values=list(BILDTEXT_MODELLER), width=18,
+                 state="readonly").pack(side="left", padx=(6, 0))
+
     # --- Flik: Urval (kriterier) ---
     f_krit = ttk.Frame(notebook, padding=8)
     notebook.add(f_krit, text="  Urval  ")
@@ -1509,6 +1535,11 @@ def main():
             rost = vals["roster"].get().strip()
             if rost:
                 cmd += ["--roster", rost]
+            if vals["bildtext_ai"].get():
+                cmd.append("--bildtext-ai")
+                mdl = BILDTEXT_MODELLER.get(vals["bildtext_modell"].get().strip())
+                if mdl:
+                    cmd += ["--bildtext-modell", mdl]
             hus = vals["husstil"].get().strip()
             if hus and hus != "(ingen)":
                 cmd += ["--husstil", str(PRESET_DIR / f"{hus}.xmp")]
