@@ -267,6 +267,26 @@ def _uppratningsvinkel(jpg_path, img, roll=None):
     return 0.0, None
 
 
+def _rakt_bevarande(jpg_path, vinkel):
+    """Dämpar upprätningsvinkeln så motivet inte beskärs för hårt — estetik
+    före perfekt vinkel. Använder Vision-saliens; oförändrad om inget motiv
+    hittas. Returnerar (vinkel, dämpad?)."""
+    if not jpg_path or abs(vinkel) < 0.05:
+        return vinkel, False
+    try:
+        from cull import vision_lager, leverans
+        bb = vision_lager.saliens_bbox(jpg_path)
+        if bb is None:
+            return vinkel, False
+        from PIL import Image
+        w, h = Image.open(jpg_path).size
+        ny = leverans._vinkel_som_bevarar(
+            w, h, vinkel, (bb[0]*w, bb[1]*h, bb[2]*w, bb[3]*h))
+        return ny, (abs(ny) + 0.05 < abs(vinkel))
+    except Exception:
+        return vinkel, False
+
+
 def _exif_env():
     env = os.environ.copy()
     for p in ("/opt/homebrew/bin", "/usr/local/bin"):
@@ -579,6 +599,7 @@ def kor_efterbehandling(args, katalog):
                 är_raw = f.suffix.lower() in RAW_SUFFIX
                 jpg = f if f.suffix.lower() in JPG_SUFFIX else pm.get(f)
                 vinkel, motor = _uppratningsvinkel(jpg, None, roll_karta.get(f))
+                vinkel, _ = _rakt_bevarande(jpg, vinkel)
                 vis += 1 if motor == "vision" else 0
                 gyr += 1 if motor == "gyro" else 0
                 xmp_writer.skriv_xmp(
@@ -1325,6 +1346,7 @@ def main():
         _t = time.perf_counter()
         vision_n = [0]
         gyro_n = [0]
+        dampad_n = [0]
         roll_karta = (_roll_batch([r["fil"] for r in valda
                                    if r["fil"].suffix.lower() in RAW_SUFFIX],
                                   _exif_env()) if (args.xmp or args.leverans) else {})
@@ -1336,13 +1358,17 @@ def main():
                 vinkel = 0.0
                 exposure = temperatur = tint = None
                 if args.xmp:
-                    # Beskärning struken (gav dåliga crops) — bara upprätning.
+                    # Upprätning (gyro/Vision/Hough), dämpad om motivet annars
+                    # beskärs för hårt (estetik > perfekt vinkel).
                     vinkel, motor = _uppratningsvinkel(
                         r.get("_jpg"), img, roll_karta.get(r["fil"]))
+                    vinkel, dämpad = _rakt_bevarande(r.get("_jpg"), vinkel)
                     if motor == "vision":
                         vision_n[0] += 1
                     elif motor == "gyro":
                         gyro_n[0] += 1
+                    if dämpad:
+                        dampad_n[0] += 1
                 if img is not None:
                     if args.xmp_justering:
                         exposure = _vb.ansikts_exponering_ev(img, ansikte_c)
@@ -1385,8 +1411,9 @@ def main():
         if args.xmp and (gyro_n[0] or vision_n[0]):
             hough_n = len(valda) - gyro_n[0] - vision_n[0]
             print(f"  Upprätning: {gyro_n[0]} via kamerans gyro (RollAngle), "
-                  f"{vision_n[0]} via Vision-horisont, {hough_n} via Hough.",
-                  flush=True)
+                  f"{vision_n[0]} via Vision-horisont, {hough_n} via Hough."
+                  + (f" Dämpad på {dampad_n[0]} (bevarar motivet)."
+                     if dampad_n[0] else ""), flush=True)
 
         # IPTC-bildtexter på de exporterade filerna (match-gemensam metadata,
         # + spelarnamn per bild om en roster är angiven).

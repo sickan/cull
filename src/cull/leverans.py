@@ -43,7 +43,7 @@ def _ryms_i_inskriven(w, h, vinkel, bbox_px):
             and bbox_px[2] <= cx1 and bbox_px[3] <= cy1)
 
 
-def _vinkel_som_bevarar(w, h, vinkel, bbox_px, tolerans=0.03):
+def _vinkel_som_bevarar(w, h, vinkel, bbox_px, tolerans=0.01):
     """Största |vinkel| (samma tecken) vars kil-beskärning INTE klipper motivet.
     bbox_px får krympas med tolerans (liten kantklipp tillåten). 0 om inget går."""
     # Krymp motivrutan något — en hand precis vid kanten ska inte blockera helt.
