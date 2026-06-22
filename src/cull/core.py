@@ -267,6 +267,25 @@ def _uppratningsvinkel(jpg_path, img, roll=None):
     return 0.0, None
 
 
+def _skriv_rating_exiftool(rating_karta, ut_dir, env):
+    """Skriver xmp:Rating inbäddat i de exporterade filerna (exiftool) — så
+    Lightroom läser betyget pålitligt (sidecaren används bara för framkallning)."""
+    n = 0
+    for fil, stjärnor in rating_karta.items():
+        mål = ut_dir / fil.name
+        if not mål.exists():
+            continue
+        try:
+            r = subprocess.run(
+                ["exiftool", "-overwrite_original", "-P",
+                 f"-XMP-xmp:Rating={stjärnor}", f"-Rating={stjärnor}", str(mål)],
+                capture_output=True, text=True, env=env)
+            n += 1 if r.returncode == 0 else 0
+        except Exception:
+            pass
+    return n
+
+
 def _stjarnor_av_poang(valda):
     """Stjärnbetyg (2-5) per bild utifrån helhetspoängens percentil i urvalet —
     starkast = 5★, garanti/svagast = 2★. Lightroom läser xmp:Rating."""
@@ -1480,6 +1499,11 @@ def main():
             print(f"IPTC-bildtexter skrivna på {n_iptc} filer."
                   if n_iptc else
                   "IPTC hoppades över (matchinfo saknas?).", flush=True)
+
+        # Stjärnbetyg inbäddat i filerna (Lightroom läser xmp:Rating därifrån).
+        if rating_karta:
+            nr = _skriv_rating_exiftool(rating_karta, ut_dir, _exif_env())
+            print(f"  Stjärnbetyg inbäddat i {nr} filer.", flush=True)
 
         # Leveransfärdiga JPEG (snabbflöde) enligt profil — gyro-rätat, skalat,
         # komprimerat, med IPTC/bildtext på leverans-JPEG:erna.
