@@ -27,9 +27,11 @@ SYSTEM = (
     "- Resultatet i matchkontexten är slutresultatet — tolka det INTE som att "
     "ett enskilt jubel i bilden är slutsegern. Skriv 'jublar' eller 'firar en "
     "poäng', inte 'firar segern', om det inte tydligt är slutsignalen.\n"
-    "- Skriv ALDRIG ut något personnamn — inte ens om du tror dig känna igen "
-    "spelaren. Använd bara tröjnummer och lag. Spelarnamn får bara förekomma om "
-    "de uttryckligen ges i kontexten.\n"
+    "- Spelarnamn får ENDAST hämtas ur trupplistan i kontexten (om en sådan "
+    "ges), och bara när du TYDLIGT ser spelarens tröjnummer i bilden och numret "
+    "finns i listan. Trupplistan gäller bara det angivna laget — namnge inte "
+    "motståndarlagets spelare. Känner du inte igen numret klart: skriv inget "
+    "namn. Hitta ALDRIG på ett namn ur minnet.\n"
     "- Ange tröjnummer och vilket lag (utifrån tröjfärg/kontext) när det syns. "
     "Gissa aldrig ett tröjnummer — utelämna det om siffran är otydlig.\n"
     "- En enda mening. Svara endast med själva bildtexten — inga citattecken, "
@@ -64,7 +66,8 @@ def _bild_base64(jpg_path):
     return base64.b64encode(buf.tobytes()).decode("ascii")
 
 
-def _kontext(matchinfo, sport, hemma_farg, nummer, namn):
+def _kontext(matchinfo, sport, hemma_farg, roster_text, roster_lag,
+             nummer, namn):
     rader = []
     if matchinfo:
         rader.append(f"Match: {matchinfo}")
@@ -72,6 +75,9 @@ def _kontext(matchinfo, sport, hemma_farg, nummer, namn):
         rader.append(f"Sport: {sport}")
     if hemma_farg:
         rader.append(f"Hemmalaget spelar i {hemma_farg}.")
+    if roster_text:
+        lag = roster_lag or "hemmalaget"
+        rader.append(f"Trupplista för {lag} (tröjnummer = namn): {roster_text}")
     if namn:
         rader.append(f"Spelare i bild (namn och tröjnummer): {namn}")
     elif nummer:
@@ -81,7 +87,8 @@ def _kontext(matchinfo, sport, hemma_farg, nummer, namn):
 
 
 def generera_bildtexter(jobb, matchinfo, sport, hemma_farg=None,
-                        modell=MODELL_STANDARD, logg=print):
+                        modell=MODELL_STANDARD, logg=print,
+                        roster_text="", roster_lag=""):
     """jobb: lista av {id, jpg, nummer, namn}. Returnerar {id: bildtext}.
 
     id som inte kunde genereras utelämnas. Tomt resultat vid saknad nyckel/SDK."""
@@ -101,6 +108,7 @@ def generera_bildtexter(jobb, matchinfo, sport, hemma_farg=None,
             {"type": "image", "source": {"type": "base64",
                                          "media_type": "image/jpeg", "data": b64}},
             {"type": "text", "text": _kontext(matchinfo, sport, hemma_farg,
+                                              roster_text, roster_lag,
                                               j.get("nummer"), j.get("namn"))},
         ]
         svar = klient.messages.create(

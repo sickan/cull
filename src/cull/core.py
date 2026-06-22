@@ -474,8 +474,9 @@ def kor_efterbehandling(args, katalog):
     # IPTC + roster (spelarnamn per bild ur cachade tröjnummer).
     if args.iptc:
         namn_per_fil = None
+        rost = {}
+        from cull import roster as _roster
         if args.roster:
-            from cull import roster as _roster
             rost = _roster.las_roster(args.roster)
             idx = _nummer_index()
             if rost:
@@ -500,9 +501,11 @@ def kor_efterbehandling(args, katalog):
                          "nummer": idx.get((f.name, str(f.stat().st_size)), []),
                          "namn": (namn_per_fil or {}).get(f, "")}
                         for f in filer]
+                lag = matchinfo.split(" - ")[0].strip()
                 bildtext_per_fil = bildtext_ai.generera_bildtexter(
                     jobb, matchinfo, sport, args.hemma_farg,
-                    args.bildtext_modell, print)
+                    args.bildtext_modell, print,
+                    roster_text=_roster.lista_text(rost), roster_lag=lag)
         n = _skriv_iptc(filer, matchinfo, sport, args.fotograf,
                         _exif_env(), namn_per_fil, bildtext_per_fil)
         print(f"  IPTC skrivet på {n} filer." if n
@@ -1248,6 +1251,7 @@ def main():
             _t = time.perf_counter()
             kopierade = [ut_dir / r["fil"].name for r in valda]
             namn_per_fil = None
+            rost = {}
             if args.roster:
                 from cull import roster as _roster
                 rost = _roster.las_roster(args.roster)
@@ -1256,11 +1260,13 @@ def main():
                                     _roster.namnge(rost, r.get("_nummer", []))
                                     for r in valda}
                     n_namn = sum(1 for v in namn_per_fil.values() if v)
-                    print(f"  Roster: {len(rost)} spelare, namn på {n_namn} bilder.",
-                          flush=True)
+                    print(f"  Roster: {len(rost)} spelare, namn på {n_namn} bilder "
+                          "(via OCR) + AI matchar resten.", flush=True)
             bildtext_per_fil = None
             if args.bildtext_ai:
+                from cull import roster as _roster
                 from cull import bildtext_ai
+                lag = (args.ut_namn or "").split(" - ")[0].strip()
                 jobb = [{"id": ut_dir / r["fil"].name,
                          "jpg": r.get("_jpg"),
                          "nummer": r.get("_nummer", []),
@@ -1268,7 +1274,8 @@ def main():
                         for r in valda]
                 bildtext_per_fil = bildtext_ai.generera_bildtexter(
                     jobb, args.ut_namn, sport, args.hemma_farg,
-                    args.bildtext_modell, print)
+                    args.bildtext_modell, print,
+                    roster_text=_roster.lista_text(rost), roster_lag=lag)
             n_iptc = _skriv_iptc(kopierade, args.ut_namn, sport,
                                  args.fotograf, _exif_env(), namn_per_fil,
                                  bildtext_per_fil)

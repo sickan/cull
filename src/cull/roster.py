@@ -33,6 +33,15 @@ def las_roster(path):
     return roster
 
 
+def lista_text(roster):
+    """Hela trupplistan som '10 = Isabelle Haak, 12 = Hilda Gustafsson, …' för
+    att ge till bildtext-AI:n (som matchar numret den ser mot namnet)."""
+    if not roster:
+        return ""
+    return ", ".join(f"{nr} = {roster[nr]}"
+                     for nr in sorted(roster, key=lambda n: int(n)))
+
+
 def namnge(roster, nummer_lista):
     """['10','7'] → 'Emma Andersson (10), Lisa Berg (7)'.
     Okända nummer utelämnas. Tom sträng om inget matchar."""
