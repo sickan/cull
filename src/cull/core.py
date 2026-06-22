@@ -570,7 +570,7 @@ def kor_efterbehandling(args, katalog):
     if args.husstil or args.exp_bump:
         preset = xmp_writer.las_preset(args.husstil) if args.husstil else None
         raw = [f for f in filer if f.suffix.lower() in RAW_SUFFIX]
-        iso_karta = _iso_batch(raw, _exif_env()) if args.husstil else {}
+        iso_karta = _iso_batch(raw, _exif_env()) if args.xmp_brus else {}
         roll_karta = _roll_batch(raw, _exif_env())
         with tempfile.TemporaryDirectory() as tmp:
             pm = extrahera_previews_batch(raw, Path(tmp)) if raw else {}
@@ -584,7 +584,7 @@ def kor_efterbehandling(args, katalog):
                 xmp_writer.skriv_xmp(
                     f, vinkel=vinkel,
                     profil=("Camera Neutral" if är_raw and not preset else None),
-                    iso=(iso_karta.get(f) if är_raw and args.husstil else None),
+                    iso=(iso_karta.get(f) if är_raw and args.xmp_brus else None),
                     objektiv=(är_raw and bool(args.husstil)),
                     preset=preset, exp_bump=args.exp_bump)
                 n += 1
@@ -682,8 +682,11 @@ def main():
     ap.add_argument("--fotograf", default=None, metavar="NAMN",
                     help="fotografens namn → IPTC By-line/Creator (med --iptc)")
     ap.add_argument("--xmp-justering", action="store_true",
-                    help="skriv exponering + WB/tint i XMP (från ansikts-"
-                         "exponering och uppmätt färgstick)")
+                    help="skriv exponering + WB/tint + objektivkorr i XMP (från "
+                         "ansikts-exponering och uppmätt färgstick)")
+    ap.add_argument("--xmp-brus", action="store_true",
+                    help="skriv ISO-baserad brusreducering i XMP (separat opt-in "
+                         "— stäng av i flöden som går till DxO, som avbrusar)")
     ap.add_argument("--husstil", default=None, metavar="PRESET.xmp",
                     help="baka in ett Camera Raw/Lightroom-preset (.xmp) i varje "
                          "sidecar — din egen look på alla bilder direkt")
@@ -1308,11 +1311,15 @@ def main():
                 if _p not in env_wb.get("PATH", "").split(os.pathsep):
                     env_wb["PATH"] = _p + os.pathsep + env_wb.get("PATH", "")
             as_shot = _as_shot_kelvin_batch([r["fil"] for r in valda], env_wb)
-            iso_karta = _iso_batch([r["fil"] for r in valda
-                                    if r["fil"].suffix.lower() in RAW_SUFFIX], env_wb)
             if delta_k or delta_tint:
                 print(f"  XMP-WB: as-shot {delta_k:+.0f}K, tint {delta_tint:+.0f} "
                       f"(uppmätt färgstick).", flush=True)
+
+        # ISO-brus = egen opt-in (av i DXO-flöden där DXO avbrusar).
+        if args.xmp_brus:
+            iso_karta = _iso_batch([r["fil"] for r in valda
+                                    if r["fil"].suffix.lower() in RAW_SUFFIX],
+                                   _exif_env())
 
         print(f"\nExporterar {len(valda)} filer (kopierar + XMP)…", flush=True)
         _t = time.perf_counter()
@@ -1353,9 +1360,11 @@ def main():
                 profil = ("Camera Neutral"
                           if är_raw and not husstil else None)
                 iso = objektiv = None
-                if args.xmp_justering and är_raw:
-                    iso = iso_karta.get(r["fil"])
-                    objektiv = True
+                if är_raw:
+                    if args.xmp_brus:          # ISO-brus = egen opt-in (DXO-flöden)
+                        iso = iso_karta.get(r["fil"])
+                    if args.xmp_justering:     # objektivkorr ingår i leveransklar
+                        objektiv = True
                 if (args.xmp or husstil or args.exp_bump
                         or exposure is not None or temperatur is not None
                         or iso is not None):

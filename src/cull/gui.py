@@ -24,7 +24,7 @@ SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "bevaka", "avspark", "topp", "andel", "burst_sek",
                  "yolo", "estetik", "estetik_motor", "modell", "sport", "matchinfo",
                  "firande_boost", "garanti_firande", "snabb",
-                 "xmp_justering", "oppna", "export_rot", "trana_rot",
+                 "xmp_justering", "xmp_brus", "oppna", "export_rot", "trana_rot",
                  "iptc", "fotograf", "bevaka_på", "garanti_bevaka",
                  "export_overskriv", "husstil", "exp_bump", "roster",
                  "bildtext_ai", "bildtext_modell", "leverans"]
@@ -247,6 +247,8 @@ def bygg_kommando(vals):
 
     if vals["xmp_justering"].get():
         cmd.append("--xmp-justering")
+    if vals["xmp_brus"].get():
+        cmd.append("--xmp-brus")
 
     husstil = vals["husstil"].get().strip()
     if husstil and husstil != "(ingen)":
@@ -1040,10 +1042,14 @@ def main():
     vals["xmp"] = tk.BooleanVar(value=saved.get("xmp", False))
     ttk.Checkbutton(f_katalog, text="XMP-sidecars (upprätning)",
                     variable=vals["xmp"]).grid(row=10, column=0, sticky="w", pady=2)
+    f_xmpj = ttk.Frame(f_katalog)
+    f_xmpj.grid(row=10, column=1, columnspan=2, sticky="w", pady=2)
     vals["xmp_justering"] = tk.BooleanVar(value=saved.get("xmp_justering", False))
-    ttk.Checkbutton(f_katalog, text="XMP: leveransklar",
-                    variable=vals["xmp_justering"]).grid(
-        row=10, column=1, columnspan=2, sticky="w", pady=2)
+    ttk.Checkbutton(f_xmpj, text="XMP: leveransklar",
+                    variable=vals["xmp_justering"]).pack(side="left")
+    vals["xmp_brus"] = tk.BooleanVar(value=saved.get("xmp_brus", False))
+    ttk.Checkbutton(f_xmpj, text="ISO-brus",
+                    variable=vals["xmp_brus"]).pack(side="left", padx=(10, 0))
 
     # Husstil-preset (bakas in i varje sidecar) + generell exp-knuff
     presets = _lista_presets()
@@ -1567,6 +1573,8 @@ def main():
             hus = vals["husstil"].get().strip()
             if hus and hus != "(ingen)":
                 cmd += ["--husstil", str(PRESET_DIR / f"{hus}.xmp")]
+            if vals["xmp_brus"].get():
+                cmd.append("--xmp-brus")
             try:
                 bump = float(str(vals["exp_bump"].get()).replace(",", "."))
             except (ValueError, AttributeError):
