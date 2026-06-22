@@ -55,9 +55,9 @@ XMP_MALL = """\
       crs:CropLeft='{left:.6f}'
       crs:CropBottom='{bottom:.6f}'
       crs:CropRight='{right:.6f}'
-      crs:CropAngle='0'
-      crs:CropConstrainToWarp='0'
-      crs:StraightenAngle='{vinkel:.2f}'{extra}
+      crs:CropAngle='{crop_angle:.2f}'
+      crs:CropConstrainToWarp='{constrain}'
+      crs:StraightenAngle='0.00'{extra}
     />
   </rdf:RDF>
 </x:xmpmeta>
@@ -119,7 +119,8 @@ PRESET_MALL = """\
 <?xpacket end='w'?>"""
 
 
-def _bygg_med_preset(preset, over, has_crop, top, left, bottom, right, vinkel):
+def _bygg_med_preset(preset, over, has_crop, top, left, bottom, right,
+                     crop_angle, constrain):
     """Presetets develop-look som bas, med våra per-bild-värden som override."""
     attrs = dict(preset["attrs"])
     attrs["HasCrop"] = has_crop
@@ -127,9 +128,9 @@ def _bygg_med_preset(preset, over, has_crop, top, left, bottom, right, vinkel):
     attrs["CropLeft"] = f"{left:.6f}"
     attrs["CropBottom"] = f"{bottom:.6f}"
     attrs["CropRight"] = f"{right:.6f}"
-    attrs["CropAngle"] = "0"
-    attrs["CropConstrainToWarp"] = "0"
-    attrs["StraightenAngle"] = f"{vinkel:.2f}"
+    attrs["CropAngle"] = f"{crop_angle:.2f}"
+    attrs["CropConstrainToWarp"] = constrain
+    attrs["StraightenAngle"] = "0.00"
     attrs.setdefault("Version", "15.0")
     attrs.setdefault("ProcessVersion", "11.0")
     attrs.update(over)   # våra värden vinner över presetets
@@ -155,12 +156,17 @@ def skriv_xmp(nef_path, crop=None, vinkel=0.0,
     exp_final = (exposure or 0.0) + (exp_bump or 0.0)
     skriv_exp = exposure is not None or abs(exp_bump or 0.0) > 0.005
 
+    # Upprätning i Lightroom = crs:CropAngle med HasCrop=True (StraightenAngle
+    # ignoreras utan aktiv beskärning). ConstrainToWarp=1 → LR beskär in kilen.
+    rakta = vinkel is not None and abs(vinkel) > 0.005
     if crop:
         top, left, bottom, right = crop
         has_crop = "True"
     else:
         top, left, bottom, right = 0.0, 0.0, 1.0, 1.0
-        has_crop = "False"
+        has_crop = "True" if rakta else "False"
+    crop_angle = vinkel if rakta else 0.0
+    constrain = "1" if rakta else "0"
 
     # Per-bild-värden (ordning bevaras → samma utdata som tidigare).
     over = {}
@@ -184,14 +190,15 @@ def skriv_xmp(nef_path, crop=None, vinkel=0.0,
 
     if preset:
         innehall = _bygg_med_preset(preset, over, has_crop,
-                                    top, left, bottom, right, vinkel)
+                                    top, left, bottom, right,
+                                    crop_angle, constrain)
     else:
         rader = [f"crs:{k}='{v}'" for k, v in over.items()]
         extra = ("\n      " + "\n      ".join(rader)) if rader else ""
         innehall = XMP_MALL.format(
             has_crop=has_crop,
             top=top, left=left, bottom=bottom, right=right,
-            vinkel=vinkel, extra=extra,
+            crop_angle=crop_angle, constrain=constrain, extra=extra,
         )
     xmp_path = Path(nef_path).with_suffix(".xmp")
     xmp_path.write_text(innehall, encoding="utf-8")
