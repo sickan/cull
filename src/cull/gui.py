@@ -26,7 +26,7 @@ SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "firande_boost", "garanti_firande", "snabb",
                  "xmp_justering", "oppna", "export_rot", "trana_rot",
                  "iptc", "fotograf", "bevaka_på", "garanti_bevaka",
-                 "export_overskriv", "husstil", "exp_bump"]
+                 "export_overskriv", "husstil", "exp_bump", "roster"]
 
 OPPNA_VAL = ["Auto", "Lightroom", "DxO PureRAW", "Finder", "Inget"]
 
@@ -249,6 +249,10 @@ def bygg_kommando(vals):
         bump = 0.0
     if abs(bump) > 0.005:
         cmd += ["--exp-bump", f"{bump:.2f}"]
+
+    roster = vals["roster"].get().strip()
+    if roster:
+        cmd += ["--roster", roster]
 
     oppna = vals["oppna"].get().strip().lower()
     oppna = {"dxo pureraw": "dxo"}.get(oppna, oppna)
@@ -1036,6 +1040,20 @@ def main():
     ttk.Spinbox(f_hus, textvariable=vals["exp_bump"], from_=-2.0, to=2.0,
                 increment=0.1, width=5).pack(side="left", padx=(4, 0))
 
+    # Roster (tröjnummer → spelarnamn i IPTC-bildtext)
+    vals["roster"] = tk.StringVar(value=saved.get("roster", ""))
+    f_rost = ttk.Frame(f_katalog)
+    f_rost.grid(row=12, column=0, columnspan=3, sticky="w", pady=(2, 0))
+    ttk.Label(f_rost, text="Roster:").pack(side="left")
+    ttk.Entry(f_rost, textvariable=vals["roster"], width=24).pack(side="left", padx=(4, 0))
+
+    def valj_roster():
+        f = filedialog.askopenfilename(title="Välj roster-CSV (nummer,namn)",
+                                       filetypes=[("CSV", "*.csv"), ("Alla", "*")])
+        if f:
+            vals["roster"].set(f)
+    ttk.Button(f_rost, text="Välj…", command=valj_roster).pack(side="left", padx=(4, 0))
+
     # --- Flik: Urval (kriterier) ---
     f_krit = ttk.Frame(notebook, padding=8)
     notebook.add(f_krit, text="  Urval  ")
@@ -1439,6 +1457,15 @@ def main():
     # Höger: huvudåtgärder
     knapp = ttk.Button(f_knapp, text="Kör cull")
     knapp.pack(side="right")
+
+    def efterbehandla():
+        start = vals["export_rot"].get().strip() or "/Volumes"
+        d = filedialog.askdirectory(
+            title="Välj exporterad urvalsmapp att efterbehandla", initialdir=start)
+        if d:
+            kor(efter_mapp=d)
+    ttk.Button(f_knapp, text="Efterbehandla…",
+               command=efterbehandla).pack(side="right", padx=6)
     ttk.Button(f_knapp, text="Visa urval…",
                command=visa_befintligt_urval).pack(side="right", padx=6)
     ttk.Button(f_knapp, text="Historik…",
@@ -1473,8 +1500,33 @@ def main():
     logg.tag_configure("fel", foreground="#cc0000")
     logg.tag_configure("klar", foreground="#007700")
 
-    def kor():
-        cmd, fel = bygg_kommando(vals)
+    def kor(efter_mapp=None):
+        if efter_mapp:
+            # Efterbehandling: kör om leveranssteg på en redan exporterad mapp.
+            cmd = [sys.executable, "-m", "cull.core", efter_mapp, "--efterbehandla"]
+            if vals["iptc"].get():
+                cmd.append("--iptc")
+            rost = vals["roster"].get().strip()
+            if rost:
+                cmd += ["--roster", rost]
+            hus = vals["husstil"].get().strip()
+            if hus and hus != "(ingen)":
+                cmd += ["--husstil", str(PRESET_DIR / f"{hus}.xmp")]
+            try:
+                bump = float(str(vals["exp_bump"].get()).replace(",", "."))
+            except (ValueError, AttributeError):
+                bump = 0.0
+            if abs(bump) > 0.005:
+                cmd += ["--exp-bump", f"{bump:.2f}"]
+            fot = vals["fotograf"].get().strip()
+            if fot:
+                cmd += ["--fotograf", fot]
+            mi = vals["matchinfo"].get().strip()
+            if mi:
+                cmd += ["--ut-namn", mi]
+            fel = None
+        else:
+            cmd, fel = bygg_kommando(vals)
         if fel:
             status_var.set(fel)
             return

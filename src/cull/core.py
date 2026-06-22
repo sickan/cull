@@ -255,28 +255,50 @@ def _iptc_metadata(matchinfo, sport):
             "datum": datum, "arena": arena}
 
 
-def _skriv_iptc(nef_paths, matchinfo, sport, fotograf, env):
-    """Skriver match-gemensam IPTC/XMP-metadata till alla exporterade NEF:er."""
+def _skriv_iptc(nef_paths, matchinfo, sport, fotograf, env, namn_per_fil=None):
+    """Skriver IPTC/XMP-metadata till de exporterade filerna.
+
+    namn_per_fil: {Path: 'Emma Andersson (10), …'} → spelarnamn läggs till i
+    bildtexten per bild (roster). Utan den skrivs match-gemensam metadata i ett
+    enda anrop."""
     if not nef_paths or not (matchinfo or "").strip():
         return 0
     md = _iptc_metadata(matchinfo, sport)
-    cmd = ["exiftool", "-overwrite_original", "-sep", ", ",
-           f"-XMP-dc:Description={md['caption']}",
-           f"-IPTC:Caption-Abstract={md['caption']}",
-           f"-XMP-photoshop:Headline={md['caption']}"]
+    gem = ["-sep", ", "]
     if md["keywords"]:
         kw = ", ".join(md["keywords"])
-        cmd += [f"-XMP-dc:Subject={kw}", f"-IPTC:Keywords={kw}"]
+        gem += [f"-XMP-dc:Subject={kw}", f"-IPTC:Keywords={kw}"]
     if md["arena"]:
-        cmd += [f"-XMP-Iptc4xmpCore:Location={md['arena']}",
+        gem += [f"-XMP-Iptc4xmpCore:Location={md['arena']}",
                 f"-IPTC:Sub-location={md['arena']}"]
     if md["datum"]:
-        cmd += [f"-XMP-photoshop:DateCreated={md['datum']}",
+        gem += [f"-XMP-photoshop:DateCreated={md['datum']}",
                 f"-IPTC:DateCreated={md['datum'].replace(':', '')}"]
     if fotograf:
-        cmd += [f"-XMP-dc:Creator={fotograf}", f"-IPTC:By-line={fotograf}"]
-    cmd += [str(p) for p in nef_paths]
+        gem += [f"-XMP-dc:Creator={fotograf}", f"-IPTC:By-line={fotograf}"]
+
+    def _bildtext(p):
+        namn = (namn_per_fil or {}).get(p, "")
+        return f"{md['caption']} — {namn}" if namn else md["caption"]
+
     try:
+        if namn_per_fil:
+            # Per-fil-bildtext (roster) → ett anrop per fil.
+            n = 0
+            for p in nef_paths:
+                cap = _bildtext(p)
+                cmd = (["exiftool", "-overwrite_original"] + gem +
+                       [f"-XMP-dc:Description={cap}",
+                        f"-IPTC:Caption-Abstract={cap}",
+                        f"-XMP-photoshop:Headline={cap}", str(p)])
+                r = subprocess.run(cmd, capture_output=True, text=True, env=env)
+                n += 1 if r.returncode == 0 else 0
+            return n
+        cmd = (["exiftool", "-overwrite_original"] + gem +
+               [f"-XMP-dc:Description={md['caption']}",
+                f"-IPTC:Caption-Abstract={md['caption']}",
+                f"-XMP-photoshop:Headline={md['caption']}"] +
+               [str(p) for p in nef_paths])
         r = subprocess.run(cmd, capture_output=True, text=True, env=env)
         return len(nef_paths) if r.returncode == 0 else 0
     except Exception:
@@ -414,6 +436,79 @@ def _skriv_tidrapport(tider_fas):
     print(f"  {'Totalt':<16} {total:5.1f} s")
 
 
+def _nummer_index():
+    """Indexerar AI-cachens avlästa tröjnummer på (filnamn, storlek), så att
+    redan exporterade (kopierade) filer kan matchas utan ny OCR."""
+    idx = {}
+    for nyckel, post in ladda_ai_cache().items():
+        delar = nyckel.split("|")
+        if len(delar) < 2:
+            continue
+        namn, storlek = Path(delar[0]).name, delar[1]
+        nummer = post.get("_nummer")
+        if nummer:
+            idx[(namn, storlek)] = nummer
+    return idx
+
+
+def kor_efterbehandling(args, katalog):
+    """Kör om leveranssteg på en redan exporterad mapp — ingen culling, ingen
+    modell-laddning. Opt-in: --iptc/--roster, --husstil/--exp-bump."""
+    from cull import xmp_writer
+    filer = sorted(p for p in katalog.iterdir()
+                   if p.suffix.lower() in BILD_SUFFIX
+                   and not p.name.startswith("._"))
+    if not filer:
+        sys.exit(f"Inga bildfiler i {katalog}")
+    print(f"Efterbehandlar {len(filer)} filer i {katalog.name} "
+          "(ingen omculling).", flush=True)
+    sport = (args.sport or "okänd").lower()
+    matchinfo = args.ut_namn or katalog.name
+
+    # IPTC + roster (spelarnamn per bild ur cachade tröjnummer).
+    if args.iptc:
+        namn_per_fil = None
+        if args.roster:
+            from cull import roster as _roster
+            rost = _roster.las_roster(args.roster)
+            idx = _nummer_index()
+            if rost:
+                namn_per_fil = {}
+                träff = 0
+                for f in filer:
+                    nummer = idx.get((f.name, str(f.stat().st_size)), [])
+                    namn_per_fil[f] = _roster.namnge(rost, nummer)
+                    träff += 1 if namn_per_fil[f] else 0
+                print(f"  Roster: {len(rost)} spelare, namn på {träff} bilder "
+                      "(tröjnummer ur cachen).", flush=True)
+        n = _skriv_iptc(filer, matchinfo, sport, args.fotograf,
+                        _exif_env(), namn_per_fil)
+        print(f"  IPTC skrivet på {n} filer." if n
+              else "  IPTC hoppades över (matchinfo saknas?).", flush=True)
+
+    # Husstil-preset / exponeringsknuff → nya sidecars (utan upprätning,
+    # som kräver bildanalys; presetets look + exponering är huvuddelen).
+    if args.husstil or args.exp_bump:
+        preset = xmp_writer.las_preset(args.husstil) if args.husstil else None
+        raw = [f for f in filer if f.suffix.lower() in RAW_SUFFIX]
+        iso_karta = _iso_batch(raw, _exif_env()) if args.husstil else {}
+        n = 0
+        for f in filer:
+            är_raw = f.suffix.lower() in RAW_SUFFIX
+            xmp_writer.skriv_xmp(
+                f, vinkel=0.0,
+                profil=("Camera Neutral" if är_raw and not preset else None),
+                iso=(iso_karta.get(f) if är_raw and args.husstil else None),
+                objektiv=(är_raw and bool(args.husstil)),
+                preset=preset, exp_bump=args.exp_bump)
+            n += 1
+        etikett = (Path(args.husstil).stem if args.husstil else "exp-knuff")
+        print(f"  Sidecars skrivna ({etikett}, "
+              f"{args.exp_bump:+.2f} EV) på {n} filer.", flush=True)
+
+    print("Klart.", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="cull",
                                  description="Teknisk culling av NEF-filer.")
@@ -474,6 +569,12 @@ def main():
     ap.add_argument("--exp-bump", type=float, default=0.0, metavar="EV",
                     help="generell exponeringsknuff (EV) ovanpå allt annat, "
                          "t.ex. 0.5")
+    ap.add_argument("--roster", default=None, metavar="ROSTER.csv",
+                    help="trupplista (nummer,namn) → spelarnamn i IPTC-bildtext "
+                         "per bild (kräver --iptc och avlästa tröjnummer)")
+    ap.add_argument("--efterbehandla", action="store_true",
+                    help="kör om leveranssteg (--iptc/--roster/--husstil/"
+                         "--exp-bump) på en REDAN exporterad mapp utan att culla om")
     ap.add_argument("--ingen-ai-cache", action="store_true",
                     help="hoppa över AI-feature-cachen (tvinga omräkning)")
     ap.add_argument("--limpa-ai-cache", action="store_true",
@@ -503,6 +604,10 @@ def main():
             sys.exit(f"Disken '{delar[2]}' är inte monterad. "
                      f"Anslut den och försök igen.")
         sys.exit(f"Hittar inte katalogen: {katalog}")
+
+    if args.efterbehandla:
+        kor_efterbehandling(args, katalog)
+        return
 
     # Exkludera macOS AppleDouble-sidecars (._namn.NEF) och andra dolda
     # filer som dyker upp på exFAT/FAT-diskar — de är inte riktiga bilder.
@@ -1106,13 +1211,25 @@ def main():
                 print(f"  kopierar …{i}/{len(valda)}", flush=True)
         tider_fas["Export"] = time.perf_counter() - _t
 
-        # IPTC-bildtexter på de exporterade filerna (match-gemensam metadata).
+        # IPTC-bildtexter på de exporterade filerna (match-gemensam metadata,
+        # + spelarnamn per bild om en roster är angiven).
         if args.iptc:
             print("Skriver IPTC-bildtexter…", flush=True)
             _t = time.perf_counter()
             kopierade = [ut_dir / r["fil"].name for r in valda]
+            namn_per_fil = None
+            if args.roster:
+                from cull import roster as _roster
+                rost = _roster.las_roster(args.roster)
+                if rost:
+                    namn_per_fil = {ut_dir / r["fil"].name:
+                                    _roster.namnge(rost, r.get("_nummer", []))
+                                    for r in valda}
+                    n_namn = sum(1 for v in namn_per_fil.values() if v)
+                    print(f"  Roster: {len(rost)} spelare, namn på {n_namn} bilder.",
+                          flush=True)
             n_iptc = _skriv_iptc(kopierade, args.ut_namn, sport,
-                                 args.fotograf, _exif_env())
+                                 args.fotograf, _exif_env(), namn_per_fil)
             tider_fas["IPTC"] = time.perf_counter() - _t
             print(f"IPTC-bildtexter skrivna på {n_iptc} filer."
                   if n_iptc else
