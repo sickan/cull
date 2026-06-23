@@ -39,6 +39,7 @@ cull = "cull.core:_main_safe"
 cull-gui = "cull.gui:main"
 cull-web = "cull.gui_web:main"
 cull-lar = "cull.inlarning:main"
+cull-nummer = "cull.nummer_pass:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cull"]

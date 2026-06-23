@@ -140,6 +140,18 @@ class Api:
             return None
         return res[0] if isinstance(res, (list, tuple)) else res
 
+    def valj_fil(self, start):
+        import webview
+        try:
+            res = self.window.create_file_dialog(
+                webview.OPEN_DIALOG, directory=start or str(Path.home()),
+                file_types=("CSV (*.csv)", "Alla filer (*.*)"))
+        except Exception:
+            res = None
+        if not res:
+            return None
+        return res[0] if isinstance(res, (list, tuple)) else res
+
     # --- spara inställningar --------------------------------------------------
     def spara(self, d):
         try:
@@ -247,6 +259,27 @@ class Api:
             cmd += ["--sport", sp.lower()]
         if (d.get("hemma_farg") or "").strip():
             cmd += ["--hemma-farg", d["hemma_farg"].strip()]
+        threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
+
+    # --- läs tröjnummer på en vald mapp → XMP-keywords -----------------------
+    def nummer_pass(self, d):
+        mapp = self.valj_mapp(d.get("katalog") or d.get("export_rot") or "")
+        if not mapp:
+            self._js("window.dpcDone(false)")
+            return
+        cmd = [sys.executable, "-m", "cull.nummer_pass", mapp]
+        yolo = (d.get("yolo") or "").strip()
+        if yolo:
+            cmd += ["--yolo", yolo]
+        if (d.get("roster") or "").strip():
+            cmd += ["--roster", d["roster"].strip()]
+        if (d.get("hemma_farg") or "").strip():
+            cmd += ["--hemma-farg", d["hemma_farg"].strip()]
+        if d.get("nummer_claude"):
+            cmd.append("--claude")
+            mdl = gui.BILDTEXT_MODELLER.get((d.get("bildtext_modell") or "").strip())
+            if mdl:
+                cmd += ["--claude-modell", mdl]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
     # --- Granska osäkra (aktiv inlärning) ------------------------------------

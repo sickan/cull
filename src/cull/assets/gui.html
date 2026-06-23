@@ -206,6 +206,12 @@
             <label class="chk"><input type="checkbox" id="bildtext_ai"><span class="box">✓</span>Bildtext-AI</label>
             <select class="f flex" id="bildtext_modell"></select>
           </div>
+          <div class="row" style="margin-top:8px"><label class="lbl" style="width:84px">Roster</label>
+            <input class="f flex" id="roster" placeholder="CSV: nummer,namn"><button class="btn" onclick="pick('roster','file')">Välj…</button></div>
+          <div class="row pad94" style="margin-top:2px">
+            <label class="chk"><input type="checkbox" id="nummer_claude"><span class="box">✓</span>Claude-fallback vid nummer-läsning</label>
+            <span class="help" style="margin:0">kostar, tak ~4 kr</span>
+          </div>
         </div>
       </div>
     </div>
@@ -275,6 +281,7 @@
     <div class="actions">
       <button class="btn" onclick="historik()">Historik…</button>
       <button class="btn" onclick="visaUrval()">Visa urval…</button>
+      <button class="btn" onclick="lasNummer()">Läs nummer…</button>
       <button class="btn" onclick="efterbehandla()">Efterbehandla…</button>
       <button class="btn primary" id="korbtn" onclick="kor()">Kör cull</button>
     </div>
@@ -361,8 +368,18 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
 });
 
 async function pick(id,kind){
-  const p = await window.pywebview.api.valj_mapp($(id).value);
+  const p = kind==="file"
+    ? await window.pywebview.api.valj_fil($(id).value)
+    : await window.pywebview.api.valj_mapp($(id).value);
   if(p) $(id).value=p;
+}
+
+async function lasNummer(){
+  window.dpcClear(); progPulse(true);
+  await window.pywebview.api.spara(collect());
+  const d = collect();
+  d.nummer_claude = $("nummer_claude").checked;   // läses direkt, sparas ej
+  await window.pywebview.api.nummer_pass(d);
 }
 async function api(name){ await window.pywebview.api[name](); }
 
