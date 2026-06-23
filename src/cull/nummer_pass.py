@@ -156,24 +156,37 @@ def _claude_nummer(jpg_path, roster_text, hemma_farg, modell):
 
 
 def _skriv_keywords(filer, nummer, roster, env):
-    """Skriver tröjnummer/-namn som keywords (inbäddat) till alla filer för stammen.
-    Idempotent: tar bort (-=) varje värde innan det läggs till (+=), så omkörning
-    inte ger dubbletter och match-keywords m.m. ändå bevaras."""
+    """Skriver tröjnummer/-namn som keywords till alla filer för stammen + till
+    ev. .xmp-sidecar (Lightroom läser metadata ur sidecaren för raw-filer, inte ur
+    den inbäddade datan). Idempotent: tar bort (-=) varje värde före += så omkörning
+    inte ger dubbletter och match-keywords m.m. bevaras."""
     if not nummer:
         return False
-    args = []
+    full_args = []   # bildfiler: XMP + IPTC
+    xmp_args = []    # .xmp-sidecar: bara XMP (IPTC-IIM finns inte i sidecar)
     for nr in sorted(nummer, key=lambda n: int(n) if str(n).isdigit() else 0):
         namn = roster.get(str(nr))
         flat = f"{nr} {namn}" if namn else str(nr)
-        # Ta bort både bara-numret och nummer+namn (täcker omkörning med/utan roster).
-        for v in {str(nr), flat}:
-            args += [f"-XMP-dc:Subject-={v}", f"-IPTC:Keywords-={v}",
-                     f"-XMP-lr:HierarchicalSubject-=Spelare|{v}"]
-        args += [f"-XMP-dc:Subject+={flat}", f"-IPTC:Keywords+={flat}",
-                 f"-XMP-lr:HierarchicalSubject+=Spelare|{flat}"]
-    ok = False
+        for v in {str(nr), flat}:   # täcker omkörning med/utan roster
+            full_args += [f"-XMP-dc:Subject-={v}", f"-IPTC:Keywords-={v}",
+                          f"-XMP-lr:HierarchicalSubject-=Spelare|{v}"]
+            xmp_args += [f"-XMP-dc:Subject-={v}",
+                         f"-XMP-lr:HierarchicalSubject-=Spelare|{v}"]
+        full_args += [f"-XMP-dc:Subject+={flat}", f"-IPTC:Keywords+={flat}",
+                      f"-XMP-lr:HierarchicalSubject+=Spelare|{flat}"]
+        xmp_args += [f"-XMP-dc:Subject+={flat}",
+                     f"-XMP-lr:HierarchicalSubject+=Spelare|{flat}"]
+
+    # Mål: varje bildfil (full) + ev. sidecar för raw-filer (bara XMP).
+    mål = [(f, full_args) for f in filer]
     for f in filer:
-        cmd = ["exiftool", "-overwrite_original", "-sep", ", "] + args + [str(f)]
+        if f.suffix.lower() in RAW_SUFFIX:
+            sidecar = f.with_suffix(".xmp")
+            if sidecar.exists():
+                mål.append((sidecar, xmp_args))
+    ok = False
+    for path, args in mål:
+        cmd = ["exiftool", "-overwrite_original", "-sep", ", "] + args + [str(path)]
         r = subprocess.run(cmd, capture_output=True, text=True, env=env)
         ok = ok or r.returncode == 0
     return ok
