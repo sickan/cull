@@ -15,6 +15,7 @@ dependencies = [
     "anthropic",
     "pyobjc-framework-Vision",
     "pyobjc-framework-Quartz",
+    "pywebview",
 ]
 
 [project.optional-dependencies]
