@@ -114,6 +114,16 @@
   .mini.keep:hover{background:var(--accent-soft); border-color:var(--accent-softborder); color:var(--accent-hover);}
   .mini.drop:hover{background:#FBEAEA; border-color:#E9C2C2; color:#C0392B;}
   .gstate{font-size:10px; color:var(--accent-hover); text-align:center; padding:0 8px 7px; min-height:14px; font-weight:600;}
+  /* nummer-genomgång (Steg 2) */
+  .numwrap{padding:8px;}
+  .numfield{width:100%; font-family:inherit; font-size:13px; color:var(--t-body); background:var(--field);
+       border:1px solid var(--field-border); border-radius:7px; padding:5px 8px; outline:none;}
+  .numfield:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(232,130,12,.15);}
+  .chips{display:flex; flex-wrap:wrap; gap:4px; margin:6px 0;}
+  .numchip{font-family:inherit; font-size:11px; padding:2px 7px; border-radius:6px; cursor:pointer;
+       border:1px solid var(--field-border); background:#fff; color:var(--t-label); transition:.1s;}
+  .numchip:hover{background:var(--accent-soft); border-color:var(--accent-softborder); color:var(--accent-hover);}
+  .nrsave{width:100%; margin-top:2px;}
   /* jämför par */
   .parwrap{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
   .parcard{background:var(--card); border:2px solid var(--card-border); border-radius:12px; overflow:hidden;
@@ -282,6 +292,7 @@
       <button class="btn" onclick="historik()">Historik…</button>
       <button class="btn" onclick="visaUrval()">Visa urval…</button>
       <button class="btn" onclick="lasNummer()">Läs nummer…</button>
+      <button class="btn" onclick="nummerGenomgang()">Fyll luckor…</button>
       <button class="btn" onclick="efterbehandla()">Efterbehandla…</button>
       <button class="btn primary" id="korbtn" onclick="kor()">Kör cull</button>
     </div>
@@ -430,6 +441,40 @@ async function granska(){
     set(b.etikett);
     cell.querySelector(".keep").onclick=async()=>{ await window.pywebview.api.satt_etikett(b.stem,true); set(1); };
     cell.querySelector(".drop").onclick=async()=>{ await window.pywebview.api.satt_etikett(b.stem,false); set(0); };
+    grid.appendChild(cell);
+  });
+}
+
+// --- Steg 2: tröjnummer-genomgång (fyll luckorna) ---
+async function nummerGenomgang(){
+  const body=openSheet("Tröjnummer — fyll luckor","Laddar…");
+  const r=await window.pywebview.api.osakra_data();
+  if(!r.bilder||!r.bilder.length){ setSheetSub("");
+    body.innerHTML=tomMsg("Inga luckor — kör 'Läs nummer…' först, eller alla är ifyllda."); return; }
+  setSheetSub("Bilder där appen inte kunde läsa numret. Skriv numren (komma) eller klicka spelare ur rostern, spara.");
+  const chips=r.roster||[];
+  const grid=document.createElement("div"); grid.className="thumbgrid"; body.innerHTML=""; body.appendChild(grid);
+  r.bilder.forEach(b=>{
+    const cell=document.createElement("div"); cell.className="thumb gcell";
+    const chipsHtml=chips.map(c=>`<button class="numchip" data-nr="${c.nr}" title="${esc(c.namn)}">${c.nr}</button>`).join("");
+    cell.innerHTML=`<img src="${b.thumb}">
+      <div class="numwrap">
+        <input class="numfield" placeholder="nr, t.ex. 10, 7">
+        ${chips.length?`<div class="chips">${chipsHtml}</div>`:""}
+        <button class="mini keep nrsave">Spara</button>
+        <div class="gstate"></div></div>`;
+    const field=cell.querySelector(".numfield"), st=cell.querySelector(".gstate");
+    cell.querySelectorAll(".numchip").forEach(ch=>ch.onclick=()=>{
+      const nr=ch.dataset.nr;
+      const cur=field.value.split(",").map(s=>s.trim()).filter(Boolean);
+      if(!cur.includes(nr)){ cur.push(nr); field.value=cur.join(", "); }
+    });
+    cell.querySelector(".nrsave").onclick=async()=>{
+      const nums=field.value.split(",").map(s=>s.trim()).filter(s=>/^\d+$/.test(s));
+      await window.pywebview.api.osakra_satt(b.stam, nums);
+      st.textContent=nums.length?"✓ "+nums.join(", "):"✓ inget"; cell.classList.add("keepOn");
+    };
+    field.addEventListener("keydown",e=>{ if(e.key==="Enter") cell.querySelector(".nrsave").click(); });
     grid.appendChild(cell);
   });
 }

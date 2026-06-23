@@ -16,6 +16,7 @@ Allt cachas på path|size i nummer_cache.json (omkörning gratis)."""
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -27,6 +28,10 @@ from cull.core import (BILD_SUFFIX, RAW_SUFFIX, JPG_SUFFIX,
 
 NUMMER_CACHE_PATH = Path.home() / ".cache" / "cull" / "nummer_cache.json"
 OSAKRA_PATH = Path.home() / ".cache" / "cull" / "osakra_nummer.json"
+# Manuellt bekräftade nummer (Steg 2) — grundsanning för framtida träning.
+FACIT_PATH = Path.home() / ".cache" / "cull" / "nummer_facit.json"
+# Beständiga previews för luckorna (överlever /tmp-städning → Steg 2 hittar dem).
+OSAKRA_THUMBS = Path.home() / ".cache" / "cull" / "osakra_thumbs"
 
 # Grov kostnadsuppskattning per Claude-anrop (nedskalad bild + kort svar).
 KR_PER_CLAUDE = 0.10        # ~1 cent → ~0,10 kr, medvetet i överkant
@@ -272,8 +277,18 @@ def kor(katalog, yolo_modell="yolo11m.pt", roster_path="", hemma_farg="",
                 skrivna += 1
         elif r["n_personer"] >= 1:
             # Spelare syns men inget nummer → manuell genomgång (Steg 2).
-            osakra.append({"stam": stam, "fil": str(filer[0]),
-                           "preview": str(previews.get(repr_filer[stam]) or "")})
+            # Kopiera previewn till en beständig mapp (mkdtemp-pathen kan städas bort).
+            prev = previews.get(repr_filer[stam])
+            kvar = ""
+            if prev and Path(prev).exists():
+                try:
+                    OSAKRA_THUMBS.mkdir(parents=True, exist_ok=True)
+                    dst = OSAKRA_THUMBS / f"{stam}.jpg"
+                    shutil.copy2(prev, dst)
+                    kvar = str(dst)
+                except Exception:
+                    kvar = str(prev)
+            osakra.append({"stam": stam, "fil": str(filer[0]), "preview": kvar})
     try:
         OSAKRA_PATH.parent.mkdir(parents=True, exist_ok=True)
         OSAKRA_PATH.write_text(

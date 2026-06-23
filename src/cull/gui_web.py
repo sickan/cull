@@ -282,6 +282,66 @@ class Api:
                 cmd += ["--claude-modell", mdl]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
+    # --- Steg 2: manuell nummer-genomgång (luckorna) -------------------------
+    def osakra_data(self):
+        from cull import nummer_pass, roster as roster_mod
+        try:
+            data = json.loads(nummer_pass.OSAKRA_PATH.read_text(encoding="utf-8"))
+            bilder = data.get("bilder", [])
+        except Exception:
+            bilder = []
+        ut = []
+        for b in bilder:
+            prev = b.get("preview") or b.get("fil")
+            thumb = _b64_thumb(Path(prev), (260, 195)) if prev else None
+            if not thumb:
+                continue
+            ut.append({"stam": b["stam"], "thumb": thumb})
+        rost = roster_mod.las_roster(gui.ladda_installningar().get("roster", ""))
+        roster = [{"nr": nr, "namn": rost[nr]}
+                  for nr in sorted(rost, key=lambda n: int(n))]
+        return {"bilder": ut, "roster": roster}
+
+    def osakra_satt(self, stam, nummer):
+        from cull import nummer_pass, roster as roster_mod
+        nummer = [str(n).strip() for n in (nummer or []) if str(n).strip().isdigit()]
+        try:
+            data = json.loads(nummer_pass.OSAKRA_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            return False
+        katalog = Path(data.get("katalog", ""))
+        filer = ([p for p in katalog.iterdir()
+                  if p.stem == stam and p.suffix.lower() in nummer_pass.BILD_SUFFIX]
+                 if katalog.is_dir() else [])
+        rost = roster_mod.las_roster(gui.ladda_installningar().get("roster", ""))
+        if nummer and filer:
+            nummer_pass._skriv_keywords(filer, set(nummer), rost, nummer_pass._env())
+        # Grundsanning (facit) för framtida träning.
+        try:
+            facit = (json.loads(nummer_pass.FACIT_PATH.read_text(encoding="utf-8"))
+                     if nummer_pass.FACIT_PATH.exists() else {})
+        except Exception:
+            facit = {}
+        facit[stam] = nummer
+        try:
+            nummer_pass.FACIT_PATH.write_text(
+                json.dumps(facit, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+        # Uppdatera nummer-cachen (kalla=manuell) och ta bort stammen ur luckorna.
+        cache = nummer_pass._ladda_cache()
+        for f in filer:
+            cache[nummer_pass._nyckel(f)] = {"nummer": nummer, "n_personer": 1,
+                                             "kalla": "manuell"}
+        nummer_pass._spara_cache(cache)
+        data["bilder"] = [x for x in data.get("bilder", []) if x.get("stam") != stam]
+        try:
+            nummer_pass.OSAKRA_PATH.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+        return True
+
     # --- Granska osäkra (aktiv inlärning) ------------------------------------
     def granska_data(self):
         try:
