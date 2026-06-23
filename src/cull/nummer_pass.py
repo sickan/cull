@@ -186,7 +186,12 @@ def _skriv_keywords(filer, nummer, roster, env):
                 mål.append((sidecar, xmp_args))
     ok = False
     for path, args in mål:
-        cmd = ["exiftool", "-overwrite_original", "-sep", ", "] + args + [str(path)]
+        # Bildfiler: markera IPTC som UTF-8 (annars visas å/ä/ö i namn som skräp).
+        # Sidecar (.xmp) har ingen IPTC-IIM → ingen markör behövs.
+        charset = ([] if path.suffix.lower() == ".xmp"
+                   else ["-charset", "UTF8", "-codedcharacterset=utf8"])
+        cmd = (["exiftool", "-overwrite_original", "-sep", ", "]
+               + charset + args + [str(path)])
         r = subprocess.run(cmd, capture_output=True, text=True, env=env)
         ok = ok or r.returncode == 0
     return ok

@@ -375,7 +375,9 @@ def _skriv_iptc(nef_paths, matchinfo, sport, fotograf, env, namn_per_fil=None,
     if not nef_paths or not (matchinfo or "").strip():
         return 0
     md = _iptc_metadata(matchinfo, sport)
-    gem = ["-sep", ", "]
+    # -codedcharacterset=utf8 markerar IPTC-IIM som UTF-8 (annars visas å/ä/ö som
+    # skräp i läsare som annars antar Latin-1/MacRoman).
+    gem = ["-charset", "UTF8", "-codedcharacterset=utf8", "-sep", ", "]
     if md["keywords"]:
         kw = ", ".join(md["keywords"])
         gem += [f"-XMP-dc:Subject={kw}", f"-IPTC:Keywords={kw}"]
@@ -407,6 +409,7 @@ def _skriv_iptc(nef_paths, matchinfo, sport, fotograf, env, namn_per_fil=None,
                         f"-XMP-photoshop:Headline={cap}", str(p)])
                 r = subprocess.run(cmd, capture_output=True, text=True, env=env)
                 n += 1 if r.returncode == 0 else 0
+            _mirror_xmp_sidecar(nef_paths, env)
             return n
         cmd = (["exiftool", "-overwrite_original"] + gem +
                [f"-XMP-dc:Description={md['caption']}",
@@ -414,9 +417,31 @@ def _skriv_iptc(nef_paths, matchinfo, sport, fotograf, env, namn_per_fil=None,
                 f"-XMP-photoshop:Headline={md['caption']}"] +
                [str(p) for p in nef_paths])
         r = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        _mirror_xmp_sidecar(nef_paths, env)
         return len(nef_paths) if r.returncode == 0 else 0
     except Exception:
         return 0
+
+
+def _mirror_xmp_sidecar(paths, env):
+    """Speglar metadatafälten Lightroom läser för raw (caption, keywords, skapare,
+    plats, datum) från bildfilens inbäddade XMP till dess .xmp-sidecar, om en finns.
+    LR läser metadata ur sidecaren för raw-filer, inte ur den inbäddade datan."""
+    fält = ["-XMP-dc:Description", "-XMP-dc:Subject", "-XMP-photoshop:Headline",
+            "-XMP-dc:Creator", "-XMP-photoshop:DateCreated",
+            "-XMP-Iptc4xmpCore:Location"]
+    for p in paths:
+        if p.suffix.lower() not in RAW_SUFFIX:
+            continue
+        sc = p.with_suffix(".xmp")
+        if not sc.exists():
+            continue
+        cmd = (["exiftool", "-charset", "UTF8", "-overwrite_original",
+                "-tagsFromFile", str(p)] + fält + [str(sc)])
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, env=env)
+        except Exception:
+            pass
 
 
 def _hitta_lightroom():
