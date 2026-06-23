@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cull"
-version = "1.13.2"
+version = "1.14.0"
 description = "Dalecarlia Photo Cull — AI-driven culling av sportfoton (NEF)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,6 +36,7 @@ inlarning = [
 [project.scripts]
 cull = "cull.core:_main_safe"
 cull-gui = "cull.gui:main"
+cull-web = "cull.gui_web:main"
 cull-lar = "cull.inlarning:main"
 
 [tool.hatch.build.targets.wheel]

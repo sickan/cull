@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --accent:#E8820C; --accent-hover:#D4760A; --accent-soft:#FFF5EA; --accent-softborder:#F3C896;
+    --win:#F4F4F6; --title:#ECECEE; --bottom:#FAFAFB;
+    --card:#FFFFFF; --card-border:#E6E6E8;
+    --field:#FBFBFC; --field-border:#D4D4D8;
+    --t-head:#1C1C1E; --t-body:#3A3A3E; --t-label:#6B6B70; --t-mut:#9A9A9E; --t-help:#B0B0B4; --t-caps:#A0A0A4;
+    --div:#DEDEDF; --div2:#E2E2E4; --div3:#EAEAEC;
+  }
+  *{box-sizing:border-box; margin:0;}
+  html,body{height:100%;}
+  body{background:var(--win); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+       color:var(--t-body); -webkit-font-smoothing:antialiased; user-select:none;}
+  .titlebar{display:flex; align-items:center; gap:8px; padding:13px 18px; background:var(--title);
+            border-bottom:1px solid var(--div); -webkit-app-region:drag;}
+  .dot{width:12px;height:12px;border-radius:50%;}
+  .app-mini{margin-left:8px; font-size:12px; font-weight:600; color:var(--t-label);}
+  .ver{margin-left:auto; font-size:11px; color:#A8A8AC;}
+  .header{display:flex; align-items:center; gap:14px; padding:20px 26px 16px;}
+  .header h1{font-size:20px; font-weight:700; color:var(--t-head); letter-spacing:-.01em;}
+  .header .sub{font-size:12px; color:var(--t-mut);}
+  .tabs{display:inline-flex; background:#E4E4E6; padding:3px; border-radius:10px; margin:0 26px;}
+  .tab{font-size:13px; font-weight:500; color:#7A7A7E; padding:6px 18px; border-radius:8px; cursor:pointer; transition:.12s;}
+  .tab:hover{color:#3A3A3E;}
+  .tab.active{background:#fff; color:var(--t-head); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.12);}
+  .content{padding:14px 26px 22px; min-height:420px;}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  .full{grid-column:1 / -1;}
+  .card{background:var(--card); border:1px solid var(--card-border); border-radius:12px; padding:18px;}
+  .cardH{font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--t-caps); margin-bottom:14px;}
+  .row{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+  .row:last-child{margin-bottom:0;}
+  label.lbl{font-size:12px; color:var(--t-label); flex-shrink:0;}
+  .help{font-size:11px; color:var(--t-help); margin-top:-4px; margin-bottom:8px;}
+  input.f, select.f{font-family:inherit; font-size:13px; color:var(--t-body); background:var(--field);
+       border:1px solid var(--field-border); border-radius:8px; padding:6px 9px; outline:none; transition:.12s;}
+  input.f:focus, select.f:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(232,130,12,.15);}
+  input.f.flex{flex:1; min-width:0;}
+  .unit{font-size:12px; color:var(--t-mut);}
+  /* checkbox */
+  .chk{display:inline-flex; align-items:center; gap:7px; font-size:13px; color:var(--t-body); cursor:pointer;}
+  .chk input{display:none;}
+  .box{width:17px;height:17px;border-radius:5px;border:1.5px solid #C8C8CC; display:flex;align-items:center;justify-content:center; transition:.12s;}
+  .chk input:checked + .box{background:var(--accent); border-color:var(--accent);}
+  .box svg{opacity:0;}
+  .chk input:checked + .box svg{opacity:1;}
+  /* buttons */
+  .btn{font-family:inherit; font-size:12px; color:var(--t-body); background:#fff; border:1px solid var(--field-border);
+       border-radius:8px; padding:7px 14px; cursor:pointer; transition:.12s;}
+  .btn:hover{background:#F4F4F6;}
+  .btn.soft{background:var(--accent-soft); border-color:var(--accent-softborder); color:var(--accent-hover); font-weight:600;}
+  .btn.primary{background:var(--accent); border:none; color:#fff; font-size:13px; font-weight:600; border-radius:9px;
+       padding:8px 22px; box-shadow:0 1px 3px rgba(232,130,12,.4);}
+  .btn.primary:hover{background:var(--accent-hover);}
+  .btn:disabled{opacity:.5; cursor:default;}
+  /* sliders */
+  .srow{display:grid; grid-template-columns:130px 1fr 70px; align-items:center; gap:12px; margin-bottom:12px;}
+  .srow:last-child{margin-bottom:0;}
+  input[type=range]{-webkit-appearance:none; height:5px; border-radius:3px; background:var(--div2); outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:17px;height:17px;border-radius:50%;
+       background:#fff; border:1px solid #CFCFD3; box-shadow:0 1px 2px rgba(0,0,0,.15); cursor:pointer;}
+  .sval{font-size:12px; color:var(--t-body); text-align:right;}
+  .sval.acc{color:var(--accent); font-weight:600;}
+  .bottom{border-top:1px solid var(--div2); background:var(--bottom); padding:16px 26px;}
+  .actions{display:flex; align-items:center; gap:10px;}
+  .actions .primary{margin-left:auto;}
+  .outlbl{font-size:11px; font-weight:600; color:var(--t-caps); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.05em;}
+  .console{height:120px; overflow:auto; background:#fff; border:1px solid #E6E6E8; border-radius:9px;
+       font-family:'SF Mono',Menlo,monospace; font-size:11px; color:#7a7a7e; padding:10px 12px; white-space:pre-wrap; line-height:1.5; user-select:text;}
+  .console .err{color:#d23;}
+  .console .ok{color:#28a;}
+  .pad94{padding-left:94px;}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+  <div class="header">
+    <svg width="36" height="36" viewBox="0 0 256 256" fill="none" stroke="#E8820C" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"><path d="M40 150 C70 120 90 150 120 140 C100 110 150 70 175 70 C175 50 200 55 205 70 C220 75 225 95 210 110 C200 175 160 200 120 200 C90 200 70 175 65 150"/></svg>
+    <div>
+      <h1>Dalecarlia Photo Cull</h1>
+      <div class="sub">Sportbildsgallring</div>
+    </div>
+    <span class="ver" id="ver" style="margin-left:auto; align-self:flex-start; padding-top:4px;"></span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab" data-tab="leverans">Leverans</div>
+    <div class="tab active" data-tab="urval">Urval</div>
+    <div class="tab" data-tab="modell">Modell</div>
+  </div>
+
+  <div class="content">
+    <!-- LEVERANS -->
+    <div class="panel hidden" data-panel="leverans">
+      <div class="grid">
+        <div class="card full">
+          <div class="cardH">Källa &amp; match</div>
+          <div class="row"><label class="lbl" style="width:84px">Källmapp</label>
+            <input class="f flex" id="katalog"><button class="btn" onclick="pick('katalog','dir')">Välj…</button></div>
+          <div class="row"><label class="lbl" style="width:84px">Matchinfo</label>
+            <input class="f flex" id="matchinfo"></div>
+          <div class="help pad94">Hemmalag · Bortalag · Resultat (Halvtid) · ÅÅÅÅMMDD · Arena</div>
+        </div>
+        <div class="card full">
+          <div class="cardH">Export</div>
+          <div class="row"><label class="lbl" style="width:84px">Export-rot</label>
+            <input class="f flex" id="export_rot"><button class="btn" onclick="pick('export_rot','dir')">Välj…</button></div>
+          <div class="row"><label class="lbl" style="width:84px">Fotograf</label>
+            <input class="f flex" id="fotograf"></div>
+          <div class="row pad94" style="gap:18px">
+            <label class="chk"><input type="checkbox" id="export_overskriv"><span class="box">✓</span>Skriv över</label>
+            <label class="chk"><input type="checkbox" id="iptc"><span class="box">✓</span>IPTC-bildtexter</label>
+            <span class="help" style="margin:0">tom = urval i källkatalogen</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="cardH">Efterbehandling</div>
+          <div class="row"><label class="lbl" style="width:96px">Öppna i</label>
+            <select class="f flex" id="oppna"></select></div>
+          <div class="row"><label class="lbl" style="width:96px">Husstil</label>
+            <select class="f flex" id="husstil"></select></div>
+          <div class="row"><label class="lbl" style="width:96px">Exp-knuff</label>
+            <input class="f" id="exp_bump" style="width:64px"><span class="unit">EV</span></div>
+          <div class="row"><label class="lbl" style="width:96px">Leverans-JPG</label>
+            <select class="f flex" id="leverans"></select></div>
+        </div>
+        <div class="card">
+          <div class="cardH">Metadata &amp; AI</div>
+          <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="xmp"><span class="box">✓</span>XMP-sidecars (upprätning)</label><br>
+          <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="xmp_justering"><span class="box">✓</span>XMP: leveransklar</label><br>
+          <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="xmp_brus"><span class="box">✓</span>ISO-brus</label><br>
+          <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="stjarnor"><span class="box">✓</span>Stjärnor (helhetspoäng)</label><br>
+          <div class="row" style="margin-top:2px">
+            <label class="chk"><input type="checkbox" id="bildtext_ai"><span class="box">✓</span>Bildtext-AI</label>
+            <select class="f flex" id="bildtext_modell"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- URVAL -->
+    <div class="panel" data-panel="urval">
+      <div class="row" style="gap:20px; margin-bottom:16px">
+        <label class="chk"><input type="checkbox" id="ai"><span class="box">✓</span>AI-gallring</label>
+        <label class="chk"><input type="checkbox" id="snabb"><span class="box">✓</span>⚡ Snabbläge</label>
+        <label class="chk"><input type="checkbox" id="rapport"><span class="box">✓</span>Rapportläge</label>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="cardH">Match &amp; urval</div>
+          <div class="row"><label class="lbl" style="width:96px">Hemmafärg</label><select class="f flex" id="hemma_farg"></select></div>
+          <div class="row"><label class="lbl" style="width:96px">Avspark</label><input class="f" id="avspark" style="width:80px"><span class="unit">HH:MM</span></div>
+          <div class="row"><label class="lbl" style="width:96px">Behåll</label><input class="f" id="topp" style="width:60px"><span class="unit">bilder</span></div>
+          <div class="row"><label class="lbl" style="width:96px">Burst-gräns</label><input class="f" id="burst_sek" style="width:60px"><span class="unit">sek</span></div>
+          <div class="row"><label class="chk"><input type="checkbox" id="bevaka_på"><span class="box">✓</span>Tröjnummer</label>
+            <input class="f" id="bevaka" style="width:70px"><span class="help" style="margin:0">9,11 · OCR</span></div>
+        </div>
+        <div class="card">
+          <div class="cardH">Modeller</div>
+          <div class="row"><label class="lbl" style="width:80px">YOLO</label><select class="f flex" id="yolo"></select></div>
+          <div class="row"><label class="lbl" style="width:80px">Sport</label><select class="f flex" id="sport"></select></div>
+          <div class="row"><label class="chk"><input type="checkbox" id="estetik"><span class="box">✓</span>Estetik</label>
+            <select class="f" id="estetik_motor" style="width:110px"></select></div>
+          <div class="row"><label class="chk"><input type="checkbox" id="modell"><span class="box">✓</span>Personlig modell</label></div>
+          <div class="help" id="modellinfo" style="margin-left:0"></div>
+        </div>
+        <div class="card full">
+          <div class="cardH">Viktning</div>
+          <div class="srow"><label class="lbl">Firande-boost</label>
+            <input type="range" id="firande_boost" min="-3" max="3" step="1"><span class="sval acc" id="v_firande_boost"></span></div>
+          <div class="srow"><label class="lbl">Garanti firande</label>
+            <input type="range" id="garanti_firande" min="0" max="8" step="1"><span class="sval" id="v_garanti_firande"></span></div>
+          <div class="srow"><label class="lbl">Garanti spelare</label>
+            <input type="range" id="garanti_bevaka" min="0" max="8" step="1"><span class="sval" id="v_garanti_bevaka"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODELL -->
+    <div class="panel hidden" data-panel="modell">
+      <div class="card" style="margin-bottom:18px">
+        <div class="cardH">Träning</div>
+        <div class="row"><label class="lbl" style="width:96px">Tränings-rot</label>
+          <input class="f flex" id="trana_rot"><button class="btn" onclick="pick('trana_rot','dir')">Välj…</button></div>
+        <div class="row" style="margin-top:4px">
+          <button class="btn" onclick="api('okanda_sporter')">Okända sporter…</button>
+          <button class="btn soft" onclick="trana()">Träna modell…</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="cardH">Granskning</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px">
+          <button class="btn" onclick="api('granska_osakra')">Granska osäkra…</button>
+          <button class="btn" onclick="api('jamfor_par')">Jämför par…</button>
+          <button class="btn" onclick="api('histogram')">Histogram…</button>
+          <button class="btn" onclick="api('jamfor_korningar')">Jämför körningar…</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="actions">
+      <button class="btn" onclick="api('historik')">Historik…</button>
+      <button class="btn" onclick="api('visa_urval')">Visa urval…</button>
+      <button class="btn" onclick="efterbehandla()">Efterbehandla…</button>
+      <button class="btn primary" id="korbtn" onclick="kor()">Kör cull</button>
+    </div>
+    <div class="outlbl">Output</div>
+    <div class="console" id="console"></div>
+  </div>
+
+<script>
+const CHK=["ai","xmp","rapport","estetik","modell","snabb","xmp_justering","xmp_brus",
+  "iptc","bevaka_på","export_overskriv","bildtext_ai","stjarnor"];
+const SLD=["firande_boost","garanti_firande","garanti_bevaka"];
+let OPT={};
+
+function $(id){return document.getElementById(id);}
+function logLine(t,cls){const c=$("console"); const d=document.createElement("div");
+  if(cls)d.className=cls; d.textContent=t; c.appendChild(d); c.scrollTop=c.scrollHeight;}
+window.dpcLog=logLine;
+window.dpcClear=()=>{$("console").innerHTML="";};
+window.dpcDone=(ok)=>{$("korbtn").disabled=false; $("korbtn").textContent="Kör cull";};
+
+function fillSelect(id,arr,val){const s=$(id); s.innerHTML="";
+  arr.forEach(o=>{const e=document.createElement("option"); e.value=o; e.textContent=o; s.appendChild(e);});
+  if(val!=null) s.value=val;}
+
+function collect(){const d={};
+  document.querySelectorAll("input.f,select.f,input[type=range]").forEach(el=>{ if(el.id) d[el.id]=el.value; });
+  CHK.forEach(k=>{ if($(k)) d[k]=$(k).checked; });
+  return d;}
+
+function apply(s){
+  for(const k in s){const el=$(k); if(!el)continue;
+    if(el.type==="checkbox") el.checked=!!s[k];
+    else el.value=s[k];}
+  SLD.forEach(k=>{ if($("v_"+k)) $("v_"+k).textContent = (k==="firande_boost"? (s[k]>0?"+":"")+ (s[k]??0) : (s[k]??0)+" platser"); });
+}
+
+async function init(){
+  const r = await window.pywebview.api.init();
+  OPT=r;
+  $("ver").textContent = r.version;
+  fillSelect("oppna", r.oppna);
+  fillSelect("husstil", r.husstil);
+  fillSelect("leverans", r.leverans);
+  fillSelect("bildtext_modell", r.bildtext_modell);
+  fillSelect("hemma_farg", r.farger);
+  fillSelect("yolo", r.yolo);
+  fillSelect("sport", r.sport);
+  fillSelect("estetik_motor", r.estetik_motor);
+  apply(r.settings||{});
+  $("modellinfo").textContent = r.modellinfo||"";
+  SLD.forEach(k=>{ $(k).oninput=()=>{ const v=$(k).value;
+    $("v_"+k).textContent = (k==="firande_boost"? (v>0?"+":"")+v : v+" platser"); }; });
+}
+
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active");
+  document.querySelectorAll(".panel").forEach(p=>p.classList.add("hidden"));
+  document.querySelector(`[data-panel="${t.dataset.tab}"]`).classList.remove("hidden");
+});
+
+async function pick(id,kind){
+  const p = await window.pywebview.api.valj_mapp($(id).value);
+  if(p) $(id).value=p;
+}
+async function api(name){ await window.pywebview.api[name](); }
+
+async function kor(){
+  $("korbtn").disabled=true; $("korbtn").textContent="Kör…"; window.dpcClear();
+  await window.pywebview.api.spara(collect());
+  await window.pywebview.api.kor(collect());
+}
+async function trana(){ window.dpcClear(); await window.pywebview.api.spara(collect()); await window.pywebview.api.trana(collect()); }
+async function efterbehandla(){ window.dpcClear(); await window.pywebview.api.spara(collect()); await window.pywebview.api.efterbehandla(collect()); }
+
+window.addEventListener("pywebviewready", init);
+</script>
+</body>
+</html>
