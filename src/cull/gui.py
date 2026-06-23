@@ -1395,6 +1395,10 @@ def main():
         spara_trana_rot(rot)   # persistera tränings-roten (separat från match)
 
         cmd = [sys.executable, "-m", "cull.inlarning", rot, "--max-neg", "100"]
+        # Träna med SAMMA YOLO som cull → modellen kalibreras på rätt features.
+        yv = vals["yolo"].get().strip()
+        if yv:
+            cmd += ["--yolo", yv]
         if vals["estetik"].get():
             cmd += ["--estetik-motor", vals["estetik_motor"].get().strip().lower()]
         env = os.environ.copy()

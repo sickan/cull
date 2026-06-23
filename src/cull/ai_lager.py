@@ -119,6 +119,31 @@ def _valj_device():
     return "cpu"
 
 
+def _yolo_sokvag(namn):
+    """Absolut sökväg till YOLO-vikten i cull:s skrivbara modellcache
+    (~/.cache/cull/models/). Oberoende av CWD — annars försöker ultralytics
+    ladda ner till nuvarande mapp, som är skrivskyddad när appen startas från
+    skrivbordet. Kopierar in en befintlig vikt om cachen saknar den."""
+    import shutil
+    if os.path.isabs(namn):
+        return namn
+    cache = Path.home() / ".cache" / "cull" / "models"
+    cache.mkdir(parents=True, exist_ok=True)
+    mål = cache / namn
+    if mål.exists():
+        return str(mål)
+    for kand in (Path.home() / "Claude" / namn,
+                 Path.home() / "Claude" / "cull" / namn,
+                 Path.cwd() / namn):
+        try:
+            if kand.exists():
+                shutil.copy2(kand, mål)
+                return str(mål)
+        except Exception:
+            pass
+    return str(mål)   # saknas → ultralytics laddar ner till skrivbar cache
+
+
 def ladda_modeller(med_ocr=False, n_pose=None, yolo_modell="yolo11s.pt",
                    med_estetik=False, med_ogon=False, med_clip=False):
     """
@@ -139,7 +164,7 @@ def ladda_modeller(med_ocr=False, n_pose=None, yolo_modell="yolo11s.pt",
     try:
         from ultralytics import YOLO
         with _tysta_stderr():
-            modeller["yolo"] = YOLO(yolo_modell)
+            modeller["yolo"] = YOLO(_yolo_sokvag(yolo_modell))
             if modeller["device"] == "mps":
                 try:
                     modeller["yolo"].to("mps")
