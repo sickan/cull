@@ -1,12 +1,16 @@
 """Webb-baserat gränssnitt (pywebview) — native fönster som hostar designens
 HTML/CSS och kopplar fälten till cull-logiken. Återanvänder gui.bygg_kommando."""
 
+import base64
+import io
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import threading
+from datetime import datetime
 from pathlib import Path
 
 from cull import gui, version as ver
@@ -15,6 +19,44 @@ from cull.leverans import PROFILER as LEVPROF
 # MediaPipe/TF Lite-skräp som loggas vid avstängning — filtreras bort.
 SKRAP = ("clearcut", "Source Location Trace", "portable_clearcut",
          "playlog/cplusplus", "Not valid for uploading")
+
+# Filtyper som "Visa urval" kan rendera (raw → extraherad preview, jpg direkt).
+RAW_SUFFIX = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf"}
+VISA_SUFFIX = RAW_SUFFIX | {".jpg", ".jpeg"}
+
+# Okänd-sport (samma sökvägar som gui._klassificera_okanda).
+OKAND_PATH = Path.home() / ".cache" / "cull" / "sport_okand.json"
+SPORT_WEBB_CACHE = Path.home() / ".cache" / "cull" / "sport_cache.json"
+SPORTER_VAL = ["handboll", "fotboll", "volleyboll", "innebandy"]
+
+
+def _b64_thumb(path, maxsize):
+    """Öppnar en bildfil, skalar ned och returnerar en data-URI (JPEG)."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        img = Image.open(path)
+        img.thumbnail(maxsize)
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=82)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return None
+
+
+def _thumb_for(path, env, maxsize=(300, 220)):
+    """Miniatyr för raw (extrahera inbäddad preview) eller jpg (direkt)."""
+    if path.suffix.lower() in (".jpg", ".jpeg"):
+        return _b64_thumb(path, maxsize)
+    with tempfile.TemporaryDirectory() as td:
+        jpg = Path(td) / (path.stem + ".jpg")
+        if not gui._extrahera_preview(path, jpg, env):
+            return None
+        return _b64_thumb(jpg, maxsize)
 
 
 class _V:
@@ -207,31 +249,185 @@ class Api:
             cmd += ["--hemma-farg", d["hemma_farg"].strip()]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
-    # --- sekundära knappar (öppnar Finder / loggar tills vidare) -------------
-    def visa_urval(self):
-        self._logga("Visa urval öppnas via senaste körningens mapp "
-                    "(historik kommer i nästa version).")
-
-    def historik(self):
+    # --- Granska osäkra (aktiv inlärning) ------------------------------------
+    def granska_data(self):
         try:
-            subprocess.Popen(["open", str(gui.HISTORY_PATH.parent)])
+            data = json.loads(gui.AKTIV_PATH.read_text(encoding="utf-8"))
+            bilder = data.get("bilder", [])
         except Exception:
-            pass
+            bilder = []
+        from cull import inlarning
+        sparade = inlarning.ladda_manuella_etiketter()
+        ut = []
+        for b in bilder:
+            t = Path(b.get("thumb", ""))
+            if not t.exists():
+                continue
+            thumb = _b64_thumb(t, (260, 195))
+            if not thumb:
+                continue
+            ut.append({"stem": b["stem"], "p": round(b.get("modell_p", 0), 2),
+                       "thumb": thumb, "etikett": sparade.get(b["stem"])})
+        return {"bilder": ut}
 
-    def okanda_sporter(self):
-        self._logga("Okända sporter: kör en träning så listas de i loggen.")
+    def satt_etikett(self, stem, behall):
+        from cull import inlarning
+        inlarning.spara_manuell_etikett(stem, bool(behall))
+        return True
 
-    def granska_osakra(self):
-        self._logga("Granska osäkra — porteras till nya gränssnittet inom kort.")
+    # --- Jämför par (parvis preferens) ---------------------------------------
+    def par_data(self):
+        try:
+            data = json.loads(gui.AKTIV_PATH.read_text(encoding="utf-8"))
+            bilder = [b for b in data.get("bilder", [])
+                      if Path(b.get("thumb", "")).exists()]
+        except Exception:
+            bilder = []
+        par = []
+        for i in range(0, len(bilder) - 1, 2):
+            kort = []
+            for b in (bilder[i], bilder[i + 1]):
+                thumb = _b64_thumb(Path(b["thumb"]), (440, 330))
+                kort.append({"stem": b["stem"],
+                             "p": round(b.get("modell_p", 0), 2), "thumb": thumb})
+            if all(k["thumb"] for k in kort):
+                par.append(kort)
+        return {"par": par}
 
-    def jamfor_par(self):
-        self._logga("Jämför par — porteras till nya gränssnittet inom kort.")
+    def valj_par(self, vinst, forl):
+        from cull import inlarning
+        inlarning.spara_par(vinst, forl)
+        inlarning.spara_manuell_etikett(vinst, True)
+        inlarning.spara_manuell_etikett(forl, False)
+        return True
 
-    def histogram(self):
-        self._logga("Histogram — porteras till nya gränssnittet inom kort.")
+    # --- Histogram (poängfördelning senaste körningen) -----------------------
+    def histogram_data(self):
+        try:
+            hist = json.loads(gui.KOR_HIST_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            hist = []
+        if not hist:
+            return {"tom": True}
+        kor = hist[-1]
+        poang = kor.get("poang", [])
+        if not poang:
+            return {"tom": True}
+        n_valda = kor.get("n_valda", 0)
+        trosk = (sorted(poang, reverse=True)[min(n_valda, len(poang)) - 1]
+                 if n_valda else max(poang))
+        return {"katalog": Path(kor.get("katalog", "")).name, "n_valda": n_valda,
+                "n_total": kor.get("n_total", len(poang)),
+                "tid": kor.get("tid", ""), "poang": poang, "trosk": trosk}
 
-    def jamfor_korningar(self):
-        self._logga("Jämför körningar — porteras till nya gränssnittet inom kort.")
+    # --- Jämför körningar ----------------------------------------------------
+    def korningar_data(self):
+        try:
+            hist = json.loads(gui.KOR_HIST_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            hist = []
+        ut = [{"label": (f"{k.get('tid', '?')}  {Path(k.get('katalog', '')).name}"
+                         f"  ({k.get('n_valda', 0)} val)"),
+               "valda": k.get("valda", [])} for k in reversed(hist)]
+        return {"korningar": ut}
+
+    # --- Historik (tidigare urval) -------------------------------------------
+    def historik_data(self):
+        ut = []
+        for p in gui.ladda_historik():
+            path = p.get("path", "")
+            mp = Path(path)
+            try:
+                datum = datetime.fromtimestamp(p["tid"]).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                datum = ""
+            ut.append({"path": path, "rubrik": f"{mp.parent.name}  ›  {mp.name}",
+                       "antal": p.get("antal", "?"), "datum": datum,
+                       "finns": mp.exists()})
+        return {"poster": ut}
+
+    def historik_ta_bort(self, path):
+        gui.spara_historik([p for p in gui.ladda_historik()
+                            if p.get("path") != path])
+        return self.historik_data()
+
+    def oppna_finder(self, path):
+        if path and Path(path).exists():
+            try:
+                subprocess.Popen(["open", str(path)])
+            except Exception:
+                pass
+        return True
+
+    # --- Visa urval (miniatyr-rutnät, strömmas) ------------------------------
+    def valj_urval_mapp(self, start):
+        return self.valj_mapp(start or "")
+
+    def urval_ladda(self, mapp):
+        mapp = Path((mapp or "").strip())
+
+        def jobb():
+            try:
+                alla = [p for p in mapp.iterdir()
+                        if p.suffix.lower() in VISA_SUFFIX
+                        and not p.name.startswith(".")]
+            except Exception:
+                alla = []
+            # En miniatyr per bild: föredra raw (NEF) framför jpg-export med samma stam.
+            per_stem = {}
+            for p in alla:
+                vald = per_stem.get(p.stem)
+                if vald is None or (p.suffix.lower() in RAW_SUFFIX
+                                    and vald.suffix.lower() not in RAW_SUFFIX):
+                    per_stem[p.stem] = p
+            filer = sorted(per_stem.values(), key=lambda p: p.name)
+            self._js(f"window.dpcUrvalMeta({json.dumps(mapp.name)},{len(filer)})")
+            env = _env()
+            n = 0
+            for p in filer:
+                thumb = _thumb_for(p, env)
+                if not thumb:
+                    continue
+                nyttolast = json.dumps({"namn": p.name, "thumb": thumb})
+                self._js(f"window.dpcUrvalThumb({nyttolast})")
+                n += 1
+            self._js(f"window.dpcUrvalDone({n})")
+
+        threading.Thread(target=jobb, daemon=True).start()
+        return True
+
+    # --- Okända sporter ------------------------------------------------------
+    def okanda_data(self):
+        try:
+            rå = json.loads(OKAND_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            rå = []
+        okanda = [({"namn": p, "path": ""} if isinstance(p, str) else p) for p in rå]
+        try:
+            cache = json.loads(SPORT_WEBB_CACHE.read_text(encoding="utf-8"))
+        except Exception:
+            cache = {}
+        ut = [{"namn": u.get("namn", ""), "path": u.get("path", ""),
+               "sport": cache.get(u.get("namn", ""), "")} for u in okanda]
+        return {"okanda": ut, "sporter": SPORTER_VAL}
+
+    def okanda_spara(self, val):
+        """val = {namn: sport}. Sparar i sport-cachen, tömmer okänd-listan,
+        tränar om om någon sport sattes."""
+        try:
+            cache = json.loads(SPORT_WEBB_CACHE.read_text(encoding="utf-8"))
+        except Exception:
+            cache = {}
+        nagot = False
+        for namn, sport in (val or {}).items():
+            if (sport or "").strip():
+                cache[namn] = sport.strip()
+                nagot = True
+        SPORT_WEBB_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        SPORT_WEBB_CACHE.write_text(
+            json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+        OKAND_PATH.unlink(missing_ok=True)
+        return {"tranar": nagot}
 
 
 def main():

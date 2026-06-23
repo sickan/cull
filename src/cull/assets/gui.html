@@ -75,6 +75,65 @@
   .console .ok{color:#28a;}
   .pad94{padding-left:94px;}
   .hidden{display:none;}
+  /* ---- overlay / sheet ---- */
+  .overlay{position:fixed; inset:0; background:rgba(20,20,22,.42); z-index:50;
+       display:flex; align-items:center; justify-content:center; padding:28px;}
+  .sheet{background:var(--win); border-radius:16px; box-shadow:0 16px 56px rgba(0,0,0,.32);
+       width:100%; max-width:920px; max-height:100%; display:flex; flex-direction:column; overflow:hidden;}
+  .sheetH{display:flex; align-items:center; gap:12px; padding:15px 22px; background:var(--title);
+       border-bottom:1px solid var(--div);}
+  .sheetH h2{font-size:15px; font-weight:700; color:var(--t-head); letter-spacing:-.01em;}
+  .sheetH .sub{font-size:12px; color:var(--t-mut); margin-top:1px;}
+  .sheetX{margin-left:auto; width:28px; height:28px; border-radius:8px; border:1px solid var(--field-border);
+       background:#fff; color:var(--t-label); font-size:14px; cursor:pointer; line-height:1; transition:.12s;}
+  .sheetX:hover{background:#F4F4F6; color:var(--t-head);}
+  .sheetBody{padding:18px 22px 22px; overflow:auto;}
+  .tom{font-size:13px; color:var(--t-mut); text-align:center; padding:48px 20px;}
+  /* thumbnail grid */
+  .thumbgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(176px,1fr)); gap:12px;}
+  .thumb{background:var(--card); border:1px solid var(--card-border); border-radius:10px; overflow:hidden;}
+  .thumb img{width:100%; display:block; background:#222; aspect-ratio:4/3; object-fit:cover;}
+  .thumb .cap{font-size:10px; color:var(--t-mut); padding:5px 8px; font-family:'SF Mono',Menlo,monospace;
+       overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  /* granska cells */
+  .gcell{transition:.12s; border-width:1.5px;}
+  .gcell.keepOn{border-color:var(--accent); box-shadow:0 0 0 2px rgba(232,130,12,.18);}
+  .gcell.dropOn{opacity:.5;}
+  .gbtns{display:flex; gap:6px; padding:7px 8px 4px;}
+  .mini{flex:1; font-family:inherit; font-size:11px; padding:5px 0; border-radius:7px; cursor:pointer;
+       border:1px solid var(--field-border); background:#fff; color:var(--t-body); transition:.12s;}
+  .mini.keep:hover{background:var(--accent-soft); border-color:var(--accent-softborder); color:var(--accent-hover);}
+  .mini.drop:hover{background:#FBEAEA; border-color:#E9C2C2; color:#C0392B;}
+  .gstate{font-size:10px; color:var(--accent-hover); text-align:center; padding:0 8px 7px; min-height:14px; font-weight:600;}
+  /* jämför par */
+  .parwrap{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .parcard{background:var(--card); border:2px solid var(--card-border); border-radius:12px; overflow:hidden;
+       cursor:pointer; transition:.12s;}
+  .parcard:hover{border-color:var(--accent); box-shadow:0 4px 16px rgba(232,130,12,.22); transform:translateY(-2px);}
+  .parcard img{width:100%; display:block; background:#222;}
+  .parstat{display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--t-mut); margin-top:14px;}
+  /* statgrid (jämför körningar) */
+  .statgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:6px;}
+  .stat{background:var(--card); border:1px solid var(--card-border); border-radius:10px; padding:12px; text-align:center;}
+  .statN{font-size:22px; font-weight:700; color:var(--t-head);}
+  .statN.acc{color:var(--accent);}
+  .statL{font-size:11px; color:var(--t-label); margin-top:2px;}
+  .lblk{margin-top:14px;}
+  .lblkH{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--t-caps); margin-bottom:6px;}
+  .lblkB{font-family:'SF Mono',Menlo,monospace; font-size:11px; color:var(--t-body); background:#fff;
+       border:1px solid var(--card-border); border-radius:9px; padding:10px 12px; max-height:160px; overflow:auto; line-height:1.6;}
+  /* historik */
+  .hrow{display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--card-border);
+       border-radius:11px; padding:12px 14px; margin-bottom:10px;}
+  .hrow.miss .htitle{color:#C0392B;}
+  .hmain{flex:1; min-width:0;}
+  .htitle{font-size:13px; font-weight:600; color:var(--t-head);}
+  .hsub{font-size:11px; color:var(--t-mut); margin-top:2px;}
+  .hbtns{display:flex; gap:6px; flex-shrink:0;}
+  /* okända sporter */
+  .orow{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--div3);}
+  .orow:last-of-type{border-bottom:none;}
+  .oname{flex:1; min-width:0; font-size:13px; color:var(--t-body); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -187,17 +246,17 @@
         <div class="row"><label class="lbl" style="width:96px">Tränings-rot</label>
           <input class="f flex" id="trana_rot"><button class="btn" onclick="pick('trana_rot','dir')">Välj…</button></div>
         <div class="row" style="margin-top:4px">
-          <button class="btn" onclick="api('okanda_sporter')">Okända sporter…</button>
+          <button class="btn" onclick="okandaSporter()">Okända sporter…</button>
           <button class="btn soft" onclick="trana()">Träna modell…</button>
         </div>
       </div>
       <div class="card">
         <div class="cardH">Granskning</div>
         <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px">
-          <button class="btn" onclick="api('granska_osakra')">Granska osäkra…</button>
-          <button class="btn" onclick="api('jamfor_par')">Jämför par…</button>
-          <button class="btn" onclick="api('histogram')">Histogram…</button>
-          <button class="btn" onclick="api('jamfor_korningar')">Jämför körningar…</button>
+          <button class="btn" onclick="granska()">Granska osäkra…</button>
+          <button class="btn" onclick="jamforPar()">Jämför par…</button>
+          <button class="btn" onclick="histogram()">Histogram…</button>
+          <button class="btn" onclick="jamforKorningar()">Jämför körningar…</button>
         </div>
       </div>
     </div>
@@ -205,8 +264,8 @@
 
   <div class="bottom">
     <div class="actions">
-      <button class="btn" onclick="api('historik')">Historik…</button>
-      <button class="btn" onclick="api('visa_urval')">Visa urval…</button>
+      <button class="btn" onclick="historik()">Historik…</button>
+      <button class="btn" onclick="visaUrval()">Visa urval…</button>
       <button class="btn" onclick="efterbehandla()">Efterbehandla…</button>
       <button class="btn primary" id="korbtn" onclick="kor()">Kör cull</button>
     </div>
@@ -281,6 +340,178 @@ async function kor(){
 }
 async function trana(){ window.dpcClear(); await window.pywebview.api.spara(collect()); await window.pywebview.api.trana(collect()); }
 async function efterbehandla(){ window.dpcClear(); await window.pywebview.api.spara(collect()); await window.pywebview.api.efterbehandla(collect()); }
+
+// ===== Overlay / granskningsverktyg ==========================================
+function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,
+  c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+function tomMsg(t){return `<div class="tom">${esc(t)}</div>`;}
+
+function openSheet(title,sub){
+  closeSheet();
+  const ov=document.createElement("div"); ov.className="overlay"; ov.id="overlay";
+  ov.onclick=e=>{ if(e.target===ov) closeSheet(); };
+  ov.innerHTML=`<div class="sheet">
+    <div class="sheetH"><div><h2>${esc(title)}</h2><div class="sub">${esc(sub||"")}</div></div>
+    <button class="sheetX" onclick="closeSheet()">✕</button></div>
+    <div class="sheetBody" id="sheetBody"></div></div>`;
+  document.body.appendChild(ov);
+  return $("sheetBody");
+}
+function setSheetSub(t){const e=document.querySelector("#overlay .sheetH .sub"); if(e)e.textContent=t;}
+function closeSheet(){const o=$("overlay"); if(o)o.remove();}
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
+
+// --- Granska osäkra ---
+async function granska(){
+  const body=openSheet("Granska osäkra","Laddar…");
+  const r=await window.pywebview.api.granska_data();
+  if(!r.bilder||!r.bilder.length){ setSheetSub("");
+    body.innerHTML=tomMsg("Inga osäkra bilder ännu. Kör en cull med personlig modell aktiv först."); return; }
+  setSheetSub("Modellen var osäker på dessa — markera Behåll/Förkasta. Dina val används vid nästa träning.");
+  const grid=document.createElement("div"); grid.className="thumbgrid"; body.innerHTML=""; body.appendChild(grid);
+  r.bilder.forEach(b=>{
+    const cell=document.createElement("div"); cell.className="thumb gcell";
+    cell.innerHTML=`<img src="${b.thumb}"><div class="cap">p=${b.p}</div>
+      <div class="gbtns"><button class="mini keep">Behåll</button><button class="mini drop">Förkasta</button></div>
+      <div class="gstate"></div>`;
+    const st=cell.querySelector(".gstate");
+    const set=v=>{ st.textContent=v===1?"✓ behåll":v===0?"✕ förkasta":"";
+      cell.classList.toggle("keepOn",v===1); cell.classList.toggle("dropOn",v===0); };
+    set(b.etikett);
+    cell.querySelector(".keep").onclick=async()=>{ await window.pywebview.api.satt_etikett(b.stem,true); set(1); };
+    cell.querySelector(".drop").onclick=async()=>{ await window.pywebview.api.satt_etikett(b.stem,false); set(0); };
+    grid.appendChild(cell);
+  });
+}
+
+// --- Jämför par ---
+let PAR=[], PARI=0;
+async function jamforPar(){
+  const body=openSheet("Jämför par","Laddar…");
+  const r=await window.pywebview.api.par_data(); PAR=r.par||[]; PARI=0;
+  if(!PAR.length){ setSheetSub(""); body.innerHTML=tomMsg("För få osäkra bilder. Kör en cull med modell först."); return; }
+  renderPar();
+}
+function renderPar(){
+  const body=$("sheetBody"); if(!body) return;
+  if(PARI>=PAR.length){ setSheetSub(`${PAR.length} par`); body.innerHTML=tomMsg("Klar — alla par bedömda."); return; }
+  setSheetSub("Klicka på den bild du hellre levererar — vinnaren märks Behåll, förloraren Förkasta.");
+  const [a,b]=PAR[PARI];
+  body.innerHTML=`<div class="parwrap">
+    <div class="parcard" id="pa"><img src="${a.thumb}"><div class="cap">p=${a.p}</div></div>
+    <div class="parcard" id="pb"><img src="${b.thumb}"><div class="cap">p=${b.p}</div></div></div>
+    <div class="parstat">Par ${PARI+1} av ${PAR.length}<button class="btn" id="skip" style="margin-left:14px">Hoppa över</button></div>`;
+  $("pa").onclick=()=>valjPar(a,b); $("pb").onclick=()=>valjPar(b,a);
+  $("skip").onclick=()=>{ PARI++; renderPar(); };
+}
+async function valjPar(v,f){ await window.pywebview.api.valj_par(v.stem,f.stem); PARI++; renderPar(); }
+
+// --- Histogram ---
+async function histogram(){
+  const body=openSheet("Poänghistogram","");
+  const r=await window.pywebview.api.histogram_data();
+  if(r.tom){ body.innerHTML=tomMsg("Ingen körning loggad ännu. Kör en cull först."); return; }
+  setSheetSub(`${r.katalog} · ${r.n_valda} valda av ${r.n_total}${r.tid?" · "+r.tid:""}`);
+  body.innerHTML=histogramSVG(r.poang,r.trosk)+
+    `<div class="help" style="margin-top:10px">Orange = valt, grått = bortvalt. En tydlig dal vid tröskeln betyder ett rent snitt.</div>`;
+}
+function histogramSVG(poang,trosk){
+  const lo=Math.min(...poang), hi=Math.max(...poang), span=(hi-lo)||1e-6, N=30, bins=new Array(N).fill(0);
+  poang.forEach(p=>{ bins[Math.min(Math.floor((p-lo)/span*N),N-1)]++; });
+  const maxB=Math.max(...bins)||1, W=840,H=300, mx=36,my=18, bottom=H-my-20, bw=(W-2*mx)/N;
+  let bars="";
+  for(let i=0;i<N;i++){ const x=mx+i*bw, mid=lo+(i+0.5)/N*span, h=(bins[i]/maxB)*(bottom-my);
+    bars+=`<rect x="${(x+1).toFixed(1)}" y="${(bottom-h).toFixed(1)}" width="${(bw-2).toFixed(1)}" height="${h.toFixed(1)}" fill="${mid>=trosk?'var(--accent)':'#C7C7CC'}" rx="1.5"/>`; }
+  const tx=mx+(trosk-lo)/span*(W-2*mx);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${bars}
+    <line x1="${tx.toFixed(1)}" y1="${my}" x2="${tx.toFixed(1)}" y2="${bottom}" stroke="#D4760A" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="${tx.toFixed(1)}" y="${my-4}" fill="#D4760A" font-size="11" text-anchor="middle" font-family="monospace">tröskel ${trosk.toFixed(2)}</text>
+    <line x1="${mx}" y1="${bottom}" x2="${W-mx}" y2="${bottom}" stroke="#CFCFD3"/>
+    <text x="${mx}" y="${bottom+15}" fill="#9A9A9E" font-size="10" font-family="monospace">${lo.toFixed(2)}</text>
+    <text x="${W-mx}" y="${bottom+15}" fill="#9A9A9E" font-size="10" text-anchor="end" font-family="monospace">${hi.toFixed(2)}</text>
+    <text x="${W/2}" y="${bottom+15}" fill="#9A9A9E" font-size="10" text-anchor="middle">poäng →</text></svg>`;
+}
+
+// --- Jämför körningar ---
+let KOR=[];
+async function jamforKorningar(){
+  const body=openSheet("Jämför körningar","");
+  const r=await window.pywebview.api.korningar_data(); KOR=r.korningar||[];
+  if(KOR.length<2){ body.innerHTML=tomMsg("Minst två loggade körningar krävs för jämförelse."); return; }
+  const opts=KOR.map((k,i)=>`<option value="${i}">${esc(k.label)}</option>`).join("");
+  body.innerHTML=`<div class="row"><label class="lbl" style="width:18px">A</label><select class="f flex" id="korA">${opts}</select></div>
+    <div class="row"><label class="lbl" style="width:18px">B</label><select class="f flex" id="korB">${opts}</select></div>
+    <div id="korut" style="margin-top:14px"></div>`;
+  $("korA").value=0; $("korB").value=Math.min(1,KOR.length-1);
+  $("korA").onchange=korJamfor; $("korB").onchange=korJamfor; korJamfor();
+}
+function korJamfor(){
+  const a=KOR[+$("korA").value], b=KOR[+$("korB").value];
+  const sa=new Set(a.valda), sb=new Set(b.valda);
+  const bada=[...sa].filter(x=>sb.has(x)), baraA=[...sa].filter(x=>!sb.has(x)), baraB=[...sb].filter(x=>!sa.has(x));
+  const uni=new Set([...sa,...sb]), jac=uni.size?bada.length/uni.size:0;
+  const blk=(t,arr)=>arr.length?`<div class="lblk"><div class="lblkH">${t}</div><div class="lblkB">${arr.sort().map(esc).join("<br>")}</div></div>`:"";
+  $("korut").innerHTML=`<div class="statgrid">
+    <div class="stat"><div class="statN">${bada.length}</div><div class="statL">Gemensamma</div></div>
+    <div class="stat"><div class="statN">${baraA.length}</div><div class="statL">Bara i A</div></div>
+    <div class="stat"><div class="statN">${baraB.length}</div><div class="statL">Bara i B</div></div>
+    <div class="stat"><div class="statN acc">${Math.round(jac*100)}%</div><div class="statL">Överlapp</div></div></div>
+    ${blk("Endast i A",baraA)}${blk("Endast i B",baraB)}`;
+}
+
+// --- Historik ---
+async function historik(){ const body=openSheet("Historik","Tidigare urval"); await renderHistorik(body); }
+async function renderHistorik(body){
+  const r=await window.pywebview.api.historik_data();
+  if(!r.poster||!r.poster.length){ body.innerHTML=tomMsg("Ingen historik ännu."); return; }
+  body.innerHTML=r.poster.map(p=>`<div class="hrow${p.finns?"":" miss"}">
+    <div class="hmain"><div class="htitle">${esc(p.rubrik)}</div>
+      <div class="hsub">${p.antal} bilder · ${esc(p.datum)}${p.finns?"":" · (saknas)"}</div></div>
+    <div class="hbtns">
+      <button class="btn" data-act="visa" data-path="${esc(p.path)}" ${p.finns?"":"disabled"}>Miniatyrer</button>
+      <button class="btn" data-act="finder" data-path="${esc(p.path)}" ${p.finns?"":"disabled"}>Finder</button>
+      <button class="btn" data-act="ta" data-path="${esc(p.path)}">Ta bort</button></div></div>`).join("");
+  body.querySelectorAll("button[data-act]").forEach(btn=>{
+    btn.onclick=async()=>{ const path=btn.dataset.path;
+      if(btn.dataset.act==="visa") visaUrval(path);
+      else if(btn.dataset.act==="finder") window.pywebview.api.oppna_finder(path);
+      else if(btn.dataset.act==="ta"){ await window.pywebview.api.historik_ta_bort(path); renderHistorik(body); } };
+  });
+}
+
+// --- Visa urval (strömmas) ---
+async function visaUrval(path){
+  let mapp=path;
+  if(!mapp){ mapp=await window.pywebview.api.valj_urval_mapp($("katalog").value||""); if(!mapp) return; }
+  const body=openSheet("Urval","Laddar miniatyrer…");
+  body.innerHTML=`<div class="thumbgrid" id="urvalgrid"></div><div class="help" id="urvalstatus" style="margin-top:10px">Extraherar förhandsvisningar…</div>`;
+  window.pywebview.api.urval_ladda(mapp);
+}
+window.dpcUrvalMeta=(namn,antal)=>setSheetSub(`${namn} · ${antal} bilder`);
+window.dpcUrvalThumb=t=>{ const g=$("urvalgrid"); if(!g)return;
+  const c=document.createElement("div"); c.className="thumb";
+  c.innerHTML=`<img src="${t.thumb}"><div class="cap">${esc(t.namn)}</div>`; g.appendChild(c); };
+window.dpcUrvalDone=n=>{ const s=$("urvalstatus"); if(s)s.textContent=n?`${n} miniatyrer`:"Kunde inte läsa några miniatyrer."; };
+
+// --- Okända sporter ---
+async function okandaSporter(){
+  const body=openSheet("Okända sporter","");
+  const r=await window.pywebview.api.okanda_data();
+  if(!r.okanda||!r.okanda.length){ body.innerHTML=tomMsg("Inga oklassificerade uppdrag just nu."); return; }
+  setSheetSub("Appen kunde inte avgöra sport. Öppna mappen, välj sport, spara — då tränas modellen om.");
+  const opt=s=>`<option value="">—</option>`+r.sporter.map(x=>`<option value="${x}"${x===s?" selected":""}>${x}</option>`).join("");
+  body.innerHTML=r.okanda.map((u,i)=>`<div class="orow">
+      <div class="oname">${esc(u.namn)}</div>
+      <select class="f" id="osp${i}" style="width:130px">${opt(u.sport)}</select>
+      <button class="btn" data-path="${esc(u.path)}" ${u.path?"":"disabled"}>Öppna mapp</button></div>`).join("")
+    +`<div style="margin-top:16px;text-align:right"><button class="btn soft" id="osave">Spara och träna om</button></div>`;
+  body.querySelectorAll(".orow button[data-path]").forEach(b=>b.onclick=()=>window.pywebview.api.oppna_finder(b.dataset.path));
+  $("osave").onclick=async()=>{
+    const val={}; r.okanda.forEach((u,i)=>{ const v=$("osp"+i).value; if(v) val[u.namn]=v; });
+    const res=await window.pywebview.api.okanda_spara(val); closeSheet();
+    if(res&&res.tranar){ document.querySelector('[data-tab="modell"]').click(); trana(); }
+  };
+}
 
 window.addEventListener("pywebviewready", init);
 </script>
