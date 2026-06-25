@@ -282,6 +282,19 @@ class Api:
                 cmd += ["--claude-modell", mdl]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
+    # --- Instagram-urval: plocka 20 IG-bästa ur ett urval (4:5 i XMP → LR) ---
+    def instagram_urval(self, d):
+        mapp = self.valj_mapp(d.get("export_rot") or d.get("katalog") or "")
+        if not mapp:
+            self._js("window.dpcDone(false)")
+            return
+        cmd = [sys.executable, "-m", "cull.core", mapp, "--instagram-urval"]
+        if d.get("instagram_ai"):
+            cmd.append("--instagram-ai")
+        if (d.get("matchinfo") or "").strip():
+            cmd += ["--ut-namn", d["matchinfo"].strip()]
+        threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
+
     # --- Bildsvepet (Claude web search) → Instagram-bildtext -----------------
     def bildsvep(self, d):
         import re as _re

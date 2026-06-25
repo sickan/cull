@@ -710,6 +710,76 @@ def kor_efterbehandling(args, katalog):
     print("Klart.", flush=True)
 
 
+def _injicera_crop_xmp(xmp_path, rect, env):
+    """Lägger till/ersätter en crs:Crop-ruta i en befintlig sidecar (bevarar
+    övrig framkallning). rect = (top, left, bottom, right) normaliserade."""
+    top, left, bottom, right = rect
+    cmd = ["exiftool", "-overwrite_original", "-XMP-crs:HasCrop=True",
+           f"-XMP-crs:CropTop={top:.6f}", f"-XMP-crs:CropLeft={left:.6f}",
+           f"-XMP-crs:CropBottom={bottom:.6f}", f"-XMP-crs:CropRight={right:.6f}",
+           str(xmp_path)]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, env=env)
+    except Exception:
+        pass
+
+
+def kor_instagram_urval(args, katalog):
+    """Plockar de N IG-bästa ur ett BEFINTLIGT urval (saliens-4:5-passform + ev.
+    Claude-redaktör), kopierar raw + sidecar till <katalog>/Instagram och
+    injicerar en 4:5-crop i sidecaren. LR öppnar dem 4:5 men redigerbart, med
+    all annan framkallning som redan ligger i sidecarsen bevarad."""
+    import shutil
+    from cull import leverans as _lev, xmp_writer
+    kat = Path(katalog)
+    if not kat.is_dir():
+        print(f"Hittar inte mappen: {kat}", flush=True)
+        return
+    raw = sorted(p for p in kat.iterdir()
+                 if p.suffix.lower() in RAW_SUFFIX and not p.name.startswith("."))
+    if not raw:
+        print("Inga raw-filer i mappen.", flush=True)
+        return
+    antal = args.topp if args.topp else _lev.PROFILER["INSTAGRAM"]["antal"]
+    prof = dict(_lev.PROFILER["INSTAGRAM"], antal=antal, _namn="INSTAGRAM")
+    print(f"Instagram-urval ur {len(raw)} bilder → {antal} bästa (4:5)…", flush=True)
+    env = _exif_env()
+    with tempfile.TemporaryDirectory() as tmp:
+        pm = extrahera_previews_batch(raw, Path(tmp))
+        jobb = [{"namn": r.stem, "jpg": pm.get(r), "raw": r, "vinkel": None}
+                for r in raw if pm.get(r)]
+        valda = _lev.valj_instagram(
+            jobb, prof, claude=getattr(args, "instagram_ai", False),
+            matchinfo=(getattr(args, "ut_namn", "") or ""), logg=print)
+        ig_dir = kat / "Instagram"
+        ig_dir.mkdir(parents=True, exist_ok=True)
+        n = 0
+        for j in valda:
+            r = j["raw"]
+            img = cv2.imread(str(j["jpg"]))
+            if img is None:
+                continue
+            h, w = img.shape[:2]
+            rect = _lev.crop_rect(j.get("_bbox"), w, h, prof["aspekt"])
+            shutil.copy2(r, ig_dir / r.name)
+            src_xmp = r.with_suffix(".xmp")
+            dst_xmp = ig_dir / f"{r.stem}.xmp"
+            if src_xmp.exists():
+                shutil.copy2(src_xmp, dst_xmp)
+                _injicera_crop_xmp(dst_xmp, rect, env)   # behåll framkallning + lägg crop
+            else:
+                xmp_writer.skriv_xmp(ig_dir / r.name, crop=rect)
+            n += 1
+            if n % 5 == 0 or n == len(valda):
+                print(f"  kopierar …{n}/{len(valda)}", flush=True)
+    print(f"✓ Instagram-urval klart: {ig_dir} ({n} bilder, 4:5 i XMP).", flush=True)
+    lr = _hitta_lightroom()
+    if lr:
+        subprocess.Popen(["open", "-a", lr, str(ig_dir)])
+        print(f"  Öppnar i Lightroom: {ig_dir}", flush=True)
+    print("Klart.", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="cull",
                                  description="Teknisk culling av NEF-filer.")
@@ -796,6 +866,9 @@ def main():
     ap.add_argument("--instagram-ai", action="store_true",
                     help="låt en Claude-redaktör välja Instagram-bilderna ur "
                          "kortlistan (komposition/variation) — kostar några ören")
+    ap.add_argument("--instagram-urval", action="store_true",
+                    help="plocka N IG-bästa ur ett befintligt urval, kopiera raw"
+                         " + sidecar med 4:5-crop i XMP (öppnas i Lightroom)")
     ap.add_argument("--stjarnor", action="store_true",
                     help="sätt stjärnbetyg (xmp:Rating 2-5) i sidecaren utifrån "
                          "helhetspoängen → Lightroom visar dem")
@@ -831,6 +904,10 @@ def main():
 
     if args.efterbehandla:
         kor_efterbehandling(args, katalog)
+        return
+
+    if args.instagram_urval:
+        kor_instagram_urval(args, katalog)
         return
 
     # Exkludera macOS AppleDouble-sidecars (._namn.NEF) och andra dolda

@@ -155,6 +155,25 @@ def _fit_aspekt(bbox_norm, w, h, aspekt):
     return (ix * iy) / area
 
 
+def crop_rect(bbox_norm, w, h, aspekt):
+    """Normaliserad cropruta (top, left, bottom, right) för mål-bildförhållandet,
+    centrerad på motivet — för crs:Crop i XMP (LR öppnar bilden beskuren men
+    redigerbar, ingen inbränd pixel)."""
+    if w <= 0 or h <= 0:
+        return (0.0, 0.1, 1.0, 0.9)
+    mål = aspekt[0] / aspekt[1]
+    cur = w / h
+    nw, nh = (mål * h, h) if cur > mål else (w, w / mål)
+    if bbox_norm is not None:
+        cx = (bbox_norm[0] + bbox_norm[2]) / 2.0 * w
+        cy = (bbox_norm[1] + bbox_norm[3]) / 2.0 * h
+    else:
+        cx, cy = w / 2.0, h / 2.0
+    x0 = min(max(cx - nw / 2.0, 0.0), w - nw)
+    y0 = min(max(cy - nh / 2.0, 0.0), h - nh)
+    return (y0 / h, x0 / w, (y0 + nh) / h, (x0 + nw) / w)
+
+
 def _claude_instagram_pick(kandidater, antal, matchinfo, modell, logg):
     """Claude vision väljer de antal bästa för ett Instagram-bildsvep
     (komposition, bär som 4:5-porträtt, variation, nyckelögonblick). Returnerar

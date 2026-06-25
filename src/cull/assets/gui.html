@@ -235,6 +235,10 @@
             <label class="chk"><input type="checkbox" id="instagram_ai"><span class="box">✓</span>Claude-urval (Instagram)</label>
             <span class="help" style="margin:0">kostar några ören</span>
           </div>
+          <div class="row pad94" style="margin-top:4px">
+            <button class="btn" onclick="instagramUrval()">Instagram-urval (4:5 → LR)…</button>
+            <span class="help" style="margin:0">20 IG-bästa ur ett urval, redigerbart</span>
+          </div>
         </div>
         <div class="card">
           <div class="cardH">Metadata &amp; AI</div>
@@ -599,6 +603,11 @@ async function nyMatch(){
 }
 
 // --- Bildsvepet (Instagram-bildtext) ---
+async function instagramUrval(){
+  window.dpcClear(); progPulse(true);
+  await window.pywebview.api.spara(collect());
+  await window.pywebview.api.instagram_urval(collect());
+}
 async function bildsvep(){ openBildsvep(false); }
 async function bildsvepGorOm(){ openBildsvep(true); }
 async function openBildsvep(force){
