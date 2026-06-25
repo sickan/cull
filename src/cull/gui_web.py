@@ -282,6 +282,33 @@ class Api:
                 cmd += ["--claude-modell", mdl]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
+    # --- Bildsvepet (Claude web search) → Instagram-bildtext -----------------
+    def bildsvep(self, d):
+        import re as _re
+        matchinfo = (d.get("matchinfo") or "").strip()
+        sport = (d.get("sport") or "").strip()
+        farg = (d.get("hemma_farg") or "").strip()
+
+        def jobb():
+            from cull import bildsvep as bs
+            data = bs.generera(matchinfo, sport, farg, logg=self._logga)
+            if not data:
+                self._js("window.dpcBildsvep(null)")
+                return
+            try:
+                slug = (_re.sub(r"[^\w-]+", "_", matchinfo).strip("_")[:60] or "match")
+                mapp = gui.CONFIG_DIR / "bildsvep"
+                mapp.mkdir(parents=True, exist_ok=True)
+                (mapp / f"{slug}_referat.txt").write_text(
+                    data.get("referat", ""), encoding="utf-8")
+                (mapp / f"{slug}_bildsvep.txt").write_text(
+                    data.get("bildsvep", ""), encoding="utf-8")
+            except Exception:
+                pass
+            self._js(f"window.dpcBildsvep({json.dumps(data, ensure_ascii=False)})")
+
+        threading.Thread(target=jobb, daemon=True).start()
+
     # --- Läs laguppställnings-ark (Claude vision) → roster + matchinfo --------
     def las_lineup(self, d):
         import webview

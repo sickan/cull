@@ -114,6 +114,12 @@
   .mini.keep:hover{background:var(--accent-soft); border-color:var(--accent-softborder); color:var(--accent-hover);}
   .mini.drop:hover{background:#FBEAEA; border-color:#E9C2C2; color:#C0392B;}
   .gstate{font-size:10px; color:var(--accent-hover); text-align:center; padding:0 8px 7px; min-height:14px; font-weight:600;}
+  /* bildsvep */
+  .bstext{width:100%; min-height:340px; font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;
+       font-size:13px; line-height:1.55; color:var(--t-body); background:var(--card); border:1px solid var(--card-border);
+       border-radius:10px; padding:14px 16px; outline:none; resize:vertical; white-space:pre-wrap; user-select:text;}
+  .bstext:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(232,130,12,.15);}
+  .bshelp{font-size:11px; color:var(--t-help); margin-top:8px;}
   /* hämta match */
   .mmatch{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
   .mmlbl{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--t-caps);}
@@ -313,6 +319,7 @@
       <button class="btn" onclick="visaUrval()">Visa urval…</button>
       <button class="btn" onclick="lasNummer()">Läs nummer…</button>
       <button class="btn" onclick="nummerGenomgang()">Fyll luckor…</button>
+      <button class="btn" onclick="bildsvep()">Bildsvep…</button>
       <button class="btn" onclick="efterbehandla()">Efterbehandla…</button>
       <button class="btn primary" id="korbtn" onclick="kor()">Kör cull</button>
     </div>
@@ -564,6 +571,32 @@ async function saveRoster(){
     setSheetSub("Sparad"); $("sheetBody").innerHTML=tomMsg(`✓ ${rader.length} spelare sparade som roster.\nRoster-fältet pekar nu på filen.`);
     setTimeout(closeSheet, 1400); }
 }
+
+// --- Bildsvepet (Instagram-bildtext) ---
+async function bildsvep(){
+  const mi=($("matchinfo").value||"").trim();
+  const body=openSheet("Bildsvepet","");
+  if(!mi){ body.innerHTML=tomMsg("Fyll i Matchinfo först (Hemma - Borta R-R (halvtid) ÅÅÅÅMMDD Arena)."); return; }
+  body.innerHTML=tomMsg("Hämtar matchfakta och skriver Bildsvepet via Claude… (web search, tar en stund, kostar några ören)");
+  await window.pywebview.api.spara(collect());
+  window.pywebview.api.bildsvep(collect());
+}
+window.dpcBildsvep=(data)=>{
+  const body=$("sheetBody"); if(!body) return;
+  if(!data){ setSheetSub(""); body.innerHTML=tomMsg("Kunde inte generera. Förtydliga Matchinfo (lag, resultat, datum) och försök igen."); return; }
+  setSheetSub("Granska och kopiera — texten postas inte härifrån");
+  body.innerHTML=`<textarea id="bsText" class="bstext" spellcheck="false"></textarea>
+    <div class="bshelp">Verifiera @-handles innan du postar (osäkra är markerade med <code>?</code>). Sparad i ~/.config/cull/bildsvep/.</div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+      <button class="btn" id="bsregen">Gör om</button>
+      <span class="help" style="margin:0">Redigera fritt i rutan</span>
+      <button class="btn soft" id="bscopy" style="margin-left:auto">Kopiera</button></div>`;
+  $("bsText").value=data.bildsvep||"";
+  $("bscopy").onclick=()=>{ const t=$("bsText"); t.focus(); t.select();
+    try{ navigator.clipboard.writeText(t.value); }catch(e){ try{ document.execCommand("copy"); }catch(e2){} }
+    $("bscopy").textContent="✓ Kopierad"; setTimeout(()=>{ if($("bscopy"))$("bscopy").textContent="Kopiera"; },1500); };
+  $("bsregen").onclick=bildsvep;
+};
 
 // --- Jämför par ---
 let PAR=[], PARI=0;
