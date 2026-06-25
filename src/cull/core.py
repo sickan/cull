@@ -693,7 +693,10 @@ def kor_efterbehandling(args, katalog):
                 jobb = [{"namn": f.stem,
                          "jpg": (f if f.suffix.lower() in JPG_SUFFIX else pm.get(f)),
                          "vinkel": roll_karta.get(f)} for f in filer]
-                skapade = _lev.exportera(jobb, lev_dir, prof, print)
+                skapade = _lev.exportera(
+                    jobb, lev_dir, prof, print,
+                    claude=getattr(args, "instagram_ai", False),
+                    matchinfo=(getattr(args, "ut_namn", "") or ""))
             # IPTC/bildtext på leverans-JPEG (samma texter, omnyckladе per stem).
             if args.iptc and skapade:
                 npf = {lev_dir / f"{f.stem}.jpg": v
@@ -789,7 +792,10 @@ def main():
                          "claude-haiku-4-5 = billigast, claude-sonnet-4-6)")
     ap.add_argument("--leverans", default=None, metavar="PROFIL",
                     help="producera leveransfärdiga JPEG enligt en profil "
-                         "(t.ex. CEV) — gyro-rätat, skalat, komprimerat")
+                         "(t.ex. CEV, INSTAGRAM) — gyro-rätat, skalat, komprimerat")
+    ap.add_argument("--instagram-ai", action="store_true",
+                    help="låt en Claude-redaktör välja Instagram-bilderna ur "
+                         "kortlistan (komposition/variation) — kostar några ören")
     ap.add_argument("--stjarnor", action="store_true",
                     help="sätt stjärnbetyg (xmp:Rating 2-5) i sidecaren utifrån "
                          "helhetspoängen → Lightroom visar dem")
@@ -1542,8 +1548,12 @@ def main():
                 prof = dict(prof, _namn=args.leverans.upper())
                 lev_dir = ut_dir / f"_leverans_{args.leverans.upper()}"
                 jobb = [{"namn": r["fil"].stem, "jpg": r.get("_jpg"),
-                         "vinkel": roll_karta.get(r["fil"])} for r in valda]
-                skapade = _lev.exportera(jobb, lev_dir, prof, print)
+                         "vinkel": roll_karta.get(r["fil"]),
+                         "poang": r.get("poang", 0.5)} for r in valda]
+                skapade = _lev.exportera(
+                    jobb, lev_dir, prof, print,
+                    claude=getattr(args, "instagram_ai", False),
+                    matchinfo=(args.ut_namn or ""))
                 if args.iptc and skapade:
                     npf = {lev_dir / f"{r['fil'].stem}.jpg":
                            (namn_per_fil or {}).get(ut_dir / r["fil"].name, "")

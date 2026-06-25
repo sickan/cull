@@ -12,7 +12,37 @@ import cv2
 PROFILER = {
     "CEV": {"antal": 30, "max_w": 2500, "max_h": 1500, "max_mb": 7.0,
             "stil": "naturlig"},
+    # Instagram porträtt 4:5 (1080×1350). aspekt = (bredd, höjd) → innehålls-
+    # medveten beskärning centrerad på motivet (saliens) innan nedskalning.
+    "INSTAGRAM": {"antal": 20, "aspekt": (4, 5), "max_w": 1080, "max_h": 1350,
+                  "max_mb": 8.0, "stil": "naturlig", "urval": True},
 }
+
+
+def _crop_aspekt(img, aspekt_w, aspekt_h, bbox_norm=None):
+    """Beskär till mål-bildförhållandet, centrerat på motivet (saliens-bbox,
+    normaliserad) så motivet inte hamnar utanför ramen. Förstorar aldrig."""
+    h, w = img.shape[:2]
+    if w <= 0 or h <= 0:
+        return img
+    mål = aspekt_w / aspekt_h          # bredd/höjd
+    cur = w / h
+    if abs(cur - mål) < 1e-3:
+        return img
+    if cur > mål:                       # för bred → kapa bredden
+        nw, nh = int(round(mål * h)), h
+    else:                               # för hög → kapa höjden
+        nw, nh = w, int(round(w / mål))
+    if bbox_norm is not None:
+        cx = (bbox_norm[0] + bbox_norm[2]) / 2.0 * w
+        cy = (bbox_norm[1] + bbox_norm[3]) / 2.0 * h
+    else:
+        cx, cy = w / 2.0, h / 2.0
+    x0 = int(round(cx - nw / 2.0))
+    y0 = int(round(cy - nh / 2.0))
+    x0 = max(0, min(x0, w - nw))        # håll fönstret inom bilden
+    y0 = max(0, min(y0, h - nh))
+    return img[y0:y0 + nh, x0:x0 + nw]
 
 
 def _storsta_inskrivna(w, h, vinkel_grader):
@@ -104,13 +134,120 @@ def spara_under_storlek(img, ut_path, max_mb, q_start=92):
     return 40, len(buf)
 
 
-def exportera(jobb, ut_dir, profil, logg=print):
+def _fit_aspekt(bbox_norm, w, h, aspekt):
+    """Andel av motivrutan som överlever en aspekt-beskärning centrerad på
+    motivet (1.0 = motivet ryms helt i 4:5, lägre = motivet klipps). Saknas
+    motivruta antas 1.0. Detta är den geometriska '4:5-lämpligheten'."""
+    if bbox_norm is None or w <= 0 or h <= 0:
+        return 1.0
+    mål = aspekt[0] / aspekt[1]
+    cur = w / h
+    nw, nh = (mål * h, h) if cur > mål else (w, w / mål)
+    cx = (bbox_norm[0] + bbox_norm[2]) / 2.0 * w
+    cy = (bbox_norm[1] + bbox_norm[3]) / 2.0 * h
+    x0 = min(max(cx - nw / 2.0, 0.0), w - nw)
+    y0 = min(max(cy - nh / 2.0, 0.0), h - nh)
+    bx0, by0 = bbox_norm[0] * w, bbox_norm[1] * h
+    bx1, by1 = bbox_norm[2] * w, bbox_norm[3] * h
+    ix = max(0.0, min(bx1, x0 + nw) - max(bx0, x0))
+    iy = max(0.0, min(by1, y0 + nh) - max(by0, y0))
+    area = max(1e-6, (bx1 - bx0) * (by1 - by0))
+    return (ix * iy) / area
+
+
+def _claude_instagram_pick(kandidater, antal, matchinfo, modell, logg):
+    """Claude vision väljer de antal bästa för ett Instagram-bildsvep
+    (komposition, bär som 4:5-porträtt, variation, nyckelögonblick). Returnerar
+    lista av jobb, eller None vid fel/avsaknad nyckel."""
+    try:
+        import json
+        import re
+        from cull import bildtext_ai
+        if not bildtext_ai.tillganglig():
+            logg("  Claude-urval: API-nyckel saknas — använder geometriskt urval.")
+            return None
+        innehall = []
+        for i, j in enumerate(kandidater, 1):
+            b64 = bildtext_ai._bild_base64(j["jpg"])
+            if not b64:
+                continue
+            innehall.append({"type": "image", "source": {"type": "base64",
+                             "media_type": "image/jpeg", "data": b64}})
+            innehall.append({"type": "text", "text": f"Bild {i}"})
+        if not innehall:
+            return None
+        ctx = f" från matchen {matchinfo}" if matchinfo else ""
+        innehall.append({"type": "text", "text":
+            f"Du är bildredaktör. Välj de {antal} bästa bilderna{ctx} för ett "
+            "Instagram-bildsvep i stående format 4:5. Kriterier: stark komposition "
+            "som bär som porträtt, variation i ögonblick och spelare, gärna "
+            "nyckelögonblick (jubel, avgöranden, närkamp). Undvik nästan likadana "
+            f"bilder. Svara ENBART med JSON: {{\"valda\": [bildnummer, ...]}} — "
+            f"exakt {antal} nummer."})
+        import anthropic
+        klient = anthropic.Anthropic(max_retries=4)
+        svar = klient.messages.create(model=modell, max_tokens=1000,
+            messages=[{"role": "user", "content": innehall}])
+        text = "".join(b.text for b in svar.content if b.type == "text")
+        m = re.search(r"\{.*\}", text, re.S)
+        if not m:
+            return None
+        idx = json.loads(m.group(0)).get("valda", [])
+        valda = [kandidater[i - 1] for i in idx if 1 <= i <= len(kandidater)]
+        logg(f"  Claude-urval: valde {len(valda)} av {len(kandidater)} kandidater.")
+        return valda[:antal] or None
+    except Exception as e:
+        logg(f"  Claude-urval: fel ({type(e).__name__}: {e}) — geometriskt urval.")
+        return None
+
+
+def valj_instagram(jobb, profil, claude=False, claude_modell="claude-opus-4-8",
+                   matchinfo="", logg=print):
+    """De profil['antal'] bästa jobben för Instagram: rankar på kvalitet ×
+    4:5-lämplighet och, om claude, låter en Claude-redaktör välja ur kortlistan.
+    Sätter '_bbox' på jobben (återanvänds vid export)."""
+    from cull import vision_lager
+    antal = profil.get("antal", 20)
+    aspekt = profil.get("aspekt", (4, 5))
+    bedomda = []
+    for j in jobb:
+        jpg = j.get("jpg")
+        if not jpg:
+            continue
+        img = cv2.imread(str(jpg))
+        if img is None:
+            continue
+        bbox = vision_lager.saliens_bbox(jpg)
+        h, w = img.shape[:2]
+        j["_bbox"] = bbox
+        j["_fit"] = _fit_aspekt(bbox, w, h, aspekt)
+        # Kvalitet styr, men dålig 4:5-passform straffar hårt.
+        j["_ig"] = float(j.get("poang", 0.5)) * (0.25 + 0.75 * j["_fit"])
+        bedomda.append(j)
+    bedomda.sort(key=lambda j: j["_ig"], reverse=True)
+    bra = [j for j in bedomda if j["_fit"] >= 0.6] or bedomda
+    logg(f"  Instagram-urval: {len(bedomda)} kandidater, "
+         f"{sum(1 for j in bedomda if j['_fit'] >= 0.6)} beskär väl till 4:5.")
+    if not claude or len(bra) <= antal:
+        return bra[:antal]
+    kortlista = bra[:min(len(bra), max(antal, 28))]
+    valda = _claude_instagram_pick(kortlista, antal, matchinfo, claude_modell, logg)
+    return valda or bra[:antal]
+
+
+def exportera(jobb, ut_dir, profil, logg=print, claude=False,
+              claude_modell="claude-opus-4-8", matchinfo=""):
     """jobb: lista av {namn (utfil-stem), jpg (full preview-path), vinkel (gyro
-    eller None)}. Skriver leverans-JPEG till ut_dir enligt profil. Returnerar
-    listan med skapade filer."""
+    eller None), poang (för Instagram-urval)}. Skriver leverans-JPEG till ut_dir
+    enligt profil. Returnerar listan med skapade filer."""
     from cull import vision_lager
     ut_dir = Path(ut_dir)
     ut_dir.mkdir(parents=True, exist_ok=True)
+    aspekt = profil.get("aspekt")
+    if profil.get("urval"):            # smart Instagram-urval (kvalitet × 4:5)
+        jobb = valj_instagram(jobb, profil, claude, claude_modell, matchinfo, logg)
+    elif profil.get("antal"):          # mottagaren vill ha exakt N (bäst först)
+        jobb = list(jobb)[:profil["antal"]]
     skapade = []
     kapade = 0
     for j in jobb:
@@ -118,8 +255,10 @@ def exportera(jobb, ut_dir, profil, logg=print):
         if img is None:
             continue
         vinkel = j.get("vinkel")
-        # Innehållsmedveten upprätning: hitta motivet, klipp aldrig bort det.
-        bbox = vision_lager.saliens_bbox(j["jpg"]) if vinkel else None
+        # Motivets ruta behövs både för innehållsmedveten upprätning och 4:5-crop.
+        bbox = j.get("_bbox")
+        if bbox is None and (vinkel or aspekt):
+            bbox = vision_lager.saliens_bbox(j["jpg"])
         if vinkel and bbox is not None:
             h, w = img.shape[:2]
             sänkt = _vinkel_som_bevarar(
@@ -127,11 +266,14 @@ def exportera(jobb, ut_dir, profil, logg=print):
             if abs(sänkt) + 0.05 < abs(vinkel):
                 kapade += 1
         img = rakta(img, vinkel, bbox)
+        if aspekt:                      # 4:5-beskärning centrerad på motivet
+            img = _crop_aspekt(img, aspekt[0], aspekt[1], bbox)
         img = passa_i_box(img, profil["max_w"], profil["max_h"])
         ut = ut_dir / f"{j['namn']}.jpg"
         spara_under_storlek(img, ut, profil["max_mb"])
         skapade.append(ut)
+    asp = f", {aspekt[0]}:{aspekt[1]}" if aspekt else ""
     logg(f"  Leverans ({profil.get('_namn', '?')}): {len(skapade)} JPEG "
-         f"≤{profil['max_w']}×{profil['max_h']}, ≤{profil['max_mb']:.0f} MB."
+         f"≤{profil['max_w']}×{profil['max_h']}{asp}, ≤{profil['max_mb']:.0f} MB."
          + (f" Rätning dämpad på {kapade} för att bevara motivet." if kapade else ""))
     return skapade

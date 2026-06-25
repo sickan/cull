@@ -27,7 +27,8 @@ SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "xmp_justering", "xmp_brus", "oppna", "export_rot", "trana_rot",
                  "iptc", "fotograf", "bevaka_på", "garanti_bevaka",
                  "export_overskriv", "husstil", "exp_bump", "roster",
-                 "bildtext_ai", "bildtext_modell", "leverans", "stjarnor"]
+                 "bildtext_ai", "bildtext_modell", "leverans", "stjarnor",
+                 "instagram_ai"]
 
 OPPNA_VAL = ["Auto", "Lightroom", "DxO PureRAW", "Finder", "Inget"]
 
@@ -274,6 +275,9 @@ def bygg_kommando(vals):
     lev = vals["leverans"].get().strip()
     if lev and lev != "(ingen)":
         cmd += ["--leverans", lev]
+        if lev.upper() == "INSTAGRAM" and vals.get("instagram_ai") \
+                and vals["instagram_ai"].get():
+            cmd.append("--instagram-ai")
 
     if vals["stjarnor"].get():
         cmd.append("--stjarnor")
