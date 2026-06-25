@@ -282,6 +282,34 @@ class Api:
                 cmd += ["--claude-modell", mdl]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
+    # --- Läs laguppställnings-ark (Claude vision) → roster + matchinfo --------
+    def las_lineup(self, d):
+        import webview
+        try:
+            res = self.window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                directory=str(Path.home() / "Downloads"),
+                file_types=("Ark (*.heic;*.heif;*.jpg;*.jpeg;*.png;*.pdf)",
+                            "Alla filer (*.*)"))
+        except Exception:
+            res = None
+        if not res:
+            self._js("closeSheet()")
+            return
+        path = res[0] if isinstance(res, (list, tuple)) else res
+        sport = (d.get("sport") or "").strip()
+
+        def jobb():
+            from cull import las_lineup as ll
+            self._js('window.dpcMatchLoading("Läser arket med Claude vision…")')
+            data = ll.las(path, sport, logg=self._logga)
+            if not data:
+                self._js("window.dpcMatch(null)")
+                return
+            self._js(f"window.dpcMatch({json.dumps(data, ensure_ascii=False)})")
+
+        threading.Thread(target=jobb, daemon=True).start()
+
     # --- Hämta match (Claude web search) → roster-förslag --------------------
     def hamta_match(self, d):
         matchinfo = (d.get("matchinfo") or "").strip()

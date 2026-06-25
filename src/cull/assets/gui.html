@@ -115,6 +115,10 @@
   .mini.drop:hover{background:#FBEAEA; border-color:#E9C2C2; color:#C0392B;}
   .gstate{font-size:10px; color:var(--accent-hover); text-align:center; padding:0 8px 7px; min-height:14px; font-weight:600;}
   /* hämta match */
+  .mmatch{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
+  .mmlbl{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--t-caps);}
+  .mmval{flex:1; font-family:'SF Mono',Menlo,monospace; font-size:12px; color:var(--t-body); background:var(--card);
+       border:1px solid var(--card-border); border-radius:8px; padding:7px 10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .msumm{font-size:13px; line-height:1.6; color:var(--t-body); background:var(--card); border:1px solid var(--card-border);
        border-radius:10px; padding:12px 14px; margin-bottom:14px;}
   .mteam{display:inline-flex; background:#E4E4E6; padding:3px; border-radius:9px; margin-bottom:12px;}
@@ -196,7 +200,7 @@
           <div class="row"><label class="lbl" style="width:84px">Källmapp</label>
             <input class="f flex" id="katalog"><button class="btn" onclick="pick('katalog','dir')">Välj…</button></div>
           <div class="row"><label class="lbl" style="width:84px">Matchinfo</label>
-            <input class="f flex" id="matchinfo"><button class="btn" onclick="hamtaMatch()">Hämta match…</button></div>
+            <input class="f flex" id="matchinfo"><button class="btn" onclick="lasArk()">Läs ark…</button><button class="btn" onclick="hamtaMatch()">Hämta match…</button></div>
           <div class="help pad94">Hemmalag · Bortalag · Resultat (Halvtid) · ÅÅÅÅMMDD · Arena</div>
         </div>
         <div class="card full">
@@ -505,9 +509,16 @@ async function hamtaMatch(){
   await window.pywebview.api.spara(collect());
   window.pywebview.api.hamta_match(collect());
 }
+async function lasArk(){
+  const body=openSheet("Läs laguppställning","");
+  body.innerHTML=tomMsg("Välj arket (foto/skärmdump/PDF)…");
+  await window.pywebview.api.spara(collect());
+  window.pywebview.api.las_lineup(collect());
+}
+window.dpcMatchLoading=(msg)=>{ const b=$("sheetBody"); if(b) b.innerHTML=tomMsg(msg||"Läser…"); };
 window.dpcMatch=(data)=>{
   const body=$("sheetBody"); if(!body) return;
-  if(!data){ setSheetSub(""); body.innerHTML=tomMsg("Hittade ingen laguppställning. Förtydliga Matchinfo (lag, datum, arena) och försök igen."); return; }
+  if(!data){ setSheetSub(""); body.innerHTML=tomMsg("Kunde inte läsa. Förtydliga Matchinfo (lag, datum, arena) eller välj ett tydligare ark och försök igen."); return; }
   (data.spelare||[]).forEach(p=>{ p.nr=String(p.nr||""); p.namn=String(p.namn||""); });
   MATCH=data; MTEAM="hemma"; renderMatch();
 };
@@ -526,7 +537,8 @@ function renderMatch(){
     <td><input class="nm" data-i="${idx}" value="${esc(p.namn)}"></td>
     <td>${p.start?'<span class="mstart">start</span>':''}</td>
     <td><button class="mdel" data-i="${idx}">✕</button></td></tr>`).join("");
-  body.innerHTML=`${MATCH.sammanfattning?`<div class="msumm">${esc(MATCH.sammanfattning)}</div>`:""}
+  body.innerHTML=`${MATCH.matchinfo?`<div class="mmatch"><span class="mmlbl">Matchinfo</span><code class="mmval">${esc(MATCH.matchinfo)}</code><button class="btn" id="muse">Använd</button></div>`:""}
+    ${MATCH.sammanfattning?`<div class="msumm">${esc(MATCH.sammanfattning)}</div>`:""}
     <div class="mteam">${segs}</div>
     <table class="mtab"><thead><tr><th>Nr</th><th>Namn</th><th></th><th></th></tr></thead><tbody id="mbody">${rows}</tbody></table>
     ${(MATCH.kallor&&MATCH.kallor.length)?`<div class="mkallor">Källor: ${MATCH.kallor.map(esc).join(" · ")}</div>`:""}
@@ -538,6 +550,8 @@ function renderMatch(){
   body.querySelectorAll(".mdel").forEach(b=>b.onclick=()=>{ mCommit(); MATCH.spelare[+b.dataset.i]._del=true; renderMatch(); });
   $("maddrow").onclick=()=>{ mCommit(); MATCH.spelare.push({nr:"",namn:"",lag:(MTEAM==="bada"?"hemma":MTEAM),start:false}); renderMatch(); };
   $("msave").onclick=saveRoster;
+  if($("muse")) $("muse").onclick=async()=>{ $("matchinfo").value=MATCH.matchinfo;
+    await window.pywebview.api.spara(collect()); $("muse").textContent="✓ Använd"; };
 }
 async function saveRoster(){
   mCommit();
