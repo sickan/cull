@@ -379,6 +379,42 @@ def _storsta_person(yolo_res):
     return bast
 
 
+def motiv_bbox(img_bgr, yolo_res, marginal=0.10):
+    """Huvudmotivets normaliserade ruta = den SKARPASTE (i-fokus) personen.
+
+    Sportbilder har oftast grunt skärpedjup: fotografen fokuserar på en spelare
+    som blir skarp medan bakgrundsspelare blir suddiga. Apple Vision-saliens
+    fångar ofta fel (en framträdande men oskarp bakgrundsperson) → vi väljer
+    istället personen med högst lokal skärpa (Laplacian-varians), med en svag
+    storleksvikt som tiebreak. Returnerar None om ingen läsbar person hittas
+    (då faller anroparen tillbaka på saliens)."""
+    if yolo_res is None or yolo_res.boxes is None:
+        return None
+    h, w = img_bgr.shape[:2]
+    grå = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    bäst, bäst_poäng = None, -1.0
+    for box, cls in zip(yolo_res.boxes.xyxy, yolo_res.boxes.cls):
+        if int(cls) != 0:                       # klass 0 = person
+            continue
+        x1, y1, x2, y2 = map(int, box.tolist())
+        if (x2 - x1) < 20 or (y2 - y1) < 40:    # för liten → hoppa
+            continue
+        crop = grå[max(0, y1):y2, max(0, x1):x2]
+        if crop.size == 0:
+            continue
+        skärpa = cv2.Laplacian(crop, cv2.CV_64F).var()
+        area = (x2 - x1) * (y2 - y1)
+        poäng = skärpa * (area ** 0.15)         # skärpa styr, storlek bryter lika
+        if poäng > bäst_poäng:
+            bäst_poäng, bäst = poäng, (x1, y1, x2, y2)
+    if bäst is None:
+        return None
+    x1, y1, x2, y2 = bäst
+    mx, my = marginal * (x2 - x1), marginal * (y2 - y1)
+    return (max(0.0, x1 - mx) / w, max(0.0, y1 - my) / h,
+            min(w, x2 + mx) / w, min(h, y2 + my) / h)
+
+
 def bakgrundskontrast(img_bgr, yolo_res):
     """
     Mäter hur väl huvudmotivet (största spelaren) sticker ut mot bakgrunden,

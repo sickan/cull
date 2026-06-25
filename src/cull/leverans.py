@@ -225,9 +225,14 @@ def valj_instagram(jobb, profil, claude=False, claude_modell="claude-opus-4-8",
     """De profil['antal'] bästa jobben för Instagram: rankar på kvalitet ×
     4:5-lämplighet och, om claude, låter en Claude-redaktör välja ur kortlistan.
     Sätter '_bbox' på jobben (återanvänds vid export)."""
-    from cull import vision_lager
+    from cull import vision_lager, ai_lager
     antal = profil.get("antal", 20)
     aspekt = profil.get("aspekt", (4, 5))
+    # YOLO en gång → motivet = SKARPASTE personen (i fokus), inte ren saliens
+    # (som ofta fastnar på en suddig bakgrundsperson).
+    modeller = ai_lager.ladda_modeller(med_ocr=False, n_pose=1,
+                                       yolo_modell="yolo11m.pt")
+    yolo, device = modeller["yolo"], modeller["device"]
     bedomda = []
     for j in jobb:
         jpg = j.get("jpg")
@@ -236,8 +241,9 @@ def valj_instagram(jobb, profil, claude=False, claude_modell="claude-opus-4-8",
         img = cv2.imread(str(jpg))
         if img is None:
             continue
-        bbox = vision_lager.saliens_bbox(jpg)
         h, w = img.shape[:2]
+        yres = yolo(img, verbose=False, device=device)[0]
+        bbox = ai_lager.motiv_bbox(img, yres) or vision_lager.saliens_bbox(jpg)
         j["_bbox"] = bbox
         j["_fit"] = _fit_aspekt(bbox, w, h, aspekt)
         # Kvalitet styr, men dålig 4:5-passform straffar hårt.
