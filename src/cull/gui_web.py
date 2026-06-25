@@ -523,6 +523,19 @@ class Api:
         return {"tranar": nagot}
 
 
+def _satt_dock_ikon():
+    """Sätter Dock-/app-ikonen till loggan i runtime (annars visas Python-raketen
+    eftersom appen körs som 'python -m', inte som en paketerad .app)."""
+    try:
+        from AppKit import NSApplication, NSImage
+        ikon = Path(__file__).parent / "assets" / "icon.png"
+        img = NSImage.alloc().initWithContentsOfFile_(str(ikon))
+        if img is not None:
+            NSApplication.sharedApplication().setApplicationIconImage_(img)
+    except Exception:
+        pass
+
+
 def main():
     import webview
     api = Api()
@@ -531,6 +544,11 @@ def main():
         "Dalecarlia Photo Cull", str(html),
         width=860, height=860, min_size=(700, 640),
         background_color="#F4F4F6", js_api=api)
+    try:
+        api.window.events.shown += lambda *a: _satt_dock_ikon()
+    except Exception:
+        pass
+    _satt_dock_ikon()
     webview.start()
 
 
