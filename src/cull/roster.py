@@ -33,6 +33,30 @@ def las_roster(path):
     return roster
 
 
+def las_roster_lag(path):
+    """Läser roster-CSV → {lag: {nr: namn}}. lag = 3:e kolumnen i gemener
+    ('hemma'/'borta'), eller '' när lag-kolumn saknas (enlagsroster).
+    För namnsättning av BÅDA lagen — samma nummer kan finnas i olika lag."""
+    p = Path(path)
+    if not p.exists():
+        return {}
+    try:
+        text = p.read_text(encoding="utf-8-sig")
+    except Exception:
+        return {}
+    avgr = ";" if text.count(";") > text.count(",") else ","
+    lag_roster = {}
+    for rad in csv.reader(text.splitlines(), delimiter=avgr):
+        if len(rad) < 2:
+            continue
+        nr, namn = rad[0].strip(), rad[1].strip()
+        if not nr.isdigit() or not namn:
+            continue
+        lag = rad[2].strip().lower() if len(rad) >= 3 and rad[2].strip() else ""
+        lag_roster.setdefault(lag, {})[nr] = namn
+    return lag_roster
+
+
 def lista_text(roster):
     """Hela trupplistan som '10 = Isabelle Haak, 12 = Hilda Gustafsson, …' för
     att ge till bildtext-AI:n (som matchar numret den ser mot namnet)."""

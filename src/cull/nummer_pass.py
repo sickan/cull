@@ -87,13 +87,54 @@ def _preview_kalla(filer):
     return filer[0]
 
 
-def _las_nummer(img_bgr, yolo_res, ocr, roster, min_konf=0.45, max_personer=25):
-    """(mängd tröjnummer, antal personer) — OCR på alla spelar-utsnitt med
-    brus-filter: konfidens-tröskel + bara 1–2 siffror (0–99) + roster-filter
-    när en trupplista finns. Tar bort reklamtext, poäng-overlays och
-    hopslagna siffror som annars förorenar keywords."""
+COLOR_TROSKEL = 0.10   # andel hemma-färg i utsnittet för att räknas som hemmalag
+
+
+def _hemma_andel_crop(crop_bgr, farg_namn):
+    """Andel hemma-färgade pixlar i ett spelar-utsnitt (för lag-bestämning)."""
+    from cull.ai_lager import FARG_HSV
+    import numpy as np
+    import cv2
+    if not farg_namn or farg_namn not in FARG_HSV or crop_bgr.size == 0:
+        return 0.0
+    lo, hi = [np.array(x, np.uint8) for x in FARG_HSV[farg_namn]]
+    hsv = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, lo, hi)
+    return mask.sum() / 255 / mask.size
+
+
+def _las_nummer(img_bgr, yolo_res, ocr, lag_roster, hemma_farg="",
+                min_konf=0.45, max_personer=25):
+    """Lista (nr, namn) för avlästa spelarnummer + antal personer. Brus-filter:
+    konfidens + bara 1–2 siffror (0–99) + roster-filter. Namnsättning av BÅDA
+    lagen: nummerunikhet först (nr som bara finns i ett lag → det lagets namn,
+    ingen färg behövs), annars tröjfärg mot hemma-färg för krockande nummer. Två
+    spelare med samma nummer i samma bild (hemma+borta) ger två poster. namn=''
+    när roster saknas eller numret inte finns (då skrivs bara numret)."""
     if ocr is None or yolo_res is None or yolo_res.boxes is None:
-        return set(), 0
+        return [], 0
+    teams = lag_roster or {}
+    har_roster = any(teams.values())
+    flera_lag = len([k for k in teams if k]) >= 2   # minst två namngivna lag
+
+    def _resolve(nr, home_frac):
+        if not har_roster:
+            return "", True
+        if flera_lag:
+            inh = teams.get("hemma", {}).get(nr)
+            ina = teams.get("borta", {}).get(nr)
+            if inh and not ina:
+                return inh, True
+            if ina and not inh:
+                return ina, True
+            if inh and ina:                     # krock → tröjfärg avgör
+                return (inh if home_frac >= COLOR_TROSKEL else ina), True
+            return "", False
+        for v in teams.values():                # enlagsroster
+            if nr in v:
+                return v[nr], True
+        return "", False
+
     personer, n_pers = [], 0
     for box, cls in zip(yolo_res.boxes.xyxy, yolo_res.boxes.cls):
         if int(cls) != 0:           # klass 0 = person
@@ -103,7 +144,7 @@ def _las_nummer(img_bgr, yolo_res, ocr, roster, min_konf=0.45, max_personer=25):
         personer.append(((x2 - x1) * (y2 - y1), x1, y1, x2, y2))
     personer.sort(reverse=True)     # störst (närmast) först
 
-    nummer = set()
+    traffar = set()
     for _, x1, y1, x2, y2 in personer[:max_personer]:
         if (x2 - x1) < 24 or (y2 - y1) < 48:   # för liten → oläsbart
             continue
@@ -111,16 +152,25 @@ def _las_nummer(img_bgr, yolo_res, ocr, roster, min_konf=0.45, max_personer=25):
         crop = img_bgr[max(0, y1):y_mid, max(0, x1):x2]
         if crop.size == 0:
             continue
+        home_frac = _hemma_andel_crop(crop, hemma_farg) if flera_lag else 0.0
         for _b, text, konf in ocr.readtext(crop, allowlist="0123456789", detail=1):
             if konf < min_konf:
                 continue
             t = (text.strip().lstrip("0") or "0")
             if not t.isdigit() or not (1 <= len(t) <= 2):   # tröjnummer 0–99
                 continue
-            if roster and t not in roster:                  # bara riktiga squad-nr
+            namn, giltigt = _resolve(t, home_frac)
+            if har_roster and not giltigt:                  # bara riktiga squad-nr
                 continue
-            nummer.add(t)
-    return nummer, n_pers
+            traffar.add((t, namn))
+    return list(traffar), n_pers
+
+
+def _namn_unikt(nr, lag_roster):
+    """Namn för ett nummer ENBART om det är unikt över lagen (annars '')."""
+    teams = lag_roster or {}
+    hits = [v[nr] for v in teams.values() if nr in v]
+    return hits[0] if len(hits) == 1 else ""
 
 
 def _claude_nummer(jpg_path, roster_text, hemma_farg, modell):
@@ -155,17 +205,19 @@ def _claude_nummer(jpg_path, roster_text, hemma_farg, modell):
             if d.isdigit()]
 
 
-def _skriv_keywords(filer, nummer, roster, env):
-    """Skriver tröjnummer/-namn som keywords till alla filer för stammen + till
-    ev. .xmp-sidecar (Lightroom läser metadata ur sidecaren för raw-filer, inte ur
-    den inbäddade datan). Idempotent: tar bort (-=) varje värde före += så omkörning
-    inte ger dubbletter och match-keywords m.m. bevaras."""
-    if not nummer:
+def _skriv_keywords(filer, traffar, env):
+    """traffar: lista av (nr, namn) (namn kan vara ''). Skriver 'nr namn' (eller
+    bara 'nr') som keywords till alla filer för stammen + ev. .xmp-sidecar
+    (Lightroom läser metadata ur sidecaren för raw-filer, inte inbäddat).
+    Idempotent: tar bort (-=) varje värde före += så omkörning inte ger dubbletter
+    och match-keywords m.m. bevaras. Hanterar samma nummer i två lag (två poster)."""
+    if not traffar:
         return False
+    par = sorted({(str(n), m or "") for n, m in traffar},
+                 key=lambda p: (int(p[0]) if p[0].isdigit() else 0, p[1]))
     full_args = []   # bildfiler: XMP + IPTC
     xmp_args = []    # .xmp-sidecar: bara XMP (IPTC-IIM finns inte i sidecar)
-    for nr in sorted(nummer, key=lambda n: int(n) if str(n).isdigit() else 0):
-        namn = roster.get(str(nr))
+    for nr, namn in par:
         flat = f"{nr} {namn}" if namn else str(nr)
         for v in {str(nr), flat}:   # täcker omkörning med/utan roster
             full_args += [f"-XMP-dc:Subject-={v}", f"-IPTC:Keywords-={v}",
@@ -208,7 +260,11 @@ def kor(katalog, yolo_modell="yolo11m.pt", roster_path="", hemma_farg="",
     if not grupper:
         logg("Inga bildfiler i mappen.")
         return
-    roster = roster_mod.las_roster(roster_path) if roster_path else {}
+    lag_roster = roster_mod.las_roster_lag(roster_path) if roster_path else {}
+    flera_lag = len([k for k in lag_roster if k]) >= 2
+    if flera_lag:
+        logg(f"  Roster med två lag — namnsätter båda (tröjfärg '{hemma_farg or '?'}'"
+             " avgör vid nummerkrock).")
     env = _env()
     cache = _ladda_cache()
     logg(f"Läser tröjnummer på {len(grupper)} bilder i {mapp.name}…")
@@ -240,12 +296,14 @@ def kor(katalog, yolo_modell="yolo11m.pt", roster_path="", hemma_farg="",
             resultat[stam] = {"nummer": [], "n_personer": 0, "kalla": "—"}
             continue
         yres = yolo(img, verbose=False, device=device)[0]
-        nummer, n_pers = _las_nummer(img, yres, modeller["ocr"], roster, min_konf)
-        resultat[stam] = {"nummer": sorted(nummer, key=int),
+        traffar, n_pers = _las_nummer(img, yres, modeller["ocr"], lag_roster,
+                                      hemma_farg, min_konf)
+        resultat[stam] = {"traffar": [list(p) for p in traffar],
+                          "nummer": sorted({nr for nr, _ in traffar}, key=int),
                           "n_personer": n_pers,
-                          "kalla": "ocr" if nummer else "—"}
+                          "kalla": "ocr" if traffar else "—"}
         cache[_nyckel(filer[0])] = resultat[stam]
-        if not nummer and n_pers >= 1:
+        if not traffar and n_pers >= 1:
             luckor.append(stam)
         if n % 5 == 0 or n == len(grupper):
             logg(f"  OCR …{n}/{len(grupper)}")
@@ -264,7 +322,10 @@ def kor(katalog, yolo_modell="yolo11m.pt", roster_path="", hemma_farg="",
             kostnad = len(kandidater) * KR_PER_CLAUDE
             logg(f"  Claude-fallback på {len(kandidater)} bilder "
                  f"(tak {max_claude}) ≈ {kostnad:.1f} kr…")
-            roster_text = roster_mod.lista_text(roster)
+            flat_union = {}
+            for v in lag_roster.values():
+                flat_union.update(v)
+            roster_text = roster_mod.lista_text(flat_union)
             lösta = 0
             for stam in kandidater:
                 jpg = previews.get(repr_filer[stam])
@@ -273,8 +334,13 @@ def kor(katalog, yolo_modell="yolo11m.pt", roster_path="", hemma_farg="",
                 except Exception as e:
                     logg(f"  Claude-fel: {type(e).__name__}: {e}")
                     nummer = []
+                # Filtrera mot roster-unionen och namnge unika nummer (utan färg
+                # här → krockande nummer skrivs som bara siffra).
+                nummer = [n for n in nummer if not lag_roster or n in flat_union]
                 if nummer:
-                    resultat[stam] = {"nummer": sorted(set(nummer), key=int),
+                    traffar = [(n, _namn_unikt(n, lag_roster)) for n in set(nummer)]
+                    resultat[stam] = {"traffar": [list(p) for p in traffar],
+                                      "nummer": sorted(set(nummer), key=int),
                                       "n_personer": resultat[stam]["n_personer"],
                                       "kalla": "claude"}
                     cache[_nyckel(grupper[stam][0])] = resultat[stam]
@@ -290,8 +356,8 @@ def kor(katalog, yolo_modell="yolo11m.pt", roster_path="", hemma_farg="",
     osakra = []
     for stam, filer in grupper.items():
         r = resultat[stam]
-        if r["nummer"]:
-            if _skriv_keywords(filer, r["nummer"], roster, env):
+        if r.get("traffar"):
+            if _skriv_keywords(filer, [tuple(p) for p in r["traffar"]], env):
                 skrivna += 1
         elif r["n_personer"] >= 1:
             # Spelare syns men inget nummer → manuell genomgång (Steg 2).

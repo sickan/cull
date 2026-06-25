@@ -370,20 +370,27 @@ class Api:
         threading.Thread(target=jobb, daemon=True).start()
 
     def spara_roster(self, rader, namn):
-        """rader = [{nr, namn}] → skriver en roster-CSV och returnerar sökvägen."""
+        """rader = [{nr, namn, lag?}] → roster-CSV. Har någon rad 'lag' (hemma/
+        borta) skrivs en 3-kolumns 'nummer,namn,lag' så båda lagen kan namnsättas
+        (samma nummer i olika lag). Returnerar sökvägen."""
         import csv
         import re as _re
         slug = _re.sub(r"[^\w-]+", "_", (namn or "match")).strip("_")[:60] or "match"
         gui.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         path = gui.CONFIG_DIR / f"roster_{slug}.csv"
+        med_lag = any((r.get("lag") or "").strip() for r in (rader or []))
         try:
             with open(path, "w", newline="", encoding="utf-8") as f:
                 w = csv.writer(f)
-                w.writerow(["nummer", "namn"])
+                w.writerow(["nummer", "namn", "lag"] if med_lag else ["nummer", "namn"])
                 for r in rader or []:
                     nr = str(r.get("nr", "")).strip()
                     nm = str(r.get("namn", "")).strip()
-                    if nr and nm:
+                    if not (nr and nm):
+                        continue
+                    if med_lag:
+                        w.writerow([nr, nm, (r.get("lag") or "").strip().lower()])
+                    else:
                         w.writerow([nr, nm])
             return str(path)
         except Exception:
@@ -420,9 +427,10 @@ class Api:
         filer = ([p for p in katalog.iterdir()
                   if p.stem == stam and p.suffix.lower() in nummer_pass.BILD_SUFFIX]
                  if katalog.is_dir() else [])
-        rost = roster_mod.las_roster(gui.ladda_installningar().get("roster", ""))
+        lag_rost = roster_mod.las_roster_lag(gui.ladda_installningar().get("roster", ""))
         if nummer and filer:
-            nummer_pass._skriv_keywords(filer, set(nummer), rost, nummer_pass._env())
+            traffar = [(nr, nummer_pass._namn_unikt(nr, lag_rost)) for nr in nummer]
+            nummer_pass._skriv_keywords(filer, traffar, nummer_pass._env())
         # Grundsanning (facit) för framtida träning.
         try:
             facit = (json.loads(nummer_pass.FACIT_PATH.read_text(encoding="utf-8"))

@@ -202,7 +202,7 @@
     <div class="panel hidden" data-panel="leverans">
       <div class="grid">
         <div class="card full">
-          <div class="cardH">Källa &amp; match</div>
+          <div class="cardH" style="display:flex; align-items:center">Källa &amp; match<button class="btn" style="margin-left:auto; font-size:11px; padding:4px 11px" onclick="nyMatch()">Ny match</button></div>
           <div class="row"><label class="lbl" style="width:84px">Källmapp</label>
             <input class="f flex" id="katalog"><button class="btn" onclick="pick('katalog','dir')">Välj…</button></div>
           <div class="row"><label class="lbl" style="width:84px">Matchinfo</label>
@@ -565,15 +565,16 @@ async function saveRoster(){
   const lag=MATCH.lag||{};
   const lagRader=(k)=>MATCH.spelare.filter(p=>!p._del && (p.lag||"hemma")===k && p.nr && p.namn).map(p=>({nr:p.nr,namn:p.namn}));
   if(MTEAM==="bada"){
-    // En CSV per lag — en flat nummer→namn-fil kan inte hålla två lag (samma
-    // nummer krockar). Roster-fältet pekar på hemmalaget (det du namnger).
-    const hemma=lagRader("hemma"), borta=lagRader("borta");
-    let homePath="";
-    if(hemma.length) homePath=await window.pywebview.api.spara_roster(hemma, lag.hemma||"hemma");
-    if(borta.length) await window.pywebview.api.spara_roster(borta, lag.borta||"borta");
-    if(homePath){ $("roster").value=homePath; await window.pywebview.api.spara(collect()); }
+    // EN CSV med lag-kolumn (nummer,namn,lag) → båda lagen kan namnsättas.
+    // Nummer-passet avgör lag via tröjfärg vid nummerkrock.
+    const rader=MATCH.spelare.filter(p=>!p._del && p.nr && p.namn)
+      .map(p=>({nr:p.nr,namn:p.namn,lag:(p.lag||"hemma")}));
+    if(!rader.length){ return; }
+    const namn=((lag.hemma||"hemma")+"-"+(lag.borta||"borta"));
+    const path=await window.pywebview.api.spara_roster(rader, namn);
+    if(path){ $("roster").value=path; await window.pywebview.api.spara(collect()); }
     setSheetSub("Sparad"); $("sheetBody").innerHTML=tomMsg(
-      `✓ ${hemma.length} (${esc(lag.hemma||"hemma")}) + ${borta.length} (${esc(lag.borta||"borta")}) sparade som två roster-filer.\nRoster-fältet pekar på ${esc(lag.hemma||"hemma")} — laget som namnsätts.`);
+      `✓ ${rader.length} spelare (båda lagen) sparade i en roster med lag-kolumn.\nNummer-passet namnsätter båda lagen (tröjfärg avgör vid nummerkrock).`);
     setTimeout(closeSheet, 2200); return;
   }
   const rader=mSynliga().map(({p})=>({nr:p.nr,namn:p.namn})).filter(r=>r.nr&&r.namn);
@@ -583,6 +584,14 @@ async function saveRoster(){
   if(path){ $("roster").value=path; await window.pywebview.api.spara(collect());
     setSheetSub("Sparad"); $("sheetBody").innerHTML=tomMsg(`✓ ${rader.length} spelare sparade som roster.\nRoster-fältet pekar nu på filen.`);
     setTimeout(closeSheet, 1400); }
+}
+
+// --- Ny match: nollställ match-specifika fält ---
+async function nyMatch(){
+  ["katalog","matchinfo","roster","bevaka"].forEach(id=>{ if($(id)) $(id).value=""; });
+  if($("avspark")) $("avspark").value="auto";
+  window.dpcClear();
+  await window.pywebview.api.spara(collect());
 }
 
 // --- Bildsvepet (Instagram-bildtext) ---
