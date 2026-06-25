@@ -309,6 +309,23 @@ class Api:
 
         threading.Thread(target=jobb, daemon=True).start()
 
+    def bildsvep_hamta(self, d):
+        """Returnerar sparad {bildsvep, referat} för matchinfo, annars None."""
+        import re as _re
+        matchinfo = (d.get("matchinfo") or "").strip()
+        slug = (_re.sub(r"[^\w-]+", "_", matchinfo).strip("_")[:60] or "match")
+        mapp = gui.CONFIG_DIR / "bildsvep"
+        f = mapp / f"{slug}_bildsvep.txt"
+        if not f.exists():
+            return None
+        try:
+            fr = mapp / f"{slug}_referat.txt"
+            return {"bildsvep": f.read_text(encoding="utf-8"),
+                    "referat": fr.read_text(encoding="utf-8") if fr.exists() else "",
+                    "sparad": True}
+        except Exception:
+            return None
+
     # --- Läs laguppställnings-ark (Claude vision) → roster + matchinfo --------
     def las_lineup(self, d):
         import webview

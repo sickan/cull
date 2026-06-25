@@ -562,10 +562,23 @@ function renderMatch(){
 }
 async function saveRoster(){
   mCommit();
+  const lag=MATCH.lag||{};
+  const lagRader=(k)=>MATCH.spelare.filter(p=>!p._del && (p.lag||"hemma")===k && p.nr && p.namn).map(p=>({nr:p.nr,namn:p.namn}));
+  if(MTEAM==="bada"){
+    // En CSV per lag — en flat nummer→namn-fil kan inte hålla två lag (samma
+    // nummer krockar). Roster-fältet pekar på hemmalaget (det du namnger).
+    const hemma=lagRader("hemma"), borta=lagRader("borta");
+    let homePath="";
+    if(hemma.length) homePath=await window.pywebview.api.spara_roster(hemma, lag.hemma||"hemma");
+    if(borta.length) await window.pywebview.api.spara_roster(borta, lag.borta||"borta");
+    if(homePath){ $("roster").value=homePath; await window.pywebview.api.spara(collect()); }
+    setSheetSub("Sparad"); $("sheetBody").innerHTML=tomMsg(
+      `✓ ${hemma.length} (${esc(lag.hemma||"hemma")}) + ${borta.length} (${esc(lag.borta||"borta")}) sparade som två roster-filer.\nRoster-fältet pekar på ${esc(lag.hemma||"hemma")} — laget som namnsätts.`);
+    setTimeout(closeSheet, 2200); return;
+  }
   const rader=mSynliga().map(({p})=>({nr:p.nr,namn:p.namn})).filter(r=>r.nr&&r.namn);
   if(!rader.length){ return; }
-  const lag=MATCH.lag||{};
-  const namn=(MTEAM==="borta"?lag.borta:MTEAM==="bada"?(lag.hemma+"-"+lag.borta):lag.hemma)||"match";
+  const namn=(MTEAM==="borta"?lag.borta:lag.hemma)||"match";
   const path=await window.pywebview.api.spara_roster(rader, namn);
   if(path){ $("roster").value=path; await window.pywebview.api.spara(collect());
     setSheetSub("Sparad"); $("sheetBody").innerHTML=tomMsg(`✓ ${rader.length} spelare sparade som roster.\nRoster-fältet pekar nu på filen.`);
@@ -573,18 +586,24 @@ async function saveRoster(){
 }
 
 // --- Bildsvepet (Instagram-bildtext) ---
-async function bildsvep(){
+async function bildsvep(){ openBildsvep(false); }
+async function bildsvepGorOm(){ openBildsvep(true); }
+async function openBildsvep(force){
   const mi=($("matchinfo").value||"").trim();
   const body=openSheet("Bildsvepet","");
   if(!mi){ body.innerHTML=tomMsg("Fyll i Matchinfo först (Hemma - Borta R-R (halvtid) ÅÅÅÅMMDD Arena)."); return; }
-  body.innerHTML=tomMsg("Hämtar matchfakta och skriver Bildsvepet via Claude… (web search, tar en stund, kostar några ören)");
   await window.pywebview.api.spara(collect());
+  if(!force){
+    const saved=await window.pywebview.api.bildsvep_hamta(collect());
+    if(saved && saved.bildsvep){ window.dpcBildsvep(saved); return; }
+  }
+  body.innerHTML=tomMsg("Hämtar matchfakta och skriver Bildsvepet via Claude… (web search, tar en stund, kostar några ören)");
   window.pywebview.api.bildsvep(collect());
 }
 window.dpcBildsvep=(data)=>{
   const body=$("sheetBody"); if(!body) return;
   if(!data){ setSheetSub(""); body.innerHTML=tomMsg("Kunde inte generera. Förtydliga Matchinfo (lag, resultat, datum) och försök igen."); return; }
-  setSheetSub("Granska och kopiera — texten postas inte härifrån");
+  setSheetSub(data.sparad?"Sparad text — Gör om söker på nytt":"Granska och kopiera — texten postas inte härifrån");
   body.innerHTML=`<textarea id="bsText" class="bstext" spellcheck="false"></textarea>
     <div class="bshelp">Verifiera @-handles innan du postar (osäkra är markerade med <code>?</code>). Sparad i ~/.config/cull/bildsvep/.</div>
     <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
@@ -595,7 +614,7 @@ window.dpcBildsvep=(data)=>{
   $("bscopy").onclick=()=>{ const t=$("bsText"); t.focus(); t.select();
     try{ navigator.clipboard.writeText(t.value); }catch(e){ try{ document.execCommand("copy"); }catch(e2){} }
     $("bscopy").textContent="✓ Kopierad"; setTimeout(()=>{ if($("bscopy"))$("bscopy").textContent="Kopiera"; },1500); };
-  $("bsregen").onclick=bildsvep;
+  $("bsregen").onclick=bildsvepGorOm;
 };
 
 // --- Jämför par ---
