@@ -114,6 +114,22 @@
   .mini.keep:hover{background:var(--accent-soft); border-color:var(--accent-softborder); color:var(--accent-hover);}
   .mini.drop:hover{background:#FBEAEA; border-color:#E9C2C2; color:#C0392B;}
   .gstate{font-size:10px; color:var(--accent-hover); text-align:center; padding:0 8px 7px; min-height:14px; font-weight:600;}
+  /* hämta match */
+  .msumm{font-size:13px; line-height:1.6; color:var(--t-body); background:var(--card); border:1px solid var(--card-border);
+       border-radius:10px; padding:12px 14px; margin-bottom:14px;}
+  .mteam{display:inline-flex; background:#E4E4E6; padding:3px; border-radius:9px; margin-bottom:12px;}
+  .mteam .seg{font-size:12px; color:#7A7A7E; padding:5px 14px; border-radius:7px; cursor:pointer;}
+  .mteam .seg.on{background:#fff; color:var(--t-head); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.12);}
+  table.mtab{width:100%; border-collapse:collapse;}
+  table.mtab th{font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--t-caps); text-align:left; padding:4px 6px;}
+  table.mtab td{padding:3px 6px; border-top:1px solid var(--div3);}
+  table.mtab input{font-family:inherit; font-size:13px; color:var(--t-body); background:var(--field);
+       border:1px solid var(--field-border); border-radius:6px; padding:4px 7px; width:100%;}
+  table.mtab input.nr{width:54px;}
+  .mstart{font-size:11px; color:var(--accent-hover); font-weight:600;}
+  .mdel{cursor:pointer; color:var(--t-mut); font-size:15px; border:none; background:none;}
+  .mdel:hover{color:#C0392B;}
+  .mkallor{font-size:11px; color:var(--t-help); margin-top:10px; word-break:break-all;}
   /* nummer-genomgång (Steg 2) */
   .numwrap{padding:8px;}
   .numfield{width:100%; font-family:inherit; font-size:13px; color:var(--t-body); background:var(--field);
@@ -180,7 +196,7 @@
           <div class="row"><label class="lbl" style="width:84px">Källmapp</label>
             <input class="f flex" id="katalog"><button class="btn" onclick="pick('katalog','dir')">Välj…</button></div>
           <div class="row"><label class="lbl" style="width:84px">Matchinfo</label>
-            <input class="f flex" id="matchinfo"></div>
+            <input class="f flex" id="matchinfo"><button class="btn" onclick="hamtaMatch()">Hämta match…</button></div>
           <div class="help pad94">Hemmalag · Bortalag · Resultat (Halvtid) · ÅÅÅÅMMDD · Arena</div>
         </div>
         <div class="card full">
@@ -477,6 +493,62 @@ async function nummerGenomgang(){
     field.addEventListener("keydown",e=>{ if(e.key==="Enter") cell.querySelector(".nrsave").click(); });
     grid.appendChild(cell);
   });
+}
+
+// --- Hämta match (Claude web search → roster) ---
+let MATCH=null, MTEAM="hemma";
+async function hamtaMatch(){
+  const mi=($("matchinfo").value||"").trim();
+  const body=openSheet("Hämta match","");
+  if(!mi){ body.innerHTML=tomMsg("Fyll i Matchinfo först (Hemma - Borta R-R ÅÅÅÅMMDD Arena)."); return; }
+  body.innerHTML=tomMsg("Söker laguppställning och referat på nätet via Claude… (tar en stund, kostar några ören)");
+  await window.pywebview.api.spara(collect());
+  window.pywebview.api.hamta_match(collect());
+}
+window.dpcMatch=(data)=>{
+  const body=$("sheetBody"); if(!body) return;
+  if(!data){ setSheetSub(""); body.innerHTML=tomMsg("Hittade ingen laguppställning. Förtydliga Matchinfo (lag, datum, arena) och försök igen."); return; }
+  (data.spelare||[]).forEach(p=>{ p.nr=String(p.nr||""); p.namn=String(p.namn||""); });
+  MATCH=data; MTEAM="hemma"; renderMatch();
+};
+function mSynliga(){ return (MATCH.spelare||[]).map((p,idx)=>({p,idx}))
+  .filter(o=>!o.p._del && (MTEAM==="bada" || (o.p.lag||"hemma")===MTEAM)); }
+function mCommit(){ document.querySelectorAll("#mbody input.nr").forEach(el=>{ MATCH.spelare[+el.dataset.i].nr=el.value.trim(); });
+  document.querySelectorAll("#mbody input.nm").forEach(el=>{ MATCH.spelare[+el.dataset.i].namn=el.value.trim(); }); }
+function renderMatch(){
+  const body=$("sheetBody"); if(!body||!MATCH) return;
+  const lag=MATCH.lag||{};
+  setSheetSub(`${esc(lag.hemma||"")}${lag.borta?" – "+esc(lag.borta):""}`);
+  const teams=[["hemma",lag.hemma||"Hemma"],["borta",lag.borta||"Borta"],["bada","Båda"]];
+  const segs=teams.map(([k,n])=>`<div class="seg${MTEAM===k?" on":""}" data-t="${k}">${esc(n)}</div>`).join("");
+  const rows=mSynliga().map(({p,idx})=>`<tr>
+    <td><input class="nr" data-i="${idx}" value="${esc(p.nr)}"></td>
+    <td><input class="nm" data-i="${idx}" value="${esc(p.namn)}"></td>
+    <td>${p.start?'<span class="mstart">start</span>':''}</td>
+    <td><button class="mdel" data-i="${idx}">✕</button></td></tr>`).join("");
+  body.innerHTML=`${MATCH.sammanfattning?`<div class="msumm">${esc(MATCH.sammanfattning)}</div>`:""}
+    <div class="mteam">${segs}</div>
+    <table class="mtab"><thead><tr><th>Nr</th><th>Namn</th><th></th><th></th></tr></thead><tbody id="mbody">${rows}</tbody></table>
+    ${(MATCH.kallor&&MATCH.kallor.length)?`<div class="mkallor">Källor: ${MATCH.kallor.map(esc).join(" · ")}</div>`:""}
+    <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+      <button class="btn" id="maddrow">+ Spelare</button>
+      <span class="help" style="margin:0">Sparas som roster för det valda laget</span>
+      <button class="btn soft" id="msave" style="margin-left:auto">Spara som roster</button></div>`;
+  body.querySelectorAll(".mteam .seg").forEach(s=>s.onclick=()=>{ mCommit(); MTEAM=s.dataset.t; renderMatch(); });
+  body.querySelectorAll(".mdel").forEach(b=>b.onclick=()=>{ mCommit(); MATCH.spelare[+b.dataset.i]._del=true; renderMatch(); });
+  $("maddrow").onclick=()=>{ mCommit(); MATCH.spelare.push({nr:"",namn:"",lag:(MTEAM==="bada"?"hemma":MTEAM),start:false}); renderMatch(); };
+  $("msave").onclick=saveRoster;
+}
+async function saveRoster(){
+  mCommit();
+  const rader=mSynliga().map(({p})=>({nr:p.nr,namn:p.namn})).filter(r=>r.nr&&r.namn);
+  if(!rader.length){ return; }
+  const lag=MATCH.lag||{};
+  const namn=(MTEAM==="borta"?lag.borta:MTEAM==="bada"?(lag.hemma+"-"+lag.borta):lag.hemma)||"match";
+  const path=await window.pywebview.api.spara_roster(rader, namn);
+  if(path){ $("roster").value=path; await window.pywebview.api.spara(collect());
+    setSheetSub("Sparad"); $("sheetBody").innerHTML=tomMsg(`✓ ${rader.length} spelare sparade som roster.\nRoster-fältet pekar nu på filen.`);
+    setTimeout(closeSheet, 1400); }
 }
 
 // --- Jämför par ---

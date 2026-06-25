@@ -282,6 +282,41 @@ class Api:
                 cmd += ["--claude-modell", mdl]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
+    # --- Hämta match (Claude web search) → roster-förslag --------------------
+    def hamta_match(self, d):
+        matchinfo = (d.get("matchinfo") or "").strip()
+        sport = (d.get("sport") or "").strip()
+
+        def jobb():
+            from cull import hamta_match as hm
+            data = hm.hamta(matchinfo, sport, logg=self._logga)
+            if not data:
+                self._js("window.dpcMatch(null)")
+                return
+            self._js(f"window.dpcMatch({json.dumps(data, ensure_ascii=False)})")
+
+        threading.Thread(target=jobb, daemon=True).start()
+
+    def spara_roster(self, rader, namn):
+        """rader = [{nr, namn}] → skriver en roster-CSV och returnerar sökvägen."""
+        import csv
+        import re as _re
+        slug = _re.sub(r"[^\w-]+", "_", (namn or "match")).strip("_")[:60] or "match"
+        gui.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        path = gui.CONFIG_DIR / f"roster_{slug}.csv"
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["nummer", "namn"])
+                for r in rader or []:
+                    nr = str(r.get("nr", "")).strip()
+                    nm = str(r.get("namn", "")).strip()
+                    if nr and nm:
+                        w.writerow([nr, nm])
+            return str(path)
+        except Exception:
+            return ""
+
     # --- Steg 2: manuell nummer-genomgång (luckorna) -------------------------
     def osakra_data(self):
         from cull import nummer_pass, roster as roster_mod
