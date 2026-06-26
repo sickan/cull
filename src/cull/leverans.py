@@ -19,12 +19,13 @@ PROFILER = {
 }
 
 
-def _komponera_4x5(bbox_norm, w, h, aspekt=(4, 5),
+def _komponera_4x5(bbox_norm, w, h, aspekt=(4, 5), topp=None, botten=None,
                    luft_topp=0.08, undertill=0.66, sidmarginal=0.06):
     """Pixelruta (x0,y0,x1,y1) för en mål-aspekt-crop som ramar motivet som ett
-    PORTRÄTT, inte bara störst möjliga centrerade fönster: liten luft över huvudet
-    och nedre kant runt mitten av låret (när motivet inte fyller bilden). Faller
-    tillbaka på största centrerade fönstret om motivet saknas eller fyller bilden.
+    PORTRÄTT. Med pose-ankare (topp/botten, normaliserade) sätts den vertikala
+    omfattningen exakt: topp strax ovan huvudet, botten på mitten av låret utan
+    att kapa händer/leder. Utan pose används en geometrisk approximation. Faller
+    tillbaka på största centrerade fönstret om motivet saknas/fyller bilden.
     Ligger alltid inom bilden (förstorar aldrig)."""
     mål = aspekt[0] / aspekt[1]   # bredd/höjd
 
@@ -43,26 +44,38 @@ def _komponera_4x5(bbox_norm, w, h, aspekt=(4, 5),
         return storsta()
     bx0, by0 = bbox_norm[0] * w, bbox_norm[1] * h
     bx1, by1 = bbox_norm[2] * w, bbox_norm[3] * h
-    sh, sw, scx = max(1.0, by1 - by0), max(1.0, bx1 - bx0), (bx0 + bx1) / 2.0
+    sw, scx = max(1.0, bx1 - bx0), (bx0 + bx1) / 2.0
+
+    if topp is not None and botten is not None and botten > topp:
+        ty, byy = topp * h, botten * h           # pose-bestämd vertikal omfattning
+        crop_h = max(byy - ty, (sw * (1 + 2 * sidmarginal)) / mål)
+        crop_w = crop_h * mål
+        if crop_h >= h or crop_w >= w:
+            return storsta()
+        y0 = min(max(ty, 0.0), h - crop_h)
+        x0 = min(max(scx - crop_w / 2.0, 0.0), w - crop_w)
+        return (x0, y0, x0 + crop_w, y0 + crop_h)
+
+    sh = max(1.0, by1 - by0)
     hr = luft_topp * sh
-    # höjd: huvud→mitten av låret, men minst så att motivets bredd ryms
     crop_h = max(hr + undertill * sh, (sw * (1 + 2 * sidmarginal)) / mål)
     crop_w = crop_h * mål
-    if crop_h >= h or crop_w >= w:        # motivet fyller bilden → största fönstret
+    if crop_h >= h or crop_w >= w:
         return storsta()
     y0 = min(max(by0 - hr, 0.0), h - crop_h)
     x0 = min(max(scx - crop_w / 2.0, 0.0), w - crop_w)
     return (x0, y0, x0 + crop_w, y0 + crop_h)
 
 
-def _crop_aspekt(img, aspekt_w, aspekt_h, bbox_norm=None):
+def _crop_aspekt(img, aspekt_w, aspekt_h, bbox_norm=None, topp=None, botten=None):
     """Beskär till mål-bildförhållandet, porträtt-komponerat på motivet
-    (_komponera_4x5). Förstorar aldrig."""
+    (_komponera_4x5, ev. med pose-ankare). Förstorar aldrig."""
     h, w = img.shape[:2]
     if w <= 0 or h <= 0:
         return img
     x0, y0, x1, y1 = (int(round(v)) for v in
-                      _komponera_4x5(bbox_norm, w, h, (aspekt_w, aspekt_h)))
+                      _komponera_4x5(bbox_norm, w, h, (aspekt_w, aspekt_h),
+                                     topp, botten))
     if x1 - x0 < 2 or y1 - y0 < 2:
         return img
     return img[y0:y1, x0:x1]
@@ -178,13 +191,13 @@ def _fit_aspekt(bbox_norm, w, h, aspekt):
     return (ix * iy) / area
 
 
-def crop_rect(bbox_norm, w, h, aspekt):
+def crop_rect(bbox_norm, w, h, aspekt, topp=None, botten=None):
     """Normaliserad cropruta (top, left, bottom, right) för mål-bildförhållandet,
-    centrerad på motivet — för crs:Crop i XMP (LR öppnar bilden beskuren men
-    redigerbar, ingen inbränd pixel)."""
+    porträtt-komponerad på motivet (ev. pose-ankare) — för crs:Crop i XMP (LR
+    öppnar bilden beskuren men redigerbar, ingen inbränd pixel)."""
     if w <= 0 or h <= 0:
         return (0.0, 0.1, 1.0, 0.9)
-    x0, y0, x1, y1 = _komponera_4x5(bbox_norm, w, h, aspekt)
+    x0, y0, x1, y1 = _komponera_4x5(bbox_norm, w, h, aspekt, topp, botten)
     return (y0 / h, x0 / w, y1 / h, x1 / w)
 
 
@@ -247,6 +260,7 @@ def valj_instagram(jobb, profil, claude=False, claude_modell="claude-opus-4-8",
     modeller = ai_lager.ladda_modeller(med_ocr=False, n_pose=1,
                                        yolo_modell="yolo11m.pt")
     yolo, device = modeller["yolo"], modeller["device"]
+    pose_det = modeller["pose_pool"][0] if modeller.get("pose_pool") else None
     bedomda = []
     for j in jobb:
         jpg = j.get("jpg")
@@ -257,8 +271,12 @@ def valj_instagram(jobb, profil, claude=False, claude_modell="claude-opus-4-8",
             continue
         h, w = img.shape[:2]
         yres = yolo(img, verbose=False, device=device)[0]
-        bbox = ai_lager.motiv_bbox(img, yres) or vision_lager.saliens_bbox(jpg)
+        motiv = ai_lager.motiv_bbox(img, yres)
+        bbox = motiv or vision_lager.saliens_bbox(jpg)
         j["_bbox"] = bbox
+        # Pose-ankare (mitten av låret, ej genom händer) — bara på riktiga personer.
+        j["_komp"] = (ai_lager.lar_komposition(img, motiv, pose_det)
+                      if motiv is not None else None)
         j["_fit"] = _fit_aspekt(bbox, w, h, aspekt)
         # Kvalitet styr, men dålig 4:5-passform straffar hårt.
         j["_ig"] = float(j.get("poang", 0.5)) * (0.25 + 0.75 * j["_fit"])
@@ -305,8 +323,9 @@ def exportera(jobb, ut_dir, profil, logg=print, claude=False,
             if abs(sänkt) + 0.05 < abs(vinkel):
                 kapade += 1
         img = rakta(img, vinkel, bbox)
-        if aspekt:                      # 4:5-beskärning centrerad på motivet
-            img = _crop_aspekt(img, aspekt[0], aspekt[1], bbox)
+        if aspekt:                      # 4:5-beskärning, porträtt-komponerad
+            komp = j.get("_komp") or (None, None)
+            img = _crop_aspekt(img, aspekt[0], aspekt[1], bbox, komp[0], komp[1])
         img = passa_i_box(img, profil["max_w"], profil["max_h"])
         ut = ut_dir / f"{j['namn']}.jpg"
         spara_under_storlek(img, ut, profil["max_mb"])

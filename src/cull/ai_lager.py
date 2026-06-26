@@ -419,6 +419,59 @@ def motiv_bbox(img_bgr, yolo_res, marginal=0.08, min_höjd=0.22):
             min(w, x2 + mx) / w, min(h, y2 + my) / h)
 
 
+def lar_komposition(img_bgr, bbox_norm, pose_detektor):
+    """(topp_norm, botten_norm) i hela bildens koordinater för ett porträtt-crop,
+    via pose-landmärken på motivpersonen: topp strax ovanför huvudet, BOTTEN på
+    mitten av låret — men ALDRIG genom händer/fingrar (då inkluderas de istället).
+    Returnerar None om pose misslyckas eller höft/knä är otydliga (då används
+    geometrisk fallback)."""
+    if pose_detektor is None or bbox_norm is None:
+        return None
+    H, W = img_bgr.shape[:2]
+    x1, y1 = int(bbox_norm[0] * W), int(bbox_norm[1] * H)
+    x2, y2 = int(bbox_norm[2] * W), int(bbox_norm[3] * H)
+    cy0 = max(0, y1)
+    crop = img_bgr[cy0:y2, max(0, x1):x2]
+    if crop.size == 0:
+        return None
+    try:
+        import mediapipe as mp
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        res = pose_detektor.detect(
+            mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
+    except Exception:
+        return None
+    lms = getattr(res, "pose_landmarks", None)
+    if not lms:
+        return None
+    lm = lms[0]
+    ch = max(1, y2 - cy0)
+
+    def yn(i):                              # landmärke-y i HELA bildens koord
+        return (cy0 + lm[i].y * ch) / H
+
+    def vis(i):
+        return getattr(lm[i], "visibility", 1.0)
+
+    if min(vis(23), vis(24), vis(25), vis(26)) < 0.3:   # höft/knä otydliga
+        return None
+    höft = (yn(23) + yn(24)) / 2.0
+    knä = (yn(25) + yn(26)) / 2.0
+    if not (0 < höft < knä < 1.2):
+        return None
+    lårmitt = höft + 0.5 * (knä - höft)
+    botten = lårmitt
+    händer = [yn(i) for i in (15, 16) if vis(i) > 0.4]
+    if händer:
+        lägst = max(händer)
+        if lägst > lårmitt - 0.02:          # händerna når mot/under lårmitten
+            botten = lägst + 0.035          # inkludera dem + fingermarginal
+    botten = min(botten, y2 / H)
+    huvud = y1 / H
+    topp = max(0.0, huvud - 0.05 * (botten - huvud))
+    return (topp, min(1.0, botten))
+
+
 def bakgrundskontrast(img_bgr, yolo_res):
     """
     Mäter hur väl huvudmotivet (största spelaren) sticker ut mot bakgrunden,
