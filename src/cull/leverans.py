@@ -46,7 +46,11 @@ def _komponera_4x5(bbox_norm, w, h, aspekt=(4, 5), komp=None,
     if komp is not None and len(komp) == 4:
         ct, cl, cb, cr = komp[0] * h, komp[1] * w, komp[2] * h, komp[3] * w
         cw, chh, ccx = (cr - cl), (cb - ct), (cl + cr) / 2.0
-        crop_h = max(chh, cw / mål)              # minsta 4:5 som rymmer innehållet
+        # Garantera sidmarginal runt innehållet (= huvud→lår OCH båda händerna):
+        # utan den blir crop_w == cw för breda poser (utbredda handskar) → croppen
+        # ligger kant-i-kant med innehållsrutan och kapar de skrymmande handskarna,
+        # vars verkliga utbredning ligger utanför pose-landmärkena.
+        crop_h = max(chh, (cw * (1 + 2 * sidmarginal)) / mål)
         crop_w = crop_h * mål
         if crop_h > h or crop_w > w:             # innehållet större än bilden
             return storsta()

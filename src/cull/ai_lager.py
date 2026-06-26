@@ -466,16 +466,34 @@ def lar_komposition(img_bgr, bbox_norm, pose_detektor):
     # hand-landmärken (handled 15/16 + hand 17–22) som syns → bredd + ev. botten
     handidx = [i for i in (15, 16, 17, 18, 19, 20, 21, 22) if vis(i) > 0.4]
     hand_x = [xn(i) for i in handidx]
-    hand_y = [yn(i) for i in handidx]
+    # Pose-landmärkena sitter i knogar/handled, men en målvakts-handske sträcker
+    # sig en bra bit NEDANFÖR dem (nedåtpekande fingrar — ofta VITA fingertoppar
+    # som färgheuristiker missar). Uppskatta fingertoppen per hand: knoge +
+    # 2×(knoge − handled), vilket skalar med handens storlek i bilden (kalibrerat
+    # mot fotografens egen referenscrop). Annars kapas fingertopparna även när
+    # själva knog-landmärket ligger ovanför lårmitten.
+    def _fingertopp(handled, fingrar):
+        if vis(handled) <= 0.4:
+            return None
+        fy = [yn(i) for i in fingrar if vis(i) > 0.4]
+        if not fy:
+            return None
+        knoge = max(fy)
+        return knoge + 2.0 * max(0.0, knoge - yn(handled))
+    fingertoppar = [t for t in (_fingertopp(15, (17, 19, 21)),
+                                _fingertopp(16, (18, 20, 22))) if t is not None]
     botten = lårmitt
-    if hand_y and max(hand_y) > lårmitt - 0.02:   # händerna når mot/under lårmitten
-        botten = max(hand_y) + 0.03               # inkludera dem + fingermarginal
-    botten = min(botten, y2 / H)
+    if fingertoppar:                              # inkludera nedåtpekande handskar
+        botten = max(botten, max(fingertoppar) + 0.03)   # + grön luft under fingrarna
+    botten = min(botten, 1.0)
     topp = max(0.0, bbox_norm[1])                  # motiv_bbox-marginalen = luft
     vänster, höger = bbox_norm[0], bbox_norm[2]    # personlådan = golv för bredden
+    # Handskmarginal: pose-landmärkena sitter i handled/knogar men en målvakts-
+    # handske är skrymmande och sträcker sig en bit utanför dem → generös marginal
+    # så handsken aldrig hamnar precis i kanten.
     if hand_x:                                     # utvidga om händerna sticker ut
-        vänster = min(vänster, min(hand_x) - 0.015)
-        höger = max(höger, max(hand_x) + 0.015)
+        vänster = min(vänster, min(hand_x) - 0.04)
+        höger = max(höger, max(hand_x) + 0.04)
     vänster, höger = max(0.0, vänster), min(1.0, höger)
     if not (höger > vänster and botten > topp):
         return None

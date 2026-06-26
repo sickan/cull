@@ -714,9 +714,13 @@ def _injicera_crop_xmp(xmp_path, rect, env):
     """Lägger till/ersätter en crs:Crop-ruta i en befintlig sidecar (bevarar
     övrig framkallning). rect = (top, left, bottom, right) normaliserade."""
     top, left, bottom, right = rect
+    # Skriv en KOMPLETT crop-block: utan crs:CropAngle (+ CropConstrainToWarp) kan
+    # Lightroom/Camera Raw tolka crop-rutan inkonsekvent. Vinkel 0 = ren aspekt-crop
+    # utan rätning (rätningen, om någon, ligger redan i den bevarade framkallningen).
     cmd = ["exiftool", "-overwrite_original", "-XMP-crs:HasCrop=True",
            f"-XMP-crs:CropTop={top:.6f}", f"-XMP-crs:CropLeft={left:.6f}",
            f"-XMP-crs:CropBottom={bottom:.6f}", f"-XMP-crs:CropRight={right:.6f}",
+           "-XMP-crs:CropAngle=0", "-XMP-crs:CropConstrainToWarp=0",
            str(xmp_path)]
     try:
         subprocess.run(cmd, capture_output=True, text=True, env=env)
