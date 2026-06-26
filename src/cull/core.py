@@ -760,9 +760,8 @@ def kor_instagram_urval(args, katalog):
             if img is None:
                 continue
             h, w = img.shape[:2]
-            komp = j.get("_komp") or (None, None)
             rect = _lev.crop_rect(j.get("_bbox"), w, h, prof["aspekt"],
-                                  komp[0], komp[1])
+                                  j.get("_komp"))
             shutil.copy2(r, ig_dir / r.name)
             src_xmp = r.with_suffix(".xmp")
             dst_xmp = ig_dir / f"{r.stem}.xmp"

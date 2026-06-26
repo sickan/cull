@@ -19,12 +19,12 @@ PROFILER = {
 }
 
 
-def _komponera_4x5(bbox_norm, w, h, aspekt=(4, 5), topp=None, botten=None,
+def _komponera_4x5(bbox_norm, w, h, aspekt=(4, 5), komp=None,
                    luft_topp=0.08, undertill=0.66, sidmarginal=0.06):
-    """Pixelruta (x0,y0,x1,y1) för en mål-aspekt-crop som ramar motivet som ett
-    PORTRÄTT. Med pose-ankare (topp/botten, normaliserade) sätts den vertikala
-    omfattningen exakt: topp strax ovan huvudet, botten på mitten av låret utan
-    att kapa händer/leder. Utan pose används en geometrisk approximation. Faller
+    """Pixelruta (x0,y0,x1,y1) för en mål-aspekt-crop som porträtt. Med en pose-
+    innehållsruta (komp = top,left,bottom,right normaliserad, omsluter huvud→lår
+    OCH båda händerna) passas det MINSTA 4:5-fönstret runt den så inget av motivet
+    eller händerna kapas. Utan komp används en geometrisk approximation. Faller
     tillbaka på största centrerade fönstret om motivet saknas/fyller bilden.
     Ligger alltid inom bilden (förstorar aldrig)."""
     mål = aspekt[0] / aspekt[1]   # bredd/höjd
@@ -40,23 +40,25 @@ def _komponera_4x5(bbox_norm, w, h, aspekt=(4, 5), topp=None, botten=None,
         y0 = min(max(cy, 0.0), h - nh)
         return (x0, y0, x0 + nw, y0 + nh)
 
-    if bbox_norm is None or w <= 0 or h <= 0:
+    if w <= 0 or h <= 0:
+        return storsta()
+
+    if komp is not None and len(komp) == 4:
+        ct, cl, cb, cr = komp[0] * h, komp[1] * w, komp[2] * h, komp[3] * w
+        cw, chh, ccx = (cr - cl), (cb - ct), (cl + cr) / 2.0
+        crop_h = max(chh, cw / mål)              # minsta 4:5 som rymmer innehållet
+        crop_w = crop_h * mål
+        if crop_h > h or crop_w > w:             # innehållet större än bilden
+            return storsta()
+        y0 = min(max(ct, 0.0), h - crop_h)       # ankra topp vid innehållets topp
+        x0 = min(max(ccx - crop_w / 2.0, 0.0), w - crop_w)
+        return (x0, y0, x0 + crop_w, y0 + crop_h)
+
+    if bbox_norm is None:
         return storsta()
     bx0, by0 = bbox_norm[0] * w, bbox_norm[1] * h
     bx1, by1 = bbox_norm[2] * w, bbox_norm[3] * h
-    sw, scx = max(1.0, bx1 - bx0), (bx0 + bx1) / 2.0
-
-    if topp is not None and botten is not None and botten > topp:
-        ty, byy = topp * h, botten * h           # pose-bestämd vertikal omfattning
-        crop_h = max(byy - ty, (sw * (1 + 2 * sidmarginal)) / mål)
-        crop_w = crop_h * mål
-        if crop_h >= h or crop_w >= w:
-            return storsta()
-        y0 = min(max(ty, 0.0), h - crop_h)
-        x0 = min(max(scx - crop_w / 2.0, 0.0), w - crop_w)
-        return (x0, y0, x0 + crop_w, y0 + crop_h)
-
-    sh = max(1.0, by1 - by0)
+    sh, sw, scx = max(1.0, by1 - by0), max(1.0, bx1 - bx0), (bx0 + bx1) / 2.0
     hr = luft_topp * sh
     crop_h = max(hr + undertill * sh, (sw * (1 + 2 * sidmarginal)) / mål)
     crop_w = crop_h * mål
@@ -67,15 +69,14 @@ def _komponera_4x5(bbox_norm, w, h, aspekt=(4, 5), topp=None, botten=None,
     return (x0, y0, x0 + crop_w, y0 + crop_h)
 
 
-def _crop_aspekt(img, aspekt_w, aspekt_h, bbox_norm=None, topp=None, botten=None):
-    """Beskär till mål-bildförhållandet, porträtt-komponerat på motivet
-    (_komponera_4x5, ev. med pose-ankare). Förstorar aldrig."""
+def _crop_aspekt(img, aspekt_w, aspekt_h, bbox_norm=None, komp=None):
+    """Beskär till mål-bildförhållandet, porträtt-komponerat (_komponera_4x5, ev.
+    med pose-innehållsruta som rymmer båda händerna). Förstorar aldrig."""
     h, w = img.shape[:2]
     if w <= 0 or h <= 0:
         return img
     x0, y0, x1, y1 = (int(round(v)) for v in
-                      _komponera_4x5(bbox_norm, w, h, (aspekt_w, aspekt_h),
-                                     topp, botten))
+                      _komponera_4x5(bbox_norm, w, h, (aspekt_w, aspekt_h), komp))
     if x1 - x0 < 2 or y1 - y0 < 2:
         return img
     return img[y0:y1, x0:x1]
@@ -191,13 +192,13 @@ def _fit_aspekt(bbox_norm, w, h, aspekt):
     return (ix * iy) / area
 
 
-def crop_rect(bbox_norm, w, h, aspekt, topp=None, botten=None):
+def crop_rect(bbox_norm, w, h, aspekt, komp=None):
     """Normaliserad cropruta (top, left, bottom, right) för mål-bildförhållandet,
-    porträtt-komponerad på motivet (ev. pose-ankare) — för crs:Crop i XMP (LR
-    öppnar bilden beskuren men redigerbar, ingen inbränd pixel)."""
+    porträtt-komponerad på motivet (ev. pose-innehållsruta) — för crs:Crop i XMP
+    (LR öppnar bilden beskuren men redigerbar, ingen inbränd pixel)."""
     if w <= 0 or h <= 0:
         return (0.0, 0.1, 1.0, 0.9)
-    x0, y0, x1, y1 = _komponera_4x5(bbox_norm, w, h, aspekt, topp, botten)
+    x0, y0, x1, y1 = _komponera_4x5(bbox_norm, w, h, aspekt, komp)
     return (y0 / h, x0 / w, y1 / h, x1 / w)
 
 
@@ -324,8 +325,7 @@ def exportera(jobb, ut_dir, profil, logg=print, claude=False,
                 kapade += 1
         img = rakta(img, vinkel, bbox)
         if aspekt:                      # 4:5-beskärning, porträtt-komponerad
-            komp = j.get("_komp") or (None, None)
-            img = _crop_aspekt(img, aspekt[0], aspekt[1], bbox, komp[0], komp[1])
+            img = _crop_aspekt(img, aspekt[0], aspekt[1], bbox, j.get("_komp"))
         img = passa_i_box(img, profil["max_w"], profil["max_h"])
         ut = ut_dir / f"{j['namn']}.jpg"
         spara_under_storlek(img, ut, profil["max_mb"])

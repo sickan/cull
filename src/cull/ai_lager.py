@@ -420,18 +420,18 @@ def motiv_bbox(img_bgr, yolo_res, marginal=0.08, min_höjd=0.22):
 
 
 def lar_komposition(img_bgr, bbox_norm, pose_detektor):
-    """(topp_norm, botten_norm) i hela bildens koordinater för ett porträtt-crop,
-    via pose-landmärken på motivpersonen: topp strax ovanför huvudet, BOTTEN på
-    mitten av låret — men ALDRIG genom händer/fingrar (då inkluderas de istället).
-    Returnerar None om pose misslyckas eller höft/knä är otydliga (då används
-    geometrisk fallback)."""
+    """Innehållsruta (top, left, bottom, right) normaliserad som ETT porträtt-crop
+    måste rymma: huvud (med liten luft) → mitten av låret, OCH båda händerna
+    (handled-/handlandmärken) så utbredda armar/handskar aldrig kapas. Om händerna
+    hänger under lårmitten flyttas botten ner och inkluderar dem. Returnerar None
+    om pose misslyckas eller höft/knä är otydliga (då används geometrisk fallback)."""
     if pose_detektor is None or bbox_norm is None:
         return None
     H, W = img_bgr.shape[:2]
     x1, y1 = int(bbox_norm[0] * W), int(bbox_norm[1] * H)
     x2, y2 = int(bbox_norm[2] * W), int(bbox_norm[3] * H)
-    cy0 = max(0, y1)
-    crop = img_bgr[cy0:y2, max(0, x1):x2]
+    cx0, cy0 = max(0, x1), max(0, y1)
+    crop = img_bgr[cy0:y2, cx0:x2]
     if crop.size == 0:
         return None
     try:
@@ -445,9 +445,12 @@ def lar_komposition(img_bgr, bbox_norm, pose_detektor):
     if not lms:
         return None
     lm = lms[0]
-    ch = max(1, y2 - cy0)
+    cw, ch = max(1, x2 - cx0), max(1, y2 - cy0)
 
-    def yn(i):                              # landmärke-y i HELA bildens koord
+    def xn(i):
+        return (cx0 + lm[i].x * cw) / W
+
+    def yn(i):
         return (cy0 + lm[i].y * ch) / H
 
     def vis(i):
@@ -460,16 +463,23 @@ def lar_komposition(img_bgr, bbox_norm, pose_detektor):
     if not (0 < höft < knä < 1.2):
         return None
     lårmitt = höft + 0.5 * (knä - höft)
+    # hand-landmärken (handled 15/16 + hand 17–22) som syns → bredd + ev. botten
+    handidx = [i for i in (15, 16, 17, 18, 19, 20, 21, 22) if vis(i) > 0.4]
+    hand_x = [xn(i) for i in handidx]
+    hand_y = [yn(i) for i in handidx]
     botten = lårmitt
-    händer = [yn(i) for i in (15, 16) if vis(i) > 0.4]
-    if händer:
-        lägst = max(händer)
-        if lägst > lårmitt - 0.02:          # händerna når mot/under lårmitten
-            botten = lägst + 0.035          # inkludera dem + fingermarginal
+    if hand_y and max(hand_y) > lårmitt - 0.02:   # händerna når mot/under lårmitten
+        botten = max(hand_y) + 0.03               # inkludera dem + fingermarginal
     botten = min(botten, y2 / H)
-    huvud = y1 / H
-    topp = max(0.0, huvud - 0.05 * (botten - huvud))
-    return (topp, min(1.0, botten))
+    topp = max(0.0, bbox_norm[1])                  # motiv_bbox-marginalen = luft
+    vänster, höger = bbox_norm[0], bbox_norm[2]    # personlådan = golv för bredden
+    if hand_x:                                     # utvidga om händerna sticker ut
+        vänster = min(vänster, min(hand_x) - 0.015)
+        höger = max(höger, max(hand_x) + 0.015)
+    vänster, höger = max(0.0, vänster), min(1.0, höger)
+    if not (höger > vänster and botten > topp):
+        return None
+    return (topp, vänster, botten, höger)
 
 
 def bakgrundskontrast(img_bgr, yolo_res):
