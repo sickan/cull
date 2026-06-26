@@ -487,6 +487,17 @@ def lar_komposition(img_bgr, bbox_norm, pose_detektor):
         botten = max(botten, max(fingertoppar) + 0.03)   # + grön luft under fingrarna
     botten = min(botten, 1.0)
     topp = max(0.0, bbox_norm[1])                  # motiv_bbox-marginalen = luft
+    # YOLO-boxen kan UNDERSKATTA huvudet (lutat/ockluderat huvud, hästsvans) så
+    # hjässan kapas. Uppskatta hjässan ur pose-huvudlandmärken (0–10) + avståndet
+    # till axlarna (11/12) och höj överkanten vid behov så hjässan alltid får luft.
+    # Sänker aldrig överkanten (min väljer den högre = mindre y).
+    huvud = [yn(i) for i in range(0, 11) if vis(i) > 0.3]
+    axel = [yn(i) for i in (11, 12) if vis(i) > 0.3]
+    if huvud and axel:
+        huvud_topp = min(huvud)
+        huvudhöjd = max(0.05, min(axel) - huvud_topp)
+        krona = huvud_topp - 0.6 * huvudhöjd       # uppskattad hjässa över ansiktet
+        topp = max(0.0, min(topp, krona - 0.25 * huvudhöjd))   # + luft över hjässan
     vänster, höger = bbox_norm[0], bbox_norm[2]    # personlådan = golv för bredden
     # Handskmarginal: pose-landmärkena sitter i handled/knogar men en målvakts-
     # handske är skrymmande och sträcker sig en bit utanför dem → generös marginal
