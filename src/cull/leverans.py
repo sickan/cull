@@ -19,30 +19,53 @@ PROFILER = {
 }
 
 
+def _komponera_4x5(bbox_norm, w, h, aspekt=(4, 5),
+                   luft_topp=0.08, undertill=0.66, sidmarginal=0.06):
+    """Pixelruta (x0,y0,x1,y1) för en mål-aspekt-crop som ramar motivet som ett
+    PORTRÄTT, inte bara störst möjliga centrerade fönster: liten luft över huvudet
+    och nedre kant runt mitten av låret (när motivet inte fyller bilden). Faller
+    tillbaka på största centrerade fönstret om motivet saknas eller fyller bilden.
+    Ligger alltid inom bilden (förstorar aldrig)."""
+    mål = aspekt[0] / aspekt[1]   # bredd/höjd
+
+    def storsta():
+        nw, nh = (mål * h, h) if (w / h) > mål else (w, w / mål)
+        if bbox_norm is not None:
+            cx = (bbox_norm[0] + bbox_norm[2]) / 2.0 * w
+            cy = bbox_norm[1] * h - luft_topp * (bbox_norm[3] - bbox_norm[1]) * h
+        else:
+            cx, cy = w / 2.0, (h - nh) / 2.0
+        x0 = min(max(cx - nw / 2.0, 0.0), w - nw)
+        y0 = min(max(cy, 0.0), h - nh)
+        return (x0, y0, x0 + nw, y0 + nh)
+
+    if bbox_norm is None or w <= 0 or h <= 0:
+        return storsta()
+    bx0, by0 = bbox_norm[0] * w, bbox_norm[1] * h
+    bx1, by1 = bbox_norm[2] * w, bbox_norm[3] * h
+    sh, sw, scx = max(1.0, by1 - by0), max(1.0, bx1 - bx0), (bx0 + bx1) / 2.0
+    hr = luft_topp * sh
+    # höjd: huvud→mitten av låret, men minst så att motivets bredd ryms
+    crop_h = max(hr + undertill * sh, (sw * (1 + 2 * sidmarginal)) / mål)
+    crop_w = crop_h * mål
+    if crop_h >= h or crop_w >= w:        # motivet fyller bilden → största fönstret
+        return storsta()
+    y0 = min(max(by0 - hr, 0.0), h - crop_h)
+    x0 = min(max(scx - crop_w / 2.0, 0.0), w - crop_w)
+    return (x0, y0, x0 + crop_w, y0 + crop_h)
+
+
 def _crop_aspekt(img, aspekt_w, aspekt_h, bbox_norm=None):
-    """Beskär till mål-bildförhållandet, centrerat på motivet (saliens-bbox,
-    normaliserad) så motivet inte hamnar utanför ramen. Förstorar aldrig."""
+    """Beskär till mål-bildförhållandet, porträtt-komponerat på motivet
+    (_komponera_4x5). Förstorar aldrig."""
     h, w = img.shape[:2]
     if w <= 0 or h <= 0:
         return img
-    mål = aspekt_w / aspekt_h          # bredd/höjd
-    cur = w / h
-    if abs(cur - mål) < 1e-3:
+    x0, y0, x1, y1 = (int(round(v)) for v in
+                      _komponera_4x5(bbox_norm, w, h, (aspekt_w, aspekt_h)))
+    if x1 - x0 < 2 or y1 - y0 < 2:
         return img
-    if cur > mål:                       # för bred → kapa bredden
-        nw, nh = int(round(mål * h)), h
-    else:                               # för hög → kapa höjden
-        nw, nh = w, int(round(w / mål))
-    if bbox_norm is not None:
-        cx = (bbox_norm[0] + bbox_norm[2]) / 2.0 * w
-        cy = (bbox_norm[1] + bbox_norm[3]) / 2.0 * h
-    else:
-        cx, cy = w / 2.0, h / 2.0
-    x0 = int(round(cx - nw / 2.0))
-    y0 = int(round(cy - nh / 2.0))
-    x0 = max(0, min(x0, w - nw))        # håll fönstret inom bilden
-    y0 = max(0, min(y0, h - nh))
-    return img[y0:y0 + nh, x0:x0 + nw]
+    return img[y0:y1, x0:x1]
 
 
 def _storsta_inskrivna(w, h, vinkel_grader):
@@ -161,17 +184,8 @@ def crop_rect(bbox_norm, w, h, aspekt):
     redigerbar, ingen inbränd pixel)."""
     if w <= 0 or h <= 0:
         return (0.0, 0.1, 1.0, 0.9)
-    mål = aspekt[0] / aspekt[1]
-    cur = w / h
-    nw, nh = (mål * h, h) if cur > mål else (w, w / mål)
-    if bbox_norm is not None:
-        cx = (bbox_norm[0] + bbox_norm[2]) / 2.0 * w
-        cy = (bbox_norm[1] + bbox_norm[3]) / 2.0 * h
-    else:
-        cx, cy = w / 2.0, h / 2.0
-    x0 = min(max(cx - nw / 2.0, 0.0), w - nw)
-    y0 = min(max(cy - nh / 2.0, 0.0), h - nh)
-    return (y0 / h, x0 / w, (y0 + nh) / h, (x0 + nw) / w)
+    x0, y0, x1, y1 = _komponera_4x5(bbox_norm, w, h, aspekt)
+    return (y0 / h, x0 / w, y1 / h, x1 / w)
 
 
 def _claude_instagram_pick(kandidater, antal, matchinfo, modell, logg):
