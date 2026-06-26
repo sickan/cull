@@ -222,7 +222,7 @@ class Api:
 
     # --- efterbehandla en exporterad mapp ------------------------------------
     def efterbehandla(self, d):
-        mapp = self.valj_mapp(d.get("export_rot") or "")
+        mapp = self._aktiv_mapp(d, "export_rot")
         if not mapp:
             self._js("window.dpcDone(false)")
             return
@@ -261,9 +261,18 @@ class Api:
             cmd += ["--hemma-farg", d["hemma_farg"].strip()]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
+    def _aktiv_mapp(self, d, *falt):
+        """Återanvänd det aktiva urvalet (väljaren) om det pekar på en mapp,
+        annars öppna mapp-dialogen med ett vettigt startläge."""
+        akt = (d.get("aktivt_urval") or "").strip()
+        if akt and Path(akt).is_dir():
+            return akt
+        start = next((d.get(f) for f in falt if (d.get(f) or "").strip()), "")
+        return self.valj_mapp(start or "")
+
     # --- läs tröjnummer på en vald mapp → XMP-keywords -----------------------
     def nummer_pass(self, d):
-        mapp = self.valj_mapp(d.get("katalog") or d.get("export_rot") or "")
+        mapp = self._aktiv_mapp(d, "katalog", "export_rot")
         if not mapp:
             self._js("window.dpcDone(false)")
             return
@@ -284,7 +293,7 @@ class Api:
 
     # --- Instagram-urval: plocka 20 IG-bästa ur ett urval (4:5 i XMP → LR) ---
     def instagram_urval(self, d):
-        mapp = self.valj_mapp(d.get("export_rot") or d.get("katalog") or "")
+        mapp = self._aktiv_mapp(d, "export_rot", "katalog")
         if not mapp:
             self._js("window.dpcDone(false)")
             return
@@ -579,6 +588,23 @@ class Api:
             except Exception:
                 pass
         return True
+
+    # --- En miniatyr per urval-mapp (väljaren / Instagram-galleriet) ---------
+    def urval_thumb(self, path):
+        mapp = Path((path or "").strip())
+        if not mapp.is_dir():
+            return None
+        try:
+            filer = sorted((p for p in mapp.iterdir()
+                            if p.suffix.lower() in VISA_SUFFIX
+                            and not p.name.startswith(".")), key=lambda p: p.name)
+        except Exception:
+            filer = []
+        for p in filer:
+            thumb = _thumb_for(p, _env(), maxsize=(360, 270))
+            if thumb:
+                return {"thumb": thumb}
+        return None
 
     # --- Visa urval (miniatyr-rutnät, strömmas) ------------------------------
     def valj_urval_mapp(self, start):
