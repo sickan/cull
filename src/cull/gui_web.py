@@ -331,8 +331,11 @@ class Api:
         self._js("document.getElementById('snabb_kalla').value="
                  + json.dumps(mapp))
         cmd = [sys.executable, "-m", "cull.core", mapp, "--snabbplock"]
-        oppna = (d.get("oppna") or "").strip()
-        if oppna:
+        # Normalisera visningsvärdet ("Lightroom", "DxO PureRAW" …) till
+        # CLI-koderna (lightroom/dxo/finder/inget); auto = default → utelämna.
+        oppna = (d.get("oppna") or "").strip().lower()
+        oppna = {"dxo pureraw": "dxo"}.get(oppna, oppna)
+        if oppna and oppna != "auto":
             cmd += ["--oppna", oppna]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
