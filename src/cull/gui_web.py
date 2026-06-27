@@ -209,10 +209,23 @@ class Api:
                 continue
             self._logga(rad.rstrip("\n"))
         proc.wait()
-        ok = proc.returncode == 0
-        self._logga("\n✓ Klar." if ok else "\n✗ Avslutades med fel.",
-                    "ok" if ok else "err")
-        self._js(f"window.dpcDone({'true' if ok else 'false'})")
+        rc = proc.returncode
+        if rc == 0:
+            self._logga("\n✓ Klar.", "ok")
+        elif rc < 0:
+            import signal as _sig
+            try:
+                namn = _sig.Signals(-rc).name
+            except ValueError:
+                namn = f"signal {-rc}"
+            tips = {9: " — slut på minne (OOM-dödad av macOS)",
+                    11: " — krasch i en C-modul (segfault)",
+                    6: " — avbrott i en C-modul (abort)"}.get(-rc, "")
+            self._logga(f"\n✗ Processen dödades av {namn} (kod {rc}){tips}.", "err")
+        else:
+            self._logga(f"\n✗ Avslutades med fel (kod {rc}). "
+                        "Se raderna ovan för orsak.", "err")
+        self._js(f"window.dpcDone({'true' if rc == 0 else 'false'})")
 
     # --- kör cull ------------------------------------------------------------
     def kor(self, d):

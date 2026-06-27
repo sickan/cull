@@ -182,10 +182,15 @@ def ladda_ai_cache():
 
 
 def spara_ai_cache(cache):
+    # Atomisk skrivning: skriv till temp + os.replace. Dödas processen (OOM/
+    # signal) mitt i skrivningen blir den gamla cachen kvar intakt i stället
+    # för att lämnas trasig (vilket skulle tvinga omkörning av all AI).
     try:
         AI_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(AI_CACHE_PATH, "w") as f:
+        tmp = AI_CACHE_PATH.with_suffix(".json.tmp")
+        with open(tmp, "w") as f:
             json.dump(cache, f)
+        os.replace(tmp, AI_CACHE_PATH)
     except Exception:
         pass
 
