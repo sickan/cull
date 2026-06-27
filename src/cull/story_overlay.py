@@ -205,21 +205,20 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     foto = _crop_9x16(foto).resize(UT_STORLEK, Image.LANCZOS)
     W, H = foto.size  # 1080 × 1920
 
-    # Diskret liga-logga som svagt vattenmärke i bakgrunden
+    # Diskret liga-logga uppe i högra hörnet (20 % opacitet)
     if liga:
         liga_logga = hitta_logga(liga)
         if liga_logga:
             try:
                 ll = Image.open(liga_logga).convert("RGBA")
-                mål = int(W * 0.52)
+                mål = int(W * 0.18)
                 ll.thumbnail((mål, mål), Image.LANCZOS)
-                alfa = ll.split()[3].point(lambda a: int(a * 0.15))
+                alfa = ll.split()[3].point(lambda a: int(a * 0.20))
                 ll.putalpha(alfa)
-                ll = ll.rotate(16, expand=True, resample=Image.BICUBIC)
-                lx = int(W * 0.55) - ll.width // 2
-                ly = int(H * 0.32) - ll.height // 2
+                lx = W - ll.width - 34
+                ly = 34
                 foto_rgba = foto.convert("RGBA")
-                foto_rgba.alpha_composite(ll, (max(0, lx), max(0, ly)))
+                foto_rgba.alpha_composite(ll, (max(0, lx), ly))
                 foto = foto_rgba.convert("RGB")
             except Exception:
                 pass
@@ -237,30 +236,34 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         except Exception:
             pass
 
-    # Blå lower-third-band
+    # Flytande blått kort med rundade hörn (lower third)
     BAND_H = 210
-    SAFE_BOTTOM = 130  # IG:s svar-fält
+    SAFE_BOTTOM = 130       # IG:s svar-fält
+    KORT_MARG = 26          # sidmarginal för det flytande kortet
+    RADIE = 30
     band_y = H - SAFE_BOTTOM - BAND_H
-    d.rectangle([(0, band_y), (W, band_y + BAND_H)], fill=BLÅ_DJUP)
+    kort_x0 = KORT_MARG
+    kort_x1 = W - KORT_MARG
+    d.rounded_rectangle([(kort_x0, band_y), (kort_x1, band_y + BAND_H)],
+                        radius=RADIE, fill=BLÅ_DJUP)
 
-    # Subtil övre gradient-linje på bandet
-    d.rectangle([(0, band_y), (W, band_y + 2)], fill=(133, 183, 235, 120))
-
-    # Rundade team-loggor
+    # Rundade team-loggor – indragna från kortets kanter, närmare mitten
     BRICKA_S = 94
-    MARG = 24
+    BRICKA_INDRAG = 40
     by = band_y + (BAND_H - BRICKA_S) // 2
+    bricka_h_x = kort_x0 + BRICKA_INDRAG
+    bricka_b_x = kort_x1 - BRICKA_INDRAG - BRICKA_S
 
     mono_h = (lag_hemma[:3] if lag_hemma else "HEM").upper()
     mono_b = (lag_borta[:3] if lag_borta else "BORT").upper()
     bricka_h = _rund_bricka(hitta_logga(lag_hemma), BRICKA_S, mono_h)
     bricka_b = _rund_bricka(hitta_logga(lag_borta), BRICKA_S, mono_b)
-    canvas.paste(bricka_h, (MARG, by), bricka_h)
-    canvas.paste(bricka_b, (W - MARG - BRICKA_S, by), bricka_b)
+    canvas.paste(bricka_h, (bricka_h_x, by), bricka_h)
+    canvas.paste(bricka_b, (bricka_b_x, by), bricka_b)
 
-    # Text i bandet
-    text_x = MARG + BRICKA_S + 16
-    text_w = W - 2 * (MARG + BRICKA_S + 16)
+    # Text centrerad mellan brickorna (= bildens mitt, symmetriskt)
+    text_x = bricka_h_x + BRICKA_S + 18
+    text_w = (bricka_b_x - 18) - text_x
     text_cx = text_x + text_w // 2
 
     # Etikettrad – spärrad, med klockslag bredvid vid avspark
