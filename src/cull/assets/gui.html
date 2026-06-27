@@ -750,38 +750,85 @@ function _uppdLoggaRad(typ, namn, status){
   const nEl=$("storyLoggaNamn"+typ), sEl=$("storyLoggaStatus"+typ);
   if(nEl) nEl.textContent = namn||"–";
   if(!sEl) return;
-  const lagEnc=encodeURIComponent(namn||"");
-  if(status&&status.finns){
-    sEl.innerHTML=`<span style="color:#3a7d3a;font-size:11px">✓ ${esc(status.fil)}</span> `+
-      `<button class="btn" style="font-size:11px;padding:3px 8px" onclick="laddaUppLogga('${esc(namn)}')">Byt…</button>`;
-  } else {
-    sEl.innerHTML=`<span style="color:var(--muted);font-size:11px">saknas</span> `+
-      (namn?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="laddaUppLogga('${esc(namn)}')">Ladda upp…</button>`:"");
-  }
-}
-async function laddaUppLogga(lagNamn){
-  const res = await window.pywebview.api.ladda_upp_logga({logga_lag: lagNamn});
-  if(res&&res.ok){ storyInfoUppdatera(); }
-  else if(res&&res.fel&&res.fel!=="Avbruten"){ alert(res.fel); }
+  sEl.innerHTML = (status&&status.finns)
+    ? `<span style="color:#3a7d3a;font-size:11px">✓</span>`
+    : `<span style="color:var(--muted);font-size:11px">–</span>`;
 }
 async function visaLoggor(){
-  const data = await window.pywebview.api.loggor_lista();
-  if(!data) return;
-  openSheet("Loggor", data.mapp);
+  openSheet("Hantera loggor","");
   const b=$("sheetBody"); if(!b) return;
-  if(!data.loggor.length){
-    b.innerHTML=tomMsg('Inga loggor än. Lägg till PNG-filer via "Ladda upp…" i Story-kortet.');
-    return;
-  }
-  b.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:12px;padding:4px 0">`+
-    data.loggor.map(l=>`
-      <div style="text-align:center;width:88px">
-        ${l.thumb?`<img src="${l.thumb}" style="width:64px;height:64px;border-radius:50%;object-fit:contain;border:1px solid var(--card-border);background:#fff">`
-          :`<div style="width:64px;height:64px;border-radius:50%;background:var(--field);border:1px solid var(--card-border);margin:0 auto"></div>`}
-        <div style="font-size:11px;margin-top:4px;word-break:break-all;color:var(--t-body)">${esc(l.stem)}</div>
-        <button class="btn" style="font-size:10px;padding:2px 7px;margin-top:3px;color:#c00"
-          onclick="sletLogga('${esc(l.fil)}')">Ta bort</button>
-      </div>`).join("")+`</div>`;
+  b.innerHTML=tomMsg("Läser…");
+  try {
+    const [info, ld] = await Promise.all([
+      window.pywebview.api.story_info(collect()),
+      window.pywebview.api.loggor_lista()
+    ]);
+    if(!ld){ b.innerHTML=tomMsg("Kunde inte läsa loggor."); return; }
+    let html="";
+    const ligaNamn=(($("story_liga")||{}).value||"").trim();
+    const matchLag=[
+      ...(info&&info.lag_hemma?[{lbl:"Hemmalag",namn:info.lag_hemma,status:info.logga_hemma}]:[]),
+      ...(info&&info.lag_borta?[{lbl:"Bortalag", namn:info.lag_borta,status:info.logga_borta}]:[]),
+    ];
+    html+=`<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Den här matchen</div>`;
+    html+=`<div style="display:grid;grid-template-columns:80px 1fr auto;gap:6px 10px;align-items:center;margin-bottom:20px">`;
+    for(const r of matchLag){
+      const ok=r.status&&r.status.finns;
+      html+=`<span style="font-size:11px;color:var(--muted)">${esc(r.lbl)}</span>`;
+      html+=`<span style="font-size:13px">${esc(r.namn)}</span>`;
+      html+=`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="_loggaUppFran('${esc(r.namn)}')">${ok?"Byt…":"Ladda upp…"}</button>`;
+    }
+    const ligaOk=(info&&info.logga_liga&&info.logga_liga.finns)||false;
+    html+=`<span style="font-size:11px;color:var(--muted)">Liga</span>`;
+    if(ligaNamn){
+      html+=`<span style="font-size:13px">${esc(ligaNamn)}</span>`;
+      html+=`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="_loggaUppFran('${esc(ligaNamn)}')">${ligaOk?"Byt…":"Ladda upp…"}</button>`;
+    } else {
+      html+=`<input id="loggaLigaNamn" class="f" placeholder="Liganamn…" style="font-size:12px">`;
+      html+=`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="_loggaUppLiga()">Ladda upp…</button>`;
+    }
+    html+=`</div>`;
+    html+=`<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Bibliotek (${ld.loggor.length})</div>`;
+    if(!ld.loggor.length){
+      html+=`<div style="font-size:13px;color:var(--muted);margin-bottom:16px">Inga loggor ännu.</div>`;
+    } else {
+      html+=`<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px">`;
+      for(const l of ld.loggor){
+        html+=`<div style="text-align:center;width:88px">`;
+        html+=l.thumb?`<img src="${l.thumb}" style="width:64px;height:64px;border-radius:50%;object-fit:contain;border:1px solid var(--card-border);background:#fff">`
+                     :`<div style="width:64px;height:64px;border-radius:50%;background:var(--field);border:1px solid var(--card-border);margin:0 auto"></div>`;
+        html+=`<div style="font-size:11px;margin-top:4px;word-break:break-all;color:var(--t-body)">${esc(l.stem)}</div>`;
+        html+=`<button class="btn" style="font-size:10px;padding:2px 7px;margin-top:3px;color:#c00" onclick="sletLogga('${esc(l.fil)}')">Ta bort</button>`;
+        html+=`</div>`;
+      }
+      html+=`</div>`;
+    }
+    html+=`<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Lägg till ny</div>`;
+    html+=`<div class="row" style="gap:8px"><input id="nyLoggaNamn" class="f flex" placeholder="Lagnamn (t.ex. Malmö FF)" style="flex:1"><button class="btn" onclick="_loggaUppNy()">Välj PNG…</button></div>`;
+    html+=`<div id="loggorFel" style="font-size:12px;margin-top:6px;min-height:18px;color:var(--muted)"></div>`;
+    b.innerHTML=html;
+    setSheetSub(ld.mapp);
+  } catch(e){ if(b) b.innerHTML=tomMsg("Fel: "+e); }
+}
+async function _loggaUppFran(lagNamn){ if(lagNamn) await _loggaUppGenom(lagNamn); }
+async function _loggaUppLiga(){
+  const nEl=$("loggaLigaNamn"), namn=nEl?nEl.value.trim():"";
+  if(!namn){ const f=$("loggorFel");if(f)f.textContent="Ange liganamn."; return; }
+  const ligaFld=$("story_liga"); if(ligaFld&&!ligaFld.value.trim()) ligaFld.value=namn;
+  await _loggaUppGenom(namn);
+}
+async function _loggaUppNy(){
+  const nEl=$("nyLoggaNamn"), namn=nEl?nEl.value.trim():"";
+  if(!namn){ const f=$("loggorFel");if(f)f.textContent="Ange ett lagnamn."; return; }
+  await _loggaUppGenom(namn);
+}
+async function _loggaUppGenom(lagNamn){
+  const f=$("loggorFel"); if(f) f.textContent="";
+  try {
+    const res=await window.pywebview.api.ladda_upp_logga({logga_lag:lagNamn});
+    if(res&&res.ok){ storyInfoUppdatera(); visaLoggor(); }
+    else { const fel=(res&&res.fel)||"Avbruten"; if(fel!=="Avbruten"&&f) f.textContent="Fel: "+fel; }
+  } catch(e){ if(f) f.textContent="Fel: "+e; }
 }
 async function sletLogga(fil){
   if(!confirm(`Ta bort ${fil}?`)) return;
