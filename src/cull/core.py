@@ -127,6 +127,9 @@ AKTIV_PATH = Path.home() / ".cache" / "cull" / "aktiv_inlarning.json"
 AKTIV_THUMB_DIR = Path.home() / ".cache" / "cull" / "aktiv_thumbs"
 # Körningshistorik med poängfördelning (för histogram + jämför körningar).
 KOR_HIST_PATH = Path.home() / ".config" / "cull" / "kor_historik.json"
+# Träningsunderlag per cull: feature-vektorer för HELA tagningen (ingen bild),
+# som "Lär av match" senare märker med ditt Photo Mechanic-urval → facit.
+FACIT_UNDERLAG_DIR = Path.home() / ".config" / "cull" / "facit_underlag"
 
 
 def _spara_aktiv_inlarning(resultat, katalog, n=12):
@@ -176,6 +179,36 @@ def _logga_korning(katalog, ut_dir, resultat, valda):
     hist = hist[-50:]
     KOR_HIST_PATH.parent.mkdir(parents=True, exist_ok=True)
     KOR_HIST_PATH.write_text(json.dumps(hist, ensure_ascii=False), encoding="utf-8")
+
+
+def _spara_facit_underlag(resultat, args, sport):
+    """Sparar feature-vektorer för HELA tagningen (inga bilder) som senare kan
+    märkas med användarens Photo Mechanic-urval → facit för träning. Kräver att
+    modellen/AI körts (annars saknas riktiga features). Liten JSON per cull."""
+    if not resultat:
+        return
+    from cull import inlarning
+    namn = (args.ut_namn or Path(args.katalog).name or "match").strip()
+    slug = re.sub(r"[^\w-]+", "_", namn).strip("_")[:80] or "match"
+    rader = [{"stem": r["fil"].stem,
+              "v": [round(float(r.get(k, 0.0)), 5) for k in inlarning.FEATURES]}
+             for r in resultat]
+    post = {
+        "match": namn,
+        "sport": sport or "",
+        "skapad": datetime.now().isoformat(timespec="seconds"),
+        "features": list(inlarning.FEATURES),
+        "n": len(rader),
+        "rader": rader,
+    }
+    try:
+        FACIT_UNDERLAG_DIR.mkdir(parents=True, exist_ok=True)
+        (FACIT_UNDERLAG_DIR / f"{slug}.json").write_text(
+            json.dumps(post, ensure_ascii=False), encoding="utf-8")
+        print(f"  Träningsunderlag sparat ({len(rader)} bilder) — märk med ditt "
+              "PM-urval via 'Lär av match'.", flush=True)
+    except Exception as e:
+        print(f"  (kunde inte spara träningsunderlag: {e})", flush=True)
 
 
 def _cache_nyckel(nef):
@@ -1892,6 +1925,10 @@ def main():
         if modell_paket:
             _spara_aktiv_inlarning(resultat, katalog)
         _logga_korning(katalog, ut_dir, resultat, valda)
+        # Träningsunderlag: spara features för hela tagningen när AI/modell körts
+        # (annars är features tomma). Märks senare med PM-urvalet via "Lär av match".
+        if args.ai or modell_paket:
+            _spara_facit_underlag(resultat, args, sport)
 
     # Tidrapport
     _skriv_tidrapport(tider_fas)
