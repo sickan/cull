@@ -351,6 +351,8 @@ class Api:
         avspark_tid = (d.get("avspark") or "").strip()
         if avspark_tid.lower() == "auto":
             avspark_tid = ""
+        if not avspark_tid:
+            avspark_tid = mi.get("tid", "")   # klockslag inbäddat i matchinfo
 
         def jobb():
             try:

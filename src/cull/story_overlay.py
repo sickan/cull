@@ -40,7 +40,7 @@ def tolka_matchinfo(s):
     Format: "Hemmalag - Bortalag [ÅÅÅÅMMDD] [Arena]"
     Stödjer även " – " (långt tankstreck) och resultat inbakat (ignoreras).
     """
-    out = {"lag_hemma": "", "lag_borta": "", "datum": "", "arena": ""}
+    out = {"lag_hemma": "", "lag_borta": "", "datum": "", "arena": "", "tid": ""}
     if not s:
         return out
     s = s.strip()
@@ -53,6 +53,14 @@ def tolka_matchinfo(s):
         out["arena"]     = s[datum_m.end():].strip()
     else:
         pre = s
+
+    # Plocka ut klockslag (HH:MM eller HH.MM) ur arena-delen, så det kan
+    # visas separat bredvid AVSPARK och inte ligga kvar i arenanamnet.
+    tid_m = re.search(r'\b([012]?\d)[:.]([0-5]\d)\b', out["arena"])
+    if tid_m:
+        out["tid"]   = f"{int(tid_m.group(1)):02d}:{tid_m.group(2)}"
+        out["arena"] = (out["arena"][:tid_m.start()]
+                        + out["arena"][tid_m.end():]).strip(" ·-–").strip()
 
     # Dela på " - " eller " – " (första förekomst)
     sep = re.search(r'\s+[–\-]\s+', pre)
@@ -213,7 +221,7 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                 ll = Image.open(liga_logga).convert("RGBA")
                 mål = int(W * 0.18)
                 ll.thumbnail((mål, mål), Image.LANCZOS)
-                alfa = ll.split()[3].point(lambda a: int(a * 0.20))
+                alfa = ll.split()[3].point(lambda a: int(a * 0.40))
                 ll.putalpha(alfa)
                 lx = W - ll.width - 34
                 ly = 34
@@ -236,7 +244,9 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         except Exception:
             pass
 
-    # Flytande blått kort med rundade hörn (lower third)
+    # Flytande blått kort med rundade hörn (lower third) – halvtransparent.
+    # OBS: ImageDraw alpha-blandar inte direkt på bilden, så kortet ritas
+    # på ett eget lager och komponeras in med alpha_composite.
     BAND_H = 210
     SAFE_BOTTOM = 130       # IG:s svar-fält
     KORT_MARG = 26          # sidmarginal för det flytande kortet
@@ -244,12 +254,16 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     band_y = H - SAFE_BOTTOM - BAND_H
     kort_x0 = KORT_MARG
     kort_x1 = W - KORT_MARG
-    d.rounded_rectangle([(kort_x0, band_y), (kort_x1, band_y + BAND_H)],
-                        radius=RADIE, fill=BLÅ_DJUP)
+    kort_lager = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(kort_lager).rounded_rectangle(
+        [(kort_x0, band_y), (kort_x1, band_y + BAND_H)],
+        radius=RADIE, fill=(12, 68, 124, 153))   # ~60 % opacitet
+    canvas = Image.alpha_composite(canvas, kort_lager)
+    d = ImageDraw.Draw(canvas)
 
-    # Rundade team-loggor – indragna från kortets kanter, närmare mitten
+    # Rundade team-loggor – indragna från kortets kanter, närmare texten
     BRICKA_S = 94
-    BRICKA_INDRAG = 40
+    BRICKA_INDRAG = 62
     by = band_y + (BAND_H - BRICKA_S) // 2
     bricka_h_x = kort_x0 + BRICKA_INDRAG
     bricka_b_x = kort_x1 - BRICKA_INDRAG - BRICKA_S
