@@ -94,6 +94,8 @@
        padding:8px 20px; box-shadow:0 1px 3px rgba(232,130,12,.4); display:inline-flex; align-items:center; gap:7px;}
   .btn.primary:hover{background:var(--accent-hover);}
   .btn:disabled{opacity:.5; cursor:default;}
+  .storyMoment{flex:1; font-size:12px; border-radius:8px;}
+  .storyMoment.on{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
   /* tool cards */
   .tool{display:flex; align-items:flex-start; gap:11px; padding:12px 13px; border:1px solid var(--card-border);
         border-radius:10px; margin-bottom:9px; cursor:pointer; background:var(--card); transition:.12s;}
@@ -280,6 +282,54 @@
             <div class="row"><label class="lbl" style="width:84px">Källmapp</label>
               <input class="f flex" id="snabb_kalla"><button class="btn" onclick="pick('snabb_kalla','dir')">Välj…</button></div>
             <div class="help pad94" style="margin-left:94px">Mappen på minneskortet med NEF-filerna. De kameralåsta plockas till en undermapp <b>Snabbplock</b> och öppnas enligt ditt val i Leverera.</div>
+          </div>
+          <div class="card full">
+            <div class="cardH">📱 Story</div>
+            <input type="hidden" class="f" id="story_moment" value="avspark">
+            <div class="row" style="gap:6px; margin-bottom:14px">
+              <button class="btn storyMoment on" id="smAvspark"  onclick="storyMoment('avspark')">Avspark</button>
+              <button class="btn storyMoment"    id="smPaus"     onclick="storyMoment('paus')">Halvtid</button>
+              <button class="btn storyMoment"    id="smResultat" onclick="storyMoment('resultat')">Resultat</button>
+            </div>
+
+            <!-- Match-sammanfattning -->
+            <div style="background:var(--field); border-radius:8px; padding:9px 12px; margin-bottom:12px; font-size:12px;">
+              <div style="color:var(--muted); margin-bottom:4px; font-size:11px; letter-spacing:.4px;">MATCH</div>
+              <div id="storyMatchSummary" style="color:var(--t-body); font-weight:500; margin-bottom:8px;">(fyll i Matchinfo och Avspark under Förbered)</div>
+              <div style="display:grid; grid-template-columns:auto 1fr auto; gap:5px 10px; align-items:center;">
+                <span style="color:var(--muted); font-size:11px;">Hemma</span>
+                <span id="storyLoggaNamnHemma" style="color:var(--t-body);"></span>
+                <span id="storyLoggaStatusHemma"></span>
+                <span style="color:var(--muted); font-size:11px;">Borta</span>
+                <span id="storyLoggaNamnBorta" style="color:var(--t-body);"></span>
+                <span id="storyLoggaStatusBorta"></span>
+                <span style="color:var(--muted); font-size:11px;">Liga</span>
+                <span id="storyLoggaNamnLiga" style="color:var(--t-body);"></span>
+                <span id="storyLoggaStatusLiga"></span>
+              </div>
+            </div>
+
+            <div class="row"><label class="lbl" style="width:84px">Bild</label>
+              <input class="f flex" id="story_bild" placeholder="Välj källbild…" readonly>
+              <button class="btn" onclick="pickBild('story_bild')">Välj…</button></div>
+            <div class="help" style="margin:2px 0 8px 94px;" id="storyBildHjälp">Avspark: välj bild från tidigare match. Paus/Resultat: välj ur dagens Snabbplock-mapp.</div>
+            <div class="row hidden" id="storyStallningRad">
+              <label class="lbl" style="width:84px">Ställning</label>
+              <input class="f" id="story_stallning" placeholder="t.ex. 2–1" style="width:120px">
+            </div>
+            <div class="row hidden" id="storyMalRad">
+              <label class="lbl" style="width:84px">Mål</label>
+              <input class="f flex" id="story_mal" placeholder="t.ex. Larsson 23′, Berg 67′">
+            </div>
+            <div class="row">
+              <label class="lbl" style="width:84px">Liga</label>
+              <input class="f flex" id="story_liga" placeholder="t.ex. OBOS Damallsvenskan" oninput="storyInfoUppdatera()">
+            </div>
+            <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button class="btn primary" onclick="skapaStory()">Skapa Story</button>
+              <button class="btn" onclick="visaLoggor()">Hantera loggor…</button>
+              <span id="storyStatus" style="font-size:12px; color:var(--muted); margin-left:4px;"></span>
+            </div>
           </div>
         </div>
 
@@ -566,6 +616,7 @@ function showPanel(name){
   document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("hidden",p.dataset.panel!==name));
   renderFooter(name);
   if(name==="valj") loadValj();
+  if(name==="snabb") storyInfoUppdatera();
   if(name==="leverera") $("leverSub").innerHTML = ACTIVE_PATH
     ? `Arbetar på <b>${esc(niceName(ACTIVE_PATH))}</b>.` : "Exportera urvalet med metadata, husstil och tröjnummer.";
   if(name==="publicera") $("pubSub").innerHTML = ACTIVE_PATH
@@ -649,6 +700,93 @@ async function snabbplock(){
   setBusy(true); window.dpcClear(); progPulse(true); showPanel("logg");
   await window.pywebview.api.spara(collect());
   await window.pywebview.api.snabbplock(collect());
+}
+function storyMoment(m){
+  $("story_moment").value=m;
+  ["avspark","paus","resultat"].forEach(k=>{
+    const btn={avspark:$("smAvspark"),paus:$("smPaus"),resultat:$("smResultat")}[k];
+    if(btn) btn.classList.toggle("on", k===m);
+  });
+  const visStallning = m==="paus"||m==="resultat";
+  const visMal       = m==="resultat";
+  const hjälpTxt = m==="avspark"
+    ? "Välj en bild från en tidigare match – laget och ligan hämtas ur Matchinfo."
+    : "Välj en bild ur dagens <b>Snabbplock</b>-mapp.";
+  const hjälp=$("storyBildHjälp"); if(hjälp) hjälp.innerHTML=hjälpTxt;
+  const sr=$("storyStallningRad"); if(sr) sr.classList.toggle("hidden",!visStallning);
+  const mr=$("storyMalRad");       if(mr) mr.classList.toggle("hidden",!visMal);
+}
+async function pickBild(id){
+  const p = await window.pywebview.api.valj_bildfil($(id)?$(id).value:"");
+  if(p && $(id)) $(id).value=p;
+}
+async function skapaStory(){
+  const st=$("storyStatus"); if(st) st.textContent="Skapar…";
+  await window.pywebview.api.spara(collect());
+  await window.pywebview.api.story_overlay(collect());
+}
+window.dpcStory=(ut)=>{
+  const st=$("storyStatus");
+  if(ut){ if(st) st.textContent="✓ Sparad"; }
+  else  { if(st) st.textContent="Misslyckades – se loggen"; }
+};
+async function storyInfoUppdatera(){
+  if(!window.pywebview) return;
+  const data = await window.pywebview.api.story_info(collect());
+  if(!data) return;
+  const sum=$("storyMatchSummary");
+  if(sum){
+    const delar=[];
+    if(data.lag_hemma&&data.lag_borta) delar.push(`${data.lag_hemma} – ${data.lag_borta}`);
+    if(data.avspark) delar.push(data.avspark);
+    if(data.arena) delar.push(data.arena);
+    sum.textContent = delar.length ? delar.join(" · ") : "(fyll i Matchinfo och Avspark under Förbered)";
+  }
+  _uppdLoggaRad("Hemma", data.lag_hemma, data.logga_hemma);
+  _uppdLoggaRad("Borta", data.lag_borta, data.logga_borta);
+  _uppdLoggaRad("Liga",  data.liga||"",  data.logga_liga);
+}
+function _uppdLoggaRad(typ, namn, status){
+  const nEl=$("storyLoggaNamn"+typ), sEl=$("storyLoggaStatus"+typ);
+  if(nEl) nEl.textContent = namn||"–";
+  if(!sEl) return;
+  const lagEnc=encodeURIComponent(namn||"");
+  if(status&&status.finns){
+    sEl.innerHTML=`<span style="color:#3a7d3a;font-size:11px">✓ ${esc(status.fil)}</span> `+
+      `<button class="btn" style="font-size:11px;padding:3px 8px" onclick="laddaUppLogga('${esc(namn)}')">Byt…</button>`;
+  } else {
+    sEl.innerHTML=`<span style="color:var(--muted);font-size:11px">saknas</span> `+
+      (namn?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="laddaUppLogga('${esc(namn)}')">Ladda upp…</button>`:"");
+  }
+}
+async function laddaUppLogga(lagNamn){
+  const res = await window.pywebview.api.ladda_upp_logga({logga_lag: lagNamn});
+  if(res&&res.ok){ storyInfoUppdatera(); }
+  else if(res&&res.fel&&res.fel!=="Avbruten"){ alert(res.fel); }
+}
+async function visaLoggor(){
+  const data = await window.pywebview.api.loggor_lista();
+  if(!data) return;
+  openSheet("Loggor", data.mapp);
+  const b=$("sheetBody"); if(!b) return;
+  if(!data.loggor.length){
+    b.innerHTML=tomMsg("Inga loggor än. Lägg till PNG-filer via "Ladda upp…" i Story-kortet.");
+    return;
+  }
+  b.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:12px;padding:4px 0">`+
+    data.loggor.map(l=>`
+      <div style="text-align:center;width:88px">
+        ${l.thumb?`<img src="${l.thumb}" style="width:64px;height:64px;border-radius:50%;object-fit:contain;border:1px solid var(--card-border);background:#fff">`
+          :`<div style="width:64px;height:64px;border-radius:50%;background:var(--field);border:1px solid var(--card-border);margin:0 auto"></div>`}
+        <div style="font-size:11px;margin-top:4px;word-break:break-all;color:var(--t-body)">${esc(l.stem)}</div>
+        <button class="btn" style="font-size:10px;padding:2px 7px;margin-top:3px;color:#c00"
+          onclick="sletLogga('${esc(l.fil)}')">Ta bort</button>
+      </div>`).join("")+`</div>`;
+}
+async function sletLogga(fil){
+  if(!confirm(`Ta bort ${fil}?`)) return;
+  const res = await window.pywebview.api.logga_slet({logga_fil: fil});
+  if(res&&res.ok){ visaLoggor(); storyInfoUppdatera(); }
 }
 async function nyMatch(){
   ["katalog","matchinfo","roster","bevaka"].forEach(id=>{ if($(id)) $(id).value=""; });

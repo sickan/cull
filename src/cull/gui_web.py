@@ -151,6 +151,21 @@ class Api:
             return None
         return res[0] if isinstance(res, (list, tuple)) else res
 
+    def valj_bildfil(self, start):
+        """Filväljare för bilder (JPEG + råformat)."""
+        import webview
+        start_dir = str(Path(start).parent) if start and Path(start).exists() else str(Path.home())
+        try:
+            res = self.window.create_file_dialog(
+                webview.OPEN_DIALOG, directory=start_dir,
+                file_types=("Bilder (*.jpg;*.jpeg;*.nef;*.dng;*.cr3;*.cr2;*.arw;*.raf;*.rw2;*.orf)",
+                            "Alla filer (*.*)"))
+        except Exception:
+            res = None
+        if not res:
+            return None
+        return res[0] if isinstance(res, (list, tuple)) else res
+
     # --- spara inställningar --------------------------------------------------
     def spara(self, d):
         try:
@@ -320,6 +335,121 @@ class Api:
         if oppna:
             cmd += ["--oppna", oppna]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
+
+    # --- Story overlay (inbränd 9:16-JPEG) -----------------------------------
+    def story_overlay(self, d):
+        """Skapar en inbränd 9:16 story-JPEG och öppnar den i Finder."""
+        bild = (d.get("story_bild") or "").strip()
+        if not bild or not Path(bild).exists():
+            self._js("window.dpcStory(null)")
+            return
+
+        from cull import story_overlay as so
+        mi      = so.tolka_matchinfo((d.get("matchinfo") or "").strip())
+        moment  = (d.get("story_moment") or "avspark").strip()
+        liga    = (d.get("story_liga") or "").strip()
+        avspark_tid = (d.get("avspark") or "").strip()
+        if avspark_tid.lower() == "auto":
+            avspark_tid = ""
+
+        def jobb():
+            try:
+                ut = so.skapa_story(
+                    bild, moment,
+                    mi["lag_hemma"], mi["lag_borta"],
+                    liga=liga,
+                    stallning=(d.get("story_stallning") or "").strip(),
+                    mal_rad=(d.get("story_mal") or "").strip(),
+                    avspark_tid=avspark_tid,
+                    arena=mi["arena"],
+                    env=_env(),
+                )
+                self._logga(f"✓ Story skapad: {ut}")
+                import subprocess as _sp
+                _sp.Popen(["open", "-R", str(ut)])
+                self._js(f"window.dpcStory({json.dumps(str(ut), ensure_ascii=False)})")
+            except Exception as exc:
+                self._logga(f"Story-fel: {exc}")
+                self._js("window.dpcStory(null)")
+
+        threading.Thread(target=jobb, daemon=True).start()
+
+    def story_info(self, d):
+        """Returnerar parsad matchdata + logga-status för Story-kortets live-visning."""
+        from cull import story_overlay as so
+        mi   = so.tolka_matchinfo((d.get("matchinfo") or "").strip())
+        liga = (d.get("story_liga") or "").strip()
+        avspark_val = (d.get("avspark") or "").strip()
+        if avspark_val.lower() == "auto":
+            avspark_val = ""
+
+        def _logga_info(namn):
+            p = so.hitta_logga(namn)
+            return {"finns": p is not None, "fil": p.name if p else None}
+
+        return {
+            "lag_hemma":   mi["lag_hemma"],
+            "lag_borta":   mi["lag_borta"],
+            "datum":       mi["datum"],
+            "arena":       mi["arena"],
+            "avspark":     avspark_val,
+            "liga":        liga,
+            "logga_hemma": _logga_info(mi["lag_hemma"]),
+            "logga_borta": _logga_info(mi["lag_borta"]),
+            "logga_liga":  _logga_info(liga),
+        }
+
+    def ladda_upp_logga(self, d):
+        """Filväljare → kopierar PNG till ~/.config/cull/loggor/<normnamn>.png."""
+        import webview, shutil
+        from cull import story_overlay as so
+        lag_namn = (d.get("logga_lag") or "").strip()
+        if not lag_namn:
+            return {"ok": False, "fel": "Inget lagnamn angivet"}
+        norm = so.normera_lag(lag_namn)
+        try:
+            res = self.window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                directory=str(Path.home()),
+                file_types=("PNG-logga (*.png)", "Alla bilder (*.png;*.jpg;*.jpeg)"))
+        except Exception:
+            res = None
+        if not res:
+            return {"ok": False, "fel": "Avbruten"}
+        src = Path(res[0] if isinstance(res, (list, tuple)) else res)
+        so.LOGG_DIR.mkdir(parents=True, exist_ok=True)
+        dst = so.LOGG_DIR / (norm + src.suffix.lower())
+        # Om befintlig logga hade annan suffix, ta bort den
+        for sfx in (".png", ".jpg", ".jpeg"):
+            old = so.LOGG_DIR / (norm + sfx)
+            if old.exists() and old != dst:
+                old.unlink()
+        shutil.copy2(src, dst)
+        return {"ok": True, "fil": dst.name, "lag": lag_namn}
+
+    def loggor_lista(self, _d=None):
+        """Returnerar alla loggor i biblioteket med miniatyr (base64)."""
+        from cull import story_overlay as so
+        so.LOGG_DIR.mkdir(parents=True, exist_ok=True)
+        poster = []
+        for p in sorted(so.LOGG_DIR.iterdir()):
+            if p.suffix.lower() not in (".png", ".jpg", ".jpeg"):
+                continue
+            thumb = _b64_thumb(p, (80, 80))
+            poster.append({"fil": p.name, "stem": p.stem, "thumb": thumb})
+        return {"loggor": poster, "mapp": str(so.LOGG_DIR)}
+
+    def logga_slet(self, d):
+        """Tar bort en logga ur biblioteket."""
+        from cull import story_overlay as so
+        fil = (d.get("logga_fil") or "").strip()
+        if not fil:
+            return {"ok": False}
+        p = so.LOGG_DIR / fil
+        if p.exists() and p.parent == so.LOGG_DIR:
+            p.unlink()
+            return {"ok": True}
+        return {"ok": False}
 
     # --- Bildsvepet (Claude web search) → Instagram-bildtext -----------------
     def bildsvep(self, d):
