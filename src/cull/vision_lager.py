@@ -95,8 +95,14 @@ def _estetik_av_cg(cg):
 
 def estetik_poang(path):
     """Apple Vision estetikpoäng ur en fil: overallScore i [-1, 1] (högre =
-    snyggare) + is_utility. Returnerar (score, is_utility) eller None."""
-    return _estetik_av_cg(_cgimage(path))
+    snyggare) + is_utility. Returnerar (score, is_utility) eller None.
+
+    Körs per bild i en autorelease-pool: utan den ackumuleras CGImage-/
+    Vision-objekten över hela uppdraget (tusentals bilder) tills processen
+    OOM-dödas. Resultatet är vanliga Python-tal och är säkert utanför poolen."""
+    import objc
+    with objc.autorelease_pool():
+        return _estetik_av_cg(_cgimage(path))
 
 
 def estetik_poang_bgr(img_bgr):

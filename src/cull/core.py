@@ -1357,11 +1357,17 @@ def main():
                 if args.estetik and args.estetik_motor == "vision":
                     from cull import vision_lager as _vis
                     _tv = time.perf_counter()
-                    for r in ref_lista:
+                    _vtot = len(ref_lista)
+                    for _vi, r in enumerate(ref_lista, 1):
                         jpg = r.get("_jpg")
-                        sc = _vis.estetik_poang(jpg) if jpg else None
+                        try:
+                            sc = _vis.estetik_poang(jpg) if jpg else None
+                        except Exception:
+                            sc = None
                         if sc is not None:
                             r["nima"] = (sc[0] + 1.0) * 4.5 + 1.0
+                        if _vi % 200 == 0 or _vi == _vtot:
+                            print(f"  Vision-estetik …{_vi}/{_vtot}", flush=True)
                     tider_fas["AI:Vision-estetik"] = time.perf_counter() - _tv
 
             # Spara nyberäknade AI-features till cachen (+ avlästa tröjnummer).
