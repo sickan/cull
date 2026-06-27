@@ -73,6 +73,11 @@ def tolka_matchinfo(s):
     else:
         out["lag_hemma"] = pre.strip()
 
+    # Strippa köns-/divisionsprefix som "(D)", "(H)", "(P19)" ur lagnamnen
+    prefix = re.compile(r'^\([A-Za-zÅÄÖåäö0-9]{1,4}\)\s*')
+    out["lag_hemma"] = prefix.sub("", out["lag_hemma"]).strip()
+    out["lag_borta"] = prefix.sub("", out["lag_borta"]).strip()
+
     return out
 
 
