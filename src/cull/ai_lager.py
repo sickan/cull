@@ -776,9 +776,14 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
             batch_imgs = imgs_bgr[start:start + batch_storlek]
             batch_refs = resultat_refs[start:start + batch_storlek]
 
-            # YOLO-batch
+            # YOLO-batch. Begränsa till de enda klasser cullen läser —
+            # person (0) + sportboll (32). Annars sållar NMS bland alla 80
+            # COCO-klasser på fullsatta fotbollsbilder och slår i tidsgränsen
+            # ("NMS time limit exceeded"); med två klasser blir det snabbare
+            # och varningen försvinner, utan att resultatet ändras.
             t0 = perf_counter()
-            yolo_res_list = yolo(batch_imgs, verbose=False, device=device)
+            yolo_res_list = yolo(batch_imgs, verbose=False, device=device,
+                                 classes=[0, 32])
             _tic("AI:YOLO", t0)
 
             # Parallell pose (en tråd per bild, lånar detektor från kön)
