@@ -58,6 +58,30 @@ def _ar_skyddad(p):
     except (OSError, AttributeError):
         return False
 
+
+def _rmtree_kraft(path):
+    """shutil.rmtree som rensar immutable-flagga (uchg/UF_IMMUTABLE) +
+    skrivskydd och försöker igen. Behövs vid --export-overskriv: kopior av
+    kameralåsta NEF ärver uchg via shutil.copy2 (bevarar st_flags på macOS),
+    annars 'Operation not permitted' när den gamla exportmappen ska raderas."""
+    def _losgor(func, p, exc):
+        try:
+            os.chflags(p, 0)               # rensa uchg/UF_IMMUTABLE m.fl.
+        except (OSError, AttributeError):
+            pass
+        try:
+            os.chmod(p, stat.S_IRWXU)
+        except OSError:
+            pass
+        try:
+            func(p)                        # försök unlink/rmdir igen
+        except OSError:
+            pass
+    try:
+        shutil.rmtree(path, onexc=_losgor)        # Python ≥ 3.12
+    except TypeError:
+        shutil.rmtree(path, onerror=_losgor)      # äldre signatur
+
 # Antal CPU-kärnor att använda för parallell baspoängsättning
 N_WORKERS = min(os.cpu_count() or 4, 8)
 # Andel av bilderna (sorterade på baspoäng) som AI körs på
@@ -806,6 +830,10 @@ def kor_instagram_urval(args, katalog):
             rect = _lev.crop_rect(j.get("_bbox"), w, h, prof["aspekt"],
                                   j.get("_komp"))
             shutil.copy2(r, ig_dir / r.name)
+            try:
+                os.chflags(ig_dir / r.name, 0)   # ärv inte kamerans uchg-lås
+            except (OSError, AttributeError):
+                pass
             src_xmp = r.with_suffix(".xmp")
             dst_xmp = ig_dir / f"{r.stem}.xmp"
             if src_xmp.exists():
@@ -880,6 +908,12 @@ def kor_snabbplock(args, katalog):
     for i, src in enumerate(skyddade, 1):
         mål = ut_dir / src.name
         shutil.copy2(src, mål)
+        # Rensa ärvd uchg (copy2 bevarar st_flags) så Snabbplock-mappen går
+        # att radera/skriva över efteråt.
+        try:
+            os.chflags(mål, 0)
+        except (OSError, AttributeError):
+            pass
         kopierade.append(mål)
         # Sidecar med Blue-etikett. Finns redan en sidecar på kortet (egen
         # framkallning) → behåll den; den inbäddade etiketten nedan markerar
@@ -1566,7 +1600,7 @@ def main():
             ut_dir = bas_dir / kam
             if ut_dir.exists():
                 if args.export_overskriv:
-                    shutil.rmtree(ut_dir)
+                    _rmtree_kraft(ut_dir)
                     print(f"  (skriver över befintlig mapp {ut_dir})", flush=True)
                 else:
                     i = 2   # finns redan → Z8, Z8 2, Z8 3, …
@@ -1586,7 +1620,7 @@ def main():
                 ut_dir = katalog / "urval"
             if ut_dir.exists():
                 if args.export_overskriv:
-                    shutil.rmtree(ut_dir)
+                    _rmtree_kraft(ut_dir)
                     print(f"  (skriver över befintlig mapp {ut_dir})", flush=True)
                 else:
                     i = 2   # finns redan → urval, urval 2, urval 3, …
@@ -1653,7 +1687,14 @@ def main():
         label_karta = {r["fil"]: SKYDD_LABEL for r in valda
                        if r["fil"] in skyddade}
         for i, r in enumerate(valda, 1):
-            shutil.copy2(r["fil"], ut_dir / r["fil"].name)
+            _mål = ut_dir / r["fil"].name
+            shutil.copy2(r["fil"], _mål)
+            # shutil.copy2 bevarar st_flags på macOS → kamerans uchg-lås skulle
+            # annars ärvas till exporten och göra den oraderbar. Rensa det.
+            try:
+                os.chflags(_mål, 0)
+            except (OSError, AttributeError):
+                pass
             rating = rating_karta.get(r["fil"])
             label = label_karta.get(r["fil"])
             if gör_xmp or rating is not None or label is not None:
