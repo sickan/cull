@@ -265,11 +265,10 @@ class Api:
     def trana(self, d):
         rot = (d.get("trana_rot") or "").strip()
         if not rot:
-            rot = self.valj_mapp("")
-            if not rot:
-                self._js("window.dpcDone(false)")
-                return
-            self._js(f"document.getElementById('trana_rot').value={json.dumps(rot)}")
+            # Avbryt mapp-dialogen = träna bara på PM-underlag (Lär av match).
+            rot = self.valj_mapp("") or str(gui.CONFIG_DIR)
+            if rot != str(gui.CONFIG_DIR):
+                self._js(f"document.getElementById('trana_rot').value={json.dumps(rot)}")
         cmd = [sys.executable, "-m", "cull.inlarning", rot, "--max-neg", "100"]
         yolo = (d.get("yolo") or "").strip()
         if yolo:
@@ -277,6 +276,71 @@ class Api:
         if d.get("estetik"):
             cmd += ["--estetik-motor", (d.get("estetik_motor") or "nima").lower()]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
+
+    # --- Lär av match: märk cull-underlag med Photo Mechanic-urval -----------
+    def facit_underlag_lista(self, _d=None):
+        """Sparade tränings-underlag (ett per cull) + om de redan märkts."""
+        from cull import inlarning as inl
+        poster = []
+        if inl.FACIT_UNDERLAG_DIR.is_dir():
+            markta = ({p.name for p in inl.FACIT_MARKT_DIR.glob("*.json")}
+                      if inl.FACIT_MARKT_DIR.is_dir() else set())
+            for f in sorted(inl.FACIT_UNDERLAG_DIR.glob("*.json"), reverse=True):
+                try:
+                    j = json.loads(f.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                poster.append({"fil": f.name,
+                               "match": j.get("match", f.stem),
+                               "n": j.get("n", len(j.get("rader", []))),
+                               "skapad": j.get("skapad", ""),
+                               "markt": f.name in markta})
+        return {"underlag": poster}
+
+    def lar_av_match(self, d):
+        """Märker ett underlag med PM-urvalet: öppnar urvalsmappen, matchar
+        filnamn (stem) → valda=1, resten=0, sparar som facit för träning."""
+        import webview
+        from cull import inlarning as inl
+        fil = (d.get("underlag_fil") or "").strip()
+        src = inl.FACIT_UNDERLAG_DIR / fil
+        if not fil or not src.exists():
+            return {"ok": False, "fel": "Välj ett underlag först."}
+        try:
+            res = self.window.create_file_dialog(
+                webview.FOLDER_DIALOG, directory=str(Path.home()))
+        except Exception as e:
+            return {"ok": False, "fel": f"Dialogfel: {e}"}
+        if not res:
+            return {"ok": False, "fel": "Avbruten"}
+        mapp = Path(res[0] if isinstance(res, (list, tuple)) else res)
+        EXIF = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf",
+                ".jpg", ".jpeg"}
+        valda = {p.stem.lower() for p in mapp.rglob("*")
+                 if p.is_file() and p.suffix.lower() in EXIF
+                 and not p.name.startswith(".")}
+        if not valda:
+            return {"ok": False, "fel": "Inga bildfiler i den valda mappen."}
+        try:
+            j = json.loads(src.read_text(encoding="utf-8"))
+        except Exception as e:
+            return {"ok": False, "fel": f"Kunde inte läsa underlaget: {e}"}
+        rader = j.get("rader", [])
+        n_val = 0
+        for r in rader:
+            y = 1 if (r.get("stem", "").lower() in valda) else 0
+            r["y"] = y
+            n_val += y
+        j["pm_mapp"] = str(mapp)
+        try:
+            inl.FACIT_MARKT_DIR.mkdir(parents=True, exist_ok=True)
+            (inl.FACIT_MARKT_DIR / fil).write_text(
+                json.dumps(j, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:
+            return {"ok": False, "fel": f"Kunde inte spara: {e}"}
+        return {"ok": True, "match": j.get("match", ""),
+                "n_total": len(rader), "n_valda": n_val,
+                "ej_matchade": max(0, len(valda) - n_val)}
 
     # --- efterbehandla en exporterad mapp ------------------------------------
     def efterbehandla(self, d):

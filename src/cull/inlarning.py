@@ -55,6 +55,40 @@ _RAW_SUFFIX = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf"}
 # Aktiv inlärning: användarens manuella behåll/förkasta-etiketter (stem → 0/1).
 MANUELLA_PATH = Path.home() / ".config" / "cull" / "manuella_etiketter.json"
 
+# Facit från Photo Mechanic-urval: cullen sparar feature-underlag per match
+# (FACIT_UNDERLAG_DIR), "Lär av match" märker det med urvalet → FACIT_MARKT_DIR.
+FACIT_UNDERLAG_DIR = Path.home() / ".config" / "cull" / "facit_underlag"
+FACIT_MARKT_DIR = Path.home() / ".config" / "cull" / "facit_markt"
+
+
+def hitta_uppdrag_markt():
+    """Läser märkta facit-underlag (features redan extraherade av cullen, märkta
+    med PM-urvalet). Returnerar [(namn, X, y, stems, sport)] med X i nuvarande
+    FEATURES-ordning (namn-justerat så gamla underlag funkar när features växt)."""
+    ut = []
+    if not FACIT_MARKT_DIR.is_dir():
+        return ut
+    for f in sorted(FACIT_MARKT_DIR.glob("*.json")):
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        gamla = d.get("features") or FEATURES
+        idx = {namn: i for i, namn in enumerate(gamla)}
+        rader = d.get("rader") or []
+        stems, X, y = [], [], []
+        for r in rader:
+            v = r.get("v") or []
+            X.append([float(v[idx[fn]]) if fn in idx and idx[fn] < len(v)
+                      else 0.0 for fn in FEATURES])
+            y.append(int(r.get("y", 0)))
+            stems.append(r.get("stem", ""))
+        if not X or sum(y) == 0:
+            continue
+        ut.append((d.get("match") or f.stem, np.array(X, dtype=float),
+                   np.array(y, dtype=int), stems, (d.get("sport") or "").lower()))
+    return ut
+
 
 def ladda_manuella_etiketter():
     try:
@@ -558,6 +592,37 @@ def _ladda_från_cache(fingerprint):
         return None
 
 
+def _ladda_cache_via_stems(items):
+    """Fallback när fingerprint missar fastän features finns cachade — t.ex. när
+    källfilerna blivit online-only (Dropbox/iCloud): stat-storleken blir 0 →
+    annan fingerprint, OCH bilderna går inte att läsa om. Hittar i stället en
+    cachad npz vars stems matchar uppdraget (innehållsidentitet, överlever både
+    mtime- och storleksändringar) och återanvänder dess features. Etiketterna
+    sätts om från items (Instagram-facit är stabil)."""
+    want = {Path(p).stem: int(lab) for p, lab in items}
+    if not want:
+        return None
+    bäst_X = bäst_stems = None
+    bäst_ov = 0
+    for f in TRAIN_CACHE_DIR.glob("*.npz"):
+        try:
+            d = np.load(f, allow_pickle=True)
+            stems = [str(s) for s in d["stems"]]
+        except Exception:
+            continue
+        if len(stems) < 30:
+            continue
+        ov = sum(1 for s in stems if s in want)
+        if ov > bäst_ov and ov >= 0.95 * len(stems):
+            bäst_X, bäst_stems, bäst_ov = d["X"], stems, ov
+    if bäst_X is None:
+        return None
+    y = np.array([want.get(s, 0) for s in bäst_stems], dtype=int)
+    if y.sum() == 0:
+        return None
+    return bäst_X, y, np.array(bäst_stems, dtype=object)
+
+
 def _spara_i_cache(fingerprint, X, y, stems=None):
     TRAIN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     if stems is None:
@@ -600,8 +665,13 @@ def traina(root, yolo_modell="yolo11s.pt", rapport=False,
     if not uppdrag:
         uppdrag = hitta_uppdrag_filterpix(root)
         kalla = "FilterPix"
-    if not uppdrag:
-        sys.exit(f"Hittade inga facit-uppdrag under {root}.")
+    markta = hitta_uppdrag_markt()   # PM-urval (features redan extraherade)
+    if markta:
+        print(f"Lär av match: {len(markta)} märkta underlag (PM-urval).",
+              flush=True)
+    if not uppdrag and not markta:
+        sys.exit(f"Hittade inga facit-uppdrag under {root} och inga märkta "
+                 "PM-underlag (kör en cull → 'Lär av match').")
 
     if max_uppdrag:
         uppdrag = uppdrag[:max_uppdrag]
@@ -632,7 +702,7 @@ def traina(root, yolo_modell="yolo11s.pt", rapport=False,
           flush=True)
     if kontroll_bara:
         return
-    if n_anv == 0:
+    if n_anv == 0 and not markta:
         sys.exit("Inga lokala bilder att träna på — gör Dropbox-mappar offline.")
 
     # Aktiv inlärning: lägg på användarens manuella behåll/förkasta-etiketter.
@@ -676,12 +746,16 @@ def traina(root, yolo_modell="yolo11s.pt", rapport=False,
         k += 1
         fp = fingerprints[namn]
         cached = _ladda_från_cache(fp)
+        via_stems = False
+        if cached is None:
+            cached = _ladda_cache_via_stems(items)   # online-only-fallback
+            via_stems = cached is not None
         if cached is not None:
             X, y, stems = cached
             n_pos = int(y.sum())
             sport = detektera_sport(namn, items=items, env=env)
-            print(f"[{k}/{n_anv}] {namn}  (cache, {len(y)} bilder, "
-                  f"{n_pos} valda, {sport})", flush=True)
+            print(f"[{k}/{n_anv}] {namn}  (cache{'/stems' if via_stems else ''}, "
+                  f"{len(y)} bilder, {n_pos} valda, {sport})", flush=True)
         else:
             if modeller is None:
                 print("\nLaddar AI-modeller…", flush=True)
@@ -712,6 +786,22 @@ def traina(root, yolo_modell="yolo11s.pt", rapport=False,
         y_list.append(y)
         sport_list.append(sport)
 
+    # Märkta PM-underlag: features redan extraherade av cullen → läggs på direkt
+    # (samma per-uppdrag z-norm + sporthantering som de bild-extraherade).
+    for namn, X, y, stems, sport in markta:
+        if len(X) == 0 or y.sum() == 0:
+            continue
+        sport = sport or "okänd"
+        for st, rad in zip(stems, X):
+            stem_feat[str(st)] = rad
+        X_list.append(_znorm(X))
+        y_list.append(y)
+        sport_list.append(sport)
+        print(f"[PM] {namn}  ({len(y)} bilder, {int(y.sum())} valda, {sport})",
+              flush=True)
+
+    if not X_list:
+        sys.exit("Inga användbara träningsuppdrag (tomma efter filtrering).")
     X_all = np.vstack(X_list)
     y_all = np.concatenate(y_list)
     n_pos = int(y_all.sum())
