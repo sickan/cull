@@ -770,7 +770,7 @@ async function visaLoggor(){
   openSheet("Loggor", data.mapp);
   const b=$("sheetBody"); if(!b) return;
   if(!data.loggor.length){
-    b.innerHTML=tomMsg("Inga loggor än. Lägg till PNG-filer via "Ladda upp…" i Story-kortet.");
+    b.innerHTML=tomMsg('Inga loggor än. Lägg till PNG-filer via "Ladda upp…" i Story-kortet.');
     return;
   }
   b.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:12px;padding:4px 0">`+
