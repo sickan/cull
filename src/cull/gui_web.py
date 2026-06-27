@@ -303,6 +303,24 @@ class Api:
             cmd += ["--ut-namn", d["matchinfo"].strip()]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
+    # --- Snabbplock: bara de kameralåsta (protect) bilderna, ingen AI --------
+    def snabbplock(self, d):
+        # Källan = kortet som sitter i (uchg läses på källan). Återanvänd
+        # Källmapp-fältet om det är ifyllt, annars öppna mappdialogen.
+        mapp = (d.get("snabb_kalla") or d.get("katalog") or "").strip()
+        if not mapp or not Path(mapp).is_dir():
+            mapp = self.valj_mapp(mapp or "")
+        if not mapp:
+            self._js("window.dpcDone(false)")
+            return
+        self._js("document.getElementById('snabb_kalla').value="
+                 + json.dumps(mapp))
+        cmd = [sys.executable, "-m", "cull.core", mapp, "--snabbplock"]
+        oppna = (d.get("oppna") or "").strip()
+        if oppna:
+            cmd += ["--oppna", oppna]
+        threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
+
     # --- Bildsvepet (Claude web search) → Instagram-bildtext -----------------
     def bildsvep(self, d):
         import re as _re

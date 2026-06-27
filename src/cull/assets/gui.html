@@ -250,6 +250,8 @@
   <div class="shell">
     <div class="rail" id="rail">
       <div class="step" data-tab="valj"><span class="ix">📷</span>Urval<span class="busy"></span></div>
+      <div class="step" data-tab="snabb"><span class="ix">⚡</span>Snabbplock<span class="busy"></span></div>
+      <div class="raildiv"></div>
       <div class="step" data-tab="forbered"><span class="ix">1</span>Förbered<span class="busy"></span></div>
       <div class="step" data-tab="gallra"><span class="ix">2</span>Gallra<span class="busy"></span></div>
       <div class="step" data-tab="leverera"><span class="ix">3</span>Leverera<span class="busy"></span></div>
@@ -267,6 +269,18 @@
           <div class="h2">Urval</div>
           <div class="sub">Plocka ett befintligt urval på disk att arbeta vidare med — eller skapa ett nytt i Förbered &amp; Gallra.</div>
           <div class="gal" id="urvalGal"></div>
+        </div>
+
+        <!-- SNABBPLOCK -->
+        <div class="panel hidden" data-panel="snabb">
+          <div class="h2">⚡ Snabbplock</div>
+          <div class="sub">Få snabbt ut bara de bilder du låst i kameran (protect) — t.ex. i pausen för en story. Ingen AI, ingen gallring: kopierar råfilerna med Blue-etikett, redo i Lightroom. Kör <b>medan kortet sitter i</b> — låsflaggan följer inte med en kopia.</div>
+          <div class="card full">
+            <div class="cardH">Kort</div>
+            <div class="row"><label class="lbl" style="width:84px">Källmapp</label>
+              <input class="f flex" id="snabb_kalla"><button class="btn" onclick="pick('snabb_kalla','dir')">Välj…</button></div>
+            <div class="help pad94" style="margin-left:94px">Mappen på minneskortet med NEF-filerna. De kameralåsta plockas till en undermapp <b>Snabbplock</b> och öppnas enligt ditt val i Leverera.</div>
+          </div>
         </div>
 
         <!-- FÖRBERED -->
@@ -533,6 +547,7 @@ async function init(){
 // ===== rail-navigering + kontextuell footer =================================
 const FOOT={
   valj:     null,
+  snabb:    {hint:"Bara de kameralåsta bilderna", label:"Plocka skyddade", fn:snabbplock},
   forbered: {hint:"Källfiler och roster klara?", label:"Fortsätt till Gallra", fn:()=>showPanel("gallra")},
   gallra:   {hint:"Gallrar källmappen → nytt urval", label:"Kör cull", fn:kor},
   leverera: {hint:"Arbetar på det aktiva urvalet", label:"Efterbehandla…", fn:efterbehandla},
@@ -629,6 +644,11 @@ async function instagramUrval(){
   window.dpcClear(); progPulse(true);
   await window.pywebview.api.spara(collect());
   await window.pywebview.api.instagram_urval(collect());
+}
+async function snabbplock(){
+  setBusy(true); window.dpcClear(); progPulse(true); showPanel("logg");
+  await window.pywebview.api.spara(collect());
+  await window.pywebview.api.snabbplock(collect());
 }
 async function nyMatch(){
   ["katalog","matchinfo","roster","bevaka"].forEach(id=>{ if($(id)) $(id).value=""; });

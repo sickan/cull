@@ -819,6 +819,79 @@ def kor_instagram_urval(args, katalog):
     print("Klart.", flush=True)
 
 
+def kor_snabbplock(args, katalog):
+    """Snabbplock: kopierar ENBART de kameralåsta (protect/UF_IMMUTABLE) NEF-
+    filerna ur kortet till en egen mapp + XMP-sidecar med Blue-etikett. Ingen
+    AI, ingen scoring, ingen burst-dedup, ingen crop — fristående snabbväg för
+    att i en paus (t.ex. efter uppvärmningen) få ut just de bilder du redan
+    låst i kameran och ta in dem direkt i Lightroom. Läs MEDAN kortet sitter i:
+    uchg-flaggan följer inte med en kopia, så den måste läsas på källan."""
+    import shutil
+    from cull import xmp_writer
+    kat = Path(katalog)
+    nef_filer = sorted(p for p in kat.iterdir()
+                       if p.suffix.lower() in BILD_SUFFIX
+                       and not p.name.startswith("."))
+    if not nef_filer:
+        print("Inga bildfiler i katalogen.", flush=True)
+        return
+    skyddade = [p for p in nef_filer if _ar_skyddad(p)]
+    if not skyddade:
+        print(f"Inga kameralåsta (protect) bilder bland {len(nef_filer)} "
+              "filer. Lås/skydda bilderna i kameran först, och kör medan "
+              "kortet sitter i.", flush=True)
+        return
+    print(f"Snabbplock: {len(skyddade)} av {len(nef_filer)} bilder är "
+          f"kameralåsta → kopierar + {SKYDD_LABEL}-etikett (ingen AI).",
+          flush=True)
+
+    def _sanera(s):
+        return s.replace("/", "-").replace(":", ".").strip()
+
+    if args.export_rot:
+        rot = Path(args.export_rot).expanduser()
+        namn = _sanera(args.ut_namn) if args.ut_namn else \
+            (kat.parent.name or kat.name)
+        ut_dir = rot / namn / "Snabbplock"
+    else:
+        ut_dir = kat / "Snabbplock"
+    if ut_dir.exists():
+        i = 2
+        bas = ut_dir
+        while ut_dir.with_name(f"{bas.name} {i}").exists():
+            i += 1
+        ut_dir = ut_dir.with_name(f"{bas.name} {i}")
+    try:
+        ut_dir.mkdir(parents=True)
+    except OSError as e:
+        sys.exit(f"Kan inte skapa mappen {ut_dir}: {e}. "
+                 "Är disken ansluten och skrivbar?")
+    print(f"Plockar till: {ut_dir}", flush=True)
+
+    env = _exif_env()
+    kopierade = []
+    for i, src in enumerate(skyddade, 1):
+        mål = ut_dir / src.name
+        shutil.copy2(src, mål)
+        kopierade.append(mål)
+        # Sidecar med Blue-etikett. Finns redan en sidecar på kortet (egen
+        # framkallning) → behåll den; den inbäddade etiketten nedan markerar
+        # ändå bilden. Annars skriv en ren sidecar med bara etiketten.
+        src_xmp = src.with_suffix(".xmp")
+        if src_xmp.exists():
+            shutil.copy2(src_xmp, ut_dir / src_xmp.name)
+        else:
+            xmp_writer.skriv_xmp(mål, label=SKYDD_LABEL)
+        print(f"  kopierar …{i}/{len(skyddade)}", flush=True)
+    # Bädda in etiketten i raw-filerna (LR läser xmp:Label ur inbäddad
+    # metadata för raw — samma dubbla väg som vanliga cullen).
+    nl = _skriv_label_exiftool(skyddade, SKYDD_LABEL, ut_dir, env)
+    print(f"✓ Snabbplock klart: {ut_dir} ({len(kopierade)} bilder, "
+          f"{SKYDD_LABEL}-etikett i {nl}).", flush=True)
+    oppna_resultat(ut_dir, ut_dir, kopierade, args.oppna)
+    print("Klart.", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="cull",
                                  description="Teknisk culling av NEF-filer.")
@@ -908,6 +981,9 @@ def main():
     ap.add_argument("--instagram-urval", action="store_true",
                     help="plocka N IG-bästa ur ett befintligt urval, kopiera raw"
                          " + sidecar med 4:5-crop i XMP (öppnas i Lightroom)")
+    ap.add_argument("--snabbplock", action="store_true",
+                    help="snabbväg: kopiera ENBART de kameralåsta (protect) "
+                         "bilderna + Blue-etikett, ingen AI — för stories i pausen")
     ap.add_argument("--stjarnor", action="store_true",
                     help="sätt stjärnbetyg (xmp:Rating 2-5) i sidecaren utifrån "
                          "helhetspoängen → Lightroom visar dem")
@@ -947,6 +1023,10 @@ def main():
 
     if args.instagram_urval:
         kor_instagram_urval(args, katalog)
+        return
+
+    if args.snabbplock:
+        kor_snabbplock(args, katalog)
         return
 
     # Exkludera macOS AppleDouble-sidecars (._namn.NEF) och andra dolda
