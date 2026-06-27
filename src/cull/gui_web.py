@@ -364,6 +364,7 @@ class Api:
                     mal_rad=(d.get("story_mal") or "").strip(),
                     avspark_tid=avspark_tid,
                     arena=mi["arena"],
+                    ut_mapp=(d.get("story_utmapp") or "").strip() or None,
                     env=_env(),
                 )
                 self._logga(f"✓ Story skapad: {ut}")

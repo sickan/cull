@@ -325,6 +325,11 @@
               <label class="lbl" style="width:84px">Liga</label>
               <input class="f flex" id="story_liga" placeholder="t.ex. OBOS Damallsvenskan" oninput="storyInfoUppdatera()">
             </div>
+            <div class="row">
+              <label class="lbl" style="width:84px">Spara till</label>
+              <input class="f flex" id="story_utmapp" placeholder="Tom = bredvid källbilden (…/Story)" readonly>
+              <button class="btn" onclick="pick('story_utmapp','dir')">Välj…</button></div>
+            <div class="help" style="margin:2px 0 8px 94px;">Välj t.ex. en Dropbox-mapp så syns story:n direkt i mobilen för att posta.</div>
             <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <button class="btn primary" onclick="skapaStory()">Skapa Story</button>
               <button class="btn" onclick="visaLoggor()">Hantera loggor…</button>

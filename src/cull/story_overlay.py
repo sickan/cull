@@ -202,14 +202,16 @@ def _spärrad_text(draw, xy, text, font, fill, tracking=0, skugga=False):
 
 def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                 liga="", stallning="", mal_rad="",
-                avspark_tid="", arena="", ut_path=None, env=None):
+                avspark_tid="", arena="", ut_path=None, ut_mapp=None, env=None):
     """
     Renderar en 1080×1920 story-JPEG med inbränd overlay.
 
     moment:    "avspark" | "paus" | "resultat"
     stallning: "1-0"  (paus/resultat)
     mal_rad:   "Larsson 23', Berg 67'"  (resultat)
-    ut_path:   None → <bild-mapp>/Story/story_<moment>.jpg
+    ut_mapp:   målmapp (filnamn genereras) – t.ex. en Dropbox-mapp
+    ut_path:   exakt målfil (vinner över ut_mapp)
+               båda None → <bild-mapp>/Story/story_<moment>.jpg
     Returnerar Path till output-filen.
     """
     Image, ImageDraw, ImageFont, ImageOps = _pil()
@@ -336,10 +338,13 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     result = canvas.convert("RGB")
 
     if ut_path is None:
-        ut_dir = Path(bild_path).parent / "Story"
-        ut_dir.mkdir(exist_ok=True)
         slug = {"avspark": "avspark", "paus": "halvtid",
                 "resultat": "resultat"}.get(moment, moment)
+        if ut_mapp:
+            ut_dir = Path(ut_mapp).expanduser()
+        else:
+            ut_dir = Path(bild_path).parent / "Story"
+        ut_dir.mkdir(parents=True, exist_ok=True)
         ut_path = ut_dir / f"story_{slug}.jpg"
 
     result.save(ut_path, "JPEG", quality=92, optimize=True)
