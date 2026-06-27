@@ -170,6 +170,23 @@ def _text_med_skugga(draw, xy, text, font, fill):
     draw.text((x, y), text, font=font, fill=fill)
 
 
+def _spärrad_bredd(draw, text, font, tracking=0):
+    """Total bredd för text ritad med extra teckenmellanrum."""
+    if not text:
+        return 0
+    return sum(draw.textlength(ch, font=font) + tracking for ch in text) - tracking
+
+
+def _spärrad_text(draw, xy, text, font, fill, tracking=0, skugga=False):
+    """Ritar text tecken-för-tecken med tracking (px mellan glyfer)."""
+    x, y = xy
+    for ch in text:
+        if skugga:
+            draw.text((x + 1, y + 1), ch, font=font, fill=(0, 0, 0, 150))
+        draw.text((x, y), ch, font=font, fill=fill)
+        x += draw.textlength(ch, font=font) + tracking
+
+
 def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                 liga="", stallning="", mal_rad="",
                 avspark_tid="", arena="", ut_path=None, env=None):
@@ -188,39 +205,37 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     foto = _crop_9x16(foto).resize(UT_STORLEK, Image.LANCZOS)
     W, H = foto.size  # 1080 × 1920
 
-    # Svag liga-text diagonalt i mitten
+    # Diskret liga-logga som svagt vattenmärke i bakgrunden
     if liga:
-        over = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        d_over = ImageDraw.Draw(over)
-        liga_fnt = _hitta_typsnitt(100)
-        liga_kort = liga.upper()
-        bbox = d_over.textbbox((0, 0), liga_kort, font=liga_fnt)
-        tw = bbox[2] - bbox[0]
-        text_yta = Image.new("RGBA", (tw + 40, 140), (0, 0, 0, 0))
-        ImageDraw.Draw(text_yta).text((20, 20), liga_kort, font=liga_fnt,
-                                      fill=(255, 255, 255, 36))
-        text_rot = text_yta.rotate(20, expand=True)
-        cx = (W - text_rot.width) // 2
-        cy = int(H * 0.38) - text_rot.height // 2
-        foto_rgba = foto.convert("RGBA")
-        foto_rgba.paste(text_rot, (cx, max(0, cy)), text_rot)
-        foto = foto_rgba.convert("RGB")
+        liga_logga = hitta_logga(liga)
+        if liga_logga:
+            try:
+                ll = Image.open(liga_logga).convert("RGBA")
+                mål = int(W * 0.52)
+                ll.thumbnail((mål, mål), Image.LANCZOS)
+                alfa = ll.split()[3].point(lambda a: int(a * 0.15))
+                ll.putalpha(alfa)
+                ll = ll.rotate(16, expand=True, resample=Image.BICUBIC)
+                lx = int(W * 0.55) - ll.width // 2
+                ly = int(H * 0.32) - ll.height // 2
+                foto_rgba = foto.convert("RGBA")
+                foto_rgba.alpha_composite(ll, (max(0, lx), max(0, ly)))
+                foto = foto_rgba.convert("RGB")
+            except Exception:
+                pass
 
     canvas = foto.convert("RGBA")
     d = ImageDraw.Draw(canvas)
 
-    # Dalahäst-signatur uppe till vänster
+    # Dalahäst-signatur uppe till vänster (enbart loggan)
     hast_p = Path(__file__).parent / "assets" / "icon_256.png"
     if hast_p.exists():
         try:
             hast = Image.open(hast_p).convert("RGBA")
-            hast.thumbnail((52, 52), Image.LANCZOS)
-            canvas.paste(hast, (20, 20), hast)
+            hast.thumbnail((62, 62), Image.LANCZOS)
+            canvas.paste(hast, (30, 30), hast)
         except Exception:
             pass
-
-    handle_fnt = _hitta_typsnitt(28)
-    _text_med_skugga(d, (82, 28), "@dalecarliaphoto", handle_fnt, VIT)
 
     # Blå lower-third-band
     BAND_H = 210
@@ -248,11 +263,17 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     text_w = W - 2 * (MARG + BRICKA_S + 16)
     text_cx = text_x + text_w // 2
 
+    # Etikettrad – spärrad, med klockslag bredvid vid avspark
     etikett = MOMENT_ETIKETT.get(moment, moment.upper())
-    etik_fnt = _hitta_typsnitt(24)
-    bbox = d.textbbox((0, 0), etikett, font=etik_fnt)
-    d.text((text_cx - (bbox[2] - bbox[0]) // 2, band_y + 18),
-           etikett, font=etik_fnt, fill=BLÅ_LJUS)
+    if moment == "avspark" and avspark_tid:
+        etikett_full = f"{etikett}   {avspark_tid}"
+    else:
+        etikett_full = etikett
+    etik_fnt = _hitta_typsnitt(22)
+    TRACK = 5
+    ew = _spärrad_bredd(d, etikett_full, etik_fnt, TRACK)
+    _spärrad_text(d, (text_cx - ew // 2, band_y + 20),
+                  etikett_full, etik_fnt, BLÅ_LJUS, TRACK)
 
     if moment == "avspark":
         huvud_fnt = _hitta_typsnitt(36)
@@ -261,26 +282,20 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         if bbox[2] - bbox[0] > text_w:
             huvud_txt = f"{mono_h} – {mono_b}"
             bbox = d.textbbox((0, 0), huvud_txt, font=huvud_fnt)
-        _text_med_skugga(d, (text_cx - (bbox[2] - bbox[0]) // 2, band_y + 52),
+        _text_med_skugga(d, (text_cx - (bbox[2] - bbox[0]) // 2, band_y + 56),
                          huvud_txt, huvud_fnt, VIT)
-        sub_y = band_y + 100
+        # Underrad: liga · arena (klockslaget står nu uppe vid etiketten)
+        sub_delar = []
         if liga:
+            sub_delar.append(liga)
+        if arena:
+            sub_delar.append(arena)
+        if sub_delar:
+            sub_txt = "  ·  ".join(sub_delar)
             sub_fnt = _hitta_typsnitt(21)
-            bbox = d.textbbox((0, 0), liga, font=sub_fnt)
-            d.text((text_cx - (bbox[2] - bbox[0]) // 2, sub_y),
-                   liga, font=sub_fnt, fill=BLÅ_SUB)
-            sub_y += 28
-        if avspark_tid or arena:
-            tid_delar = []
-            if avspark_tid:
-                tid_delar.append(avspark_tid)
-            if arena:
-                tid_delar.append(arena)
-            tid_txt = "  ·  ".join(tid_delar)
-            tid_fnt = _hitta_typsnitt(20)
-            bbox = d.textbbox((0, 0), tid_txt, font=tid_fnt)
-            d.text((text_cx - (bbox[2] - bbox[0]) // 2, sub_y),
-                   tid_txt, font=tid_fnt, fill=BLÅ_SUB)
+            bbox = d.textbbox((0, 0), sub_txt, font=sub_fnt)
+            d.text((text_cx - (bbox[2] - bbox[0]) // 2, band_y + 108),
+                   sub_txt, font=sub_fnt, fill=BLÅ_SUB)
     else:
         stall_fnt = _hitta_typsnitt(78)
         stall_txt = stallning or "?"
