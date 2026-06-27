@@ -492,6 +492,7 @@ class Api:
                     avspark_tid=avspark_tid,
                     arena=mi["arena"],
                     ut_mapp=(d.get("story_utmapp") or "").strip() or None,
+                    format=(d.get("story_format") or "9x16").strip(),
                     env=_env(),
                 )
                 self._logga(f"✓ Story skapad: {ut}")

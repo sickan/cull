@@ -301,10 +301,15 @@
           <div class="card full">
             <div class="cardH">📱 Story</div>
             <input type="hidden" class="f" id="story_moment" value="avspark">
-            <div class="row" style="gap:6px; margin-bottom:14px">
+            <div class="row" style="gap:6px; margin-bottom:8px">
               <button class="btn storyMoment on" id="smAvspark"  onclick="storyMoment('avspark')">Avspark</button>
               <button class="btn storyMoment"    id="smPaus"     onclick="storyMoment('paus')">Halvtid</button>
               <button class="btn storyMoment"    id="smResultat" onclick="storyMoment('resultat')">Resultat</button>
+            </div>
+            <input type="hidden" class="f" id="story_format" value="9x16">
+            <div class="row" style="gap:6px; margin-bottom:14px">
+              <button class="btn storyMoment on" id="sfStory"  onclick="storyFormat('9x16')">Story 9:16</button>
+              <button class="btn storyMoment"    id="sfInlagg" onclick="storyFormat('4x5')">Inlägg 4:5</button>
             </div>
 
             <!-- Match-sammanfattning -->
@@ -679,7 +684,7 @@ function showPanel(name){
   renderFooter(name);
   if(name==="valj") loadValj();
   if(name==="gallra") behallPreview();
-  if(name==="snabb") storyInfoUppdatera();
+  if(name==="snabb"){ storyInfoUppdatera(); storyFormat(($("story_format")||{}).value||"9x16"); }
   if(name==="trana") laddaUnderlag();
   if(name==="leverera") $("leverSub").innerHTML = ACTIVE_PATH
     ? `Arbetar på <b>${esc(niceName(ACTIVE_PATH))}</b>.` : "Exportera urvalet med metadata, husstil och tröjnummer.";
@@ -832,6 +837,12 @@ function storyMoment(m){
   const hjälp=$("storyBildHjälp"); if(hjälp) hjälp.innerHTML=hjälpTxt;
   const sr=$("storyStallningRad"); if(sr) sr.classList.toggle("hidden",!visStallning);
   const mr=$("storyMalRad");       if(mr) mr.classList.toggle("hidden",!visMal);
+}
+function storyFormat(f){
+  $("story_format").value=f;
+  const b1=$("sfStory"), b2=$("sfInlagg");
+  if(b1) b1.classList.toggle("on", f==="9x16");
+  if(b2) b2.classList.toggle("on", f==="4x5");
 }
 async function pickBild(id){
   const p = await window.pywebview.api.valj_bildfil($(id)?$(id).value:"");

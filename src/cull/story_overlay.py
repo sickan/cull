@@ -11,6 +11,11 @@ import tempfile
 
 LOGG_DIR = Path("~/.config/cull/loggor").expanduser()
 UT_STORLEK = (1080, 1920)
+# Utdataformat: 9:16 story (1080×1920) och 4:5 inlägg (1080×1350).
+FORMAT_STORLEK = {"9x16": (1080, 1920), "4x5": (1080, 1350)}
+# Säker bottenmarginal (kortet skjuts upp): 9:16 har IG:s svar-fält, 4:5 inte.
+SAFE_BOTTOM_F = {"9x16": 130, "4x5": 48}
+FORMAT_PREFIX = {"9x16": "story", "4x5": "inlagg"}
 
 BLÅ_DJUP  = (12,  68, 124, 215)
 BLÅ_LJUS  = (133, 183, 235, 255)
@@ -151,15 +156,16 @@ def _ladda_foto(bild_path, env=None):
     raise RuntimeError(f"Kan inte extrahera preview ur {p.name}")
 
 
-def _crop_9x16(img):
+def _crop_till(img, mal_w, mal_h):
+    """Beskär centrerat till mål-bildförhållandet (mal_w:mal_h)."""
     W, H = img.size
-    mal_h = W * 16 // 9
-    if mal_h <= H:
-        y0 = (H - mal_h) // 2
-        return img.crop((0, y0, W, y0 + mal_h))
-    mal_w = H * 9 // 16
-    x0 = (W - mal_w) // 2
-    return img.crop((x0, 0, x0 + mal_w, H))
+    if W * mal_h >= H * mal_w:          # för bred → beskär bredden
+        ny_w = H * mal_w // mal_h
+        x0 = (W - ny_w) // 2
+        return img.crop((x0, 0, x0 + ny_w, H))
+    ny_h = W * mal_h // mal_w           # för hög → beskär höjden
+    y0 = (H - ny_h) // 2
+    return img.crop((0, y0, W, y0 + ny_h))
 
 
 def _hitta_typsnitt(storlek):
@@ -202,23 +208,26 @@ def _spärrad_text(draw, xy, text, font, fill, tracking=0, skugga=False):
 
 def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                 liga="", stallning="", mal_rad="",
-                avspark_tid="", arena="", ut_path=None, ut_mapp=None, env=None):
+                avspark_tid="", arena="", ut_path=None, ut_mapp=None,
+                format="9x16", env=None):
     """
-    Renderar en 1080×1920 story-JPEG med inbränd overlay.
+    Renderar en JPEG med inbränd overlay i valt format.
 
     moment:    "avspark" | "paus" | "resultat"
+    format:    "9x16" (story 1080×1920) | "4x5" (inlägg 1080×1350)
     stallning: "1-0"  (paus/resultat)
     mal_rad:   "Larsson 23', Berg 67'"  (resultat)
     ut_mapp:   målmapp (filnamn genereras) – t.ex. en Dropbox-mapp
     ut_path:   exakt målfil (vinner över ut_mapp)
-               båda None → <bild-mapp>/Story/story_<moment>.jpg
+               båda None → <bild-mapp>/Story/<story|inlagg>_<moment>.jpg
     Returnerar Path till output-filen.
     """
     Image, ImageDraw, ImageFont, ImageOps = _pil()
 
+    storlek = FORMAT_STORLEK.get(format, FORMAT_STORLEK["9x16"])
     foto = _ladda_foto(bild_path, env)
-    foto = _crop_9x16(foto).resize(UT_STORLEK, Image.LANCZOS)
-    W, H = foto.size  # 1080 × 1920
+    foto = _crop_till(foto, storlek[0], storlek[1]).resize(storlek, Image.LANCZOS)
+    W, H = foto.size
 
     # Diskret liga-logga uppe i högra hörnet (20 % opacitet)
     if liga:
@@ -255,7 +264,7 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     # OBS: ImageDraw alpha-blandar inte direkt på bilden, så kortet ritas
     # på ett eget lager och komponeras in med alpha_composite.
     BAND_H = 210
-    SAFE_BOTTOM = 130       # IG:s svar-fält
+    SAFE_BOTTOM = SAFE_BOTTOM_F.get(format, 130)   # 9:16 har IG:s svar-fält
     KORT_MARG = 26          # sidmarginal för det flytande kortet
     RADIE = 30
     band_y = H - SAFE_BOTTOM - BAND_H
@@ -345,7 +354,8 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         else:
             ut_dir = Path(bild_path).parent / "Story"
         ut_dir.mkdir(parents=True, exist_ok=True)
-        ut_path = ut_dir / f"story_{slug}.jpg"
+        prefix = FORMAT_PREFIX.get(format, "story")
+        ut_path = ut_dir / f"{prefix}_{slug}.jpg"
 
     result.save(ut_path, "JPEG", quality=92, optimize=True)
     return Path(ut_path)
