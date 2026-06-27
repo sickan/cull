@@ -16,6 +16,7 @@ import os
 import random
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -42,6 +43,20 @@ RAW_SUFFIX = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf"}
 # JPG kan också cullas — då är filen själv sin egen "preview".
 JPG_SUFFIX = {".jpg", ".jpeg"}
 BILD_SUFFIX = RAW_SUFFIX | JPG_SUFFIX
+
+# Bilder som skyddats (protect/lås) i kameran tas alltid med i urvalet och
+# får denna LR-färgetikett (xmp:Label) som markör. Protect lagras som DOS
+# read-only-attributet på exFAT-kortet → exponeras som UF_IMMUTABLE (uchg) av
+# macOS. Flaggan följer INTE med vid kopiering, så den måste läsas på kortet.
+SKYDD_LABEL = "Blue"
+
+
+def _ar_skyddad(p):
+    """True om filen är protect-flaggad i kameran (read-only/UF_IMMUTABLE)."""
+    try:
+        return bool(os.stat(p).st_flags & stat.UF_IMMUTABLE)
+    except (OSError, AttributeError):
+        return False
 
 # Antal CPU-kärnor att använda för parallell baspoängsättning
 N_WORKERS = min(os.cpu_count() or 4, 8)
@@ -279,6 +294,25 @@ def _skriv_rating_exiftool(rating_karta, ut_dir, env):
             r = subprocess.run(
                 ["exiftool", "-overwrite_original", "-P",
                  f"-XMP-xmp:Rating={stjärnor}", f"-Rating={stjärnor}", str(mål)],
+                capture_output=True, text=True, env=env)
+            n += 1 if r.returncode == 0 else 0
+        except Exception:
+            pass
+    return n
+
+
+def _skriv_label_exiftool(filer, label, ut_dir, env):
+    """Bäddar in xmp:Label (färgetikett) i de exporterade filerna — LR läser
+    etiketten ur filens inbäddade metadata för raw, precis som betyg."""
+    n = 0
+    for fil in filer:
+        mål = ut_dir / fil.name
+        if not mål.exists():
+            continue
+        try:
+            r = subprocess.run(
+                ["exiftool", "-overwrite_original", "-P",
+                 f"-XMP-xmp:Label={label}", str(mål)],
                 capture_output=True, text=True, env=env)
             n += 1 if r.returncode == 0 else 0
         except Exception:
@@ -924,6 +958,14 @@ def main():
         sys.exit("Inga bildfiler i katalogen (raw: NEF/DNG/CR3/ARW/RAF/RW2/ORF "
                  "eller JPG).")
 
+    # Kamera-skyddade bilder (protect/lås) — läses NU medan filerna ligger på
+    # kortet (flaggan följer inte med en kopia). Tas alltid med i urvalet +
+    # får färgetikett. Läs på källan eftersom shutil.copy2 inte bevarar uchg.
+    skyddade = {p for p in nef_filer if _ar_skyddad(p)}
+    if skyddade:
+        print(f"Skyddade i kameran (protect): {len(skyddade)} bild(er) — "
+              f"tas alltid med + {SKYDD_LABEL}-etikett i LR.", flush=True)
+
     bevaka = set(args.bevaka.split(",")) if args.bevaka else set()
 
     # Personlig modell (om tränad) — kräver AI-features för alla bilder.
@@ -1374,14 +1416,23 @@ def main():
                     [r for r in resultat if r["fil"] not in redan
                      and set(r.get("_nummer", [])) & bevaka],
                     key=lambda r: r["poang"], reverse=True)[:args.garanti_bevaka]
-        garanterade = firande_g + bevaka_g
+        # Kamera-skyddade bilder tas ALLTID med, oavsett poäng/burst/topp-N.
+        # Ovillkorlig garanti (ej beroende av args.ai) — kan aldrig trängas ut.
+        skydd_g = []
+        if skyddade:
+            redan = ({r["fil"] for r in valda}
+                     | {r["fil"] for r in firande_g + bevaka_g})
+            skydd_g = [r for r in resultat
+                       if r["fil"] in skyddade and r["fil"] not in redan]
+        garanterade = firande_g + bevaka_g + skydd_g
         if garanterade:
             g_filer = {r["fil"] for r in garanterade}
             behalls = sorted([r for r in valda if r["fil"] not in g_filer],
                              key=lambda r: r["poang"], reverse=True)
             valda = behalls[:max(0, n_behall - len(garanterade))] + garanterade
             delar = ([f"{len(firande_g)} firande"] if firande_g else []) + \
-                    ([f"{len(bevaka_g)} på bevakat nummer"] if bevaka_g else [])
+                    ([f"{len(bevaka_g)} på bevakat nummer"] if bevaka_g else []) + \
+                    ([f"{len(skydd_g)} skyddade"] if skydd_g else [])
             print(f"Garantiplatser: {', '.join(delar)} tillagd(a).")
 
         print(f"\nBehåller {len(valda)} av {n_total} "
@@ -1501,10 +1552,15 @@ def main():
                                    if r["fil"].suffix.lower() in RAW_SUFFIX],
                                   _exif_env()) if (args.xmp or args.leverans) else {})
         rating_karta = _stjarnor_av_poang(valda) if args.stjarnor else {}
+        # Färgetikett på de kamera-skyddade bilderna i urvalet (skyddade läses
+        # på källkortet före kopiering eftersom uchg-flaggan inte följer med).
+        label_karta = {r["fil"]: SKYDD_LABEL for r in valda
+                       if r["fil"] in skyddade}
         for i, r in enumerate(valda, 1):
             shutil.copy2(r["fil"], ut_dir / r["fil"].name)
             rating = rating_karta.get(r["fil"])
-            if gör_xmp or rating is not None:
+            label = label_karta.get(r["fil"])
+            if gör_xmp or rating is not None or label is not None:
                 img = cv2.imread(str(r["_jpg"])) if r["_jpg"] else None
                 crop = None
                 vinkel = 0.0
@@ -1545,7 +1601,8 @@ def main():
                         objektiv = True
                 if (args.xmp or husstil or args.exp_bump
                         or exposure is not None or temperatur is not None
-                        or iso is not None or rating is not None):
+                        or iso is not None or rating is not None
+                        or label is not None):
                     xmp_writer.skriv_xmp(ut_dir / r["fil"].name,
                                          crop=crop, vinkel=vinkel,
                                          exposure=exposure,
@@ -1553,7 +1610,7 @@ def main():
                                          profil=profil,
                                          iso=iso, objektiv=bool(objektiv),
                                          preset=husstil, exp_bump=args.exp_bump,
-                                         rating=rating)
+                                         rating=rating, label=label)
             else:
                 xmp = r["fil"].with_suffix(".xmp")
                 if xmp.exists():
@@ -1617,6 +1674,14 @@ def main():
         if rating_karta:
             nr = _skriv_rating_exiftool(rating_karta, ut_dir, _exif_env())
             print(f"  Stjärnbetyg inbäddat i {nr} filer.", flush=True)
+
+        # Färgetikett inbäddad på de skyddade bilderna (LR läser xmp:Label
+        # ur inbäddad metadata för raw, precis som betyget).
+        if label_karta:
+            nl = _skriv_label_exiftool(label_karta, SKYDD_LABEL, ut_dir,
+                                       _exif_env())
+            print(f"  {SKYDD_LABEL}-etikett (protect) inbäddad i {nl} filer.",
+                  flush=True)
 
         # Leveransfärdiga JPEG (snabbflöde) enligt profil — gyro-rätat, skalat,
         # komprimerat, med IPTC/bildtext på leverans-JPEG:erna.
