@@ -450,6 +450,19 @@ class Api:
             cmd += ["--oppna", oppna]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
+    # --- Räta upp för Lightroom (fristående XMP-sidecars) --------------------
+    def rata_upp(self, d):
+        mapp = (d.get("rata_mapp") or "").strip()
+        if not mapp or not Path(mapp).is_dir():
+            mapp = self.valj_mapp(mapp or "")
+        if not mapp:
+            self._js("window.dpcDone(false)")
+            return
+        self._js("document.getElementById('rata_mapp').value="
+                 + json.dumps(mapp))
+        cmd = [sys.executable, "-m", "cull.core", mapp, "--rata-upp"]
+        threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
+
     # --- Story overlay (inbränd 9:16-JPEG) -----------------------------------
     def story_overlay(self, d):
         """Skapar en inbränd 9:16 story-JPEG och öppnar den i Finder."""

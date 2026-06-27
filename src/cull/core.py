@@ -993,6 +993,61 @@ def kor_snabbplock(args, katalog):
     print("Klart.", flush=True)
 
 
+def _las_rating_label(xmp_path):
+    """Plockar xmp:Rating + xmp:Label ur en befintlig sidecar (för att bevara
+    dem när vi bara lägger på rätning)."""
+    try:
+        txt = Path(xmp_path).read_text(encoding="utf-8")
+    except Exception:
+        return None, None
+    r = re.search(r"xmp:Rating=['\"](\d+)['\"]", txt)
+    l = re.search(r"xmp:Label=['\"]([^'\"]+)['\"]", txt)
+    return (int(r.group(1)) if r else None), (l.group(1) if l else None)
+
+
+def kor_rata_upp(args, katalog):
+    """Fristående upprätning: skriver crop-only XMP-sidecars (kamerans gyro-
+    RollAngle → Apple Vision-horisont → Hough) bredvid NEF:erna, så Lightroom
+    plockar upp rätningen vid import. Icke-förstörande: en befintlig sidecar
+    bevaras (develop + betyg/etikett) och bara beskärningsvinkeln läggs på."""
+    import tempfile
+    raw = [p for p in lista_bildfiler(katalog, rekursiv=True)
+           if p.suffix.lower() in RAW_SUFFIX]
+    if not raw:
+        print("Inga raw-filer att räta upp i mappen.", flush=True)
+        return
+    env = _exif_env()
+    roll_karta = _roll_batch(raw, env)
+    n_gyro = sum(1 for f in raw if roll_karta.get(f) is not None)
+    print(f"Rätar upp {len(raw)} bilder ({n_gyro} med kamerans gyro)…",
+          flush=True)
+    n_skriv = n_raka = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        pm = extrahera_previews_batch(raw, Path(tmp))
+        for i, f in enumerate(raw, 1):
+            jpg = pm.get(f)
+            vinkel, _motor = _uppratningsvinkel(jpg, None, roll_karta.get(f))
+            vinkel, _ = _rakt_bevarande(jpg, vinkel)
+            if abs(vinkel) < 0.05:
+                n_raka += 1
+            sc = f.with_suffix(".xmp")
+            preset = rating = label = None
+            if sc.exists():
+                preset = xmp_writer.las_preset(sc)
+                rating, label = _las_rating_label(sc)
+            try:
+                xmp_writer.skriv_xmp(f, vinkel=vinkel, preset=preset,
+                                     rating=rating, label=label)
+                n_skriv += 1
+            except Exception as e:
+                print(f"  (kunde inte skriva {sc.name}: {e})", flush=True)
+            if i % 25 == 0 or i == len(raw):
+                print(f"  rätar …{i}/{len(raw)}", flush=True)
+    print(f"✓ Rätning klar: {n_skriv} XMP-sidecars skrivna "
+          f"({n_raka} var redan raka). Importera mappen i Lightroom — "
+          "rätningen följer med automatiskt.", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="cull",
                                  description="Teknisk culling av NEF-filer.")
@@ -1091,6 +1146,10 @@ def main():
     ap.add_argument("--stjarnor", action="store_true",
                     help="sätt stjärnbetyg (xmp:Rating 2-5) i sidecaren utifrån "
                          "helhetspoängen → Lightroom visar dem")
+    ap.add_argument("--rata-upp", action="store_true",
+                    help="fristående: skriv crop-only XMP-sidecars med upprätning "
+                         "(gyro/Vision/Hough) bredvid NEF:erna → Lightroom plockar "
+                         "upp rätningen vid import (icke-förstörande)")
     ap.add_argument("--ingen-ai-cache", action="store_true",
                     help="hoppa över AI-feature-cachen (tvinga omräkning)")
     ap.add_argument("--limpa-ai-cache", action="store_true",
@@ -1131,6 +1190,10 @@ def main():
 
     if args.snabbplock:
         kor_snabbplock(args, katalog)
+        return
+
+    if args.rata_upp:
+        kor_rata_upp(args, katalog)
         return
 
     # Läs rekursivt: alla underkataloger med riktiga NEF tas med (kort med

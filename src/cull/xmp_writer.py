@@ -26,14 +26,21 @@ def las_preset(path):
         txt = Path(path).read_text(encoding="utf-8")
     except Exception:
         return None
-    # Yttre rdf:Description: första öppningstaggen → SISTA stängningen
-    # (greedy, så vi inte stannar vid Look-blockets egna </rdf:Description>).
+    # Yttre rdf:Description i två former: med kropp (Adobe-presets, tonkurva/
+    # Look — greedy till SISTA stängningen så vi inte stannar i Look-blocket)
+    # ELLER självstängande (appens egna + enkla PM/Adobe-sidecars: attr + />).
     m = re.search(r"<rdf:Description\b([^>]*)>(.*)</rdf:Description>", txt, re.S)
-    if not m:
-        return None
-    attr_blob, inner = m.group(1), m.group(2)
+    if m:
+        attr_blob, inner = m.group(1), m.group(2)
+    else:
+        m = re.search(r"<rdf:Description\b([^>]*?)/>", txt, re.S)
+        if not m:
+            return None
+        attr_blob, inner = m.group(1), ""
     attrs = {}
-    for namn, val in re.findall(r"crs:(\w+)\s*=\s*\"([^\"]*)\"", attr_blob):
+    # Stöd både dubbla (Adobe/PM-presets) och enkla citattecken (appens egna
+    # sidecars) → merge bevarar develop-inställningar oavsett källa.
+    for namn, val in re.findall(r"crs:(\w+)\s*=\s*['\"]([^'\"]*)['\"]", attr_blob):
         if namn not in _PRESET_DROPPA_ATTR:
             attrs[namn] = val
     for elem in _PRESET_DROPPA_ELEM:

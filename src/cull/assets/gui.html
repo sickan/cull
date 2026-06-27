@@ -456,6 +456,14 @@
               <div class="row"><label class="lbl" style="width:96px">Exp-knuff</label><input class="f" id="exp_bump" style="width:64px"><span class="unit">EV</span></div>
               <div class="row"><label class="lbl" style="width:96px">Leverans-JPG</label><select class="f flex" id="leverans"></select></div>
             </div>
+            <div class="card full">
+              <div class="cardH">📐 Räta upp för Lightroom</div>
+              <div class="help" style="margin:0 0 8px 0">Skriver crop-only XMP-sidecars (kamerans gyro → Vision-horisont → Hough) bredvid NEF:erna i en mapp. Kör <b>före import</b> — LR plockar upp rätningen automatiskt. Befintliga sidecars (betyg/etikett) bevaras.</div>
+              <div class="row"><label class="lbl" style="width:84px">Mapp</label>
+                <input class="f flex" id="rata_mapp" placeholder="NEF-mapp att räta upp (t.ex. ditt PM-urval)" readonly>
+                <button class="btn" onclick="pick('rata_mapp','dir')">Välj…</button>
+                <button class="btn primary" onclick="rataUpp()">Räta upp</button></div>
+            </div>
             <div class="full">
               <div class="grpH">Tröjnummer &amp; namn</div>
               <div class="tool" onclick="lasNummer()"><span class="tic">#</span>
@@ -798,6 +806,12 @@ async function instagramUrval(){
   window.dpcClear(); progPulse(true);
   await window.pywebview.api.spara(collect());
   await window.pywebview.api.instagram_urval(collect());
+}
+async function rataUpp(){
+  // Tom mapp → API:t öppnar mappdialogen.
+  window.dpcClear(); progPulse(true); showPanel("logg");
+  await window.pywebview.api.spara(collect());
+  await window.pywebview.api.rata_upp(collect());
 }
 async function snabbplock(){
   setBusy(true); window.dpcClear(); progPulse(true); showPanel("logg");
