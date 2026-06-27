@@ -41,6 +41,9 @@ cull-web = "cull.gui_web:main"
 cull-lar = "cull.inlarning:main"
 cull-nummer = "cull.nummer_pass:main"
 
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/cull"]
-artifacts = ["src/cull/assets/*.png"]
+artifacts = ["src/cull/assets/*.png", "src/cull/_buildstamp.py"]

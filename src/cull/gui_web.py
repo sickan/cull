@@ -84,8 +84,7 @@ def _env():
 
 
 def _versionsrad():
-    m = re.search(r"(v[\d.]+).*?build ([\d-]+)", ver.etikett())
-    return f"{m.group(1)} · build {m.group(2)}" if m else ver.etikett()
+    return f"v{ver.version()} · build {ver.build()}"
 
 
 def _modellinfo():
