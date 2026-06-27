@@ -156,8 +156,12 @@
   .frow .primary{margin-left:auto;}
   /* console (logg-panelen) */
   .console{height:340px; overflow:auto; background:var(--card); border:1px solid var(--card-border); border-radius:10px;
-       font-family:'SF Mono',Menlo,monospace; font-size:11px; color:var(--t-label); padding:12px 14px; white-space:pre-wrap; line-height:1.55; user-select:text;}
+       font-family:'SF Mono',Menlo,monospace; font-size:11px; color:var(--t-label); padding:12px 14px; white-space:pre-wrap; line-height:1.55;
+       -webkit-user-select:text; user-select:text; cursor:text;}
+  .console *{-webkit-user-select:text !important; user-select:text !important;}
   .console .err{color:#E2574C;} .console .ok{color:#1D9E75;}
+  .loghd{display:flex; align-items:center; gap:10px;}
+  .loghd .btn{margin-left:auto; font-size:12px;}
   .hidden{display:none;}
   /* ---- overlay / sheet ---- */
   .overlay{position:fixed; inset:0; background:rgba(20,20,22,.42); z-index:50;
@@ -525,7 +529,7 @@
 
         <!-- LOGG -->
         <div class="panel hidden" data-panel="logg">
-          <div class="h2">Logg</div>
+          <div class="h2 loghd">Logg<button class="btn" onclick="kopieraLogg()" id="logCopy">Kopiera logg</button></div>
           <div class="sub">Utdata från senaste körningen. Framstegen syns alltid uppe till höger.</div>
           <div class="console" id="console"></div>
         </div>
@@ -547,10 +551,28 @@ let OPT={}, ACTIVE_PATH="", TEMA="light";
 function $(id){return document.getElementById(id);}
 
 // ===== logg + arbetar-indikator =============================================
-function logLine(t,cls){const c=$("console"); if(c){const d=document.createElement("div");
-  if(cls)d.className=cls; d.textContent=t; c.appendChild(d); c.scrollTop=c.scrollHeight;}
+function logLine(t,cls){const c=$("console"); if(c){
+  const nearBot = c.scrollHeight - c.scrollTop - c.clientHeight < 40;
+  const d=document.createElement("div");
+  if(cls)d.className=cls; d.textContent=t; c.appendChild(d);
+  if(nearBot) c.scrollTop=c.scrollHeight;}   // håll botten bara om du redan är där
   parseProgress(t);}
 window.dpcLog=logLine;
+async function kopieraLogg(){
+  const c=$("console"); if(!c) return;
+  const txt=c.innerText||c.textContent||"";
+  let ok=false;
+  try{ await navigator.clipboard.writeText(txt); ok=true; }
+  catch(e){
+    try{ const ta=document.createElement("textarea"); ta.value=txt;
+      ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta);
+      ta.select(); ok=document.execCommand("copy"); document.body.removeChild(ta);
+    }catch(e2){}
+  }
+  const b=$("logCopy");
+  if(b){ b.textContent = ok?"✓ Kopierad":"Kunde inte kopiera";
+    setTimeout(()=>{ if($("logCopy")) $("logCopy").textContent="Kopiera logg"; }, 1600); }
+}
 window.dpcClear=()=>{ if($("console"))$("console").innerHTML=""; progReset(); };
 window.dpcDone=(ok)=>{ setBusy(false); progDone(ok); };
 
