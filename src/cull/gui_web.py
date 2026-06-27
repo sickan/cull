@@ -411,20 +411,27 @@ class Api:
             res = self.window.create_file_dialog(
                 webview.OPEN_DIALOG,
                 directory=str(Path.home()),
-                file_types=("PNG-logga (*.png)", "Alla bilder (*.png;*.jpg;*.jpeg)"))
-        except Exception:
-            res = None
+                file_types=("Bildfiler (*.png;*.jpg;*.jpeg)", "Alla filer (*.*)"))
+        except Exception as e:
+            import traceback
+            self._logga(f"[logga] create_file_dialog fel: {e}\n", "fel")
+            return {"ok": False, "fel": f"Dialogfel: {e}"}
         if not res:
             return {"ok": False, "fel": "Avbruten"}
         src = Path(res[0] if isinstance(res, (list, tuple)) else res)
-        so.LOGG_DIR.mkdir(parents=True, exist_ok=True)
-        dst = so.LOGG_DIR / (norm + src.suffix.lower())
-        # Om befintlig logga hade annan suffix, ta bort den
-        for sfx in (".png", ".jpg", ".jpeg"):
-            old = so.LOGG_DIR / (norm + sfx)
-            if old.exists() and old != dst:
-                old.unlink()
-        shutil.copy2(src, dst)
+        try:
+            so.LOGG_DIR.mkdir(parents=True, exist_ok=True)
+            dst = so.LOGG_DIR / (norm + src.suffix.lower())
+            # Om befintlig logga hade annan suffix, ta bort den
+            for sfx in (".png", ".jpg", ".jpeg"):
+                old = so.LOGG_DIR / (norm + sfx)
+                if old.exists() and old != dst:
+                    old.unlink()
+            shutil.copy2(src, dst)
+        except Exception as e:
+            self._logga(f"[logga] kunde inte spara: {e}\n", "fel")
+            return {"ok": False, "fel": f"Kunde inte spara: {e}"}
+        self._logga(f"[logga] sparad: {dst.name} ({lag_namn})\n")
         return {"ok": True, "fil": dst.name, "lag": lag_namn}
 
     def loggor_lista(self, _d=None):
