@@ -166,6 +166,21 @@ class Api:
             return None
         return res[0] if isinstance(res, (list, tuple)) else res
 
+    def bild_antal(self, d):
+        """Räknar riktiga bildfiler rekursivt i källmappen (för antals-/%-
+        visning). Returnerar {antal, mappar, mapp}."""
+        from cull import core
+        mapp = (d.get("katalog") or "").strip()
+        p = Path(mapp)
+        if not mapp or not p.is_dir():
+            return {"antal": 0, "mappar": 0, "mapp": mapp}
+        try:
+            filer = core.lista_bildfiler(p, rekursiv=True)
+        except Exception:
+            return {"antal": 0, "mappar": 0, "mapp": mapp}
+        mappar = len({f.parent for f in filer})
+        return {"antal": len(filer), "mappar": mappar, "mapp": mapp}
+
     # --- spara inställningar --------------------------------------------------
     def spara(self, d):
         try:
@@ -229,6 +244,16 @@ class Api:
 
     # --- kör cull ------------------------------------------------------------
     def kor(self, d):
+        # Behåll-enhet: "%" → andel (fraktion 0–1), annars topp (antal).
+        if (d.get("behall_enhet") or "").strip() == "%":
+            try:
+                pct = float(str(d.get("topp", "")).replace(",", "."))
+                d["andel"] = f"{max(0.0, min(pct, 100.0)) / 100:.4f}"
+            except (ValueError, TypeError):
+                d["andel"] = ""
+            d["topp"] = ""
+        else:
+            d["andel"] = ""
         cmd, fel = gui.bygg_kommando(_shim(d))
         if fel:
             self._logga("⚠ " + fel, "err")

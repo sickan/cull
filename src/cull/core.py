@@ -82,6 +82,33 @@ def _rmtree_kraft(path):
     except TypeError:
         shutil.rmtree(path, onerror=_losgor)      # äldre signatur
 
+# Mappnamn som aldrig scannas som källa (appens egna utdata, inte kortbilder).
+_HOPPA_MAPP = {"story", "snabbplock", "urval", "instagram"}
+
+
+def lista_bildfiler(rot, rekursiv=True):
+    """Riktiga bildfiler (raw/jpg) under rot. rekursiv=True går ner i ALLA
+    underkataloger (kort med flera DCIM-mappar) men hoppar dolda mappar och
+    appens egna utdata (_leverans*, Story, Snabbplock, Instagram, urval).
+    Exkluderar dolda filer (._namn-AppleDouble m.m. på exFAT/FAT)."""
+    rot = Path(rot)
+
+    def _ok(p):
+        return p.suffix.lower() in BILD_SUFFIX and not p.name.startswith(".")
+
+    if not rekursiv:
+        return sorted(p for p in rot.iterdir() if p.is_file() and _ok(p))
+    träffar = []
+    for d, dirs, files in os.walk(rot):
+        dirs[:] = [x for x in dirs
+                   if not x.startswith(".")
+                   and x.lower() not in _HOPPA_MAPP
+                   and not x.lower().startswith("_leverans")]
+        dp = Path(d)
+        träffar += [dp / f for f in files if _ok(dp / f)]
+    return sorted(träffar)
+
+
 # Antal CPU-kärnor att använda för parallell baspoängsättning
 N_WORKERS = min(os.cpu_count() or 4, 8)
 # Andel av bilderna (sorterade på baspoäng) som AI körs på
@@ -1073,14 +1100,24 @@ def main():
         kor_snabbplock(args, katalog)
         return
 
-    # Exkludera macOS AppleDouble-sidecars (._namn.NEF) och andra dolda
-    # filer som dyker upp på exFAT/FAT-diskar — de är inte riktiga bilder.
-    nef_filer = sorted(p for p in katalog.iterdir()
-                       if p.suffix.lower() in BILD_SUFFIX
-                       and not p.name.startswith("."))
+    # Läs rekursivt: alla underkataloger med riktiga NEF tas med (kort med
+    # flera DCIM-mappar). Dolda AppleDouble-sidecars (._namn) + egna utdata
+    # hoppas av lista_bildfiler.
+    nef_filer = lista_bildfiler(katalog, rekursiv=True)
     if not nef_filer:
         sys.exit("Inga bildfiler i katalogen (raw: NEF/DNG/CR3/ARW/RAF/RW2/ORF "
                  "eller JPG).")
+
+    # Exporten skiljer filer på basnamn (ut_dir/fil.name). Finns samma namn i
+    # flera kortmappar (Nikon-räknaren börjar om per mapp) skulle de skriva
+    # över varandra → avbryt tydligt i stället för att tappa bilder.
+    from collections import Counter as _Counter
+    _dubbl = [n for n, c in _Counter(p.name for p in nef_filer).items() if c > 1]
+    if _dubbl:
+        sys.exit(f"Samma filnamn finns i flera mappar ({len(_dubbl)} st, "
+                 f"t.ex. {sorted(_dubbl)[0]}). Exporten skiljer filer på namn, "
+                 "så det skulle skriva över. Kör en mapp i taget, eller sätt "
+                 "'File number sequence' = ON i kameran för unika namn.")
 
     # Kamera-skyddade bilder (protect/lås) — läses NU medan filerna ligger på
     # kortet (flaggan följer inte med en kopia). Tas alltid med i urvalet +
