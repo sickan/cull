@@ -41,6 +41,14 @@
   .work .dot{width:5px; height:5px; border-radius:50%; background:var(--accent); animation:pul 1s infinite;}
   .work .dot:nth-child(2){animation-delay:.15s;} .work .dot:nth-child(3){animation-delay:.3s;}
   @keyframes pul{0%,100%{opacity:.25} 50%{opacity:1}}
+  /* arbets-vy i sheet för långsamma Claude-anrop */
+  .wbox{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:13px; padding:52px 24px; text-align:center;}
+  .wbox .wdots{display:flex; gap:7px;}
+  .wbox .wdots span{width:9px; height:9px; border-radius:50%; background:var(--accent); animation:pul 1s infinite;}
+  .wbox .wdots span:nth-child(2){animation-delay:.15s;} .wbox .wdots span:nth-child(3){animation-delay:.3s;}
+  .wbox .wmsg{font-size:14px; color:var(--t-body); max-width:430px; line-height:1.45;}
+  .wbox .wel{font-size:13px; color:var(--accent); font-family:'SF Mono',Menlo,monospace; font-variant-numeric:tabular-nums;}
+  .wbox .whint{font-size:11px; color:var(--muted); max-width:380px; line-height:1.4;}
   .tgl{width:30px; height:30px; border-radius:8px; border:1px solid var(--field-border); background:var(--card);
        color:var(--t-label); cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:.12s;}
   .tgl:hover{color:var(--t-head); border-color:var(--accent);}
@@ -855,6 +863,27 @@ function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,
   c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
 function tomMsg(t){return `<div class="tom">${esc(t)}</div>`;}
 
+// ===== arbets-vy för långsamma anrop (Hämta match, Läs ark, Bildsvep) =======
+let WORK_TIMER=null, WORK_T0=0;
+function sheetWork(msg){
+  const b=$("sheetBody"); if(!b) return;
+  b.innerHTML=`<div class="wbox">
+    <div class="wdots"><span></span><span></span><span></span></div>
+    <div class="wmsg" id="wMsg">${esc(msg||"Arbetar…")}</div>
+    <div class="wel" id="wEl">0 s</div>
+    <div class="whint">Anropet kan ta upp till en minut. Räknaren tickar så länge appen lever — om den fryser har något hängt sig.</div>
+  </div>`;
+  WORK_T0=Date.now(); clearInterval(WORK_TIMER);
+  WORK_TIMER=setInterval(()=>{
+    const el=$("wEl"); if(!el){ clearInterval(WORK_TIMER); return; }
+    const s=Math.round((Date.now()-WORK_T0)/1000);
+    el.textContent = s<60 ? s+" s" : Math.floor(s/60)+" min "+String(s%60).padStart(2,"0")+" s";
+  },1000);
+}
+function sheetWorkMsg(m){ const e=$("wMsg"); if(e&&m) e.textContent=m; }
+function sheetWorkStop(){ clearInterval(WORK_TIMER); WORK_TIMER=null; }
+window.dpcWork=(m)=>{ if($("wMsg")) sheetWorkMsg(m); else if($("sheetBody")) sheetWork(m); };
+
 function openSheet(title,sub){
   closeSheet();
   const ov=document.createElement("div"); ov.className="overlay"; ov.id="overlay";
@@ -867,7 +896,7 @@ function openSheet(title,sub){
   return $("sheetBody");
 }
 function setSheetSub(t){const e=document.querySelector("#overlay .sheetH .sub"); if(e)e.textContent=t;}
-function closeSheet(){const o=$("overlay"); if(o)o.remove();}
+function closeSheet(){sheetWorkStop(); const o=$("overlay"); if(o)o.remove();}
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
 
 async function granska(){
@@ -930,7 +959,7 @@ async function hamtaMatch(){
   const mi=($("matchinfo").value||"").trim();
   const body=openSheet("Hämta match","");
   if(!mi){ body.innerHTML=tomMsg("Fyll i Matchinfo först (Hemma - Borta R-R ÅÅÅÅMMDD Arena)."); return; }
-  body.innerHTML=tomMsg("Söker laguppställning och referat på nätet via Claude… (tar en stund, kostar några ören)");
+  sheetWork("Söker laguppställning och referat på nätet via Claude… (kostar några ören)");
   await window.pywebview.api.spara(collect());
   window.pywebview.api.hamta_match(collect());
 }
@@ -940,8 +969,9 @@ async function lasArk(){
   await window.pywebview.api.spara(collect());
   window.pywebview.api.las_lineup(collect());
 }
-window.dpcMatchLoading=(msg)=>{ const b=$("sheetBody"); if(b) b.innerHTML=tomMsg(msg||"Läser…"); };
+window.dpcMatchLoading=(msg)=>{ sheetWork(msg||"Läser…"); };
 window.dpcMatch=(data)=>{
+  sheetWorkStop();
   const body=$("sheetBody"); if(!body) return;
   if(!data){ setSheetSub(""); body.innerHTML=tomMsg("Kunde inte läsa. Förtydliga Matchinfo (lag, datum, arena) eller välj ett tydligare ark och försök igen."); return; }
   (data.spelare||[]).forEach(p=>{ p.nr=String(p.nr||""); p.namn=String(p.namn||""); });
@@ -1012,10 +1042,11 @@ async function openBildsvep(force){
     const saved=await window.pywebview.api.bildsvep_hamta(collect());
     if(saved && saved.bildsvep){ window.dpcBildsvep(saved); return; }
   }
-  body.innerHTML=tomMsg("Hämtar matchfakta och skriver Bildsvepet via Claude… (web search, tar en stund, kostar några ören)");
+  sheetWork("Hämtar matchfakta och skriver Bildsvepet via Claude… (web search, kostar några ören)");
   window.pywebview.api.bildsvep(collect());
 }
 window.dpcBildsvep=(data)=>{
+  sheetWorkStop();
   const body=$("sheetBody"); if(!body) return;
   if(!data){ setSheetSub(""); body.innerHTML=tomMsg("Kunde inte generera. Förtydliga Matchinfo (lag, resultat, datum) och försök igen."); return; }
   setSheetSub(data.sparad?"Sparad text — Gör om söker på nytt":"Granska och kopiera — texten postas inte härifrån");

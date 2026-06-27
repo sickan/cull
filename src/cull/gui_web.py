@@ -188,6 +188,12 @@ class Api:
         arg = json.dumps(text)
         self._js(f"window.dpcLog({arg}, {json.dumps(cls) if cls else 'null'})")
 
+    def _work(self, text, cls=None):
+        """Som _logga men uppdaterar även arbets-vyn i sheeten (senaste steg),
+        så långsamma Claude-anrop syns leva i stället för en frusen rad."""
+        self._logga(text, cls)
+        self._js(f"window.dpcWork({json.dumps(text)})")
+
     def _stream(self, cmd):
         self._logga("$ " + " ".join(cmd) + "\n")
         try:
@@ -476,7 +482,7 @@ class Api:
 
         def jobb():
             from cull import bildsvep as bs
-            data = bs.generera(matchinfo, sport, farg, logg=self._logga)
+            data = bs.generera(matchinfo, sport, farg, logg=self._work)
             if not data:
                 self._js("window.dpcBildsvep(null)")
                 return
@@ -531,7 +537,7 @@ class Api:
         def jobb():
             from cull import las_lineup as ll
             self._js('window.dpcMatchLoading("Läser arket med Claude vision…")')
-            data = ll.las(path, sport, logg=self._logga)
+            data = ll.las(path, sport, logg=self._work)
             if not data:
                 self._js("window.dpcMatch(null)")
                 return
@@ -546,7 +552,7 @@ class Api:
 
         def jobb():
             from cull import hamta_match as hm
-            data = hm.hamta(matchinfo, sport, logg=self._logga)
+            data = hm.hamta(matchinfo, sport, logg=self._work)
             if not data:
                 self._js("window.dpcMatch(null)")
                 return
