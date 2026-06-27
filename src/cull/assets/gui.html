@@ -281,7 +281,10 @@
             <div class="cardH">Kort</div>
             <div class="row"><label class="lbl" style="width:84px">Källmapp</label>
               <input class="f flex" id="snabb_kalla"><button class="btn" onclick="pick('snabb_kalla','dir')">Välj…</button></div>
-            <div class="help pad94" style="margin-left:94px">Mappen på minneskortet med NEF-filerna. De kameralåsta plockas till en undermapp <b>Snabbplock</b> och öppnas enligt ditt val i Leverera.</div>
+            <div class="help pad94" style="margin-left:94px">Mappen på minneskortet med NEF-filerna. Kör <b>medan kortet sitter i</b> — låsflaggan följer inte med en kopia.</div>
+            <div class="row" style="margin-top:8px"><label class="lbl" style="width:84px">Spara till</label>
+              <input class="f flex" id="snabb_ut" placeholder="Tom = på minneskortet" readonly><button class="btn" onclick="pick('snabb_ut','dir')">Välj…</button></div>
+            <div class="help pad94" style="margin-left:94px">Var <b>Snabbplock</b>-mappen skapas. Välj t.ex. en Dropbox-mapp så slipper du skriva till kortet och får bilderna i mobilen.</div>
           </div>
           <div class="card full">
             <div class="cardH">📱 Story</div>

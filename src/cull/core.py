@@ -848,7 +848,9 @@ def kor_snabbplock(args, katalog):
     def _sanera(s):
         return s.replace("/", "-").replace(":", ".").strip()
 
-    if args.export_rot:
+    if getattr(args, "snabb_ut", None):
+        ut_dir = Path(args.snabb_ut).expanduser() / "Snabbplock"
+    elif args.export_rot:
         rot = Path(args.export_rot).expanduser()
         namn = _sanera(args.ut_namn) if args.ut_namn else \
             (kat.parent.name or kat.name)
@@ -939,6 +941,9 @@ def main():
     ap.add_argument("--export-rot", default=None, metavar="MAPP",
                     help="exportera till MAPP/<matchinfo>/<kameratyp>/ istället "
                          "för en undermapp i källkatalogen")
+    ap.add_argument("--snabb-ut", default=None, metavar="MAPP",
+                    help="snabbplock: lägg Snabbplock-mappen i MAPP (t.ex. en "
+                         "Dropbox-mapp) istället för på minneskortet")
     ap.add_argument("--export-overskriv", action="store_true",
                     help="skriv över befintlig urvalsmapp istället för att räkna "
                          "upp (Z8 2, Z8 3 …) — undviker dubblettmappar vid omkörning")

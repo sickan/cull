@@ -331,6 +331,9 @@ class Api:
         self._js("document.getElementById('snabb_kalla').value="
                  + json.dumps(mapp))
         cmd = [sys.executable, "-m", "cull.core", mapp, "--snabbplock"]
+        snabb_ut = (d.get("snabb_ut") or "").strip()
+        if snabb_ut:
+            cmd += ["--snabb-ut", snabb_ut]
         # Normalisera visningsvärdet ("Lightroom", "DxO PureRAW" …) till
         # CLI-koderna (lightroom/dxo/finder/inget); auto = default → utelämna.
         oppna = (d.get("oppna") or "").strip().lower()
