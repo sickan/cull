@@ -13,6 +13,15 @@ import re
 
 MODELL = "claude-opus-4-8"
 
+# Ungefärliga priser för claude-opus-4-8 (USD per token, exkl. web search-avgifter).
+# Uppdatera vid prisändring: https://www.anthropic.com/pricing
+_PRIS_IN = 15.0 / 1_000_000   # $15/MTok input
+_PRIS_UT = 75.0 / 1_000_000   # $75/MTok output
+
+# Timeout i sekunder per streaming-runda.
+_TIMEOUT_SPELARE     = 120.0   # fas 1: fler sökningar, mer tid
+_TIMEOUT_UPPSTALLNING =  90.0  # fas 2: färre sökningar
+
 # --- Fas 1: spelartruppens profiler + handles --------------------------------
 
 SYSTEM_SPELARE = (
@@ -87,51 +96,78 @@ def _parsa(text):
         return None
 
 
-def _kör_sökning(klient, fraga, system, max_uses, logg):
+def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
     """Kör ett web-search-anrop och returnerar parsad JSON eller None.
-    Använder streaming så att sökfrågor visas i realtid via logg-callbacken."""
+    Streaming: sökfrågor visas i realtid. Token-förbrukning + uppskattad
+    kostnad loggas efter varje runda. timeout gäller per streaming-runda."""
+    import anthropic as _ant
     webb = {"type": "web_search_20260209", "name": "web_search",
             "max_uses": max_uses}
     messages = [{"role": "user", "content": fraga}]
     logg("Söker på nätet via Claude (web search)…")
     final = None
+    tot_in = tot_ut = 0   # ackumulerade tokens över alla rundor
     try:
-        for _ in range(4):   # server-tool-loop: pause_turn → fortsätt (taktat)
+        for runda in range(4):   # server-tool-loop: pause_turn → fortsätt
             tool_namn = None
             tool_json = ""
-            with klient.messages.stream(
-                    model=MODELL, max_tokens=4000, system=system,
-                    tools=[webb], messages=messages) as stream:
-                for ev in stream:
-                    etype = getattr(ev, "type", "")
-                    if etype == "content_block_start":
-                        cb = ev.content_block
-                        if getattr(cb, "type", "") in ("tool_use", "server_tool_use") \
-                                and getattr(cb, "name", "") == "web_search":
-                            tool_namn = "web_search"
-                            tool_json = ""
-                        else:
+            try:
+                with klient.messages.stream(
+                        model=MODELL, max_tokens=4000, system=system,
+                        tools=[webb], messages=messages,
+                        timeout=timeout) as stream:
+                    for ev in stream:
+                        etype = getattr(ev, "type", "")
+                        if etype == "content_block_start":
+                            cb = ev.content_block
+                            if getattr(cb, "type", "") in (
+                                    "tool_use", "server_tool_use") \
+                                    and getattr(cb, "name", "") == "web_search":
+                                tool_namn = "web_search"
+                                tool_json = ""
+                            else:
+                                tool_namn = None
+                        elif etype == "content_block_delta":
+                            d = ev.delta
+                            if tool_namn == "web_search" \
+                                    and getattr(d, "type", "") == "input_json_delta":
+                                tool_json += getattr(d, "partial_json", "") or ""
+                        elif etype == "content_block_stop" \
+                                and tool_namn == "web_search":
+                            try:
+                                q = json.loads(tool_json or "{}").get("query", "")
+                                if q:
+                                    logg(f"🔍 {q}")
+                            except Exception:
+                                pass
                             tool_namn = None
-                    elif etype == "content_block_delta":
-                        d = ev.delta
-                        if tool_namn == "web_search" \
-                                and getattr(d, "type", "") == "input_json_delta":
-                            tool_json += getattr(d, "partial_json", "") or ""
-                    elif etype == "content_block_stop" and tool_namn == "web_search":
-                        try:
-                            q = json.loads(tool_json or "{}").get("query", "")
-                            if q:
-                                logg(f"🔍 {q}")
-                        except Exception:
-                            pass
-                        tool_namn = None
-                final = stream.get_final_message()
+                    final = stream.get_final_message()
+            except _ant.APITimeoutError:
+                logg(f"⚠ Timeout ({timeout:.0f} s) — sökningen tog för lång tid.")
+                return None
+            except _ant.APIStatusError as e:
+                logg(f"⚠ API-fel {e.status_code}: {e.message}")
+                return None
+            except _ant.APIConnectionError as e:
+                logg(f"⚠ Nätverksfel: {e}")
+                return None
+
+            # Token-förbrukning + uppskattad kostnad efter varje runda
+            usage = getattr(final, "usage", None)
+            if usage:
+                in_tok  = getattr(usage, "input_tokens",  0) or 0
+                out_tok = getattr(usage, "output_tokens", 0) or 0
+                tot_in += in_tok
+                tot_ut += out_tok
+                kostnad = tot_in * _PRIS_IN + tot_ut * _PRIS_UT
+                logg(f"📊 {tot_in + tot_ut:,} token · ~${kostnad:.3f}")
+
             if final.stop_reason == "pause_turn":
                 messages.append({"role": "assistant", "content": final.content})
                 continue
             break
     except Exception as e:
-        logg(f"⚠ Web search misslyckades: {type(e).__name__}: {e}")
+        logg(f"⚠ Web search misslyckades oväntat: {type(e).__name__}: {e}")
         return None
     if final is None or final.stop_reason == "refusal":
         logg("⚠ Inget svar (eller avböjt).")
@@ -164,7 +200,8 @@ def hamta_spelare(lag_hemma, lag_borta, sport="", logg=print):
     fraga += (f"\nHitta spelartruppens profiler (tröjnummer, namn, positioner, "
               f"Instagram-handles) och returnera JSON enligt detta schema:\n"
               f"{SCHEMA_SPELARE}")
-    data = _kör_sökning(klient, fraga, SYSTEM_SPELARE, max_uses=10, logg=logg)
+    data = _kör_sökning(klient, fraga, SYSTEM_SPELARE, max_uses=10, logg=logg,
+                       timeout=_TIMEOUT_SPELARE)
     if data:
         logg(f"✓ Hittade {len(data.get('spelare', []))} spelare. "
              "Granska och spara i matchen.")
@@ -190,7 +227,8 @@ def hamta_uppstallning(lag_hemma, lag_borta, datum, sport="", logg=print):
         fraga += f". Sport: {sport}"
     fraga += (f".\nHitta den officiella startuppställningen och returnera JSON "
               f"enligt detta schema:\n{SCHEMA_UPPSTALLNING}")
-    data = _kör_sökning(klient, fraga, SYSTEM_UPPSTALLNING, max_uses=8, logg=logg)
+    data = _kör_sökning(klient, fraga, SYSTEM_UPPSTALLNING, max_uses=8, logg=logg,
+                       timeout=_TIMEOUT_UPPSTALLNING)
     if data:
         n_start = sum(1 for p in data.get("spelare", []) if p.get("start"))
         logg(f"✓ Hittade {len(data.get('spelare', []))} spelare "
