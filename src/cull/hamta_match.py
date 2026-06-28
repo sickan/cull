@@ -1,10 +1,14 @@
 """Hämta laguppställning från nätet via Claude web search.
 
 Två separata funktioner för olika tidpunkter i matchförberedelsen:
-  hamta_spelare()      — dagar/veckor innan: trupp + handles från klubbsidor
+  hamta_spelare()      — dagar/veckor innan: trupp från officiella klubbsidor
   hamta_uppstallning() — ~1h innan: officiell startuppställning
 
-Inget skrivs på bilder här. Kräver ANTHROPIC_API_KEY + anthropic-SDK.
+Klubbregistret (KLUBBAR) pekar Claude direkt till rätt URL:er. Utan känd
+URL faller koden tillbaka på fri web-sökning. Lägg till nya lag i KLUBBAR
+— ingen annan kodändring behövs.
+
+Kräver ANTHROPIC_API_KEY + anthropic-SDK.
 """
 
 import json
@@ -24,58 +28,101 @@ import os as _os
 _MAX_KOSTNAD_USD = float(_os.environ.get("CULL_MAX_KOSTNAD_USD", "2.00"))
 
 # Timeout i sekunder per streaming-runda.
-_TIMEOUT_SPELARE     = 120.0   # fas 1: fler sökningar, mer tid
-_TIMEOUT_UPPSTALLNING =  90.0  # fas 2: färre sökningar
+_TIMEOUT_SPELARE      = 180.0   # fas 1: upp till 10 sökningar
+_TIMEOUT_UPPSTALLNING =  90.0   # fas 2: färre sökningar
 
-# --- Fas 1: spelartruppens profiler + handles --------------------------------
+# ---------------------------------------------------------------------------
+# Klubbregister — utöka med fler lag, ingen annan kodändring behövs.
+# Nycklar: lagnamn i lowercase, trimmat. Alla varianter av samma lag.
+# squad_url  : officiell truppsida (primär källa — alltid prioriteras)
+# matches_url: officiell matchsida (används av hamta_uppstallning)
+# ig         : officiellt klubb-Instagram-konto (utan @)
+# ---------------------------------------------------------------------------
+KLUBBAR = {
+    # --- Damallsvenskan ---
+    "fc rosengård": {
+        "squad_url":   "https://www.fcrosengard.se/sv/players",
+        "matches_url": "https://www.fcrosengard.se/sv/matches",
+        "ig": "fcrosengard",
+    },
+    "eskilstuna united": {
+        "squad_url":   "https://eskilstunaunited.se/truppen/",
+        "matches_url": "https://eskilstunaunited.se/allsvenskan-2026/",
+        "ig": "eskilstunaunited",
+    },
+    "eskilstuna united dff": {
+        "squad_url":   "https://eskilstunaunited.se/truppen/",
+        "matches_url": "https://eskilstunaunited.se/allsvenskan-2026/",
+        "ig": "eskilstunaunited",
+    },
+    # Lägg till fler lag här:
+    # "djurgårdens if dam": {
+    #     "squad_url": "https://www.difdam.se/spelare/",
+    #     "matches_url": "https://www.difdam.se/matcher/",
+    #     "ig": "difdam",
+    # },
+}
 
+
+def _klub(namn: str) -> dict:
+    """Returnerar KLUBBAR-post för lagnamnet (case-insensitive), eller {}."""
+    return KLUBBAR.get((namn or "").strip().lower(), {})
+
+
+# ---------------------------------------------------------------------------
+# Fas 1 — system + schema
+# ---------------------------------------------------------------------------
 SYSTEM_SPELARE = (
-    "Du är en sportresearcher. Din uppgift är att hitta spelartruppens "
-    "profiler för de angivna lagen. "
-    "Sök på lagets officiella webbsida (t.ex. lagnamn.se/spelare eller "
-    "/trupp), på sportförbundets sida (Fogis, Profixio, innebandy.se, "
-    "volleyboll.se) och på sociala medier. "
-    "Hitta för varje spelare: tröjnummer, namn, position/roll och "
-    "eventuell Instagram-handle. "
-    "Täck HELA den registrerade truppen — inte bara startande. "
-    "Sätt start=false för alla (startuppställning är inte känd ännu). "
-    "Gissa ALDRIG ett personligt Instagram-konto: hittar du ingen handle, "
-    "lämna fältet tomt; hittar du en men är osäker, lägg till '?' sist "
-    "(t.ex. \"@spelaren?\"). Officiella lag-/förbundskonton är ok om du är säker. "
-    "Ange vilka källor du använde. "
+    "Du är en sportresearcher. Din uppgift är att hämta hela spelartruppen "
+    "från klubbens OFFICIELLA hemsida. "
+    "Om en URL anges: besök den direkt utan att söka via Google. "
+    "Om ingen URL anges: hitta klubbens officiella webbsida och gå till truppsidan. "
+    "Officiell klubbsida är alltid facit — tredjepartssidor som Transfermarkt, "
+    "Sofascore, Wikipedia och liknande har ofta föråldrade uppgifter och felaktiga "
+    "klubbtillhörigheter (spelare som bytts ut listas fortfarande). Använd dem "
+    "bara för komplement (position, nationalitet) om det saknas på klubbsidan. "
+    "Täck HELA truppen — alla positioner och ledarstab om den är listad. "
+    "Sätt start=false för alla spelare (startuppställning är inte känd ännu). "
+    "Instagram-handles: om du stöter på en verifierad handle i klubbens egna "
+    "kanaler, ta med den. Gissa ALDRIG — lämna tomt snarare än att gissa. "
+    "Om du hittar en handle men är osäker, lägg till '?' sist (t.ex. '@spelaren?'). "
     "Svara ENBART med ett JSON-objekt enligt schemat, ingen annan text."
 )
 
 SCHEMA_SPELARE = (
     '{"lag": {"hemma": "lagnamn", "borta": "lagnamn eller tom sträng"}, '
-    '"spelare": [{"nr": "10", "namn": "Anna Svensson", "lag": "hemma", '
-    '"start": false, "handle": "@annasvensson", "info": "spiker, lagkapten"}], '
-    '"kallor": ["https://..."]}'
+    '"spelare": [{"nr": "10", "namn": "Remy Siemsen", "lag": "hemma", '
+    '"start": false, "handle": "@remyysiemsen", "info": "Forward"}], '
+    '"kallor": ["https://www.fcrosengard.se/sv/players"]}'
 )
 
-# --- Fas 2: officiell startuppställning ~1h innan ----------------------------
-
+# ---------------------------------------------------------------------------
+# Fas 2 — system + schema
+# ---------------------------------------------------------------------------
 SYSTEM_UPPSTALLNING = (
     "Du är en sportresearcher. Din uppgift är att hitta den officiella "
     "startuppställningen för en specifik kommande match. "
-    "Sök på lagets officiella kanaler (webbsida, X/Twitter, Instagram), "
-    "sportdatabaser (Fogis, Profixio, innebandy.se, volleyboll.se), "
-    "matchförhandsvisningar och sportjournalistik. "
+    "Om en URL anges: besök den direkt utan att söka via Google. "
+    "Sök annars på klubbarnas officiella kanaler (webbsida, X/Twitter, Instagram) "
+    "och sportdatabaser (Fogis, Profixio). "
     "Hitta: tröjnummer, spelarnamn och VILKA SOM STARTAR (start=true). "
     "Ta med avbytare om de listas (start=false). "
+    "Hitta ALDRIG på nummer eller namn — ta bara med det som finns i källorna. "
     "Lämna handle och info som tomma strängar — de hämtas separat. "
-    "Hitta ALDRIG på nummer eller namn — ta bara med det du hittar i källorna. "
-    "Ange vilka källor du använde. "
     "Svara ENBART med ett JSON-objekt enligt schemat, ingen annan text."
 )
 
 SCHEMA_UPPSTALLNING = (
     '{"lag": {"hemma": "lagnamn", "borta": "lagnamn"}, '
-    '"spelare": [{"nr": "10", "namn": "Anna Svensson", "lag": "hemma", '
+    '"spelare": [{"nr": "10", "namn": "Remy Siemsen", "lag": "hemma", '
     '"start": true, "handle": "", "info": ""}], '
     '"kallor": ["https://..."]}'
 )
 
+
+# ---------------------------------------------------------------------------
+# Hjälpfunktioner
+# ---------------------------------------------------------------------------
 
 def tillganglig():
     """True om SDK + API-nyckel finns."""
@@ -101,22 +148,29 @@ def _parsa(text):
         return None
 
 
+# ---------------------------------------------------------------------------
+# Kärn-streaming-funktion
+# ---------------------------------------------------------------------------
+
 def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
     """Kör ett web-search-anrop och returnerar parsad JSON eller None.
 
-    Feedback-strategi:
-      • Ticker-tråd loggar "⏳ Xs…" var 10:e sekund — alltid, oberoende av events.
+    Feedback:
+      • Ticker-tråd loggar "⏳ Xs…" var 10:e sekund oberoende av events.
       • Stream-events: fångar web_search tool_use i realtid om de levereras.
       • Fallback post-runda: sökfrågor ur final.content om events missades.
-    Timeout: ticker avbryter efter 'timeout' sekunder totalt (via ticker_timed_out-
-    flagga + break i event-loopen). Inaktivitetstimeout = 60 s (stream-parameter).
+    Timeout: ticker avbryter efter 'timeout' sekunder totalt.
+    Inaktivitetstimeout: 60 s (stream-parametern — fångar hängande anrop).
     """
     import time
     import threading
     import anthropic as _ant
+
     webb = {"type": "web_search_20260209", "name": "web_search",
             "max_uses": max_uses}
     messages = [{"role": "user", "content": fraga}]
+
+    # Logga exakt prompt — i GUI-overlay och i terminalen (kopierbar)
     logg(f"Modell: {MODELL} · cap ${_MAX_KOSTNAD_USD:.2f}")
     logg("── SYSTEM ──")
     for rad in system.split(". "):
@@ -127,11 +181,11 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
         if rad.strip():
             logg(rad.strip())
     logg("────────────")
-    # Skriv även till terminal (kopierbar)
     print("\n=== HAMTA_MATCH PROMPT ===")
     print(f"[SYSTEM]\n{system}\n")
     print(f"[USER]\n{fraga}\n")
     print("=========================\n", flush=True)
+
     logg("Söker på nätet via Claude (web search)…")
     final = None
     tot_in = tot_ut = 0
@@ -144,7 +198,6 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
             timed_out = False
             t0 = time.monotonic()
 
-            # Ticker: synlig aktivitet var 10:e sekund, startas innan stream
             ticker_stop = threading.Event()
             ticker_timed_out = threading.Event()
 
@@ -153,7 +206,7 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                 while not stop.wait(10.0):
                     elapsed = time.monotonic() - start
                     if elapsed > lim:
-                        to.set()   # signalera timeout till huvud-tråden
+                        to.set()
                         logg(f"⚠ Timeout ({lim:.0f} s) — sökningen avbröts.")
                         break
                     logg(f"⏳ {int(elapsed)} s…")
@@ -164,7 +217,7 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                 with klient.messages.stream(
                         model=MODELL, max_tokens=4000, system=system,
                         tools=[webb], messages=messages,
-                        timeout=60.0) as stream:   # 60 s inaktivitetstimeout
+                        timeout=60.0) as stream:
                     for ev in stream:
                         if ticker_timed_out.is_set():
                             timed_out = True
@@ -209,12 +262,11 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                 logg(f"⚠ Nätverksfel: {e}")
                 return None
             finally:
-                ticker_stop.set()   # stoppa ticker oavsett utfall
+                ticker_stop.set()
 
             if timed_out:
                 return None
 
-            # Fallback: sökfrågor ur final.content om streaming-events missades
             if not stream_queries:
                 for block in getattr(final, "content", []):
                     bt = getattr(block, "type", "")
@@ -224,7 +276,6 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                         if q:
                             logg(f"🔍 {q}")
 
-            # Token-förbrukning + uppskattad kostnad, cap-kontroll
             usage = getattr(final, "usage", None)
             if usage:
                 in_tok  = getattr(usage, "input_tokens",  0) or 0
@@ -232,9 +283,10 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                 tot_in += in_tok
                 tot_ut += out_tok
                 kostnad = tot_in * _PRIS_IN + tot_ut * _PRIS_UT
-                logg(f"📊 {tot_in + tot_ut:,} tok · ~${kostnad:.3f} / gräns ${_MAX_KOSTNAD_USD:.2f}")
+                logg(f"📊 {tot_in + tot_ut:,} tok · ~${kostnad:.3f}"
+                     f" / gräns ${_MAX_KOSTNAD_USD:.2f}")
                 if kostnad >= _MAX_KOSTNAD_USD:
-                    logg(f"⚠ Kostnadsgräns ${_MAX_KOSTNAD_USD:.2f} nådd — avbryter.")
+                    logg(f"⚠ Kostnadsgräns ${_MAX_KOSTNAD_USD:.2f} nådd.")
                     break
 
             if final.stop_reason == "pause_turn":
@@ -258,10 +310,18 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
     return data
 
 
+# ---------------------------------------------------------------------------
+# Publika funktioner
+# ---------------------------------------------------------------------------
+
 def hamta_spelare(lag_hemma, lag_borta, sport="", logg=print):
-    """Fas 1 — hämta spelartruppens profiler + handles från klubbsidor.
+    """Fas 1 — hämta spelartruppen från officiella klubbsidor.
+
+    Kända lag (i KLUBBAR-registret) pekas ut med direkta URL:er.
+    Okända lag faller tillbaka på fri web-sökning.
     Returnerar {lag, spelare:[{nr,namn,lag,start=false,handle,info}], kallor}
-    eller None. Körs dagar/veckor innan match."""
+    eller None.
+    """
     if not (lag_hemma or lag_borta):
         logg("⚠ Ange minst ett lag.")
         return None
@@ -270,15 +330,26 @@ def hamta_spelare(lag_hemma, lag_borta, sport="", logg=print):
         return None
     import anthropic
     klient = anthropic.Anthropic(max_retries=4)
-    delar = [d for d in [lag_hemma, lag_borta] if d]
-    fraga = "Lag: " + " och ".join(delar) + "."
+
+    # Bygg riktad fråga med URL:er där vi känner till dem
+    lag_rader = []
+    for namn in [lag_hemma, lag_borta]:
+        if not namn:
+            continue
+        k = _klub(namn)
+        url = k.get("squad_url")
+        if url:
+            lag_rader.append(f"- {namn}: besök {url}")
+        else:
+            lag_rader.append(f"- {namn}: hitta officiell truppsida")
+
+    fraga = "Hämta spelartruppen för:\n" + "\n".join(lag_rader)
     if sport and sport.lower() not in ("", "auto"):
-        fraga += f" Sport: {sport}."
-    fraga += (f"\nHitta spelartruppens profiler (tröjnummer, namn, positioner, "
-              f"Instagram-handles) och returnera JSON enligt detta schema:\n"
-              f"{SCHEMA_SPELARE}")
+        fraga += f"\nSport: {sport}"
+    fraga += f"\n\nReturnera JSON:\n{SCHEMA_SPELARE}"
+
     data = _kör_sökning(klient, fraga, SYSTEM_SPELARE, max_uses=10, logg=logg,
-                       timeout=_TIMEOUT_SPELARE)
+                        timeout=_TIMEOUT_SPELARE)
     if data:
         logg(f"✓ Hittade {len(data.get('spelare', []))} spelare. "
              "Granska och spara i matchen.")
@@ -287,8 +358,10 @@ def hamta_spelare(lag_hemma, lag_borta, sport="", logg=print):
 
 def hamta_uppstallning(lag_hemma, lag_borta, datum, sport="", logg=print):
     """Fas 2 — hämta officiell startuppställning ~1h innan match.
+
     Returnerar {lag, spelare:[{nr,namn,lag,start,handle='',info=''}], kallor}
-    eller None. handle/info är alltid tomma — bevaras från fas 1 vid merge."""
+    eller None. handle/info är alltid tomma — bevaras från fas 1 vid merge.
+    """
     if not (lag_hemma or lag_borta):
         logg("⚠ Ange minst ett lag.")
         return None
@@ -297,15 +370,28 @@ def hamta_uppstallning(lag_hemma, lag_borta, datum, sport="", logg=print):
         return None
     import anthropic
     klient = anthropic.Anthropic(max_retries=4)
+
+    # Bygg riktad fråga med match-URL:er där vi känner till dem
+    match_rader = []
+    for namn in [lag_hemma, lag_borta]:
+        if not namn:
+            continue
+        k = _klub(namn)
+        url = k.get("matches_url")
+        if url:
+            match_rader.append(f"- {namn}: {url}")
+
     fraga = f"Match: {lag_hemma} vs {lag_borta}"
     if datum:
         fraga += f", {datum}"
     if sport and sport.lower() not in ("", "auto"):
         fraga += f". Sport: {sport}"
-    fraga += (f".\nHitta den officiella startuppställningen och returnera JSON "
-              f"enligt detta schema:\n{SCHEMA_UPPSTALLNING}")
+    if match_rader:
+        fraga += "\nOfficiel matchinfo på:\n" + "\n".join(match_rader)
+    fraga += f"\n\nReturnera JSON:\n{SCHEMA_UPPSTALLNING}"
+
     data = _kör_sökning(klient, fraga, SYSTEM_UPPSTALLNING, max_uses=8, logg=logg,
-                       timeout=_TIMEOUT_UPPSTALLNING)
+                        timeout=_TIMEOUT_UPPSTALLNING)
     if data:
         n_start = sum(1 for p in data.get("spelare", []) if p.get("start"))
         logg(f"✓ Hittade {len(data.get('spelare', []))} spelare "
