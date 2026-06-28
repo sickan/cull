@@ -117,6 +117,10 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
     webb = {"type": "web_search_20260209", "name": "web_search",
             "max_uses": max_uses}
     messages = [{"role": "user", "content": fraga}]
+    # Visa frågan i loggen: rad 1 = lag + sport, rad 2 = modell + cap
+    fraga_rad1 = fraga.split("\n")[0]
+    logg(f"→ {fraga_rad1}")
+    logg(f"Modell: {MODELL} · cap ${_MAX_KOSTNAD_USD:.2f}")
     logg("Söker på nätet via Claude (web search)…")
     final = None
     tot_in = tot_ut = 0
