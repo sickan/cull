@@ -32,6 +32,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 import urllib.parse
 import urllib.request
 import warnings
@@ -47,6 +48,8 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="sklearn")
 from cull import bas
 
 MODELL_PATH = Path.home() / ".config" / "cull" / "modell.pkl"
+# Modell-bibliotek: namngivna kopior (din_smak / arkiv) för modell-växlaren.
+MODELLER_DIR = Path.home() / ".config" / "cull" / "modeller"
 TRAIN_CACHE_DIR = Path.home() / ".cache" / "cull" / "train_features"
 OKAND_PATH = Path.home() / ".cache" / "cull" / "sport_okand.json"
 # Raw-format som extraheras via exiftool-preview (samma som core.RAW_SUFFIX).
@@ -939,14 +942,21 @@ def traina(root, yolo_modell="yolo11s.pt", rapport=False,
         OKAND_PATH.unlink()
 
     sport_stats = {s: {"n_uppdrag": sport_list.count(s)} for s in sporters}
+    typ = "din_smak" if bara_markt else "arkiv"
+    paket = {"modell": modell, "sport_modeller": sport_modeller,
+             "features": FEATURES, "n_uppdrag": len(X_list),
+             "n_valda": n_pos, "sport_stats": sport_stats,
+             "rank_modell": rank_modell, "modell_typ": typ,
+             "sparad": datetime.now().isoformat(timespec="seconds")}
     MODELL_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(MODELL_PATH, "wb") as f:
-        pickle.dump({"modell": modell, "sport_modeller": sport_modeller,
-                     "features": FEATURES, "n_uppdrag": len(X_list),
-                     "n_valda": n_pos, "sport_stats": sport_stats,
-                     "rank_modell": rank_modell}, f)
+        pickle.dump(paket, f)
+    # Namngiven kopia i modell-biblioteket → modell-växlaren (din smak ↔ arkiv).
+    MODELLER_DIR.mkdir(parents=True, exist_ok=True)
+    with open(MODELLER_DIR / f"{typ}.pkl", "wb") as f:
+        pickle.dump(paket, f)
     print(f"\nModell sparad: {MODELL_PATH}  "
-          f"(kombinerad + {len(sport_modeller)} sportmodeller: "
+          f"(typ: {typ}, kombinerad + {len(sport_modeller)} sportmodeller: "
           f"{', '.join(sport_modeller)})", flush=True)
 
 

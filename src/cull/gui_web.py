@@ -286,6 +286,51 @@ class Api:
             cmd += ["--estetik-motor", (d.get("estetik_motor") or "nima").lower()]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
+    # --- Modell-växlare: din smak ↔ arkiv ------------------------------------
+    def modeller_lista(self, _d=None):
+        """Listar modell-biblioteket (din_smak/arkiv) + vilken som är aktiv."""
+        import pickle
+        from cull import inlarning as inl
+
+        def _meta(p):
+            try:
+                with open(p, "rb") as f:
+                    d = pickle.load(f)
+                return {"typ": d.get("modell_typ", ""),
+                        "n_uppdrag": d.get("n_uppdrag"),
+                        "n_valda": d.get("n_valda"),
+                        "sport": list(d.get("sport_modeller", {}).keys()),
+                        "sparad": d.get("sparad", "")}
+            except Exception:
+                return None
+
+        aktiv = _meta(inl.MODELL_PATH) or {}
+        poster = []
+        if inl.MODELLER_DIR.is_dir():
+            for p in sorted(inl.MODELLER_DIR.glob("*.pkl")):
+                m = _meta(p)
+                if not m:
+                    continue
+                m["fil"] = p.name
+                m["aktiv"] = (bool(aktiv) and m.get("typ") == aktiv.get("typ")
+                              and m.get("sparad") == aktiv.get("sparad"))
+                poster.append(m)
+        return {"modeller": poster, "aktiv": aktiv}
+
+    def aktivera_modell(self, d):
+        """Kopierar vald modell ur biblioteket till aktiva modell.pkl."""
+        import shutil
+        from cull import inlarning as inl
+        fil = (d.get("modell_fil") or "").strip()
+        src = inl.MODELLER_DIR / fil
+        if not fil or not src.exists():
+            return {"ok": False, "fel": "Okänd modell."}
+        try:
+            shutil.copy2(src, inl.MODELL_PATH)
+        except Exception as e:
+            return {"ok": False, "fel": str(e)}
+        return {"ok": True}
+
     # --- Lär av match: märk cull-underlag med Photo Mechanic-urval -----------
     def facit_underlag_lista(self, _d=None):
         """Sparade tränings-underlag (ett per cull) + om de redan märkts."""

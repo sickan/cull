@@ -524,6 +524,11 @@
           <div class="h2">Träna &amp; granska</div>
           <div class="sub">Lär modellen av dina egna Five-Star-val och kontrollera gränsfallen.</div>
           <div class="card" style="margin-bottom:16px">
+            <div class="cardH">🎛 Aktiv modell</div>
+            <div class="help" style="margin:0 0 8px 0">Vilken modell cullen använder. Växla mellan <b>din smak</b> (bara dina matcher) och <b>arkiv</b> (dina 10 facit-uppdrag) för att A/B-testa på samma tagning.</div>
+            <div id="modellLista">—</div>
+          </div>
+          <div class="card" style="margin-bottom:16px">
             <div class="cardH">📥 Lär av match (ditt urval)</div>
             <div class="help" style="margin:0 0 8px 0">Varje cull (även Rapportläge) sparar ett underlag med hela tagningens features. Välj matchen, peka på din <b>behåll-mapp</b> (NEF-urvalet) och valfritt <b>levererat</b> (JPG-galleriet, extra vikt) — appen matchar filnamn och gör ditt urval till facit. Träna sedan om.</div>
             <div class="row"><label class="lbl" style="width:96px">Match</label>
@@ -695,7 +700,7 @@ function showPanel(name){
   if(name==="valj") loadValj();
   if(name==="gallra") behallPreview();
   if(name==="snabb"){ storyInfoUppdatera(); storyFormat(($("story_format")||{}).value||"9x16"); }
-  if(name==="trana") laddaUnderlag();
+  if(name==="trana"){ laddaUnderlag(); renderModeller(); }
   if(name==="leverera") $("leverSub").innerHTML = ACTIVE_PATH
     ? `Arbetar på <b>${esc(niceName(ACTIVE_PATH))}</b>.` : "Exportera urvalet med metadata, husstil och tröjnummer.";
   if(name==="publicera") $("pubSub").innerHTML = ACTIVE_PATH
@@ -791,6 +796,29 @@ async function trana(){ setBusy(true); window.dpcClear(); progPulse(true); showP
   await window.pywebview.api.spara(collect()); await window.pywebview.api.trana(collect()); }
 async function tranaDinSmak(){ setBusy(true); window.dpcClear(); progPulse(true); showPanel("logg");
   await window.pywebview.api.spara(collect()); await window.pywebview.api.trana_dinsmak(collect()); }
+async function renderModeller(){
+  const box=$("modellLista"); if(!box) return;
+  const r=await window.pywebview.api.modeller_lista();
+  const lista=(r&&r.modeller)||[];
+  const namn={din_smak:"Din smak",arkiv:"Arkiv"};
+  if(!lista.length){
+    const a=(r&&r.aktiv)||{};
+    box.innerHTML=`<div class="help">Inga sparade modeller än. Träna en gång till med nya koden så fylls biblioteket. Aktiv nu: ${a.n_uppdrag?esc((namn[a.typ]||a.typ||"okänd"))+` · ${a.n_uppdrag} uppdrag`:"okänd modell"}.</div>`;
+    return;
+  }
+  box.innerHTML=lista.map(m=>`
+    <div class="row" style="align-items:center;gap:10px;margin-bottom:4px">
+      <span style="width:90px;font-weight:600">${esc(namn[m.typ]||m.typ)}</span>
+      <span style="flex:1;font-size:12px;color:var(--muted)">${m.n_uppdrag} uppdrag · ${m.n_valda} valda${m.sport.length?" · "+esc(m.sport.join(",")):""}${m.sparad?" · "+esc(m.sparad.slice(0,10)):""}</span>
+      ${m.aktiv?`<span class="acc" style="font-size:12px;font-weight:600">✓ aktiv</span>`
+              :`<button class="btn" onclick="aktiveraModell('${esc(m.fil)}')">Aktivera</button>`}
+    </div>`).join("");
+}
+async function aktiveraModell(fil){
+  const r=await window.pywebview.api.aktivera_modell({modell_fil:fil});
+  if(r&&r.ok) renderModeller();
+  else if(r&&r.fel) alert("Fel: "+r.fel);
+}
 async function laddaUnderlag(){
   const sel=$("underlag_fil"); if(!sel) return;
   const r=await window.pywebview.api.facit_underlag_lista();
