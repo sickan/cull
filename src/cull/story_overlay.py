@@ -105,29 +105,41 @@ def saknar_loggor():
                   if p.suffix.lower() in (".png", ".jpg", ".jpeg"))
 
 
+def _mjuk_cirkelmask(storlek, inner=0.62, outer=0.92):
+    """L-mask: full opacitet inom inner·r, linjär utfasning till 0 vid outer·r."""
+    import numpy as np
+    y, x = np.ogrid[:storlek, :storlek]
+    c = (storlek - 1) / 2.0
+    r = np.sqrt((x - c) ** 2 + (y - c) ** 2) / c
+    alpha = np.clip((outer - r) / (outer - inner), 0.0, 1.0)
+    from PIL import Image as _Img
+    return _Img.fromarray((alpha * 255.0).astype("uint8"), "L")
+
+
 def _rund_bricka(logga_path, storlek, monogram):
+    import numpy as np
     Image, ImageDraw, ImageFont, ImageOps = _pil()
     S = storlek
-    bricka = Image.new("RGBA", (S, S), (255, 255, 255, 255))
     if logga_path:
         try:
             logo = Image.open(logga_path).convert("RGBA")
-            inre = int(S * 0.80)
-            logo.thumbnail((inre, inre), Image.LANCZOS)
-            ox = (S - logo.width) // 2
-            oy = (S - logo.height) // 2
-            bricka.paste(logo, (ox, oy), logo)
+            bricka = ImageOps.fit(logo, (S, S), Image.LANCZOS)
+            cirkel = np.asarray(_mjuk_cirkelmask(S), dtype=np.float32) / 255.0
+            egen   = np.asarray(bricka.getchannel("A"), dtype=np.float32) / 255.0
+            bricka.putalpha(Image.fromarray((cirkel * egen * 255).astype("uint8"), "L"))
+            return bricka
         except Exception:
-            logga_path = None
-    if not logga_path:
-        d = ImageDraw.Draw(bricka)
-        txt = monogram[:4].upper()
-        fs = max(10, S // (3 if len(txt) <= 2 else 4))
-        fnt = _hitta_typsnitt(fs)
-        bbox = d.textbbox((0, 0), txt, font=fnt)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        d.text(((S - tw) // 2, (S - th) // 2 - bbox[1]),
-               txt, font=fnt, fill=(12, 68, 124, 255))
+            pass
+    # Monogram-fallback (ingen logga hittades)
+    bricka = Image.new("RGBA", (S, S), (255, 255, 255, 255))
+    d = ImageDraw.Draw(bricka)
+    txt = monogram[:4].upper()
+    fs = max(10, S // (3 if len(txt) <= 2 else 4))
+    fnt = _hitta_typsnitt(fs)
+    bbox = d.textbbox((0, 0), txt, font=fnt)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    d.text(((S - tw) // 2, (S - th) // 2 - bbox[1]),
+           txt, font=fnt, fill=(12, 68, 124, 255))
     mask = Image.new("L", (S, S), 0)
     ImageDraw.Draw(mask).ellipse((0, 0, S - 1, S - 1), fill=255)
     bricka.putalpha(mask)
