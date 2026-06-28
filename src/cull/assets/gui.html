@@ -537,7 +537,9 @@
               <button class="btn" onclick="pick('lar_lev_mapp','dir')">Välj…</button></div>
             <div class="row" style="margin-top:6px">
               <button class="btn primary" onclick="larAvMatch()">Märk urval</button>
+              <button class="btn" onclick="tranaDinSmak()" title="Träna en modell enbart på dina märkta matcher">Träna din smak ▸</button>
               <span id="larStatus" style="font-size:12px; color:var(--muted); margin-left:8px"></span></div>
+            <div class="help" style="margin:4px 0 0 0">"Träna din smak" = modell enbart på dina märkta matcher (oblandat med arkivet). Bäst med 3+ matcher inne.</div>
           </div>
           <div class="card" style="margin-bottom:16px">
             <div class="cardH">Träning</div>
@@ -787,6 +789,8 @@ async function kor(){
 }
 async function trana(){ setBusy(true); window.dpcClear(); progPulse(true); showPanel("logg");
   await window.pywebview.api.spara(collect()); await window.pywebview.api.trana(collect()); }
+async function tranaDinSmak(){ setBusy(true); window.dpcClear(); progPulse(true); showPanel("logg");
+  await window.pywebview.api.spara(collect()); await window.pywebview.api.trana_dinsmak(collect()); }
 async function laddaUnderlag(){
   const sel=$("underlag_fil"); if(!sel) return;
   const r=await window.pywebview.api.facit_underlag_lista();

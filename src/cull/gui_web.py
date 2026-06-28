@@ -277,6 +277,15 @@ class Api:
             cmd += ["--estetik-motor", (d.get("estetik_motor") or "nima").lower()]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
+    def trana_dinsmak(self, d):
+        """'Din smak'-modell: tränar enbart på dina märkta matcher (Lär av
+        match), oblandat med arkivets Instagram-facit."""
+        cmd = [sys.executable, "-m", "cull.inlarning",
+               "--bara-markt", "--max-neg", "100"]
+        if d.get("estetik"):
+            cmd += ["--estetik-motor", (d.get("estetik_motor") or "nima").lower()]
+        threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
+
     # --- Lär av match: märk cull-underlag med Photo Mechanic-urval -----------
     def facit_underlag_lista(self, _d=None):
         """Sparade tränings-underlag (ett per cull) + om de redan märkts."""

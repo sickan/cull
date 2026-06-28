@@ -656,7 +656,7 @@ def _exiftool_env():
 
 def traina(root, yolo_modell="yolo11s.pt", rapport=False,
            max_neg=150, max_uppdrag=None, kontroll_bara=False,
-           limpa_cache=False, estetik_motor="nima"):
+           limpa_cache=False, estetik_motor="nima", bara_markt=False):
     if limpa_cache:
         import shutil
         if TRAIN_CACHE_DIR.exists():
@@ -666,15 +666,25 @@ def traina(root, yolo_modell="yolo11s.pt", rapport=False,
             print("Ingen cache att rensa.", flush=True)
         return
 
-    uppdrag = hitta_uppdrag_export(root)
-    kalla = "export (Instagram)"
-    if not uppdrag:
-        uppdrag = hitta_uppdrag_filterpix(root)
-        kalla = "FilterPix"
+    # bara_markt = "din smak"-modell: enbart dina egna märkta matcher (Lär av
+    # match), oblandat med arkivets Instagram/FilterPix-facit.
+    if bara_markt:
+        uppdrag, kalla = [], "din smak (märkta matcher)"
+    else:
+        uppdrag = hitta_uppdrag_export(root)
+        kalla = "export (Instagram)"
+        if not uppdrag:
+            uppdrag = hitta_uppdrag_filterpix(root)
+            kalla = "FilterPix"
     markta = hitta_uppdrag_markt()   # PM-urval (features redan extraherade)
     if markta:
-        print(f"Lär av match: {len(markta)} märkta underlag (PM-urval).",
-              flush=True)
+        n_match = len({u[0] for u in markta})
+        print(f"Lär av match: {len(markta)} märkta underlag "
+              f"({n_match} matcher).", flush=True)
+        if bara_markt and n_match < 3:
+            print(f"⚠ Bara {n_match} match(er) i din-smak-läget — modellen blir "
+                  "svag/överanpassad. Mata in fler matcher för en stabil modell.",
+                  flush=True)
     if not uppdrag and not markta:
         sys.exit(f"Hittade inga facit-uppdrag under {root} och inga märkta "
                  "PM-underlag (kör en cull → 'Lär av match').")
@@ -984,14 +994,18 @@ def main():
                     help="visa bara online-only-status, träna inte")
     ap.add_argument("--limpa-cache", action="store_true",
                     help="rensa feature-cache och avsluta")
+    ap.add_argument("--bara-markt", action="store_true",
+                    help="'din smak'-modell: träna enbart på dina märkta matcher "
+                         "(Lär av match), oblandat med arkivets Instagram-facit")
     args = ap.parse_args()
-    if not args.root and not args.limpa_cache:
-        ap.error("root krävs (ange rotkatalog, eller --limpa-cache för att rensa cache)")
+    if not args.root and not args.limpa_cache and not args.bara_markt:
+        ap.error("root krävs (ange rotkatalog, --bara-markt, eller --limpa-cache)")
     root = Path(args.root).expanduser() if args.root else Path(".")
     traina(root, yolo_modell=args.yolo,
            rapport=args.rapport, max_neg=args.max_neg,
            max_uppdrag=args.max_uppdrag, kontroll_bara=args.kolla,
-           limpa_cache=args.limpa_cache, estetik_motor=args.estetik_motor)
+           limpa_cache=args.limpa_cache, estetik_motor=args.estetik_motor,
+           bara_markt=args.bara_markt)
 
 
 if __name__ == "__main__":
