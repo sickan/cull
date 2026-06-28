@@ -83,9 +83,8 @@ SYSTEM_SPELARE = (
     "bara för komplement (position, nationalitet) om det saknas på klubbsidan. "
     "Täck HELA truppen — alla positioner och ledarstab om den är listad. "
     "Sätt start=false för alla spelare (startuppställning är inte känd ännu). "
-    "Instagram-handles: om du stöter på en verifierad handle i klubbens egna "
-    "kanaler, ta med den. Gissa ALDRIG — lämna tomt snarare än att gissa. "
-    "Om du hittar en handle men är osäker, lägg till '?' sist (t.ex. '@spelaren?'). "
+    "Lämna handle-fältet TOMT för alla — sök INTE efter Instagram-handles, "
+    "det görs i ett separat steg. "
     "Svara ENBART med ett JSON-objekt enligt schemat, ingen annan text."
 )
 
@@ -348,7 +347,7 @@ def hamta_spelare(lag_hemma, lag_borta, sport="", logg=print):
         fraga += f"\nSport: {sport}"
     fraga += f"\n\nReturnera JSON:\n{SCHEMA_SPELARE}"
 
-    data = _kör_sökning(klient, fraga, SYSTEM_SPELARE, max_uses=10, logg=logg,
+    data = _kör_sökning(klient, fraga, SYSTEM_SPELARE, max_uses=4, logg=logg,
                         timeout=_TIMEOUT_SPELARE)
     if data:
         logg(f"✓ Hittade {len(data.get('spelare', []))} spelare. "
