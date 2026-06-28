@@ -127,6 +127,11 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
         if rad.strip():
             logg(rad.strip())
     logg("────────────")
+    # Skriv även till terminal (kopierbar)
+    print("\n=== HAMTA_MATCH PROMPT ===")
+    print(f"[SYSTEM]\n{system}\n")
+    print(f"[USER]\n{fraga}\n")
+    print("=========================\n", flush=True)
     logg("Söker på nätet via Claude (web search)…")
     final = None
     tot_in = tot_ut = 0
