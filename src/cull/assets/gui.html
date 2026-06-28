@@ -308,15 +308,24 @@
           <div class="card full">
             <div class="cardH">📱 Story</div>
             <input type="hidden" class="f" id="story_moment" value="avspark">
-            <div class="row" style="gap:6px; margin-bottom:8px">
-              <button class="btn storyMoment on" id="smAvspark"  onclick="storyMoment('avspark')">Avspark</button>
-              <button class="btn storyMoment"    id="smPaus"     onclick="storyMoment('paus')">Halvtid</button>
-              <button class="btn storyMoment"    id="smResultat" onclick="storyMoment('resultat')">Resultat</button>
+            <div style="gap:6px; margin-bottom:8px; display:grid; grid-template-columns:1fr 1fr 1fr;">
+              <button class="btn storyMoment on" id="smAvspark"   onclick="storyMoment('avspark')">Avspark</button>
+              <button class="btn storyMoment"    id="smPaus"      onclick="storyMoment('paus')">Halvtid</button>
+              <button class="btn storyMoment"    id="smResultat"  onclick="storyMoment('resultat')">Resultat</button>
+              <button class="btn storyMoment"    id="smStartelva" onclick="storyMoment('startelva')">Startelva</button>
+              <button class="btn storyMoment"    id="smMalgorare" onclick="storyMoment('malgorare')">Målgörare</button>
+              <button class="btn storyMoment"    id="smNastaMatch"onclick="storyMoment('nasta_match')">Nästa match</button>
             </div>
             <input type="hidden" class="f" id="story_format" value="9x16">
-            <div class="row" style="gap:6px; margin-bottom:14px">
+            <div class="row" style="gap:6px; margin-top:8px; margin-bottom:8px">
               <button class="btn storyMoment on" id="sfStory"  onclick="storyFormat('9x16')">Story 9:16</button>
               <button class="btn storyMoment"    id="sfInlagg" onclick="storyFormat('4x5')">Inlägg 4:5</button>
+            </div>
+            <input type="hidden" class="f" id="story_tema" value="Hav">
+            <div class="row" style="gap:6px; margin-bottom:14px">
+              <button class="btn storyMoment on" id="stHav"  onclick="storyTema('Hav')">Hav</button>
+              <button class="btn storyMoment"    id="stSol"  onclick="storyTema('Sol')">Sol</button>
+              <button class="btn storyMoment"    id="stRose" onclick="storyTema('Rosé')">Rosé</button>
             </div>
 
             <!-- Match-sammanfattning -->
@@ -347,6 +356,16 @@
             <div class="row hidden" id="storyMalRad">
               <label class="lbl" style="width:84px">Mål</label>
               <input class="f flex" id="story_mal" placeholder="t.ex. Larsson 23′, Berg 67′">
+            </div>
+            <div class="hidden" id="storyStartelvaRad" style="margin-bottom:8px">
+              <label class="lbl" style="display:block;margin-bottom:4px;width:auto">Startelva (ett namn per rad)</label>
+              <textarea class="f" id="story_startelva" rows="6"
+                style="width:100%;box-sizing:border-box;font-size:13px;resize:vertical;background:var(--field);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--t-body);"
+                placeholder="Edrud&#10;Iwai&#10;Pennsäter&#10;…"></textarea>
+            </div>
+            <div class="row hidden" id="storyNästaMatchRad">
+              <label class="lbl" style="width:84px">Nästa match</label>
+              <input class="f flex" id="story_next_when" placeholder="t.ex. Lör 15 aug · 14:00">
             </div>
             <div class="row">
               <label class="lbl" style="width:84px">Liga</label>
@@ -684,7 +703,7 @@ function fillSelect(id,arr,val){const s=$(id); if(!s)return; s.innerHTML="";
   if(val!=null) s.value=val;}
 
 function collect(){const d={};
-  document.querySelectorAll("input.f,select.f,input[type=range]").forEach(el=>{ if(el.id && !el.id.startsWith("m_")) d[el.id]=el.value; });
+  document.querySelectorAll("input.f,select.f,textarea.f,input[type=range]").forEach(el=>{ if(el.id && !el.id.startsWith("m_")) d[el.id]=el.value; });
   CHK.forEach(k=>{ if($(k)) d[k]=$(k).checked; });
   d.aktivt_urval=ACTIVE_PATH||"";
   return d;}
@@ -907,18 +926,30 @@ async function snabbplock(){
 }
 function storyMoment(m){
   $("story_moment").value=m;
-  ["avspark","paus","resultat"].forEach(k=>{
-    const btn={avspark:$("smAvspark"),paus:$("smPaus"),resultat:$("smResultat")}[k];
-    if(btn) btn.classList.toggle("on", k===m);
+  const BTN_MAP={avspark:"smAvspark",paus:"smPaus",resultat:"smResultat",
+                 startelva:"smStartelva",malgorare:"smMalgorare",nasta_match:"smNastaMatch"};
+  Object.entries(BTN_MAP).forEach(([k,id])=>{
+    const btn=$(id); if(btn) btn.classList.toggle("on", k===m);
   });
-  const visStallning = m==="paus"||m==="resultat";
-  const visMal       = m==="resultat";
-  const hjälpTxt = m==="avspark"
+  const visStallning = m==="paus"||m==="resultat"||m==="malgorare";
+  const visMal       = m==="resultat"||m==="malgorare";
+  const visStartelva = m==="startelva";
+  const visNästa     = m==="nasta_match";
+  const hjälpTxt = m==="avspark"||m==="nasta_match"
     ? "Välj en bild från en tidigare match – laget och ligan hämtas ur Matchinfo."
     : "Välj en bild ur dagens <b>Snabbplock</b>-mapp.";
   const hjälp=$("storyBildHjälp"); if(hjälp) hjälp.innerHTML=hjälpTxt;
-  const sr=$("storyStallningRad"); if(sr) sr.classList.toggle("hidden",!visStallning);
-  const mr=$("storyMalRad");       if(mr) mr.classList.toggle("hidden",!visMal);
+  const sr=$("storyStallningRad");  if(sr) sr.classList.toggle("hidden",!visStallning);
+  const mr=$("storyMalRad");        if(mr) mr.classList.toggle("hidden",!visMal);
+  const sv=$("storyStartelvaRad");  if(sv) sv.classList.toggle("hidden",!visStartelva);
+  const nr=$("storyNästaMatchRad"); if(nr) nr.classList.toggle("hidden",!visNästa);
+}
+function storyTema(t){
+  $("story_tema").value=t;
+  const BTN={Hav:"stHav",Sol:"stSol","Rosé":"stRose"};
+  Object.entries(BTN).forEach(([k,id])=>{
+    const btn=$(id); if(btn) btn.classList.toggle("on", k===t);
+  });
 }
 function storyFormat(f){
   $("story_format").value=f;
