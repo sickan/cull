@@ -98,25 +98,39 @@ def _parsa(text):
 
 def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
     """Kör ett web-search-anrop och returnerar parsad JSON eller None.
-    Streaming: sökfrågor visas i realtid. Token-förbrukning + uppskattad
-    kostnad loggas efter varje runda. timeout gäller per streaming-runda."""
+
+    Timeout: 'timeout' är maximal total tid PER RUNDA (inte inaktivitet).
+    Kontrolleras via time.monotonic() inne i stream-loopen.
+    Sökfrågor visas via stream-events om de fångas; annars via post-runda
+    inspektion av final.content (fallback). Token + kostnad loggas per runda.
+    """
+    import time
     import anthropic as _ant
     webb = {"type": "web_search_20260209", "name": "web_search",
             "max_uses": max_uses}
     messages = [{"role": "user", "content": fraga}]
     logg("Söker på nätet via Claude (web search)…")
     final = None
-    tot_in = tot_ut = 0   # ackumulerade tokens över alla rundor
+    tot_in = tot_ut = 0
+
     try:
-        for runda in range(4):   # server-tool-loop: pause_turn → fortsätt
+        for _ in range(4):   # server-tool-loop: pause_turn → fortsätt
             tool_namn = None
             tool_json = ""
+            stream_queries = []   # frågor loggade via stream (dedup vs fallback)
+            timed_out = False
+            t0 = time.monotonic()
+
             try:
                 with klient.messages.stream(
                         model=MODELL, max_tokens=4000, system=system,
                         tools=[webb], messages=messages,
-                        timeout=timeout) as stream:
+                        timeout=60.0) as stream:   # 60 s inaktivitetstimeout
                     for ev in stream:
+                        # Hård tidsgräns för hela rundan
+                        if time.monotonic() - t0 > timeout:
+                            timed_out = True
+                            break
                         etype = getattr(ev, "type", "")
                         if etype == "content_block_start":
                             cb = ev.content_block
@@ -130,20 +144,25 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                         elif etype == "content_block_delta":
                             d = ev.delta
                             if tool_namn == "web_search" \
-                                    and getattr(d, "type", "") == "input_json_delta":
+                                    and getattr(d, "type", "") \
+                                    == "input_json_delta":
                                 tool_json += getattr(d, "partial_json", "") or ""
                         elif etype == "content_block_stop" \
                                 and tool_namn == "web_search":
                             try:
-                                q = json.loads(tool_json or "{}").get("query", "")
+                                q = json.loads(
+                                    tool_json or "{}").get("query", "")
                                 if q:
                                     logg(f"🔍 {q}")
+                                    stream_queries.append(q)
                             except Exception:
                                 pass
                             tool_namn = None
-                    final = stream.get_final_message()
+                    if not timed_out:
+                        final = stream.get_final_message()
+
             except _ant.APITimeoutError:
-                logg(f"⚠ Timeout ({timeout:.0f} s) — sökningen tog för lång tid.")
+                logg("⚠ Inaktivitet >60 s — servern svarar inte.")
                 return None
             except _ant.APIStatusError as e:
                 logg(f"⚠ API-fel {e.status_code}: {e.message}")
@@ -152,7 +171,21 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                 logg(f"⚠ Nätverksfel: {e}")
                 return None
 
-            # Token-förbrukning + uppskattad kostnad efter varje runda
+            if timed_out:
+                logg(f"⚠ Timeout ({timeout:.0f} s) — sökningen avbröts.")
+                return None
+
+            # Fallback: om stream-events inte fångade frågorna, hämta ur content
+            if not stream_queries:
+                for block in getattr(final, "content", []):
+                    bt = getattr(block, "type", "")
+                    if bt in ("tool_use", "server_tool_use") \
+                            and getattr(block, "name", "") == "web_search":
+                        q = (getattr(block, "input", {}) or {}).get("query", "")
+                        if q:
+                            logg(f"🔍 {q}")
+
+            # Token-förbrukning + uppskattad kostnad
             usage = getattr(final, "usage", None)
             if usage:
                 in_tok  = getattr(usage, "input_tokens",  0) or 0
@@ -166,13 +199,15 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                 messages.append({"role": "assistant", "content": final.content})
                 continue
             break
+
     except Exception as e:
-        logg(f"⚠ Web search misslyckades oväntat: {type(e).__name__}: {e}")
+        logg(f"⚠ Oväntat fel: {type(e).__name__}: {e}")
         return None
+
     if final is None or final.stop_reason == "refusal":
         logg("⚠ Inget svar (eller avböjt).")
         return None
-    text = "".join(getattr(b, "text", "") for b in final.content
+    text = "".join(getattr(b, "text", "") for b in getattr(final, "content", [])
                    if getattr(b, "type", "") == "text")
     data = _parsa(text)
     if not data:
