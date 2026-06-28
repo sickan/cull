@@ -389,7 +389,7 @@
                 <button class="btn" onclick="matchRadera()" style="color:#c00">Radera</button>
                 <span id="m_status" style="font-size:12px;color:var(--muted);margin-left:4px"></span></div>
               <div class="row" style="margin-top:8px;gap:8px;align-items:center;border-top:1px solid var(--div3);padding-top:8px">
-                <span id="m_spelare_sum" class="help" style="margin:0">Inga spelare ännu — Hämta match eller Redigera spelare.</span>
+                <span id="m_spelare_sum" class="help" style="margin:0">Inga spelare ännu — Hämta spelare eller Redigera spelare.</span>
                 <button class="btn" onclick="redigeraSpelare()" style="margin-left:auto">Redigera spelare…</button></div>
             </div>
             <div class="card full">
@@ -405,8 +405,10 @@
               <div class="cardH">Laguppställning</div>
               <div class="tool" onclick="lasArk()"><span class="tic">📄</span>
                 <div><div class="tt">Läs ark</div><div class="td">Läs laguppställnings-arket (foto/skärmdump/PDF) → roster automatiskt</div></div></div>
-              <div class="tool" onclick="hamtaMatch()"><span class="tic">🌐</span>
-                <div><div class="tt">Hämta match</div><div class="td">Sök trupp + referat på nätet via Claude (kostar några ören)</div></div></div>
+              <div class="tool" onclick="hamtaSpelare()"><span class="tic">👥</span>
+                <div><div class="tt">Hämta spelare</div><div class="td">Sök spelartruppens profiler och @handles på klubbsidan (kan göras i förväg)</div></div></div>
+              <div class="tool" onclick="hamtaUppstallning()"><span class="tic">🌐</span>
+                <div><div class="tt">Hämta uppställning</div><div class="td">Sök officiell startuppställning ~1 timme innan match</div></div></div>
               <div class="tool" onclick="nyMatch()"><span class="tic">↺</span>
                 <div><div class="tt">Ny match</div><div class="td">Nollställ matchfälten inför nästa uppdrag</div></div></div>
             </div>
@@ -1209,14 +1211,30 @@ async function nummerGenomgang(){
 }
 
 let MATCH=null, MTEAM="hemma";
-async function hamtaMatch(){
-  MATCH_BIND_ID=($("m_id")||{}).value||"";
-  const mi=($("matchinfo").value||"").trim();
-  const body=openSheet("Hämta match","");
-  if(!mi){ body.innerHTML=tomMsg("Fyll i Matchinfo först (Hemma - Borta R-R ÅÅÅÅMMDD Arena)."); return; }
-  sheetWork("Söker laguppställning och referat på nätet via Claude… (kostar några ören)");
-  await window.pywebview.api.spara(collect());
-  window.pywebview.api.hamta_match(collect());
+function _matchBrygga(){
+  // Kräver att en match är sparad och vald. Returnerar {ok,id,lag_hemma,lag_borta,datum,sport} eller null.
+  const id=($("m_id")||{}).value||"";
+  if(!id){ if($("m_status")) $("m_status").textContent="Spara matchen i databasen först."; return null; }
+  return { id,
+    lag_hemma: ($("m_lag_hemma")||{}).value||"",
+    lag_borta: ($("m_lag_borta")||{}).value||"",
+    datum:     ($("m_datum")||{}).value||"",
+    sport:     (($("m_sport")||{}).value||"").toLowerCase() };
+}
+async function hamtaSpelare(){
+  const p=_matchBrygga(); if(!p) return;
+  MATCH_BIND_ID=p.id;
+  openSheet("Hämta spelare","");
+  sheetWork("Söker spelartruppens profiler och @handles på klubbsidor… (kostar några ören)");
+  window.pywebview.api.hamta_spelare(p);
+}
+async function hamtaUppstallning(){
+  const p=_matchBrygga(); if(!p) return;
+  if(!p.datum){ if($("m_status")) $("m_status").textContent="Fyll i matchdatum först."; return; }
+  MATCH_BIND_ID=p.id;
+  openSheet("Hämta uppställning","");
+  sheetWork("Söker officiell startuppställning via Claude… (kostar några ören)");
+  window.pywebview.api.hamta_uppstallning(p);
 }
 async function lasArk(){
   MATCH_BIND_ID=($("m_id")||{}).value||"";

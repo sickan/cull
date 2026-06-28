@@ -268,6 +268,64 @@ class Api:
             falt["roster"] = m["roster"].strip()
         return {"ok": True, "falt": falt}
 
+    @staticmethod
+    def _slå_ihop_spelare(gamla, nya, *, bevara_start=False):
+        """Mergar ny spelarlista mot befintlig.
+        Matchar på (nr, lag) i första hand; faller tillbaka på (namn, lag) —
+        täcker fallet att fas 1 saknar nummer men fas 2 har det.
+        Nya vinner på: nr, namn, lag, start (om inte bevara_start).
+        Gamla bevaras för: handle, info — om de saknas i nya.
+        Spelare enbart i gamla behålls; start sätts False om inte bevara_start."""
+        gl = list(gamla or [])
+        anvanda = set()   # index i gl som redan matchats
+
+        def _nr(p):   return str(p.get("nr", "")).strip()
+        def _lag(p):  return str(p.get("lag", "hemma")).strip().lower()
+        def _namn(p): return str(p.get("namn", "")).strip().lower()
+
+        # Bygg snabbindex: (nr, lag) → index och (namn, lag) → index
+        by_nr   = {(_nr(p), _lag(p)): i for i, p in enumerate(gl) if _nr(p)}
+        by_namn = {(_namn(p), _lag(p)): i for i, p in enumerate(gl)}
+
+        ut = []
+        for ny in (nya or []):
+            nr = _nr(ny); lag = _lag(ny); namn = _namn(ny)
+            gi = by_nr.get((nr, lag)) if nr else None
+            if gi is None or gi in anvanda:
+                gi = by_namn.get((namn, lag))
+            gammal = gl[gi] if (gi is not None and gi not in anvanda) else None
+            if gi is not None and gi not in anvanda and gammal is not None:
+                anvanda.add(gi)
+            merged = {
+                "nr":     nr,
+                "namn":   str(ny.get("namn", "")).strip(),
+                "lag":    lag,
+                "handle": str(ny.get("handle", "")).strip(),
+                "info":   str(ny.get("info", "")).strip(),
+                "start":  bool(ny.get("start", False)),
+            }
+            if gammal:
+                if not merged["handle"] and gammal.get("handle"):
+                    merged["handle"] = gammal["handle"]
+                if not merged["info"] and gammal.get("info"):
+                    merged["info"] = gammal["info"]
+                if bevara_start:
+                    merged["start"] = bool(gammal.get("start", False))
+            ut.append(merged)
+        # Spelare enbart i gamla — behåll, reset start vid fas 2
+        for i, g in enumerate(gl):
+            if i in anvanda:
+                continue
+            ut.append({
+                "nr":     _nr(g),
+                "namn":   str(g.get("namn", "")).strip(),
+                "lag":    _lag(g),
+                "handle": str(g.get("handle", "")).strip(),
+                "info":   str(g.get("info", "")).strip(),
+                "start":  bool(g.get("start", False)) if bevara_start else False,
+            })
+        return ut
+
     def match_satt_spelare(self, d):
         """Skriver inline-spelarlistan till en match utan att röra övriga fält.
         d = {id, spelare:[{nr,namn,lag,handle,info,start}]}. Används av spelar-
@@ -884,17 +942,58 @@ class Api:
 
         threading.Thread(target=jobb, daemon=True).start()
 
-    # --- Hämta match (Claude web search) → roster-förslag --------------------
-    def hamta_match(self, d):
-        matchinfo = (d.get("matchinfo") or "").strip()
-        sport = (d.get("sport") or "").strip()
+    # --- Hämta spelare (fas 1, Claude web search) → trupp + handles ----------
+    def hamta_spelare(self, d):
+        """Fas 1: sök spelartruppens profiler och handles på klubbsidor.
+        Mergar med befintliga spelare i matchposten (bevarar start-flaggor)."""
+        mid    = (d.get("id") or "").strip()
+        lag_h  = (d.get("lag_hemma") or "").strip()
+        lag_b  = (d.get("lag_borta") or "").strip()
+        sport  = (d.get("sport") or "").strip()
 
         def jobb():
             from cull import hamta_match as hm
-            data = hm.hamta(matchinfo, sport, logg=self._work)
+            data = hm.hamta_spelare(lag_h, lag_b, sport, logg=self._work)
             if not data:
                 self._js("window.dpcMatch(null)")
                 return
+            if mid:
+                lista = gui.ladda_matcher()
+                m = next((x for x in lista if x.get("id") == mid), None)
+                if m:
+                    data["spelare"] = self._slå_ihop_spelare(
+                        m.get("spelare", []), data.get("spelare", []),
+                        bevara_start=True)
+            data["_mid"] = mid
+            self._js(f"window.dpcMatch({json.dumps(data, ensure_ascii=False)})")
+
+        threading.Thread(target=jobb, daemon=True).start()
+
+    # --- Hämta uppställning (fas 2, Claude web search) → startande elva -----
+    def hamta_uppstallning(self, d):
+        """Fas 2: sök officiell startuppställning ~1h innan match.
+        Mergar med befintliga spelare — bevarar handles/info från fas 1."""
+        mid    = (d.get("id") or "").strip()
+        lag_h  = (d.get("lag_hemma") or "").strip()
+        lag_b  = (d.get("lag_borta") or "").strip()
+        datum  = (d.get("datum") or "").strip()
+        sport  = (d.get("sport") or "").strip()
+
+        def jobb():
+            from cull import hamta_match as hm
+            data = hm.hamta_uppstallning(lag_h, lag_b, datum, sport,
+                                         logg=self._work)
+            if not data:
+                self._js("window.dpcMatch(null)")
+                return
+            if mid:
+                lista = gui.ladda_matcher()
+                m = next((x for x in lista if x.get("id") == mid), None)
+                if m:
+                    data["spelare"] = self._slå_ihop_spelare(
+                        m.get("spelare", []), data.get("spelare", []),
+                        bevara_start=False)
+            data["_mid"] = mid
             self._js(f"window.dpcMatch({json.dumps(data, ensure_ascii=False)})")
 
         threading.Thread(target=jobb, daemon=True).start()
