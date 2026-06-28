@@ -42,11 +42,15 @@
   .work .dot:nth-child(2){animation-delay:.15s;} .work .dot:nth-child(3){animation-delay:.3s;}
   @keyframes pul{0%,100%{opacity:.25} 50%{opacity:1}}
   /* arbets-vy i sheet för långsamma Claude-anrop */
-  .wbox{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:13px; padding:52px 24px; text-align:center;}
+  .wbox{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:13px; padding:40px 24px 36px; text-align:center;}
   .wbox .wdots{display:flex; gap:7px;}
   .wbox .wdots span{width:9px; height:9px; border-radius:50%; background:var(--accent); animation:pul 1s infinite;}
   .wbox .wdots span:nth-child(2){animation-delay:.15s;} .wbox .wdots span:nth-child(3){animation-delay:.3s;}
   .wbox .wmsg{font-size:14px; color:var(--t-body); max-width:430px; line-height:1.45;}
+  .wbox .wlog{width:100%; max-height:180px; overflow-y:auto; text-align:left;
+    font-size:11px; font-family:'SF Mono',Menlo,monospace; color:var(--muted);
+    line-height:1.65; border-top:1px solid var(--div3); padding-top:8px; margin-top:-2px;}
+  .wbox .wlog div{padding:1px 0; word-break:break-all;}
   .wbox .wel{font-size:13px; color:var(--accent); font-family:'SF Mono',Menlo,monospace; font-variant-numeric:tabular-nums;}
   .wbox .whint{font-size:11px; color:var(--muted); max-width:380px; line-height:1.4;}
   .tgl{width:30px; height:30px; border-radius:8px; border:1px solid var(--field-border); background:var(--card);
@@ -1126,6 +1130,7 @@ function sheetWork(msg){
   b.innerHTML=`<div class="wbox">
     <div class="wdots"><span></span><span></span><span></span></div>
     <div class="wmsg" id="wMsg">${esc(msg||"Arbetar…")}</div>
+    <div class="wlog" id="wLog"></div>
     <div class="wel" id="wEl">0 s</div>
     <div class="whint">Anropet kan ta upp till en minut. Räknaren tickar så länge appen lever — om den fryser har något hängt sig.</div>
   </div>`;
@@ -1138,7 +1143,12 @@ function sheetWork(msg){
 }
 function sheetWorkMsg(m){ const e=$("wMsg"); if(e&&m) e.textContent=m; }
 function sheetWorkStop(){ clearInterval(WORK_TIMER); WORK_TIMER=null; }
-window.dpcWork=(m)=>{ if($("wMsg")) sheetWorkMsg(m); else if($("sheetBody")) sheetWork(m); };
+window.dpcWork=(m)=>{
+  if($("wMsg")) sheetWorkMsg(m); else if($("sheetBody")) sheetWork(m);
+  const wl=$("wLog");
+  if(wl&&m){ const d=document.createElement("div"); d.textContent=m;
+    wl.appendChild(d); wl.scrollTop=wl.scrollHeight; }
+};
 
 function openSheet(title,sub){
   closeSheet();
