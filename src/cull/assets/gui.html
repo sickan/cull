@@ -410,8 +410,8 @@
               <div class="cardH">Laguppställning</div>
               <div class="tool" onclick="lasArk()"><span class="tic">📄</span>
                 <div><div class="tt">Läs ark</div><div class="td">Läs laguppställnings-arket (foto/skärmdump/PDF) → roster automatiskt</div></div></div>
-              <div class="tool" onclick="hamtaSpelare()"><span class="tic">👥</span>
-                <div><div class="tt">Hämta spelare</div><div class="td">Sök spelartruppens profiler och @handles på klubbsidan (kan göras i förväg)</div></div></div>
+              <div class="tool" onclick="lasInSpellistaJson()"><span class="tic">📋</span>
+                <div><div class="tt">Läs in spellista</div><div class="td">Klistra in JSON från Claude Chat — trupp med nr, namn, handle</div></div></div>
               <div class="tool" onclick="hamtaUppstallning()"><span class="tic">🌐</span>
                 <div><div class="tt">Hämta uppställning</div><div class="td">Sök officiell startuppställning ~1 timme innan match</div></div></div>
               <div class="tool" onclick="nyMatch()"><span class="tic">↺</span>
@@ -1232,12 +1232,35 @@ function _matchBrygga(){
     datum:     ($("m_datum")||{}).value||"",
     sport:     (($("m_sport")||{}).value||"").toLowerCase() };
 }
-async function hamtaSpelare(){
+function lasInSpellistaJson(){
   const p=_matchBrygga(); if(!p) return;
   MATCH_BIND_ID=p.id;
-  openSheet("Hämta spelare","");
-  sheetWork("Söker spelartruppens profiler och @handles på klubbsidor… (kostar några ören)");
-  window.pywebview.api.hamta_spelare(p);
+  const body=openSheet("Läs in spellista","");
+  const ex='{"lag":{"hemma":"FC Rosengård","borta":"Eskilstuna United"},'
+    +'"spelare":[{"nr":"10","namn":"Remy Siemsen","lag":"hemma","start":false,"handle":"@remyysiemsen","info":"Forward"}],'
+    +'"kallor":["https://www.fcrosengard.se/sv/players"]}';
+  body.innerHTML=`<div style="padding:4px 0 12px">
+    <p style="margin:0 0 6px;font-size:12px;color:var(--muted)">Klistra in JSON från Claude Chat. Ange detta schema till Claude:</p>
+    <pre id="jsonSchema" style="font-size:10px;background:var(--bg2);padding:8px;border-radius:6px;
+      overflow-x:auto;white-space:pre-wrap;word-break:break-all;
+      -webkit-user-select:text;user-select:text;cursor:text">${esc(ex)}</pre>
+    <textarea id="jsonPaste" style="width:100%;box-sizing:border-box;height:140px;
+      margin-top:10px;font-size:11px;font-family:'SF Mono',Menlo,monospace;
+      background:var(--bg2);color:var(--t-body);border:1px solid var(--div3);
+      border-radius:6px;padding:8px;resize:vertical" placeholder='Klistra in JSON här…'></textarea>
+    <button onclick="importeraSpellistaJson()" style="margin-top:8px;width:100%">Importera</button>
+  </div>`;
+}
+function importeraSpellistaJson(){
+  const raw=($("jsonPaste")||{}).value||"";
+  let data;
+  try{ data=JSON.parse(raw); }
+  catch(e){ alert("Ogiltig JSON:\n"+e.message); return; }
+  if(!Array.isArray(data.spelare)||!data.spelare.length){
+    alert('JSON saknar "spelare"-lista eller den är tom.'); return;
+  }
+  data._mid=MATCH_BIND_ID||"";
+  window.dpcMatch(data);
 }
 async function hamtaUppstallning(){
   const p=_matchBrygga(); if(!p) return;
