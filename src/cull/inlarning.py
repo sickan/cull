@@ -187,6 +187,15 @@ _SPORT_NYCKELORD = {
     "innebandy": ["ibk", "innebandy", "floorball", " fbc", "fbk"],
 }
 
+# Lag-suffix = otvetydiga sport-markörer. Väger TYNGST i detekteringen, så att
+# stadsnamn inte avgör fel när samma stad har lag i flera sporter
+# (Kristianstads DFF = fotboll, IFK Kristianstad = handboll).
+_LAG_SUFFIX = [("dff", "fotboll"), (" fc", "fotboll"), ("fc ", "fotboll"),
+               (" ff", "fotboll"),
+               (" hk", "handboll"), ("hk ", "handboll"),
+               (" hf", "handboll"), ("hf ", "handboll"),
+               (" vk", "volleyboll"), ("ibk", "innebandy")]
+
 _SPORT_WEBB_CACHE_PATH = Path.home() / ".cache" / "cull" / "sport_cache.json"
 
 # Webb-nyckelord per sport (engelska + svenska, söks i DuckDuckGo-svar)
@@ -325,11 +334,16 @@ def detektera_sport(namn, items=None, webb=True, env=None):
 
     low = namn.lower()
 
-    # 1. Nyckelord i namn (stark signal, 3p)
+    # 0. Lag-suffix väger TYNGST (4p) — avgör före stads-/klubbnamn.
+    for suf, sport in _LAG_SUFFIX:
+        if suf in low:
+            rösta(sport, 4)
+
+    # 1. Övriga nyckelord (stad/klubb/sport-ord), 2p. INGEN break — annars
+    #    vinner första sporten i listan på ett ensamt stadsnamn.
     for sport, nyckelord in _SPORT_NYCKELORD.items():
         if any(k in low for k in nyckelord):
-            rösta(sport, 3)
-            break
+            rösta(sport, 2)
 
     # 2. Resultat i matchnamnet: >25 → aldrig fotboll (2p); ≤6 → troligt fotboll (1p)
     for a, b in re.findall(r"\b(\d+)-(\d+)\b", namn):
