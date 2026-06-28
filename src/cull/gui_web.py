@@ -131,8 +131,60 @@ class Api:
     def matcher_lista(self, _d=None):
         return {"matcher": gui.ladda_matcher(), "sporter": gui.SPORTER}
 
+    @staticmethod
+    def _rensa_spelare(lista):
+        """Saniterar en inline-spelarlista → [{nr,namn,lag,handle,info,start}].
+        Behåller bara rader med nummer ELLER namn; lag tvingas hemma/borta."""
+        ut = []
+        for r in (lista or []):
+            if not isinstance(r, dict):
+                continue
+            nr = str(r.get("nr", "")).strip()
+            namn = str(r.get("namn", "")).strip()
+            if not (nr or namn):
+                continue
+            lag = str(r.get("lag", "")).strip().lower()
+            if lag not in ("hemma", "borta"):
+                lag = "hemma"
+            ut.append({
+                "nr": nr, "namn": namn, "lag": lag,
+                "handle": str(r.get("handle", "")).strip(),
+                "info": str(r.get("info", "")).strip(),
+                "start": bool(r.get("start")),
+            })
+        return ut
+
+    @staticmethod
+    def _skriv_roster_csv(rader, namn):
+        """rader=[{nr,namn,lag?}] → roster-CSV i CONFIG_DIR, returnerar sökväg.
+        3-kolumns (nummer,namn,lag) om någon rad har lag, annars 2-kolumns."""
+        import csv
+        import re as _re
+        slug = _re.sub(r"[^\w-]+", "_", (namn or "match")).strip("_")[:60] or "match"
+        gui.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        path = gui.CONFIG_DIR / f"roster_{slug}.csv"
+        med_lag = any((r.get("lag") or "").strip() for r in (rader or []))
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["nummer", "namn", "lag"] if med_lag
+                           else ["nummer", "namn"])
+                for r in rader or []:
+                    nr = str(r.get("nr", "")).strip()
+                    nm = str(r.get("namn", "")).strip()
+                    if not (nr and nm):
+                        continue
+                    if med_lag:
+                        w.writerow([nr, nm, (r.get("lag") or "").strip().lower()])
+                    else:
+                        w.writerow([nr, nm])
+            return str(path)
+        except Exception:
+            return ""
+
     def match_spara(self, d):
-        """Skapar/uppdaterar en match. d = matchfälten (+ valfritt id)."""
+        """Skapar/uppdaterar en match. d = matchfälten (+ valfritt id).
+        Inline-spelarlistan (spelare) bevaras om den inte skickas med."""
         import uuid
         m = d.get("match") if isinstance(d.get("match"), dict) else d
         falt = ("lag_hemma", "lag_borta", "datum", "tid", "arena", "liga",
@@ -142,15 +194,24 @@ class Api:
             return {"ok": False, "fel": "Ange minst ett lag."}
         lista = gui.ladda_matcher()
         mid = (m.get("id") or "").strip()
+        gammal = None
         if mid:
             for i, x in enumerate(lista):
                 if x.get("id") == mid:
+                    gammal = x
                     post["id"] = mid
                     post["skapad"] = x.get("skapad", "")
                     lista[i] = post
                     break
             else:
                 mid = ""
+        # inline-spelarlista: använd skickad, annars bevara den befintliga
+        if "spelare" in m:
+            post["spelare"] = self._rensa_spelare(m.get("spelare"))
+        elif gammal is not None:
+            post["spelare"] = gammal.get("spelare", [])
+        else:
+            post["spelare"] = []
         if not mid:
             post["id"] = uuid.uuid4().hex[:12]
             post["skapad"] = datetime.now().isoformat(timespec="seconds")
@@ -191,9 +252,37 @@ class Api:
         }
         if (m.get("sport") or "").strip():
             falt["sport"] = m["sport"].strip().capitalize()
-        if (m.get("roster") or "").strip():
+        # roster: härled CSV ur matchens inline-spelare (källan), så nummer-/
+        # bildtext-verktygen får en fil att läsa. Fallback: en befintlig sökväg.
+        spelare = m.get("spelare") or []
+        rader = [{"nr": p.get("nr", ""), "namn": p.get("namn", ""),
+                  "lag": p.get("lag", "hemma")}
+                 for p in spelare if (p.get("nr") and p.get("namn"))]
+        if rader:
+            namn = f"{m.get('lag_hemma', '')}-{m.get('lag_borta', '')}".strip("-") \
+                or "match"
+            path = self._skriv_roster_csv(rader, namn)
+            if path:
+                falt["roster"] = path
+        elif (m.get("roster") or "").strip():
             falt["roster"] = m["roster"].strip()
         return {"ok": True, "falt": falt}
+
+    def match_satt_spelare(self, d):
+        """Skriver inline-spelarlistan till en match utan att röra övriga fält.
+        d = {id, spelare:[{nr,namn,lag,handle,info,start}]}. Används av spelar-
+        editorn (Hämta match / Redigera spelare) → matchposten = källan."""
+        mid = (d.get("id") or "").strip()
+        lista = gui.ladda_matcher()
+        for x in lista:
+            if x.get("id") == mid:
+                x["spelare"] = self._rensa_spelare(d.get("spelare"))
+                gui.spara_matcher(lista)
+                antal = len(x["spelare"])
+                med_h = sum(1 for p in x["spelare"] if p.get("handle"))
+                return {"ok": True, "matcher": lista, "antal": antal,
+                        "med_handle": med_h}
+        return {"ok": False, "fel": "Okänd match."}
 
     # --- mapp-väljare --------------------------------------------------------
     def valj_mapp(self, start):
@@ -814,28 +903,7 @@ class Api:
         """rader = [{nr, namn, lag?}] → roster-CSV. Har någon rad 'lag' (hemma/
         borta) skrivs en 3-kolumns 'nummer,namn,lag' så båda lagen kan namnsättas
         (samma nummer i olika lag). Returnerar sökvägen."""
-        import csv
-        import re as _re
-        slug = _re.sub(r"[^\w-]+", "_", (namn or "match")).strip("_")[:60] or "match"
-        gui.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        path = gui.CONFIG_DIR / f"roster_{slug}.csv"
-        med_lag = any((r.get("lag") or "").strip() for r in (rader or []))
-        try:
-            with open(path, "w", newline="", encoding="utf-8") as f:
-                w = csv.writer(f)
-                w.writerow(["nummer", "namn", "lag"] if med_lag else ["nummer", "namn"])
-                for r in rader or []:
-                    nr = str(r.get("nr", "")).strip()
-                    nm = str(r.get("namn", "")).strip()
-                    if not (nr and nm):
-                        continue
-                    if med_lag:
-                        w.writerow([nr, nm, (r.get("lag") or "").strip().lower()])
-                    else:
-                        w.writerow([nr, nm])
-            return str(path)
-        except Exception:
-            return ""
+        return self._skriv_roster_csv(rader, namn)
 
     # --- Steg 2: manuell nummer-genomgång (luckorna) -------------------------
     def osakra_data(self):

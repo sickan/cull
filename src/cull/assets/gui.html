@@ -210,6 +210,8 @@
   table.mtab input{font-family:inherit; font-size:13px; color:var(--t-body); background:var(--field);
        border:1px solid var(--field-border); border-radius:6px; padding:4px 7px; width:100%;}
   table.mtab input.nr{width:54px;}
+  table.mtab input.hd{width:150px;}
+  table.mtab input.if{width:170px;}
   .mstart{font-size:11px; color:var(--accent-hover); font-weight:600;}
   .mdel{cursor:pointer; color:var(--t-mut); font-size:15px; border:none; background:none;}
   .mdel:hover{color:#C0392B;}
@@ -386,6 +388,9 @@
                 <button class="btn" onclick="matchAktivera()">Aktivera ▸</button>
                 <button class="btn" onclick="matchRadera()" style="color:#c00">Radera</button>
                 <span id="m_status" style="font-size:12px;color:var(--muted);margin-left:4px"></span></div>
+              <div class="row" style="margin-top:8px;gap:8px;align-items:center;border-top:1px solid var(--div3);padding-top:8px">
+                <span id="m_spelare_sum" class="help" style="margin:0">Inga spelare ännu — Hämta match eller Redigera spelare.</span>
+                <button class="btn" onclick="redigeraSpelare()" style="margin-left:auto">Redigera spelare…</button></div>
             </div>
             <div class="card full">
               <div class="cardH">Källa &amp; match</div>
@@ -1042,6 +1047,7 @@ async function nyMatch(){
 
 // ===== matchdatabas (förberedda matcher) ====================================
 let MATCHER=[];
+let MATCH_BIND_ID="";   // matchen spelar-editorn (overlay) skriver tillbaka till
 async function laddaMatcher(){
   const sel=$("m_lista"), spsel=$("m_sport"); if(!sel) return;
   const r=await window.pywebview.api.matcher_lista();
@@ -1057,6 +1063,14 @@ async function laddaMatcher(){
 function _matchFyll(m){
   ["id","lag_hemma","lag_borta","datum","tid","arena","liga","resultat"].forEach(k=>{ const el=$("m_"+k); if(el) el.value=(m&&m[k])||""; });
   const sp=$("m_sport"); if(sp) sp.value=(m&&m.sport)?(m.sport.charAt(0).toUpperCase()+m.sport.slice(1)):"";
+  uppdateraSpelareSum(m&&m.spelare);
+}
+function uppdateraSpelareSum(spelare){
+  const el=$("m_spelare_sum"); if(!el) return;
+  const sp=spelare||[];
+  if(!sp.length){ el.textContent="Inga spelare ännu — Hämta match eller Redigera spelare."; return; }
+  const h=sp.filter(p=>p.handle).length, inf=sp.filter(p=>p.info).length;
+  el.textContent=`👥 ${sp.length} spelare · ${h} @handle · ${inf} info`;
 }
 function matchValj(){ const m=MATCHER.find(x=>x.id===$("m_lista").value); _matchFyll(m||{}); if($("m_status")) $("m_status").textContent=""; }
 function matchNy(){ _matchFyll({}); if($("m_lista")) $("m_lista").value=""; if($("m_status")) $("m_status").textContent="Ny match — fyll i och spara."; }
@@ -1084,6 +1098,18 @@ async function matchRadera(){
   if(!confirm("Radera matchen?")) return;
   await window.pywebview.api.match_radera({id:id});
   _matchFyll({}); await laddaMatcher(); if($("m_status")) $("m_status").textContent="Raderad.";
+}
+function redigeraSpelare(){
+  const id=($("m_id")||{}).value||"";
+  const m=MATCHER.find(x=>x.id===id);
+  if(!id||!m){ if($("m_status")) $("m_status").textContent="Spara matchen först, sedan redigera spelare."; return; }
+  MATCH_BIND_ID=id;
+  openSheet("Spelare","");
+  MATCH={ _mid:id, lag:{hemma:m.lag_hemma||"",borta:m.lag_borta||""},
+    matchinfo:"", sammanfattning:"", kallor:[],
+    spelare:(m.spelare||[]).map(p=>({nr:String(p.nr||""),namn:String(p.namn||""),
+      lag:p.lag||"hemma",handle:p.handle||"",info:p.info||"",start:!!p.start})) };
+  MTEAM="hemma"; renderMatch();
 }
 
 // ===== Overlay / verktyg ====================================================
@@ -1184,6 +1210,7 @@ async function nummerGenomgang(){
 
 let MATCH=null, MTEAM="hemma";
 async function hamtaMatch(){
+  MATCH_BIND_ID=($("m_id")||{}).value||"";
   const mi=($("matchinfo").value||"").trim();
   const body=openSheet("Hämta match","");
   if(!mi){ body.innerHTML=tomMsg("Fyll i Matchinfo först (Hemma - Borta R-R ÅÅÅÅMMDD Arena)."); return; }
@@ -1192,6 +1219,7 @@ async function hamtaMatch(){
   window.pywebview.api.hamta_match(collect());
 }
 async function lasArk(){
+  MATCH_BIND_ID=($("m_id")||{}).value||"";
   const body=openSheet("Läs laguppställning","");
   body.innerHTML=tomMsg("Välj arket (foto/skärmdump/PDF)…");
   await window.pywebview.api.spara(collect());
@@ -1202,13 +1230,17 @@ window.dpcMatch=(data)=>{
   sheetWorkStop();
   const body=$("sheetBody"); if(!body) return;
   if(!data){ setSheetSub(""); body.innerHTML=tomMsg("Kunde inte läsa. Förtydliga Matchinfo (lag, datum, arena) eller välj ett tydligare ark och försök igen."); return; }
-  (data.spelare||[]).forEach(p=>{ p.nr=String(p.nr||""); p.namn=String(p.namn||""); });
+  (data.spelare||[]).forEach(p=>{ p.nr=String(p.nr||""); p.namn=String(p.namn||"");
+    p.handle=String(p.handle||""); p.info=String(p.info||""); });
+  data._mid=MATCH_BIND_ID||"";
   MATCH=data; MTEAM="hemma"; renderMatch();
 };
 function mSynliga(){ return (MATCH.spelare||[]).map((p,idx)=>({p,idx}))
   .filter(o=>!o.p._del && (MTEAM==="bada" || (o.p.lag||"hemma")===MTEAM)); }
 function mCommit(){ document.querySelectorAll("#mbody input.nr").forEach(el=>{ MATCH.spelare[+el.dataset.i].nr=el.value.trim(); });
-  document.querySelectorAll("#mbody input.nm").forEach(el=>{ MATCH.spelare[+el.dataset.i].namn=el.value.trim(); }); }
+  document.querySelectorAll("#mbody input.nm").forEach(el=>{ MATCH.spelare[+el.dataset.i].namn=el.value.trim(); });
+  document.querySelectorAll("#mbody input.hd").forEach(el=>{ MATCH.spelare[+el.dataset.i].handle=el.value.trim(); });
+  document.querySelectorAll("#mbody input.if").forEach(el=>{ MATCH.spelare[+el.dataset.i].info=el.value.trim(); }); }
 function renderMatch(){
   const body=$("sheetBody"); if(!body||!MATCH) return;
   const lag=MATCH.lag||{};
@@ -1218,21 +1250,31 @@ function renderMatch(){
   const rows=mSynliga().map(({p,idx})=>`<tr>
     <td><input class="nr" data-i="${idx}" value="${esc(p.nr)}"></td>
     <td><input class="nm" data-i="${idx}" value="${esc(p.namn)}"></td>
+    <td><input class="hd" data-i="${idx}" value="${esc(p.handle||"")}" placeholder="@konto"></td>
+    <td><input class="if" data-i="${idx}" value="${esc(p.info||"")}" placeholder="position, roll"></td>
     <td>${p.start?'<span class="mstart">start</span>':''}</td>
     <td><button class="mdel" data-i="${idx}">✕</button></td></tr>`).join("");
+  const bunden=!!MATCH._mid;
   body.innerHTML=`${MATCH.matchinfo?`<div class="mmatch"><span class="mmlbl">Matchinfo</span><code class="mmval">${esc(MATCH.matchinfo)}</code><button class="btn" id="muse">Använd</button></div>`:""}
     ${MATCH.sammanfattning?`<div class="msumm">${esc(MATCH.sammanfattning)}</div>`:""}
     <div class="mteam">${segs}</div>
-    <table class="mtab"><thead><tr><th>Nr</th><th>Namn</th><th></th><th></th></tr></thead><tbody id="mbody">${rows}</tbody></table>
+    <table class="mtab"><thead><tr><th>Nr</th><th>Namn</th><th>@handle</th><th>Info</th><th></th><th></th></tr></thead><tbody id="mbody">${rows}</tbody></table>
     ${(MATCH.kallor&&MATCH.kallor.length)?`<div class="mkallor">Källor: ${MATCH.kallor.map(esc).join(" · ")}</div>`:""}
-    <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+    <div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn" id="maddrow">+ Spelare</button>
-      <span class="help" style="margin:0">Sparas som roster för det valda laget</span>
-      <button class="btn soft" id="msave" style="margin-left:auto">Spara som roster</button></div>`;
+      ${bunden
+        ? `<span class="help" style="margin:0">Sparas i matchen — nr · namn · @handle · info (båda lagen).</span>
+           <button class="btn soft" id="msaveroster">Spara som roster (CSV)</button>
+           <button class="btn primary" id="msavematch" style="margin-left:auto">Spara i matchen</button>`
+        : `<span class="help" style="margin:0">Ingen aktiv match — sparas som roster för det valda laget.</span>
+           <button class="btn soft" id="msave" style="margin-left:auto">Spara som roster</button>`}
+    </div>`;
   body.querySelectorAll(".mteam .seg").forEach(s=>s.onclick=()=>{ mCommit(); MTEAM=s.dataset.t; renderMatch(); });
   body.querySelectorAll(".mdel").forEach(b=>b.onclick=()=>{ mCommit(); MATCH.spelare[+b.dataset.i]._del=true; renderMatch(); });
-  $("maddrow").onclick=()=>{ mCommit(); MATCH.spelare.push({nr:"",namn:"",lag:(MTEAM==="bada"?"hemma":MTEAM),start:false}); renderMatch(); };
-  $("msave").onclick=saveRoster;
+  $("maddrow").onclick=()=>{ mCommit(); MATCH.spelare.push({nr:"",namn:"",lag:(MTEAM==="bada"?"hemma":MTEAM),handle:"",info:"",start:false}); renderMatch(); };
+  if($("msave")) $("msave").onclick=saveRoster;
+  if($("msaveroster")) $("msaveroster").onclick=saveRoster;
+  if($("msavematch")) $("msavematch").onclick=saveSpelareIMatch;
   if($("muse")) $("muse").onclick=async()=>{ $("matchinfo").value=MATCH.matchinfo;
     await window.pywebview.api.spara(collect()); $("muse").textContent="✓ Använd"; };
 }
@@ -1257,6 +1299,18 @@ async function saveRoster(){
   if(path){ $("roster").value=path; await window.pywebview.api.spara(collect());
     setSheetSub("Sparad"); $("sheetBody").innerHTML=tomMsg(`✓ ${rader.length} spelare sparade som roster.\nRoster-fältet pekar nu på filen.`);
     setTimeout(closeSheet, 1400); }
+}
+async function saveSpelareIMatch(){
+  mCommit();
+  const rader=(MATCH.spelare||[]).filter(p=>!p._del && (p.nr||p.namn))
+    .map(p=>({nr:p.nr,namn:p.namn,lag:(p.lag||"hemma"),handle:p.handle||"",info:p.info||"",start:!!p.start}));
+  const r=await window.pywebview.api.match_satt_spelare({id:MATCH._mid, spelare:rader});
+  if(r&&r.ok){
+    MATCHER=r.matcher||MATCHER;
+    if(($("m_id")||{}).value===MATCH._mid){ const m=MATCHER.find(x=>x.id===MATCH._mid); uppdateraSpelareSum(m&&m.spelare); }
+    setSheetSub("Sparad"); $("sheetBody").innerHTML=tomMsg(`✓ ${r.antal} spelare sparade i matchen (${r.med_handle} med @handle).\nAktivera matchen för att skriva roster-filen som nummer-passet läser.`);
+    setTimeout(closeSheet, 1900);
+  } else { setSheetSub("Fel"); $("sheetBody").innerHTML=tomMsg("Kunde inte spara — matchen hittades inte. Spara matchen först."); }
 }
 
 async function bildsvep(){ openBildsvep(false); }

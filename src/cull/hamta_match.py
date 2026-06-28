@@ -19,15 +19,23 @@ SYSTEM = (
     "för den angivna matchen: spelarnas tröjnummer och namn, vilka som startade "
     "(startelva i fotboll, startande sex i volleyboll), samt ett kort sakligt "
     "referat på svenska (resultat och förlopp). "
-    "Hitta ALDRIG på nummer eller namn — ta bara med det du hittar i källorna; "
-    "utelämna spelare där du är osäker på numret. Ange vilka källor du använde. "
+    "Ta även med, NÄR källorna stöder det: spelarens Instagram-handle (handle, "
+    "med inledande @) och en kort spelarinfo (info: position och ev. roll som "
+    "lagkapten/målvakt — på svenska, några ord). "
+    "Hitta ALDRIG på nummer, namn eller @-handles — ta bara med det du hittar i "
+    "källorna; utelämna spelare där du är osäker på numret. "
+    "Gissa ALDRIG ett personligt Instagram-konto: hittar du ingen handle, lämna "
+    "den tom (\"\"); hittar du en men är osäker, lägg till '?' sist (t.ex. "
+    "\"@spelaren?\"). Officiella lag-/förbundskonton får anges om du är säker. "
+    "Ange vilka källor du använde. "
     "Svara ENBART med ett JSON-objekt enligt schemat, ingen annan text."
 )
 
 SCHEMA = (
     '{"sammanfattning": "kort referat på svenska", '
     '"lag": {"hemma": "lagnamn", "borta": "lagnamn"}, '
-    '"spelare": [{"nr": "10", "namn": "Isabelle Haak", "lag": "hemma", "start": true}], '
+    '"spelare": [{"nr": "10", "namn": "Isabelle Haak", "lag": "hemma", "start": true, '
+    '"handle": "@isabellehaak", "info": "spiker, lagkapten"}], '
     '"kallor": ["https://..."]}'
 )
 
@@ -57,8 +65,9 @@ def _parsa(text):
 
 
 def hamta(matchinfo, sport="", logg=print):
-    """Returnerar dict {sammanfattning, lag, spelare:[{nr,namn,lag,start}], kallor}
-    eller None. matchinfo = "Hemma - Borta R-R ÅÅÅÅMMDD Arena"."""
+    """Returnerar dict {sammanfattning, lag,
+    spelare:[{nr,namn,lag,start,handle,info}], kallor} eller None.
+    handle/info kan vara tomma. matchinfo = "Hemma - Borta R-R ÅÅÅÅMMDD Arena"."""
     matchinfo = (matchinfo or "").strip()
     if not matchinfo:
         logg("⚠ Ingen matchinfo angiven.")
