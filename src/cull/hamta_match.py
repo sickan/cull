@@ -88,28 +88,56 @@ def _parsa(text):
 
 
 def _kör_sökning(klient, fraga, system, max_uses, logg):
-    """Kör ett web-search-anrop och returnerar parsad JSON eller None."""
+    """Kör ett web-search-anrop och returnerar parsad JSON eller None.
+    Använder streaming så att sökfrågor visas i realtid via logg-callbacken."""
     webb = {"type": "web_search_20260209", "name": "web_search",
             "max_uses": max_uses}
     messages = [{"role": "user", "content": fraga}]
     logg("Söker på nätet via Claude (web search)…")
-    svar = None
+    final = None
     try:
         for _ in range(4):   # server-tool-loop: pause_turn → fortsätt (taktat)
-            svar = klient.messages.create(
-                model=MODELL, max_tokens=4000, system=system,
-                tools=[webb], messages=messages)
-            if svar.stop_reason == "pause_turn":
-                messages.append({"role": "assistant", "content": svar.content})
+            tool_namn = None
+            tool_json = ""
+            with klient.messages.stream(
+                    model=MODELL, max_tokens=4000, system=system,
+                    tools=[webb], messages=messages) as stream:
+                for ev in stream:
+                    etype = getattr(ev, "type", "")
+                    if etype == "content_block_start":
+                        cb = ev.content_block
+                        if getattr(cb, "type", "") in ("tool_use", "server_tool_use") \
+                                and getattr(cb, "name", "") == "web_search":
+                            tool_namn = "web_search"
+                            tool_json = ""
+                        else:
+                            tool_namn = None
+                    elif etype == "content_block_delta":
+                        d = ev.delta
+                        if tool_namn == "web_search" \
+                                and getattr(d, "type", "") == "input_json_delta":
+                            tool_json += getattr(d, "partial_json", "") or ""
+                    elif etype == "content_block_stop" and tool_namn == "web_search":
+                        try:
+                            q = json.loads(tool_json or "{}").get("query", "")
+                            if q:
+                                logg(f"🔍 {q}")
+                        except Exception:
+                            pass
+                        tool_namn = None
+                final = stream.get_final_message()
+            if final.stop_reason == "pause_turn":
+                messages.append({"role": "assistant", "content": final.content})
                 continue
             break
     except Exception as e:
         logg(f"⚠ Web search misslyckades: {type(e).__name__}: {e}")
         return None
-    if svar is None or svar.stop_reason == "refusal":
+    if final is None or final.stop_reason == "refusal":
         logg("⚠ Inget svar (eller avböjt).")
         return None
-    text = "".join(b.text for b in svar.content if b.type == "text")
+    text = "".join(getattr(b, "text", "") for b in final.content
+                   if getattr(b, "type", "") == "text")
     data = _parsa(text)
     if not data:
         logg("⚠ Kunde inte tolka svaret som JSON.")
