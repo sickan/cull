@@ -99,12 +99,15 @@ def _parsa(text):
 def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
     """Kör ett web-search-anrop och returnerar parsad JSON eller None.
 
-    Timeout: 'timeout' är maximal total tid PER RUNDA (inte inaktivitet).
-    Kontrolleras via time.monotonic() inne i stream-loopen.
-    Sökfrågor visas via stream-events om de fångas; annars via post-runda
-    inspektion av final.content (fallback). Token + kostnad loggas per runda.
+    Feedback-strategi:
+      • Ticker-tråd loggar "⏳ Xs…" var 10:e sekund — alltid, oberoende av events.
+      • Stream-events: fångar web_search tool_use i realtid om de levereras.
+      • Fallback post-runda: sökfrågor ur final.content om events missades.
+    Timeout: ticker avbryter efter 'timeout' sekunder totalt (via ticker_timed_out-
+    flagga + break i event-loopen). Inaktivitetstimeout = 60 s (stream-parameter).
     """
     import time
+    import threading
     import anthropic as _ant
     webb = {"type": "web_search_20260209", "name": "web_search",
             "max_uses": max_uses}
@@ -117,9 +120,25 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
         for _ in range(4):   # server-tool-loop: pause_turn → fortsätt
             tool_namn = None
             tool_json = ""
-            stream_queries = []   # frågor loggade via stream (dedup vs fallback)
+            stream_queries = []
             timed_out = False
             t0 = time.monotonic()
+
+            # Ticker: synlig aktivitet var 10:e sekund, startas innan stream
+            ticker_stop = threading.Event()
+            ticker_timed_out = threading.Event()
+
+            def _ticker(stop=ticker_stop, to=ticker_timed_out,
+                        start=t0, lim=timeout):
+                while not stop.wait(10.0):
+                    elapsed = time.monotonic() - start
+                    if elapsed > lim:
+                        to.set()   # signalera timeout till huvud-tråden
+                        logg(f"⚠ Timeout ({lim:.0f} s) — sökningen avbröts.")
+                        break
+                    logg(f"⏳ {int(elapsed)} s…")
+
+            threading.Thread(target=_ticker, daemon=True).start()
 
             try:
                 with klient.messages.stream(
@@ -127,8 +146,7 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                         tools=[webb], messages=messages,
                         timeout=60.0) as stream:   # 60 s inaktivitetstimeout
                     for ev in stream:
-                        # Hård tidsgräns för hela rundan
-                        if time.monotonic() - t0 > timeout:
+                        if ticker_timed_out.is_set():
                             timed_out = True
                             break
                         etype = getattr(ev, "type", "")
@@ -170,12 +188,13 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
             except _ant.APIConnectionError as e:
                 logg(f"⚠ Nätverksfel: {e}")
                 return None
+            finally:
+                ticker_stop.set()   # stoppa ticker oavsett utfall
 
             if timed_out:
-                logg(f"⚠ Timeout ({timeout:.0f} s) — sökningen avbröts.")
                 return None
 
-            # Fallback: om stream-events inte fångade frågorna, hämta ur content
+            # Fallback: sökfrågor ur final.content om streaming-events missades
             if not stream_queries:
                 for block in getattr(final, "content", []):
                     bt = getattr(block, "type", "")
