@@ -361,8 +361,32 @@
         <!-- FÖRBERED -->
         <div class="panel hidden" data-panel="forbered">
           <div class="h2">Förbered match</div>
-          <div class="sub">Peka ut råfilerna och hämta laguppställningen. Det här och Gallra skapar ett nytt urval.</div>
+          <div class="sub">Förbered matcher i förväg — material som stories, avsparksinlägg och övriga verktyg läser ur.</div>
           <div class="grid">
+            <div class="card full">
+              <div class="cardH">📋 Matcher</div>
+              <div class="help" style="margin:0 0 8px 0">Välj en match att redigera, eller skapa ny. <b>Aktivera</b> fyller matchfälten som verktygen använder.</div>
+              <div class="row" style="gap:8px;align-items:center">
+                <select class="f flex" id="m_lista" onchange="matchValj()"></select>
+                <button class="btn" onclick="matchNy()">Ny match</button></div>
+              <input type="hidden" id="m_id">
+              <div class="row" style="margin-top:8px;gap:8px">
+                <input class="f flex" id="m_lag_hemma" placeholder="Hemmalag">
+                <input class="f flex" id="m_lag_borta" placeholder="Bortalag"></div>
+              <div class="row" style="gap:8px">
+                <input class="f" id="m_datum" placeholder="ÅÅÅÅMMDD" style="width:120px">
+                <input class="f" id="m_tid" placeholder="HH:MM" style="width:84px">
+                <select class="f" id="m_sport" style="width:140px"></select>
+                <input class="f" id="m_resultat" placeholder="Resultat 2-1" style="width:120px"></div>
+              <div class="row" style="gap:8px">
+                <input class="f flex" id="m_arena" placeholder="Arena">
+                <input class="f flex" id="m_liga" placeholder="Liga (t.ex. OBOS Damallsvenskan)"></div>
+              <div class="row" style="margin-top:8px;gap:8px;align-items:center">
+                <button class="btn primary" onclick="matchSpara()">Spara match</button>
+                <button class="btn" onclick="matchAktivera()">Aktivera ▸</button>
+                <button class="btn" onclick="matchRadera()" style="color:#c00">Radera</button>
+                <span id="m_status" style="font-size:12px;color:var(--muted);margin-left:4px"></span></div>
+            </div>
             <div class="card full">
               <div class="cardH">Källa &amp; match</div>
               <div class="row"><label class="lbl" style="width:84px">Källmapp</label>
@@ -648,7 +672,7 @@ function fillSelect(id,arr,val){const s=$(id); if(!s)return; s.innerHTML="";
   if(val!=null) s.value=val;}
 
 function collect(){const d={};
-  document.querySelectorAll("input.f,select.f,input[type=range]").forEach(el=>{ if(el.id) d[el.id]=el.value; });
+  document.querySelectorAll("input.f,select.f,input[type=range]").forEach(el=>{ if(el.id && !el.id.startsWith("m_")) d[el.id]=el.value; });
   CHK.forEach(k=>{ if($(k)) d[k]=$(k).checked; });
   d.aktivt_urval=ACTIVE_PATH||"";
   return d;}
@@ -698,6 +722,7 @@ function showPanel(name){
   document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("hidden",p.dataset.panel!==name));
   renderFooter(name);
   if(name==="valj") loadValj();
+  if(name==="forbered") laddaMatcher();
   if(name==="gallra") behallPreview();
   if(name==="snabb"){ storyInfoUppdatera(); storyFormat(($("story_format")||{}).value||"9x16"); }
   if(name==="trana"){ laddaUnderlag(); renderModeller(); }
@@ -1013,6 +1038,52 @@ async function nyMatch(){
   if($("avspark")) $("avspark").value="auto";
   window.dpcClear();
   await window.pywebview.api.spara(collect());
+}
+
+// ===== matchdatabas (förberedda matcher) ====================================
+let MATCHER=[];
+async function laddaMatcher(){
+  const sel=$("m_lista"), spsel=$("m_sport"); if(!sel) return;
+  const r=await window.pywebview.api.matcher_lista();
+  MATCHER=(r&&r.matcher)||[];
+  if(spsel && !spsel.options.length){
+    (r.sporter||[]).forEach(s=>{ const o=document.createElement("option"); o.value=o.textContent=s; spsel.appendChild(o); });
+  }
+  const cur=($("m_id")||{}).value||"";
+  sel.innerHTML=`<option value="">— välj match —</option>`+MATCHER.map(m=>
+    `<option value="${esc(m.id)}">${esc((m.lag_hemma||"")+" – "+(m.lag_borta||""))}${m.datum?" · "+esc(m.datum):""}</option>`).join("");
+  if(cur) sel.value=cur;
+}
+function _matchFyll(m){
+  ["id","lag_hemma","lag_borta","datum","tid","arena","liga","resultat"].forEach(k=>{ const el=$("m_"+k); if(el) el.value=(m&&m[k])||""; });
+  const sp=$("m_sport"); if(sp) sp.value=(m&&m.sport)?(m.sport.charAt(0).toUpperCase()+m.sport.slice(1)):"";
+}
+function matchValj(){ const m=MATCHER.find(x=>x.id===$("m_lista").value); _matchFyll(m||{}); if($("m_status")) $("m_status").textContent=""; }
+function matchNy(){ _matchFyll({}); if($("m_lista")) $("m_lista").value=""; if($("m_status")) $("m_status").textContent="Ny match — fyll i och spara."; }
+async function matchSpara(){
+  const m={id:($("m_id")||{}).value||""};
+  ["lag_hemma","lag_borta","datum","tid","arena","liga","resultat"].forEach(k=>m[k]=($("m_"+k)||{}).value||"");
+  m.sport=(($("m_sport")||{}).value||"").toLowerCase();
+  const r=await window.pywebview.api.match_spara({match:m});
+  if(r&&r.ok){ if($("m_id")) $("m_id").value=r.id; await laddaMatcher(); if($("m_lista")) $("m_lista").value=r.id; if($("m_status")) $("m_status").textContent="✓ Sparad"; }
+  else if($("m_status")) $("m_status").textContent="Fel: "+((r&&r.fel)||"okänt");
+}
+async function matchAktivera(){
+  const id=($("m_id")||{}).value||"";
+  if(!id){ if($("m_status")) $("m_status").textContent="Spara matchen först."; return; }
+  const r=await window.pywebview.api.match_aktivera({id:id});
+  if(r&&r.ok){
+    for(const k in r.falt){ const el=$(k); if(el) el.value=r.falt[k]; }
+    await window.pywebview.api.spara(collect());
+    storyInfoUppdatera();
+    if($("m_status")) $("m_status").textContent="✓ Aktiverad — matchfälten ifyllda.";
+  } else if($("m_status")) $("m_status").textContent="Fel: "+((r&&r.fel)||"okänt");
+}
+async function matchRadera(){
+  const id=($("m_id")||{}).value||""; if(!id) return;
+  if(!confirm("Radera matchen?")) return;
+  await window.pywebview.api.match_radera({id:id});
+  _matchFyll({}); await laddaMatcher(); if($("m_status")) $("m_status").textContent="Raderad.";
 }
 
 // ===== Overlay / verktyg ====================================================

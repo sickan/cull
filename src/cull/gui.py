@@ -20,6 +20,7 @@ FARGER = ["", "blå", "ljusblå", "röd", "mörkröd", "gul", "grön",
 CONFIG_DIR    = Path.home() / ".config" / "cull"
 SETTINGS_PATH = CONFIG_DIR / "settings.json"
 HISTORY_PATH  = CONFIG_DIR / "history.json"
+MATCHER_PATH  = CONFIG_DIR / "matcher.json"   # förberedda matcher (databas)
 SETTINGS_KEYS = ["katalog", "ai", "xmp", "rapport", "hemma_farg",
                  "bevaka", "avspark", "topp", "andel", "burst_sek",
                  "yolo", "estetik", "estetik_motor", "modell", "sport", "matchinfo",
@@ -66,6 +67,22 @@ def ladda_installningar():
             return json.load(f)
     except Exception:
         return {}
+
+
+def ladda_matcher():
+    """Förberedda matcher (databas) — lista av dictar."""
+    try:
+        with open(MATCHER_PATH) as f:
+            d = json.load(f)
+            return d if isinstance(d, list) else []
+    except Exception:
+        return []
+
+
+def spara_matcher(lista):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    with open(MATCHER_PATH, "w") as f:
+        json.dump(lista, f, indent=2, ensure_ascii=False)
 
 
 def spara_installningar(vals):

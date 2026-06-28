@@ -127,6 +127,74 @@ class Api:
             "modellinfo": _modellinfo(),
         }
 
+    # --- matchdatabas (förberedda matcher) -----------------------------------
+    def matcher_lista(self, _d=None):
+        return {"matcher": gui.ladda_matcher(), "sporter": gui.SPORTER}
+
+    def match_spara(self, d):
+        """Skapar/uppdaterar en match. d = matchfälten (+ valfritt id)."""
+        import uuid
+        m = d.get("match") if isinstance(d.get("match"), dict) else d
+        falt = ("lag_hemma", "lag_borta", "datum", "tid", "arena", "liga",
+                "sport", "resultat", "roster")
+        post = {k: (m.get(k) or "").strip() for k in falt}
+        if not post["lag_hemma"] and not post["lag_borta"]:
+            return {"ok": False, "fel": "Ange minst ett lag."}
+        lista = gui.ladda_matcher()
+        mid = (m.get("id") or "").strip()
+        if mid:
+            for i, x in enumerate(lista):
+                if x.get("id") == mid:
+                    post["id"] = mid
+                    post["skapad"] = x.get("skapad", "")
+                    lista[i] = post
+                    break
+            else:
+                mid = ""
+        if not mid:
+            post["id"] = uuid.uuid4().hex[:12]
+            post["skapad"] = datetime.now().isoformat(timespec="seconds")
+            lista.insert(0, post)
+        gui.spara_matcher(lista)
+        return {"ok": True, "id": post["id"], "matcher": lista}
+
+    def match_radera(self, d):
+        mid = (d.get("id") or "").strip()
+        lista = [x for x in gui.ladda_matcher() if x.get("id") != mid]
+        gui.spara_matcher(lista)
+        return {"ok": True, "matcher": lista}
+
+    def match_aktivera(self, d):
+        """Sätter en match som aktiv: komponerar matchinfo + fyller de fält som
+        verktygen (stories, cull, bildsvep) redan läser. Returnerar fält att
+        applicera i UI:t."""
+        mid = (d.get("id") or "").strip()
+        m = next((x for x in gui.ladda_matcher() if x.get("id") == mid), None)
+        if not m:
+            return {"ok": False, "fel": "Okänd match."}
+        bitar = [b for b in [m.get("lag_hemma", ""), "-", m.get("lag_borta", "")]
+                 if b]
+        rad = " ".join(bitar)
+        if m.get("resultat"):
+            rad += " " + m["resultat"]
+        if m.get("datum"):
+            rad += " " + m["datum"]
+        if m.get("tid"):
+            rad += " " + m["tid"]
+        if m.get("arena"):
+            rad += " " + m["arena"]
+        falt = {
+            "matchinfo": rad.strip(),
+            "avspark": m.get("tid", "") or "auto",
+            "story_liga": m.get("liga", ""),
+            "aktiv_match_id": mid,
+        }
+        if (m.get("sport") or "").strip():
+            falt["sport"] = m["sport"].strip().capitalize()
+        if (m.get("roster") or "").strip():
+            falt["roster"] = m["roster"].strip()
+        return {"ok": True, "falt": falt}
+
     # --- mapp-väljare --------------------------------------------------------
     def valj_mapp(self, start):
         import webview
