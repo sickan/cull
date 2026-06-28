@@ -1211,14 +1211,22 @@ def main():
 
     # Exporten skiljer filer på basnamn (ut_dir/fil.name). Finns samma namn i
     # flera kortmappar (Nikon-räknaren börjar om per mapp) skulle de skriva
-    # över varandra → avbryt tydligt i stället för att tappa bilder.
+    # över varandra. I rapportläge kopieras INGET → då räcker en varning;
+    # annars avbryt tydligt i stället för att tappa bilder.
     from collections import Counter as _Counter
     _dubbl = [n for n, c in _Counter(p.name for p in nef_filer).items() if c > 1]
     if _dubbl:
-        sys.exit(f"Samma filnamn finns i flera mappar ({len(_dubbl)} st, "
-                 f"t.ex. {sorted(_dubbl)[0]}). Exporten skiljer filer på namn, "
-                 "så det skulle skriva över. Kör en mapp i taget, eller sätt "
-                 "'File number sequence' = ON i kameran för unika namn.")
+        if args.rapport:
+            print(f"⚠ {len(_dubbl)} filnamn finns i flera mappar (t.ex. "
+                  f"{sorted(_dubbl)[0]}). I rapportläge spelar det ingen roll "
+                  "(inget kopieras), men för en riktig export: kör en mapp i "
+                  "taget eller 'File number sequence' = ON i kameran.", flush=True)
+        else:
+            sys.exit(f"Samma filnamn finns i flera mappar ({len(_dubbl)} st, "
+                     f"t.ex. {sorted(_dubbl)[0]}). Exporten skiljer filer på "
+                     "namn, så det skulle skriva över. Kör en mapp i taget, "
+                     "eller sätt 'File number sequence' = ON i kameran för "
+                     "unika namn.")
 
     # Kamera-skyddade bilder (protect/lås) — läses NU medan filerna ligger på
     # kortet (flaggan följer inte med en kopia). Tas alltid med i urvalet +
