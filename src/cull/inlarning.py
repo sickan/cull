@@ -179,7 +179,11 @@ _SPORT_NYCKELORD = {
                   "superettan", "damallsvenskan", " bk ", "fotbolls",
                   " aik", " djurgård", " hammarby if", " ifk göteborg ",
                   " ifk norrköping", " häcken", "brommapojkarna", " bp "],
+    "beachvolley": ["beachvolley", "beach volley", "beachvolleyboll",
+                    "beach volleyball"],
     "volleyboll": [" vk", "volleyboll", "volleyball"],
+    "tennis":    ["tennis", " atp", " wta", "davis cup", "billie jean",
+                  "grand slam", "us open", "roland garros", "wimbledon"],
     "innebandy": ["ibk", "innebandy", "floorball", " fbc", "fbk"],
 }
 
@@ -190,7 +194,9 @@ _SPORT_WEBB_NYCKELORD = {
     "handboll":  ["handball", "handboll", "handbollsförbundet", "ehf", "shf"],
     "fotboll":   ["football", "fotboll", "soccer", "fifa", "uefa", "allsvenskan",
                   "superettan", "damallsvenskan", "svff"],
+    "beachvolley": ["beach volleyball", "beachvolley", "beachvolleyboll"],
     "volleyboll": ["volleyball", "volleyboll", "cev", "svbf"],
+    "tennis":    ["tennis", "atp tour", "wta", "itf", "davis cup"],
     "innebandy": ["floorball", "innebandy", "ibf", "innebandyförbundet"],
 }
 

@@ -21,6 +21,7 @@ CLIP_FEATURES = ["clip_firande", "clip_narkamp", "clip_portratt",
 _SPORT_ORD = {
     "fotboll": "soccer", "handboll": "handball",
     "volleyboll": "volleyball", "innebandy": "floorball",
+    "beachvolley": "beach volleyball", "tennis": "tennis",
 }
 
 # Begreppsgrupper → paraphraser. Bild-poäng per grupp = max cosinuslikhet

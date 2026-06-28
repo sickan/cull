@@ -56,7 +56,8 @@ AKTIV_PATH    = Path.home() / ".cache" / "cull" / "aktiv_inlarning.json"
 KOR_HIST_PATH = Path.home() / ".config" / "cull" / "kor_historik.json"
 
 YOLO_MODELLER = ["yolov8n.pt", "yolo11s.pt", "yolo11m.pt"]
-SPORTER = ["Auto", "Handboll", "Fotboll", "Volleyboll", "Innebandy"]
+SPORTER = ["Auto", "Handboll", "Fotboll", "Volleyboll", "Beachvolley",
+           "Tennis", "Innebandy"]
 
 
 def ladda_installningar():
@@ -1295,7 +1296,8 @@ def main():
     # --- Träning ---
     OKAND_PATH = Path.home() / ".cache" / "cull" / "sport_okand.json"
     SPORT_WEBB_CACHE = Path.home() / ".cache" / "cull" / "sport_cache.json"
-    SPORTER_VAL = ["handboll", "fotboll", "volleyboll", "innebandy"]
+    SPORTER_VAL = ["handboll", "fotboll", "volleyboll", "beachvolley",
+                   "tennis", "innebandy"]
 
     # --- Flik: Modell (träning) ---
     f_trana = ttk.Frame(notebook, padding=8)
