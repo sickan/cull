@@ -170,7 +170,7 @@ class Api:
         """Räknar riktiga bildfiler rekursivt i källmappen (för antals-/%-
         visning). Returnerar {antal, mappar, mapp}."""
         from cull import core
-        mapp = (d.get("katalog") or "").strip()
+        mapp = gui.stadad_sokvag(d.get("katalog"))
         p = Path(mapp)
         if not mapp or not p.is_dir():
             return {"antal": 0, "mappar": 0, "mapp": mapp}
@@ -442,7 +442,7 @@ class Api:
     def snabbplock(self, d):
         # Källan = kortet som sitter i (uchg läses på källan). Återanvänd
         # Källmapp-fältet om det är ifyllt, annars öppna mappdialogen.
-        mapp = (d.get("snabb_kalla") or d.get("katalog") or "").strip()
+        mapp = gui.stadad_sokvag(d.get("snabb_kalla") or d.get("katalog"))
         if not mapp or not Path(mapp).is_dir():
             mapp = self.valj_mapp(mapp or "")
         if not mapp:
@@ -464,7 +464,7 @@ class Api:
 
     # --- Räta upp för Lightroom (fristående XMP-sidecars) --------------------
     def rata_upp(self, d):
-        mapp = (d.get("rata_mapp") or "").strip()
+        mapp = gui.stadad_sokvag(d.get("rata_mapp"))
         if not mapp or not Path(mapp).is_dir():
             mapp = self.valj_mapp(mapp or "")
         if not mapp:

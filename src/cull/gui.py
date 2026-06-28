@@ -146,6 +146,22 @@ def _omonterad_disk(path):
     return None
 
 
+def stadad_sokvag(raw):
+    """Trimmar en sökväg men BEVARAR efterföljande mellanslag som hör till ett
+    riktigt volymnamn (Nikon-kort monteras t.ex. som '/Volumes/NIKON Z 8  ').
+    En vanlig .strip() bryter sådana sökvägar → 'inte monterad' fast kortet
+    sitter i. Faller tillbaka på lstrip-varianten (efterföljande blanksteg
+    kvar) om den strippade inte finns men den gör."""
+    if not raw:
+        return ""
+    s = raw.strip()
+    if s and not Path(s).is_dir():
+        alt = raw.rstrip("\r\n\t").lstrip()      # behåll efterföljande mellanslag
+        if alt and Path(alt).is_dir():
+            return alt
+    return s
+
+
 def _katalog_problem(p):
     """Returnerar ett vänligt felmeddelande om katalogen inte går att använda."""
     path = Path(p)
@@ -160,7 +176,7 @@ def _katalog_problem(p):
 
 
 def bygg_kommando(vals):
-    katalog = vals["katalog"].get().strip()
+    katalog = stadad_sokvag(vals["katalog"].get())
     if not katalog:
         return None, "Välj en katalog först."
     problem = _katalog_problem(katalog)
