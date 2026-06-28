@@ -292,46 +292,58 @@ class Api:
                     continue
                 poster.append({"fil": f.name,
                                "match": j.get("match", f.stem),
+                               "kalla": j.get("kalla", ""),
                                "n": j.get("n", len(j.get("rader", []))),
                                "skapad": j.get("skapad", ""),
                                "markt": f.name in markta})
         return {"underlag": poster}
 
     def lar_av_match(self, d):
-        """Märker ett underlag med PM-urvalet: öppnar urvalsmappen, matchar
-        filnamn (stem) → valda=1, resten=0, sparar som facit för träning."""
-        import webview
+        """Märker ett underlag i två nivåer: behåll-mappen (ditt NEF-urval) →
+        y=1, levererat (JPG-galleriet, valfritt) → samma men extra vikt. Resten
+        y=0. Matchar på filstam → facit för träning."""
         from cull import inlarning as inl
+        LEV_VIKT = 2.0
+        EXIF = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf",
+                ".jpg", ".jpeg"}
+
+        def _stems(p):
+            return {x.stem.lower() for x in Path(p).rglob("*")
+                    if x.is_file() and x.suffix.lower() in EXIF
+                    and not x.name.startswith(".")}
+
         fil = (d.get("underlag_fil") or "").strip()
         src = inl.FACIT_UNDERLAG_DIR / fil
         if not fil or not src.exists():
             return {"ok": False, "fel": "Välj ett underlag först."}
-        try:
-            res = self.window.create_file_dialog(
-                webview.FOLDER_DIALOG, directory=str(Path.home()))
-        except Exception as e:
-            return {"ok": False, "fel": f"Dialogfel: {e}"}
-        if not res:
-            return {"ok": False, "fel": "Avbruten"}
-        mapp = Path(res[0] if isinstance(res, (list, tuple)) else res)
-        EXIF = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf",
-                ".jpg", ".jpeg"}
-        valda = {p.stem.lower() for p in mapp.rglob("*")
-                 if p.is_file() and p.suffix.lower() in EXIF
-                 and not p.name.startswith(".")}
-        if not valda:
-            return {"ok": False, "fel": "Inga bildfiler i den valda mappen."}
+        keep_mapp = (d.get("lar_keep_mapp") or "").strip()
+        if not keep_mapp or not Path(keep_mapp).is_dir():
+            return {"ok": False, "fel": "Välj din behåll-mapp (NEF-urvalet)."}
+        behall = _stems(keep_mapp)
+        if not behall:
+            return {"ok": False, "fel": "Inga bildfiler i behåll-mappen."}
+        lev_mapp = (d.get("lar_lev_mapp") or "").strip()
+        levererat = (_stems(lev_mapp)
+                     if lev_mapp and Path(lev_mapp).is_dir() else set())
         try:
             j = json.loads(src.read_text(encoding="utf-8"))
         except Exception as e:
             return {"ok": False, "fel": f"Kunde inte läsa underlaget: {e}"}
         rader = j.get("rader", [])
-        n_val = 0
+        n_keep = n_lev = 0
         for r in rader:
-            y = 1 if (r.get("stem", "").lower() in valda) else 0
-            r["y"] = y
-            n_val += y
-        j["pm_mapp"] = str(mapp)
+            s = (r.get("stem", "") or "").lower()
+            if s in behall:
+                r["y"] = 1
+                r["w"] = LEV_VIKT if s in levererat else 1.0
+                n_keep += 1
+                if s in levererat:
+                    n_lev += 1
+            else:
+                r["y"] = 0
+                r["w"] = 1.0
+        j["behall_mapp"] = keep_mapp
+        j["lev_mapp"] = lev_mapp
         try:
             inl.FACIT_MARKT_DIR.mkdir(parents=True, exist_ok=True)
             (inl.FACIT_MARKT_DIR / fil).write_text(
@@ -339,8 +351,8 @@ class Api:
         except Exception as e:
             return {"ok": False, "fel": f"Kunde inte spara: {e}"}
         return {"ok": True, "match": j.get("match", ""),
-                "n_total": len(rader), "n_valda": n_val,
-                "ej_matchade": max(0, len(valda) - n_val)}
+                "n_total": len(rader), "n_keep": n_keep, "n_lev": n_lev,
+                "ej_matchade": max(0, len(behall) - n_keep)}
 
     # --- efterbehandla en exporterad mapp ------------------------------------
     def efterbehandla(self, d):
@@ -845,6 +857,54 @@ class Api:
                          f"  ({k.get('n_valda', 0)} val)"),
                "valda": k.get("valda", [])} for k in reversed(hist)]
         return {"korningar": ut}
+
+    def jamfor_levererat(self, _d=None):
+        """Jämför en levererad mapp (t.ex. Pixieset-JPG:erna) mot cull-historiken:
+        hittar vilken körning den motsvarar och visar hur många av cullens picks
+        som levererades vs föll bort i din manuella gallring. Matchar på filstam
+        (JPG-export behåller NEF-namnet)."""
+        import webview
+        try:
+            res = self.window.create_file_dialog(
+                webview.FOLDER_DIALOG, directory=str(Path.home()))
+        except Exception as e:
+            return {"ok": False, "fel": f"Dialogfel: {e}"}
+        if not res:
+            return {"ok": False, "fel": "Avbruten"}
+        mapp = Path(res[0] if isinstance(res, (list, tuple)) else res)
+        EXIF = {".jpg", ".jpeg", ".nef", ".dng", ".cr3", ".cr2", ".arw",
+                ".raf", ".rw2", ".orf"}
+        lev = {p.stem.lower() for p in mapp.rglob("*")
+               if p.is_file() and p.suffix.lower() in EXIF
+               and not p.name.startswith(".")}
+        if not lev:
+            return {"ok": False, "fel": "Inga bildfiler i den valda mappen."}
+        try:
+            hist = json.loads(gui.KOR_HIST_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            hist = []
+        rader = []
+        tackta = set()
+        for k in hist:
+            vs = {Path(n).stem.lower() for n in k.get("valda", [])}
+            if not vs:
+                continue
+            ov = vs & lev
+            if not ov:
+                continue
+            tackta |= ov
+            ud = Path(k.get("ut_dir", ""))
+            rader.append({
+                "tid": (k.get("tid", "") or "")[:16],
+                "namn": f"{ud.parent.name} / {ud.name}" if ud.name else ud.name,
+                "n_culled": len(vs),
+                "n_levererade": len(ov),
+                "n_bortfall": len(vs - lev),
+                "bortfall": sorted(s for s in (vs - lev))[:60],
+            })
+        rader.sort(key=lambda r: -r["n_levererade"])
+        return {"ok": True, "mapp": str(mapp), "n_levererat": len(lev),
+                "ej_tackt": len(lev - tackta), "rader": rader[:8]}
 
     # --- Historik (tidigare urval) -------------------------------------------
     def historik_data(self):

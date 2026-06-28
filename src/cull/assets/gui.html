@@ -524,13 +524,19 @@
           <div class="h2">Träna &amp; granska</div>
           <div class="sub">Lär modellen av dina egna Five-Star-val och kontrollera gränsfallen.</div>
           <div class="card" style="margin-bottom:16px">
-            <div class="cardH">📥 Lär av match (Photo Mechanic-urval)</div>
-            <div class="help" style="margin:0 0 8px 0">Varje cull sparar ett underlag. Välj matchen och peka på din PM-exporterade urvalsmapp — appen matchar filnamn och gör ditt urval till facit. Träna sedan om.</div>
+            <div class="cardH">📥 Lär av match (ditt urval)</div>
+            <div class="help" style="margin:0 0 8px 0">Varje cull (även Rapportläge) sparar ett underlag med hela tagningens features. Välj matchen, peka på din <b>behåll-mapp</b> (NEF-urvalet) och valfritt <b>levererat</b> (JPG-galleriet, extra vikt) — appen matchar filnamn och gör ditt urval till facit. Träna sedan om.</div>
             <div class="row"><label class="lbl" style="width:96px">Match</label>
               <select class="f flex" id="underlag_fil"></select>
               <button class="btn" onclick="laddaUnderlag()" title="Uppdatera listan">↺</button></div>
+            <div class="row" style="margin-top:6px"><label class="lbl" style="width:96px">Behåll-mapp</label>
+              <input class="f flex" id="lar_keep_mapp" placeholder="Ditt NEF-urval (t.ex. Galleri/Z8)" readonly>
+              <button class="btn" onclick="pick('lar_keep_mapp','dir')">Välj…</button></div>
+            <div class="row"><label class="lbl" style="width:96px">Levererat</label>
+              <input class="f flex" id="lar_lev_mapp" placeholder="JPG-galleriet (valfritt, extra vikt)" readonly>
+              <button class="btn" onclick="pick('lar_lev_mapp','dir')">Välj…</button></div>
             <div class="row" style="margin-top:6px">
-              <button class="btn primary" onclick="larAvMatch()">Märk med PM-urval…</button>
+              <button class="btn primary" onclick="larAvMatch()">Märk urval</button>
               <span id="larStatus" style="font-size:12px; color:var(--muted); margin-left:8px"></span></div>
           </div>
           <div class="card" style="margin-bottom:16px">
@@ -552,6 +558,8 @@
               <div><div class="tt">Histogram</div><div class="td">Poängfördelning + tröskel</div></div></div>
             <div class="tool" onclick="jamforKorningar()" style="margin:0"><span class="tic">⊞</span>
               <div><div class="tt">Jämför körningar</div><div class="td">Överlapp mellan urval</div></div></div>
+            <div class="tool" onclick="jamforLevererat()" style="margin:0"><span class="tic">✓</span>
+              <div><div class="tt">Jämför med levererat</div><div class="td">Hur många av cullens picks du levererade (Pixieset-JPG)</div></div></div>
           </div>
         </div>
 
@@ -784,16 +792,21 @@ async function laddaUnderlag(){
   const r=await window.pywebview.api.facit_underlag_lista();
   const lista=(r&&r.underlag)||[];
   if(!lista.length){ sel.innerHTML=`<option value="">(inga underlag än — kör en cull först)</option>`; return; }
-  sel.innerHTML=lista.map(u=>`<option value="${esc(u.fil)}">${u.markt?"✓ ":""}${esc(u.match)} · ${u.n} bilder${u.skapad?" · "+esc(u.skapad.slice(0,10)):""}</option>`).join("");
+  sel.innerHTML=lista.map(u=>`<option value="${esc(u.fil)}">${u.markt?"✓ ":""}${esc(u.match)}${u.kalla?" · "+esc(u.kalla):""} · ${u.n} bilder${u.skapad?" · "+esc(u.skapad.slice(0,10)):""}</option>`).join("");
 }
 async function larAvMatch(){
   const fil=(($("underlag_fil")||{}).value||"");
   const st=$("larStatus");
   if(!fil){ if(st) st.textContent="Välj en match först."; return; }
-  if(st) st.textContent="Välj din PM-urvalsmapp…";
-  const r=await window.pywebview.api.lar_av_match({underlag_fil:fil});
+  if(!($("lar_keep_mapp")||{}).value){ if(st) st.textContent="Välj din behåll-mapp först."; return; }
+  if(st) st.textContent="Märker…";
+  const r=await window.pywebview.api.lar_av_match({
+    underlag_fil:fil,
+    lar_keep_mapp:($("lar_keep_mapp")||{}).value||"",
+    lar_lev_mapp:($("lar_lev_mapp")||{}).value||""
+  });
   if(r&&r.ok){
-    if(st) st.textContent=`✓ ${r.n_valda} valda av ${r.n_total}${r.ej_matchade?` · ${r.ej_matchade} ej matchade`:""}. Träna om för att lära in.`;
+    if(st) st.textContent=`✓ ${r.n_keep} behåll${r.n_lev?` (${r.n_lev} levererade, extra vikt)`:""} av ${r.n_total}${r.ej_matchade?` · ${r.ej_matchade} ej i underlaget`:""}. Träna om för att lära in.`;
     laddaUnderlag();
   } else if(r&&r.fel&&r.fel!=="Avbruten"){ if(st) st.textContent="Fel: "+r.fel; }
   else if(st) st.textContent="";
@@ -1245,6 +1258,29 @@ function korJamfor(){
     <div class="stat"><div class="statN">${baraB.length}</div><div class="statL">Bara i B</div></div>
     <div class="stat"><div class="statN acc">${Math.round(jac*100)}%</div><div class="statL">Överlapp</div></div></div>
     ${blk("Endast i A",baraA)}${blk("Endast i B",baraB)}`;
+}
+
+async function jamforLevererat(){
+  const body=openSheet("Jämför med levererat","Välj din leveransmapp (JPG)…");
+  const r=await window.pywebview.api.jamfor_levererat();
+  if(!r||!r.ok){ if(r&&r.fel&&r.fel!=="Avbruten"){ setSheetSub(""); body.innerHTML=tomMsg("Fel: "+r.fel); } else closeSheet(); return; }
+  setSheetSub(`${r.n_levererat} levererade bilder · ${esc(r.mapp)}`);
+  if(!r.rader.length){ body.innerHTML=tomMsg("Ingen cull-körning matchar den här mappen (filnamnen känns inte igen i historiken)."); return; }
+  const blk=(t,arr)=>arr.length?`<div class="lblk"><div class="lblkH">${t}</div><div class="lblkB">${arr.sort().map(esc).join("<br>")}</div></div>`:"";
+  let html="";
+  r.rader.forEach(k=>{
+    const prec=k.n_culled?Math.round(k.n_levererade/k.n_culled*100):0;
+    html+=`<div style="margin-bottom:18px">
+      <div style="font-weight:600;margin-bottom:6px">${esc(k.namn)} <span style="color:var(--muted);font-weight:400">· ${esc(k.tid)}</span></div>
+      <div class="statgrid">
+        <div class="stat"><div class="statN">${k.n_culled}</div><div class="statL">Cullade</div></div>
+        <div class="stat"><div class="statN acc">${k.n_levererade}</div><div class="statL">Levererade</div></div>
+        <div class="stat"><div class="statN">${k.n_bortfall}</div><div class="statL">Föll bort</div></div>
+        <div class="stat"><div class="statN acc">${prec}%</div><div class="statL">Träff</div></div></div>
+      ${blk("Cullens picks du INTE levererade (för svaga?)", k.bortfall)}</div>`;
+  });
+  if(r.ej_tackt) html+=`<div class="help">${r.ej_tackt} levererade bilder fanns inte i någon cull-körning (annan kamera/match, omdöpta, eller cull-missar).</div>`;
+  body.innerHTML=html;
 }
 
 async function visaUrval(path){

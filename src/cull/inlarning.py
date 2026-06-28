@@ -79,10 +79,16 @@ def hitta_uppdrag_markt():
         stems, X, y = [], [], []
         for r in rader:
             v = r.get("v") or []
-            X.append([float(v[idx[fn]]) if fn in idx and idx[fn] < len(v)
-                      else 0.0 for fn in FEATURES])
-            y.append(int(r.get("y", 0)))
-            stems.append(r.get("stem", ""))
+            vec = [float(v[idx[fn]]) if fn in idx and idx[fn] < len(v)
+                   else 0.0 for fn in FEATURES]
+            y_val = int(r.get("y", 0))
+            # Vikt (levererat-nivån) realiseras som radupprepning → ingen
+            # ändring i fit-signaturen; vikt 2 = två kopior. Bara positiva.
+            rep = max(1, int(round(float(r.get("w", 1.0))))) if y_val == 1 else 1
+            for _ in range(rep):
+                X.append(vec)
+                y.append(y_val)
+                stems.append(r.get("stem", ""))
         if not X or sum(y) == 0:
             continue
         ut.append((d.get("match") or f.stem, np.array(X, dtype=float),

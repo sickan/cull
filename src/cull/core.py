@@ -189,12 +189,17 @@ def _spara_facit_underlag(resultat, args, sport):
         return
     from cull import inlarning
     namn = (args.ut_namn or Path(args.katalog).name or "match").strip()
-    slug = re.sub(r"[^\w-]+", "_", namn).strip("_")[:80] or "match"
+    # Källkatalogens namn i filnamnet → flera kort/kameror (t.ex. 277Z8_01 vs
+    # 170D5_01) för SAMMA match blir separata underlag i stället för att skriva
+    # över varandra.
+    kalla = Path(args.katalog).name
+    slug = re.sub(r"[^\w-]+", "_", f"{namn}__{kalla}").strip("_")[:96] or "match"
     rader = [{"stem": r["fil"].stem,
               "v": [round(float(r.get(k, 0.0)), 5) for k in inlarning.FEATURES]}
              for r in resultat]
     post = {
         "match": namn,
+        "kalla": kalla,
         "sport": sport or "",
         "skapad": datetime.now().isoformat(timespec="seconds"),
         "features": list(inlarning.FEATURES),
@@ -1716,6 +1721,11 @@ def main():
                   f"{r['fil'].name}")
 
         if args.rapport:
+            # Spara facit-underlag även i rapportläge: poängsätt hela tagningen
+            # (snabbt vid cache-träff) och dumpa features utan att kopiera/
+            # exportera — perfekt "lär tagning" inför Lär av match.
+            if args.ai or modell_paket:
+                _spara_facit_underlag(resultat, args, sport)
             _skriv_tidrapport(tider_fas)
             print("\n(Rapportläge — inget kopierades.)")
             return
