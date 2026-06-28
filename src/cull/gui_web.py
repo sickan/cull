@@ -1329,7 +1329,7 @@ def main():
     api = Api()
     html = Path(__file__).parent / "assets" / "gui.html"
     api.window = webview.create_window(
-        "Dalecarlia Photo Cull", str(html),
+        "Dalecarlia Photo Tools", str(html),
         width=860, height=860, min_size=(700, 640),
         background_color="#F4F4F6", js_api=api)
     try:

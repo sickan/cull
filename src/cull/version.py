@@ -1,9 +1,9 @@
-"""Varumärke, version och build för Dalecarlia Photo Cull."""
+"""Varumärke, version och build för Dalecarlia Photo Tools."""
 
 from datetime import datetime
 from pathlib import Path
 
-APPNAMN = "Dalecarlia Photo Cull"
+APPNAMN = "Dalecarlia Photo Tools"
 
 
 def version():
