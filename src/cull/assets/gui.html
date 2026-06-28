@@ -1236,9 +1236,9 @@ function lasInSpellistaJson(){
   const p=_matchBrygga(); if(!p) return;
   MATCH_BIND_ID=p.id;
   const body=openSheet("Läs in spellista","");
-  const ex='{"lag":{"hemma":"FC Rosengård","borta":"Eskilstuna United"},'
-    +'"spelare":[{"nr":"10","namn":"Remy Siemsen","lag":"hemma","start":false,"handle":"@remyysiemsen","info":"Forward"}],'
-    +'"kallor":["https://www.fcrosengard.se/sv/players"]}';
+  const ex='{"matches":[{"home":{"club":"FC Rosengård","squad":['
+    +'{"number":10,"name":"Remy Siemsen","position":"Forward","nationality":"Australia","instagram":"remyysiemsen","ig_verified":true}'
+    +']},"away":{"club":"Eskilstuna United DFF","squad":[...]},"sources":["https://..."]}]}';
   body.innerHTML=`<div style="padding:4px 0 12px">
     <p style="margin:0 0 6px;font-size:12px;color:var(--muted)">Klistra in JSON från Claude Chat. Ange detta schema till Claude:</p>
     <pre id="jsonSchema" style="font-size:10px;background:var(--bg2);padding:8px;border-radius:6px;
@@ -1251,14 +1251,37 @@ function lasInSpellistaJson(){
     <button onclick="importeraSpellistaJson()" style="margin-top:8px;width:100%">Importera</button>
   </div>`;
 }
+function _konverteraSpellistaJson(raw){
+  /* Hanterar två format:
+     A) App-format:      { lag:{hemma,borta}, spelare:[{nr,namn,lag,handle,info,start}] }
+     B) Chat-format:     { matches:[{ home:{club,squad:[{number,name,instagram,position,nationality}]},
+                                      away:{...}, sources:[...] }] }
+     Returnerar app-format eller kastar Error. */
+  if(raw.spelare){ return raw; }           // A: redan rätt
+  const m=(raw.matches||[])[0];
+  if(!m) throw new Error('Hittade varken "spelare" eller "matches" i JSON.');
+  const conv=(squad,lag)=>(squad||[]).map(p=>({
+    nr:    String(p.number??p.nr??""),
+    namn:  String(p.name??p.namn??""),
+    lag,
+    start: false,
+    handle:p.instagram ? "@"+p.instagram : (p.handle||""),
+    info:  [p.position,p.nationality].filter(Boolean).join(", ")
+  }));
+  return {
+    lag:{ hemma: m.home?.club||"", borta: m.away?.club||"" },
+    spelare: [...conv(m.home?.squad,"hemma"), ...conv(m.away?.squad,"borta")],
+    kallor: m.sources||[]
+  };
+}
 function importeraSpellistaJson(){
   const raw=($("jsonPaste")||{}).value||"";
-  let data;
-  try{ data=JSON.parse(raw); }
+  let parsed,data;
+  try{ parsed=JSON.parse(raw); }
   catch(e){ alert("Ogiltig JSON:\n"+e.message); return; }
-  if(!Array.isArray(data.spelare)||!data.spelare.length){
-    alert('JSON saknar "spelare"-lista eller den är tom.'); return;
-  }
+  try{ data=_konverteraSpellistaJson(parsed); }
+  catch(e){ alert(e.message); return; }
+  if(!data.spelare?.length){ alert('"spelare"-listan är tom.'); return; }
   data._mid=MATCH_BIND_ID||"";
   window.dpcMatch(data);
 }
