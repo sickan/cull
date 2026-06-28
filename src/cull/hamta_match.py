@@ -18,6 +18,11 @@ MODELL = "claude-opus-4-8"
 _PRIS_IN = 15.0 / 1_000_000   # $15/MTok input
 _PRIS_UT = 75.0 / 1_000_000   # $75/MTok output
 
+# Kostnadsgräns per anrop (USD). Kontrolleras efter varje runda.
+# Ändra värdet här eller sätt miljövariabeln CULL_MAX_KOSTNAD_USD.
+import os as _os
+_MAX_KOSTNAD_USD = float(_os.environ.get("CULL_MAX_KOSTNAD_USD", "2.00"))
+
 # Timeout i sekunder per streaming-runda.
 _TIMEOUT_SPELARE     = 120.0   # fas 1: fler sökningar, mer tid
 _TIMEOUT_UPPSTALLNING =  90.0  # fas 2: färre sökningar
@@ -204,7 +209,7 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                         if q:
                             logg(f"🔍 {q}")
 
-            # Token-förbrukning + uppskattad kostnad
+            # Token-förbrukning + uppskattad kostnad, cap-kontroll
             usage = getattr(final, "usage", None)
             if usage:
                 in_tok  = getattr(usage, "input_tokens",  0) or 0
@@ -212,7 +217,10 @@ def _kör_sökning(klient, fraga, system, max_uses, logg, timeout=120.0):
                 tot_in += in_tok
                 tot_ut += out_tok
                 kostnad = tot_in * _PRIS_IN + tot_ut * _PRIS_UT
-                logg(f"📊 {tot_in + tot_ut:,} token · ~${kostnad:.3f}")
+                logg(f"📊 {tot_in + tot_ut:,} tok · ~${kostnad:.3f} / gräns ${_MAX_KOSTNAD_USD:.2f}")
+                if kostnad >= _MAX_KOSTNAD_USD:
+                    logg(f"⚠ Kostnadsgräns ${_MAX_KOSTNAD_USD:.2f} nådd — avbryter.")
+                    break
 
             if final.stop_reason == "pause_turn":
                 messages.append({"role": "assistant", "content": final.content})
