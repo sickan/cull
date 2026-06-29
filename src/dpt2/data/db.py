@@ -22,16 +22,18 @@ def _schema_sql():
     return _SCHEMA_PATH.read_text(encoding="utf-8")
 
 
-def oppna(path=DB_DEFAULT, *, init=True):
+def oppna(path=DB_DEFAULT, *, init=True, check_same_thread=True):
     """Öppnar (och skapar) databasen. Sätter FK-tvång och Row-factory.
 
     path : sökväg till .db-filen (skapas inkl. föräldrakatalog vid behov).
     init : kör init_db automatiskt (default). Sätt False för en rå anslutning.
+    check_same_thread : False när anslutningen delas mellan trådar (t.ex.
+        pywebview-bryggan som anropas från JS-tråden).
     """
     path = Path(path)
     if path != Path(":memory:"):
         path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path))
+    conn = sqlite3.connect(str(path), check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     if init:
