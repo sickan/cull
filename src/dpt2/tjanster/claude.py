@@ -123,6 +123,17 @@ def fraga_json(klient, system, fraga, *, modell=MODELL, max_tokens=4000,
                 max_varv, logg, kostnad)
 
 
+def fraga_json_innehall(klient, system, innehall, *, modell=MODELL,
+                        max_tokens=4000, verktyg=None, max_varv=4, logg=print,
+                        kostnad=None):
+    """Låg-nivå: skicka en färdig content-blocklista (bilder, PDF-dokument,
+    text) och få parsad JSON. Används av vision/lineup-flöden som bygger egna
+    block (t.ex. PDF eller HEIC)."""
+    messages = [{"role": "user", "content": innehall}]
+    return _kor(klient, system, messages, modell, max_tokens, verktyg,
+                max_varv, logg, kostnad)
+
+
 def fraga_json_vision(klient, system, text, bild_paths, *, modell=MODELL,
                       max_tokens=4000, max_kant=1024, max_varv=4, logg=print,
                       kostnad=None):
@@ -133,9 +144,9 @@ def fraga_json_vision(klient, system, text, bild_paths, *, modell=MODELL,
         if b64:
             innehall.append(_bild_block(b64))
     innehall.append({"type": "text", "text": text})
-    messages = [{"role": "user", "content": innehall}]
-    return _kor(klient, system, messages, modell, max_tokens, None,
-                max_varv, logg, kostnad)
+    return fraga_json_innehall(klient, system, innehall, modell=modell,
+                               max_tokens=max_tokens, max_varv=max_varv,
+                               logg=logg, kostnad=kostnad)
 
 
 def _kor(klient, system, messages, modell, max_tokens, verktyg, max_varv,
