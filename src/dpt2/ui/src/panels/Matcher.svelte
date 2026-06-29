@@ -1,6 +1,9 @@
 <script>
   import { onMount } from 'svelte'
-  import { listaMatcher, hamtaMatch, sparaMatch, hamtaTrupp } from '../lib/api.js'
+  import { createEventDispatcher } from 'svelte'
+  import { listaMatcher, hamtaMatch, sparaMatch, hamtaTrupp, sattAktivMatch } from '../lib/api.js'
+
+  const dispatch = createEventDispatcher()
 
   let matcher = []
   let laddar = true
@@ -67,6 +70,12 @@
     await sparaMatch(m)
     matcher = await listaMatcher()
     oppen = null; utkast = null
+  }
+
+  function aktivera(m) {
+    if (typeof m.id === 'string' && m.id.startsWith('ny-')) return
+    dispatch('aktiverad', m)          // navigera synkront → App byter till Gallra
+    sattAktivMatch(m.id)              // spara aktiv match i bakgrunden
   }
 </script>
 
@@ -148,7 +157,7 @@
                   </div>
                   <div class="hoger">
                     <button class="sek" on:click={spara}>Spara</button>
-                    <button class="prim">Aktivera match ›</button>
+                    <button class="prim" on:click={() => aktivera(utkast)}>Aktivera match ›</button>
                   </div>
                 </div>
               </div>

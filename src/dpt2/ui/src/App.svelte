@@ -2,10 +2,12 @@
   import Rail from './lib/Rail.svelte'
   import Matcher from './panels/Matcher.svelte'
   import Lag from './panels/Lag.svelte'
+  import Gallra from './panels/Gallra.svelte'
   import { ARMOCK } from './lib/api.js'
 
   let aktiv = 'matcher'
   let tema = 'light'
+  let aktivMatchData = null   // matchen som "Aktivera match" skickar till Gallra
 
   const NAMN = {
     matcher: 'Matcher', lag: 'Lag & tävlingar', gallra: 'Gallra',
@@ -31,9 +33,11 @@
     </div>
 
     {#if aktiv === 'matcher'}
-      <Matcher />
+      <Matcher on:aktiverad={(e) => { aktivMatchData = e.detail; aktiv = 'gallra' }} />
     {:else if aktiv === 'lag'}
       <Lag />
+    {:else if aktiv === 'gallra'}
+      <Gallra {aktivMatchData} />
     {:else}
       <div class="platshallare">
         <h1 class="scd">{NAMN[aktiv]}</h1>

@@ -123,4 +123,28 @@ export async function hamtaTrupp(matchId) {
   return wait({ ok: true, match: { ...full, spelare: merge } })
 }
 
+let _aktivMock = null
+
+export async function sattAktivMatch(id) {
+  const api = brygga()
+  if (api) return api.satt_aktiv_match(id)
+  _aktivMock = await hamtaMatch(id)
+  return wait({ ok: true, match: _aktivMock })
+}
+
+export async function aktivMatch() {
+  const api = brygga()
+  if (api) return api.aktiv_match()
+  return wait(_aktivMock)
+}
+
+export async function startaCull(config) {
+  const api = brygga()
+  if (api) return api.starta_cull(config)
+  return wait({
+    ok: true, urval_id: 'mock', jobb_id: 'mock',
+    meddelande: 'Cull-jobb skapat (mock). Gallringsmotorn körs i ML-miljö.',
+  })
+}
+
 export const ARMOCK = !brygga()

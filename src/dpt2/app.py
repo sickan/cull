@@ -97,10 +97,50 @@ class Api:
         store.radera_tavling(self.conn, id)
         return {"ok": True}
 
+    # ── Aktiv match (delas av Efter match-panelerna) ─────────────────────────
+    def satt_aktiv_match(self, id):
+        store.satt_installning(self.conn, "aktiv_match_id", id)
+        m = store.hamta_match(self.conn, id)
+        return {"ok": bool(m), "match": m}
+
+    def aktiv_match(self):
+        mid = store.hamta_installning(self.conn, "aktiv_match_id")
+        return store.hamta_match(self.conn, mid) if mid else None
+
+    # ── Gallra (skapar urval + cull_jobb; motorn körs i ML-miljö) ────────────
+    def starta_cull(self, config):
+        from dpt2.motorer.gallring import Gallring
+        cfg = _gallring_av_config(config)
+        uid = store.spara_urval(
+            self.conn, kalla=config.get("kalla", ""), bilder=0,
+            match_id=config.get("match_id") or None, kamera=config.get("kamera"))
+        jid = store.cull_jobb_fran_gallring(
+            self.conn, uid, cfg, verktyg=config.get("verktyg", "ai"),
+            hemmafarg=config.get("hemmafarg"), modell=config.get("modell"))
+        return {"ok": True, "urval_id": uid, "jobb_id": jid,
+                "meddelande": "Cull-jobb skapat. Körning av gallringsmotorn "
+                              "(feature-extraktion + modell) sker i ML-workern "
+                              "— kommande steg."}
+
     # ── Meta ─────────────────────────────────────────────────────────────────
     def info(self):
         return {"db": str(self.db_path),
                 "schemaversion": db.schemaversion(self.conn)}
+
+
+def _gallring_av_config(config):
+    """Mappar UI-config → motorer.gallring.Gallring. behall_enhet 'bilder' →
+    topp (exakt antal); 'procent' → andel (fraktion)."""
+    from dpt2.motorer.gallring import Gallring
+    enhet = config.get("behall_enhet", "bilder")
+    varde = config.get("behall_varde")
+    topp = int(varde) if (enhet == "bilder" and varde) else None
+    andel = (float(varde) / 100.0) if (enhet == "procent" and varde) else 0.10
+    return Gallring(
+        ai=config.get("verktyg", "ai") == "ai",
+        topp=topp, andel=andel,
+        burst_sek=float(config.get("burst", 2.0)),
+        bevaka=set(config.get("bevaka") or []))
 
 
 def index_url():

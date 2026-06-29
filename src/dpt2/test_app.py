@@ -2,7 +2,8 @@
 
 import unittest
 
-from dpt2.app import Api
+from dpt2.app import Api, _gallring_av_config
+from dpt2.data import store
 
 
 class TestApi(unittest.TestCase):
@@ -61,6 +62,44 @@ class TestApi(unittest.TestCase):
                                     "datum": "2026-01-01"})["id"]
         self.api.radera_match(mid)
         self.assertEqual(self.api.lista_matcher(), [])
+
+    def test_aktiv_match(self):
+        self.assertIsNone(self.api.aktiv_match())
+        mid = self.api.spara_match({"lag_hemma": "A", "lag_borta": "B",
+                                    "datum": "2026-01-01"})["id"]
+        res = self.api.satt_aktiv_match(mid)
+        self.assertTrue(res["ok"])
+        self.assertEqual(self.api.aktiv_match()["id"], mid)
+
+    def test_starta_cull_skapar_urval_och_jobb(self):
+        mid = self.api.spara_match({"lag_hemma": "A", "lag_borta": "B",
+                                    "datum": "2026-01-01"})["id"]
+        res = self.api.starta_cull({
+            "kalla": "/Volumes/NIKON/DCIM", "match_id": mid, "kamera": "NIKON Z 8",
+            "behall_varde": 40, "behall_enhet": "bilder", "verktyg": "ai",
+            "modell": "din_smak", "burst": 2.0})
+        self.assertTrue(res["ok"])
+        u = store.hamta_urval(self.api.conn, res["urval_id"])
+        self.assertEqual(u["match_id"], mid)
+        self.assertEqual(u["kamera"], "NIKON Z 8")
+        jobb = store.jobb_for_urval(self.api.conn, res["urval_id"])
+        self.assertEqual(jobb[0]["behall_varde"], 40.0)
+        self.assertEqual(jobb[0]["behall_enhet"], "bilder")
+
+
+class TestGallringConfig(unittest.TestCase):
+    def test_bilder_ger_topp(self):
+        g = _gallring_av_config({"behall_enhet": "bilder", "behall_varde": 40,
+                                 "verktyg": "ai", "burst": 2.0})
+        self.assertEqual(g.topp, 40)
+        self.assertTrue(g.ai)
+
+    def test_procent_ger_andel(self):
+        g = _gallring_av_config({"behall_enhet": "procent", "behall_varde": 25,
+                                 "verktyg": "rapport"})
+        self.assertAlmostEqual(g.andel, 0.25)
+        self.assertIsNone(g.topp)
+        self.assertFalse(g.ai)          # rapport → ai=False
 
 
 if __name__ == "__main__":

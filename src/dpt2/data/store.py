@@ -197,6 +197,19 @@ def radera_tavling(conn, tavling_id):
     conn.commit()
 
 
+# ── App-inställningar (key-value, t.ex. aktiv match) ─────────────────────────
+def satt_installning(conn, nyckel, varde):
+    conn.execute("INSERT OR REPLACE INTO installning(nyckel,varde) VALUES(?,?)",
+                 (nyckel, varde))
+    conn.commit()
+
+
+def hamta_installning(conn, nyckel, default=None):
+    r = conn.execute("SELECT varde FROM installning WHERE nyckel=?",
+                     (nyckel,)).fetchone()
+    return r[0] if r else default
+
+
 # ── Match (normalisering ↔ rekonstruktion av inline-spelare) ─────────────────
 def spara_match(conn, match):
     """Skapar/uppdaterar en match ur ett UI-dict (inline-spelare). Normaliserar
