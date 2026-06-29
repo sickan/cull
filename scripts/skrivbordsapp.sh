@@ -1,32 +1,32 @@
 #!/bin/zsh
-# Bygger (eller bygger om) skrivbordsappen "Dalecarlia Cull.app" med rätt ikon.
+# Bygger (eller bygger om) skrivbordsappen "Dalecarlia Photo Tools.app" med rätt ikon.
 # Kör efter en ominstallation om skrivbordsikonen tappats. Idempotent.
 #
 #   ./scripts/skrivbordsapp.sh
 #
 set -e
 
-ASSETS="$(cd "$(dirname "$0")/../src/cull/assets" && pwd)"
+ASSETS="$(cd "$(dirname "$0")/../src/dpt/assets" && pwd)"
 PNG="$ASSETS/icon.png"
-APP="$HOME/Desktop/Dalecarlia Cull.app"
+APP="$HOME/Desktop/Dalecarlia Photo Tools.app"
 BIN="$HOME/.local/bin"
-PY="$HOME/.local/pipx/venvs/cull/bin/python"
+PY="$HOME/.local/pipx/venvs/dpt/bin/python"
 
 # 1) Launcher: laddar API-nyckeln ur ~/.zshrc, sätter PATH, startar webb-GUI:t.
 mkdir -p "$BIN"
-cat > "$BIN/cull-start" <<'EOF'
+cat > "$BIN/dpt-start" <<'EOF'
 #!/bin/zsh
 cd "$HOME" 2>/dev/null || true
 [ -f "$HOME/.zshrc" ] && eval "$(grep '^export ANTHROPIC_API_KEY=' "$HOME/.zshrc" | tail -1)"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
-exec "$HOME/.local/bin/cull-web"
+exec "$HOME/.local/bin/dpt-web"
 EOF
-chmod +x "$BIN/cull-start"
+chmod +x "$BIN/dpt-start"
 
 # 2) AppleScript-applet: startar launchern utan terminalfönster.
 rm -rf "$APP"
 osacompile -o "$APP" -e \
-  'do shell script "nohup \"$HOME/.local/bin/cull-start\" >/dev/null 2>&1 &"'
+  'do shell script "nohup \"$HOME/.local/bin/dpt-start\" >/dev/null 2>&1 &"'
 
 # 3) Ikon: regenerera applet.icns ur loggan (bundle-självständig) ...
 SET="$(mktemp -d)/icon.iconset"; mkdir -p "$SET"
@@ -45,4 +45,4 @@ NSWorkspace.sharedWorkspace().setIcon_forFile_options_(img, sys.argv[2], 0)
 PY
 touch "$APP"
 
-echo "Klart: $APP (logga satt, startar cull-web)"
+echo "Klart: $APP (logga satt, startar dpt-web)"
