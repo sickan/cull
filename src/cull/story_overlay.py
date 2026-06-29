@@ -190,8 +190,13 @@ def _rund_bricka(logga_path, storlek, monogram, fallback_color=(70, 130, 180)):
     S = storlek
     if logga_path:
         try:
-            logo  = Image.open(logga_path).convert("RGBA")
-            bricka = ImageOps.fit(logo, (S, S), Image.LANCZOS)
+            logo = Image.open(logga_path).convert("RGBA")
+            # Contain (inte cover): skala ner så hela loggan ryms, centrera på transparent
+            logo.thumbnail((S, S), Image.LANCZOS)
+            bricka = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+            ox = (S - logo.width) // 2
+            oy = (S - logo.height) // 2
+            bricka.alpha_composite(logo, (ox, oy))
             cirkel = np.asarray(_mjuk_cirkelmask(S), dtype=np.float32) / 255.0
             egen   = np.asarray(bricka.getchannel("A"), dtype=np.float32) / 255.0
             bricka.putalpha(Image.fromarray((cirkel * egen * 255).astype("uint8"), "L"))
