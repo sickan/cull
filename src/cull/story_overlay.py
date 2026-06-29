@@ -814,12 +814,12 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
 
     # Halvtid/Slutresultat
     score_label = "Halvtid" if state == "Halvtid" else "Slutresultat"
-    # score_text med tunt mellanslag (U+2009)
+    # SairaCondensed-Bold saknar space-glyf — rendera utan mellanslag
     if stallning and "-" in stallning:
         delar = stallning.split("-", 1)
-        score_text = f"{delar[0].strip()} – {delar[1].strip()}"
+        score_text = f"{delar[0].strip()}–{delar[1].strip()}"
     else:
-        score_text = stallning or "? – ?"
+        score_text = stallning or "?–?"
     score_sub = mal_rad if state == "Slutresultat" else competition
 
     # Lagbrickor
