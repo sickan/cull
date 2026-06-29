@@ -12,6 +12,7 @@ Saknas dist/ faller den tillbaka på Vite-dev-servern (localhost:5173).
 from pathlib import Path
 
 from dpt2.data import db, store
+from dpt2.tjanster import matchhamtning
 
 UI_DIR = Path(__file__).parent / "ui"
 DIST_INDEX = UI_DIR / "dist" / "index.html"
@@ -40,6 +41,30 @@ class Api:
     def radera_match(self, id):
         store.radera_match(self.conn, id)
         return {"ok": True}
+
+    def hamta_trupp(self, match_id):
+        """Hämtar truppen (web-sök via Claude), slår ihop med matchens befintliga
+        spelare och sparar. Returnerar {ok, match} eller {ok:False, fel}."""
+        m = store.hamta_match(self.conn, match_id)
+        if not m:
+            return {"ok": False, "fel": "Okänd match."}
+        data = matchhamtning.hamta_spelare(
+            m["lag_hemma"], m["lag_borta"], m.get("sport", ""))
+        if not data:
+            return {"ok": False, "fel": "Kunde inte hämta truppen "
+                    "(saknas API-nyckel eller inget svar)."}
+        uppd = store.merge_in_trupp(self.conn, match_id, data.get("spelare", []))
+        return {"ok": True, "match": uppd}
+
+    def las_lineup_fil(self, match_id, filsokvag):
+        """Läser ett laguppställnings-ark (vision), slår ihop + sparar."""
+        if not store.hamta_match(self.conn, match_id):
+            return {"ok": False, "fel": "Okänd match."}
+        data = matchhamtning.las_lineup(filsokvag)
+        if not data:
+            return {"ok": False, "fel": "Kunde inte läsa arket."}
+        uppd = store.merge_in_trupp(self.conn, match_id, data.get("spelare", []))
+        return {"ok": True, "match": uppd}
 
     # ── Lag & tävlingar ──────────────────────────────────────────────────────
     def lista_lag(self):

@@ -284,3 +284,16 @@ def lista_matcher(conn):
 def radera_match(conn, match_id):
     conn.execute("DELETE FROM matchen WHERE id=?", (match_id,))
     conn.commit()
+
+
+def merge_in_trupp(conn, match_id, nya_spelare, *, bevara_start=False):
+    """Slår ihop nya spelare (från trupp-hämtning eller laguppställnings-ark) med
+    matchens befintliga trupp och sparar. Returnerar den uppdaterade matchen,
+    eller None om matchen är okänd. Ren glue ovanpå matchlogik.sla_ihop_spelare."""
+    m = hamta_match(conn, match_id)
+    if not m:
+        return None
+    m["spelare"] = matchlogik.sla_ihop_spelare(
+        m.get("spelare", []), nya_spelare, bevara_start=bevara_start)
+    spara_match(conn, m)
+    return hamta_match(conn, match_id)

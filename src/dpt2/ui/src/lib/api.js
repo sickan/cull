@@ -89,4 +89,20 @@ export async function sparaLag(lag) {
   return wait({ ok: true, id: lag.id || 'nytt' })
 }
 
+export async function hamtaTrupp(matchId) {
+  const api = brygga()
+  if (api) return api.hamta_trupp(matchId)
+  // Mock: returnera matchen med ett par "hämtade" spelare ihopslagna.
+  const full = MOCK_FULL[matchId] || {
+    ...MOCK_MATCHER.find((m) => m.id === matchId), spelare: [],
+  }
+  const nya = [
+    { nr: '7', namn: 'Thea Sørbo', lag: 'hemma', handle: '@theasoerbo', info: 'Mittfältare, Norway', start: false },
+    { nr: '11', namn: 'Molly Johansson', lag: 'hemma', handle: '', info: 'Back, Sweden', start: false },
+  ]
+  const fanns = new Set((full.spelare || []).map((p) => p.nr + p.lag))
+  const merge = [...(full.spelare || []), ...nya.filter((p) => !fanns.has(p.nr + p.lag))]
+  return wait({ ok: true, match: { ...full, spelare: merge } })
+}
+
 export const ARMOCK = !brygga()

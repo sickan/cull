@@ -133,6 +133,23 @@ class TestMatchCRUD(unittest.TestCase):
         store.radera_match(self.c, mid)
         self.assertIsNone(store.hamta_match(self.c, mid))
 
+    def test_merge_in_trupp(self):
+        mid = store.spara_match(self.c, self.match)        # 3 spelare
+        # "hämtad" trupp: uppdaterar #1 (saknar handle→bevaras) + ny spelare #14
+        nya = [
+            {"nr": "1", "namn": "Zecira Musovic", "lag": "hemma"},
+            {"nr": "14", "namn": "Ny Spelare", "lag": "hemma", "handle": "@ny"},
+        ]
+        uppd = store.merge_in_trupp(self.c, mid, nya)
+        nrs = {p["nr"] for p in uppd["spelare"]}
+        self.assertIn("14", nrs)                            # ny tillagd
+        zm = next(p for p in uppd["spelare"] if p["nr"] == "1")
+        self.assertEqual(zm["handle"], "@zm")              # bevarat över merge
+        self.assertIn("9", nrs)                            # gammal kvar
+
+    def test_merge_okand_match(self):
+        self.assertIsNone(store.merge_in_trupp(self.c, "finns-ej", []))
+
 
 class TestLagTavling(unittest.TestCase):
     def setUp(self):

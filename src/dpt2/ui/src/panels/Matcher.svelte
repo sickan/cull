@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { listaMatcher, hamtaMatch, sparaMatch } from '../lib/api.js'
+  import { listaMatcher, hamtaMatch, sparaMatch, hamtaTrupp } from '../lib/api.js'
 
   let matcher = []
   let laddar = true
@@ -50,6 +50,15 @@
     matcher = [tmp, ...matcher]
     oppen = tmp.id
     utkast = { ...tmp, spelare: [] }
+  }
+
+  let hamtar = false
+  async function hamtaTruppen() {
+    if (!utkast || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))) return
+    hamtar = true
+    const res = await hamtaTrupp(utkast.id)
+    hamtar = false
+    if (res?.ok && res.match) utkast = res.match
   }
 
   async function spara() {
@@ -130,7 +139,13 @@
                 {/if}
 
                 <div class="knappar">
-                  <button class="sek">Läs laguppställning…</button>
+                  <div class="vanster">
+                    <button class="sek" on:click={hamtaTruppen}
+                      disabled={hamtar || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))}>
+                      {hamtar ? 'Hämtar trupp…' : 'Hämta trupp'}
+                    </button>
+                    <button class="sek">Läs laguppställning…</button>
+                  </div>
                   <div class="hoger">
                     <button class="sek" on:click={spara}>Spara</button>
                     <button class="prim">Aktivera match ›</button>
@@ -206,11 +221,13 @@
   .sp b { color: var(--t-head); }
   .sp i { color: var(--rose); font-style: normal; margin-left: 3px; }
 
-  .knappar { display: flex; justify-content: space-between; align-items: center; }
-  .hoger { display: flex; gap: 8px; }
+  .knappar { display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; flex-wrap: wrap; }
+  .vanster, .hoger { display: flex; gap: 8px; }
   .sek { padding: 8px 14px; border: 1px solid var(--div); border-radius: 8px;
     background: var(--kort); color: var(--t-head); font-size: 13px; font-weight: 500; }
-  .sek:hover { background: var(--div3); }
+  .sek:hover:not(:disabled) { background: var(--div3); }
+  .sek:disabled { opacity: 0.5; cursor: default; }
   .prim { padding: 8px 16px; border: 0; border-radius: 8px; background: var(--acc);
     color: var(--kort); font-size: 13px; font-weight: 600; }
   .ny { margin-top: 6px; padding: 11px; width: 100%; border: 1.5px dashed var(--div);
