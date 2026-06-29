@@ -12,12 +12,12 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, ttk
 
-from cull import version as ver
+from dpt import version as ver
 
 FARGER = ["", "blå", "ljusblå", "röd", "mörkröd", "gul", "grön",
           "vit", "svart", "orange", "lila"]
 
-CONFIG_DIR    = Path.home() / ".config" / "cull"
+CONFIG_DIR    = Path.home() / ".config" / "dpt"
 SETTINGS_PATH = CONFIG_DIR / "settings.json"
 HISTORY_PATH  = CONFIG_DIR / "history.json"
 MATCHER_PATH  = CONFIG_DIR / "matcher.json"   # förberedda matcher (databas)
@@ -52,9 +52,9 @@ def _lista_presets():
     except Exception:
         return []
 
-MODELL_PATH = Path.home() / ".config" / "cull" / "modell.pkl"
-AKTIV_PATH    = Path.home() / ".cache" / "cull" / "aktiv_inlarning.json"
-KOR_HIST_PATH = Path.home() / ".config" / "cull" / "kor_historik.json"
+MODELL_PATH = Path.home() / ".config" / "dpt" / "modell.pkl"
+AKTIV_PATH    = Path.home() / ".cache" / "dpt" / "aktiv_inlarning.json"
+KOR_HIST_PATH = Path.home() / ".config" / "dpt" / "kor_historik.json"
 
 YOLO_MODELLER = ["yolov8n.pt", "yolo11s.pt", "yolo11m.pt"]
 SPORTER = ["Auto", "Handboll", "Fotboll", "Volleyboll", "Beachvolley",
@@ -201,7 +201,7 @@ def bygg_kommando(vals):
     if problem:
         return None, problem
 
-    cmd = [sys.executable, "-m", "cull.core", katalog]
+    cmd = [sys.executable, "-m", "dpt.core", katalog]
 
     if vals["ai"].get():
         cmd.append("--ai")
@@ -662,7 +662,7 @@ def visa_aktiv_inlarning(fönster):
                      "Kör en cull med personlig modell aktiv först.")
         return
 
-    from cull import inlarning
+    from dpt import inlarning
     sparade = inlarning.ladda_manuella_etiketter()
 
     topp = tk.Toplevel(fönster)
@@ -740,7 +740,7 @@ def visa_jamforelse(fönster, vals):
                      "Minst två osäkra bilder krävs. Kör en cull med modell först.")
         return
 
-    from cull import inlarning
+    from dpt import inlarning
     par = [(bilder[i], bilder[i + 1]) for i in range(0, len(bilder) - 1, 2)]
 
     topp = tk.Toplevel(fönster)
@@ -960,7 +960,7 @@ def main():
                 q = urllib.parse.quote(fraga + " fotbollsmatch OR handbollsmatch")
                 url = (f"https://api.duckduckgo.com/?q={q}"
                        f"&format=json&no_html=1&skip_disambig=1")
-                req = urllib.request.Request(url, headers={"User-Agent": "cull/1.0"})
+                req = urllib.request.Request(url, headers={"User-Agent": "dpt/1.0"})
                 with urllib.request.urlopen(req, timeout=5) as r:
                     data = _json.loads(r.read().decode("utf-8"))
                 heading = data.get("Heading", "").strip()
@@ -1133,7 +1133,7 @@ def main():
                  state="readonly").pack(side="left", padx=(6, 0))
 
     # Leveransprofil (snabbflöde: leveransfärdig JPG ur urvalet)
-    from cull.leverans import PROFILER as _LEVPROF
+    from dpt.leverans import PROFILER as _LEVPROF
     vals["leverans"] = tk.StringVar(value=saved.get("leverans", "(ingen)"))
     f_lev = ttk.Frame(f_katalog)
     f_lev.grid(row=14, column=0, columnspan=3, sticky="w", pady=(2, 0))
@@ -1311,8 +1311,8 @@ def main():
     _upd_garanti_b(saved.get("garanti_bevaka", 0))
 
     # --- Träning ---
-    OKAND_PATH = Path.home() / ".cache" / "cull" / "sport_okand.json"
-    SPORT_WEBB_CACHE = Path.home() / ".cache" / "cull" / "sport_cache.json"
+    OKAND_PATH = Path.home() / ".cache" / "dpt" / "sport_okand.json"
+    SPORT_WEBB_CACHE = Path.home() / ".cache" / "dpt" / "sport_cache.json"
     SPORTER_VAL = ["handboll", "fotboll", "volleyboll", "beachvolley",
                    "tennis", "innebandy"]
 
@@ -1433,7 +1433,7 @@ def main():
             vals["trana_rot"].set(rot)
         spara_trana_rot(rot)   # persistera tränings-roten (separat från match)
 
-        cmd = [sys.executable, "-m", "cull.inlarning", rot, "--max-neg", "100"]
+        cmd = [sys.executable, "-m", "dpt.inlarning", rot, "--max-neg", "100"]
         # Träna med SAMMA YOLO som cull → modellen kalibreras på rätt features.
         yv = vals["yolo"].get().strip()
         if yv:
@@ -1605,7 +1605,7 @@ def main():
     def kor(efter_mapp=None):
         if efter_mapp:
             # Efterbehandling: kör om leveranssteg på en redan exporterad mapp.
-            cmd = [sys.executable, "-m", "cull.core", efter_mapp, "--efterbehandla"]
+            cmd = [sys.executable, "-m", "dpt.core", efter_mapp, "--efterbehandla"]
             if vals["iptc"].get():
                 cmd.append("--iptc")
             rost = vals["roster"].get().strip()

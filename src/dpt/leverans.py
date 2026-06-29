@@ -213,7 +213,7 @@ def _claude_instagram_pick(kandidater, antal, matchinfo, modell, logg):
     try:
         import json
         import re
-        from cull import bildtext_ai
+        from dpt import bildtext_ai
         if not bildtext_ai.tillganglig():
             logg("  Claude-urval: API-nyckel saknas — använder geometriskt urval.")
             return None
@@ -257,7 +257,7 @@ def valj_instagram(jobb, profil, claude=False, claude_modell="claude-opus-4-8",
     """De profil['antal'] bästa jobben för Instagram: rankar på kvalitet ×
     4:5-lämplighet och, om claude, låter en Claude-redaktör välja ur kortlistan.
     Sätter '_bbox' på jobben (återanvänds vid export)."""
-    from cull import vision_lager, ai_lager
+    from dpt import vision_lager, ai_lager
     antal = profil.get("antal", 20)
     aspekt = profil.get("aspekt", (4, 5))
     # YOLO en gång → motivet = SKARPASTE personen (i fokus), inte ren saliens
@@ -302,7 +302,7 @@ def exportera(jobb, ut_dir, profil, logg=print, claude=False,
     """jobb: lista av {namn (utfil-stem), jpg (full preview-path), vinkel (gyro
     eller None), poang (för Instagram-urval)}. Skriver leverans-JPEG till ut_dir
     enligt profil. Returnerar listan med skapade filer."""
-    from cull import vision_lager
+    from dpt import vision_lager
     ut_dir = Path(ut_dir)
     ut_dir.mkdir(parents=True, exist_ok=True)
     aspekt = profil.get("aspekt")

@@ -13,8 +13,8 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from cull import gui, version as ver
-from cull.leverans import PROFILER as LEVPROF
+from dpt import gui, version as ver
+from dpt.leverans import PROFILER as LEVPROF
 
 # MediaPipe/TF Lite-skräp som loggas vid avstängning — filtreras bort.
 SKRAP = ("clearcut", "Source Location Trace", "portable_clearcut",
@@ -25,8 +25,8 @@ RAW_SUFFIX = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf"}
 VISA_SUFFIX = RAW_SUFFIX | {".jpg", ".jpeg"}
 
 # Okänd-sport (samma sökvägar som gui._klassificera_okanda).
-OKAND_PATH = Path.home() / ".cache" / "cull" / "sport_okand.json"
-SPORT_WEBB_CACHE = Path.home() / ".cache" / "cull" / "sport_cache.json"
+OKAND_PATH = Path.home() / ".cache" / "dpt" / "sport_okand.json"
+SPORT_WEBB_CACHE = Path.home() / ".cache" / "dpt" / "sport_cache.json"
 SPORTER_VAL = ["handboll", "fotboll", "volleyboll", "innebandy"]
 
 
@@ -384,7 +384,7 @@ class Api:
     def bild_antal(self, d):
         """Räknar riktiga bildfiler rekursivt i källmappen (för antals-/%-
         visning). Returnerar {antal, mappar, mapp}."""
-        from cull import core
+        from dpt import core
         mapp = gui.stadad_sokvag(d.get("katalog"))
         p = Path(mapp)
         if not mapp or not p.is_dir():
@@ -457,7 +457,7 @@ class Api:
                         "Se raderna ovan för orsak.", "err")
         self._js(f"window.dpcDone({'true' if rc == 0 else 'false'})")
 
-    # --- kör cull ------------------------------------------------------------
+    # --- kör dpt ------------------------------------------------------------
     def kor(self, d):
         # Behåll-enhet: "%" → andel (fraktion 0–1), annars topp (antal).
         if (d.get("behall_enhet") or "").strip() == "%":
@@ -484,7 +484,7 @@ class Api:
             rot = self.valj_mapp("") or str(gui.CONFIG_DIR)
             if rot != str(gui.CONFIG_DIR):
                 self._js(f"document.getElementById('trana_rot').value={json.dumps(rot)}")
-        cmd = [sys.executable, "-m", "cull.inlarning", rot, "--max-neg", "100"]
+        cmd = [sys.executable, "-m", "dpt.inlarning", rot, "--max-neg", "100"]
         yolo = (d.get("yolo") or "").strip()
         if yolo:
             cmd += ["--yolo", yolo]
@@ -495,7 +495,7 @@ class Api:
     def trana_dinsmak(self, d):
         """'Din smak'-modell: tränar enbart på dina märkta matcher (Lär av
         match), oblandat med arkivets Instagram-facit."""
-        cmd = [sys.executable, "-m", "cull.inlarning",
+        cmd = [sys.executable, "-m", "dpt.inlarning",
                "--bara-markt", "--max-neg", "100"]
         if d.get("estetik"):
             cmd += ["--estetik-motor", (d.get("estetik_motor") or "nima").lower()]
@@ -505,7 +505,7 @@ class Api:
     def modeller_lista(self, _d=None):
         """Listar modell-biblioteket (din_smak/arkiv) + vilken som är aktiv."""
         import pickle
-        from cull import inlarning as inl
+        from dpt import inlarning as inl
 
         def _meta(p):
             try:
@@ -535,7 +535,7 @@ class Api:
     def aktivera_modell(self, d):
         """Kopierar vald modell ur biblioteket till aktiva modell.pkl."""
         import shutil
-        from cull import inlarning as inl
+        from dpt import inlarning as inl
         fil = (d.get("modell_fil") or "").strip()
         src = inl.MODELLER_DIR / fil
         if not fil or not src.exists():
@@ -549,7 +549,7 @@ class Api:
     # --- Lär av match: märk cull-underlag med Photo Mechanic-urval -----------
     def facit_underlag_lista(self, _d=None):
         """Sparade tränings-underlag (ett per cull) + om de redan märkts."""
-        from cull import inlarning as inl
+        from dpt import inlarning as inl
         poster = []
         if inl.FACIT_UNDERLAG_DIR.is_dir():
             markta = ({p.name for p in inl.FACIT_MARKT_DIR.glob("*.json")}
@@ -571,7 +571,7 @@ class Api:
         """Märker ett underlag i två nivåer: behåll-mappen (ditt NEF-urval) →
         y=1, levererat (JPG-galleriet, valfritt) → samma men extra vikt. Resten
         y=0. Matchar på filstam → facit för träning."""
-        from cull import inlarning as inl
+        from dpt import inlarning as inl
         LEV_VIKT = 2.0
         EXIF = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf",
                 ".jpg", ".jpeg"}
@@ -629,7 +629,7 @@ class Api:
         if not mapp:
             self._js("window.dpcDone(false)")
             return
-        cmd = [sys.executable, "-m", "cull.core", mapp, "--efterbehandla"]
+        cmd = [sys.executable, "-m", "dpt.core", mapp, "--efterbehandla"]
         if d.get("iptc"):
             cmd.append("--iptc")
         if (d.get("roster") or "").strip():
@@ -679,7 +679,7 @@ class Api:
         if not mapp:
             self._js("window.dpcDone(false)")
             return
-        cmd = [sys.executable, "-m", "cull.nummer_pass", mapp]
+        cmd = [sys.executable, "-m", "dpt.nummer_pass", mapp]
         yolo = (d.get("yolo") or "").strip()
         if yolo:
             cmd += ["--yolo", yolo]
@@ -700,7 +700,7 @@ class Api:
         if not mapp:
             self._js("window.dpcDone(false)")
             return
-        cmd = [sys.executable, "-m", "cull.core", mapp, "--instagram-urval"]
+        cmd = [sys.executable, "-m", "dpt.core", mapp, "--instagram-urval"]
         if d.get("instagram_ai"):
             cmd.append("--instagram-ai")
         if (d.get("matchinfo") or "").strip():
@@ -719,7 +719,7 @@ class Api:
             return
         self._js("document.getElementById('snabb_kalla').value="
                  + json.dumps(mapp))
-        cmd = [sys.executable, "-m", "cull.core", mapp, "--snabbplock"]
+        cmd = [sys.executable, "-m", "dpt.core", mapp, "--snabbplock"]
         snabb_ut = (d.get("snabb_ut") or "").strip()
         if snabb_ut:
             cmd += ["--snabb-ut", snabb_ut]
@@ -741,7 +741,7 @@ class Api:
             return
         self._js("document.getElementById('rata_mapp').value="
                  + json.dumps(mapp))
-        cmd = [sys.executable, "-m", "cull.core", mapp, "--rata-upp"]
+        cmd = [sys.executable, "-m", "dpt.core", mapp, "--rata-upp"]
         threading.Thread(target=self._stream, args=(cmd,), daemon=True).start()
 
     # --- Story overlay (inbränd 9:16-JPEG) -----------------------------------
@@ -752,7 +752,7 @@ class Api:
             self._js("window.dpcStory(null)")
             return
 
-        from cull import story_overlay as so
+        from dpt import story_overlay as so
         mi      = so.tolka_matchinfo((d.get("matchinfo") or "").strip())
         moment  = (d.get("story_moment") or "avspark").strip()
         liga    = (d.get("story_liga") or "").strip()
@@ -791,7 +791,7 @@ class Api:
 
     def story_info(self, d):
         """Returnerar parsad matchdata + logga-status för Story-kortets live-visning."""
-        from cull import story_overlay as so
+        from dpt import story_overlay as so
         mi   = so.tolka_matchinfo((d.get("matchinfo") or "").strip())
         liga = (d.get("story_liga") or "").strip()
         avspark_val = (d.get("avspark") or "").strip()
@@ -815,9 +815,9 @@ class Api:
         }
 
     def ladda_upp_logga(self, d):
-        """Filväljare → kopierar PNG till ~/.config/cull/loggor/<normnamn>.png."""
+        """Filväljare → kopierar PNG till ~/.config/dpt/loggor/<normnamn>.png."""
         import webview, shutil
-        from cull import story_overlay as so
+        from dpt import story_overlay as so
         lag_namn = (d.get("logga_lag") or "").strip()
         if not lag_namn:
             return {"ok": False, "fel": "Inget lagnamn angivet"}
@@ -851,7 +851,7 @@ class Api:
 
     def loggor_lista(self, _d=None):
         """Returnerar alla loggor i biblioteket med miniatyr (base64)."""
-        from cull import story_overlay as so
+        from dpt import story_overlay as so
         so.LOGG_DIR.mkdir(parents=True, exist_ok=True)
         poster = []
         for p in sorted(so.LOGG_DIR.iterdir()):
@@ -863,7 +863,7 @@ class Api:
 
     def logga_slet(self, d):
         """Tar bort en logga ur biblioteket."""
-        from cull import story_overlay as so
+        from dpt import story_overlay as so
         fil = (d.get("logga_fil") or "").strip()
         if not fil:
             return {"ok": False}
@@ -881,7 +881,7 @@ class Api:
         farg = (d.get("hemma_farg") or "").strip()
 
         def jobb():
-            from cull import bildsvep as bs
+            from dpt import bildsvep as bs
             data = bs.generera(matchinfo, sport, farg, logg=self._work)
             if not data:
                 self._js("window.dpcBildsvep(null)")
@@ -935,7 +935,7 @@ class Api:
         sport = (d.get("sport") or "").strip()
 
         def jobb():
-            from cull import las_lineup as ll
+            from dpt import las_lineup as ll
             self._js('window.dpcMatchLoading("Läser arket med Claude vision…")')
             data = ll.las(path, sport, logg=self._work)
             if not data:
@@ -955,7 +955,7 @@ class Api:
         sport  = (d.get("sport") or "").strip()
 
         def jobb():
-            from cull import hamta_match as hm
+            from dpt import hamta_match as hm
             data = hm.hamta_spelare(lag_h, lag_b, sport, logg=self._work)
             if not data:
                 self._js("window.dpcMatch(null)")
@@ -983,7 +983,7 @@ class Api:
         sport  = (d.get("sport") or "").strip()
 
         def jobb():
-            from cull import hamta_match as hm
+            from dpt import hamta_match as hm
             data = hm.hamta_uppstallning(lag_h, lag_b, datum, sport,
                                          logg=self._work)
             if not data:
@@ -1009,7 +1009,7 @@ class Api:
 
     # --- Steg 2: manuell nummer-genomgång (luckorna) -------------------------
     def osakra_data(self):
-        from cull import nummer_pass, roster as roster_mod
+        from dpt import nummer_pass, roster as roster_mod
         try:
             data = json.loads(nummer_pass.OSAKRA_PATH.read_text(encoding="utf-8"))
             bilder = data.get("bilder", [])
@@ -1028,7 +1028,7 @@ class Api:
         return {"bilder": ut, "roster": roster}
 
     def osakra_satt(self, stam, nummer):
-        from cull import nummer_pass, roster as roster_mod
+        from dpt import nummer_pass, roster as roster_mod
         nummer = [str(n).strip() for n in (nummer or []) if str(n).strip().isdigit()]
         try:
             data = json.loads(nummer_pass.OSAKRA_PATH.read_text(encoding="utf-8"))
@@ -1075,7 +1075,7 @@ class Api:
             bilder = data.get("bilder", [])
         except Exception:
             bilder = []
-        from cull import inlarning
+        from dpt import inlarning
         sparade = inlarning.ladda_manuella_etiketter()
         ut = []
         for b in bilder:
@@ -1090,7 +1090,7 @@ class Api:
         return {"bilder": ut}
 
     def satt_etikett(self, stem, behall):
-        from cull import inlarning
+        from dpt import inlarning
         inlarning.spara_manuell_etikett(stem, bool(behall))
         return True
 
@@ -1114,7 +1114,7 @@ class Api:
         return {"par": par}
 
     def valj_par(self, vinst, forl):
-        from cull import inlarning
+        from dpt import inlarning
         inlarning.spara_par(vinst, forl)
         inlarning.spara_manuell_etikett(vinst, True)
         inlarning.spara_manuell_etikett(forl, False)

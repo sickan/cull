@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cull"
+name = "dpt"
 version = "2.1.0"
 description = "Dalecarlia Photo Tools — AI-driven culling av sportfoton (NEF)"
 readme = "README.md"
@@ -35,15 +35,15 @@ inlarning = [
 ]
 
 [project.scripts]
-cull = "cull.core:_main_safe"
-cull-gui = "cull.gui:main"
-cull-web = "cull.gui_web:main"
-cull-lar = "cull.inlarning:main"
-cull-nummer = "cull.nummer_pass:main"
+dpt     = "dpt.core:_main_safe"
+dpt-gui = "dpt.gui:main"
+dpt-web = "dpt.gui_web:main"
+dpt-lar = "dpt.inlarning:main"
+dpt-nummer = "dpt.nummer_pass:main"
 
 [tool.hatch.build.hooks.custom]
 path = "hatch_build.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cull"]
-artifacts = ["src/cull/assets/*.png", "src/cull/_buildstamp.py"]
+packages = ["src/dpt"]
+artifacts = ["src/dpt/assets/*.png", "src/dpt/_buildstamp.py"]

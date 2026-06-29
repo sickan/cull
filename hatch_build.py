@@ -1,7 +1,7 @@
 """Hatch-build-hook: stämplar in git-commit + tidpunkt vid varje paketering.
 
 Körs av hatchling under 'pipx install' / 'pip wheel'. Skriver
-src/cull/_buildstamp.py så att den installerade koden vet EXAKT vilket
+src/dpt/_buildstamp.py så att den installerade koden vet EXAKT vilket
 bygge den är — även när .git inte följer med in i venv:en."""
 
 import os
@@ -29,7 +29,7 @@ class CustomBuildHook(BuildHookInterface):
         except Exception:
             dirty = False
         tid = datetime.now().strftime("%Y-%m-%d %H:%M")
-        sokvag = os.path.join(root, "src", "cull", "_buildstamp.py")
+        sokvag = os.path.join(root, "src", "dpt", "_buildstamp.py")
         with open(sokvag, "w", encoding="utf-8") as f:
             f.write(
                 '"""Auto-genererad av hatch_build.py vid paketering. Committa ej."""\n'

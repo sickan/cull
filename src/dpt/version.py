@@ -9,7 +9,7 @@ APPNAMN = "Dalecarlia Photo Tools"
 def version():
     try:
         from importlib.metadata import version as _v
-        return _v("cull")
+        return _v("dpt")
     except Exception:
         return "0.0.0"
 

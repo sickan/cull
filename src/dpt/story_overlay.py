@@ -5,7 +5,7 @@ Full-bleed matchfoto + gradient-scrims + Saira-typografi.
 Sex tillståndstyper: Avspark, Halvtid, Slutresultat, Startelva, Målgörare, Nästa match.
 Tre teman: Hav (#8FD0E8), Sol (#F4C77A), Rosé (#EBB3C4).
 
-Loggor hämtas ur ~/.config/cull/loggor/<normaliserat>.(png|jpg).
+Loggor hämtas ur ~/.config/dpt/loggor/<normaliserat>.(png|jpg).
 Temaloggor hämtas ur assets/temaloggor/.
 Saknas laglogga → vitt monogram-badge med lagförkortningen.
 """
@@ -17,7 +17,7 @@ import tempfile
 ASSETS_DIR  = Path(__file__).parent / "assets"
 FONTS_DIR   = ASSETS_DIR / "fonts"
 TEMA_LOGG_DIR = ASSETS_DIR / "temaloggor"
-LOGG_DIR    = Path("~/.config/cull/loggor").expanduser()
+LOGG_DIR    = Path("~/.config/dpt/loggor").expanduser()
 
 CANVAS_W = 1080
 FORMAT_H  = {"9x16": 1920, "4x5": 1350}
@@ -146,7 +146,7 @@ def normera_lag(namn):
 
 
 def hitta_logga(lag_namn):
-    """Slår upp ~/.config/cull/loggor/<normaliserat>.(png|jpg)."""
+    """Slår upp ~/.config/dpt/loggor/<normaliserat>.(png|jpg)."""
     if not lag_namn:
         return None
     norm = normera_lag(lag_namn)
@@ -887,7 +887,7 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
 # ---------------------------------------------------------------------------
 
 def hitta_logga_namn():
-    """Lista befintliga loggor i ~/.config/cull/loggor/."""
+    """Lista befintliga loggor i ~/.config/dpt/loggor/."""
     LOGG_DIR.mkdir(parents=True, exist_ok=True)
     return sorted(p.stem for p in LOGG_DIR.iterdir()
                   if p.suffix.lower() in (".png", ".jpg", ".jpeg"))

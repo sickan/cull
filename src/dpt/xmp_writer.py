@@ -51,7 +51,7 @@ def las_preset(path):
 
 XMP_MALL = """\
 <?xpacket begin='\xef\xbb\xbf' id='W5M0MpCehiHzreSzNTczkc9d'?>
-<x:xmpmeta xmlns:x='adobe:ns:meta/' x:xmptk='cull'>
+<x:xmpmeta xmlns:x='adobe:ns:meta/' x:xmptk='dpt'>
   <rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>
     <rdf:Description rdf:about=''
       xmlns:crs='http://ns.adobe.com/camera-raw-settings/1.0/'
@@ -116,7 +116,7 @@ def brus_av_iso(iso):
 
 PRESET_MALL = """\
 <?xpacket begin='\xef\xbb\xbf' id='W5M0MpCehiHzreSzNTczkc9d'?>
-<x:xmpmeta xmlns:x='adobe:ns:meta/' x:xmptk='cull'>
+<x:xmpmeta xmlns:x='adobe:ns:meta/' x:xmptk='dpt'>
   <rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>
     <rdf:Description rdf:about=''
       xmlns:crs='http://ns.adobe.com/camera-raw-settings/1.0/'

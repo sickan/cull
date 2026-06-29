@@ -1,14 +1,14 @@
 """
-cull — teknisk culling av NEF-uppdrag (macOS)
+dpt — teknisk culling av NEF-uppdrag (macOS)
 
 Användning:
-  cull <katalog>
-  cull <katalog> --topp 30 --ai --hemma-farg blå --bevaka 9,11
-  cull <katalog> --avspark 19:00 --xmp --rapport
+  dpt <katalog>
+  dpt <katalog> --topp 30 --ai --hemma-farg blå --bevaka 9,11
+  dpt <katalog> --avspark 19:00 --xmp --rapport
 
 Krav: exiftool (brew install exiftool)
-AI:   pipx inject cull ultralytics mediapipe
-OCR:  pipx inject cull easyocr
+AI:   pipx inject dpt ultralytics mediapipe
+OCR:  pipx inject dpt easyocr
 """
 
 import argparse
@@ -32,8 +32,8 @@ try:
 except ImportError:
     sys.exit("Saknar opencv/numpy.")
 
-from cull import bas, matchfas, xmp_writer
-from cull.ai_lager import FARG_NAMN
+from dpt import bas, matchfas, xmp_writer
+from dpt.ai_lager import FARG_NAMN
 
 # Stödda raw-format. Alla går genom samma exiftool-preview-väg (-JpgFromRaw/
 # -PreviewImage), så stöd = att filtypen tas med i filfiltret.
@@ -120,16 +120,16 @@ SNABB_ANDEL = 0.4
 # Cache för baspoäng — nyckel = sökväg|mtime|storlek (oföränderlig per NEF)
 import json
 # v2: baspoängen innehåller nu motljus + rörelse-riktning → ny cachefil.
-BAS_CACHE_PATH = Path.home() / ".cache" / "cull" / "bas_cache_v2.json"
+BAS_CACHE_PATH = Path.home() / ".cache" / "dpt" / "bas_cache_v2.json"
 
 # Aktiv inlärning: osäkra bilder (modell-p nära 0.5) sparas för manuell etikett.
-AKTIV_PATH = Path.home() / ".cache" / "cull" / "aktiv_inlarning.json"
-AKTIV_THUMB_DIR = Path.home() / ".cache" / "cull" / "aktiv_thumbs"
+AKTIV_PATH = Path.home() / ".cache" / "dpt" / "aktiv_inlarning.json"
+AKTIV_THUMB_DIR = Path.home() / ".cache" / "dpt" / "aktiv_thumbs"
 # Körningshistorik med poängfördelning (för histogram + jämför körningar).
-KOR_HIST_PATH = Path.home() / ".config" / "cull" / "kor_historik.json"
+KOR_HIST_PATH = Path.home() / ".config" / "dpt" / "kor_historik.json"
 # Träningsunderlag per cull: feature-vektorer för HELA tagningen (ingen bild),
 # som "Lär av match" senare märker med ditt Photo Mechanic-urval → facit.
-FACIT_UNDERLAG_DIR = Path.home() / ".config" / "cull" / "facit_underlag"
+FACIT_UNDERLAG_DIR = Path.home() / ".config" / "dpt" / "facit_underlag"
 
 
 def _spara_aktiv_inlarning(resultat, katalog, n=12):
@@ -187,7 +187,7 @@ def _spara_facit_underlag(resultat, args, sport):
     modellen/AI körts (annars saknas riktiga features). Liten JSON per cull."""
     if not resultat:
         return
-    from cull import inlarning
+    from dpt import inlarning
     namn = (args.ut_namn or Path(args.katalog).name or "match").strip()
     # Källkatalogens namn i filnamnet → flera kort/kameror (t.ex. 277Z8_01 vs
     # 170D5_01) för SAMMA match blir separata underlag i stället för att skriva
@@ -244,14 +244,14 @@ def spara_bas_cache(cache):
 # face/NIMA på nytt. Används bara när personlig modell är aktiv — då påverkar
 # inte --hemma-farg/--bevaka poängen, så cachen kan inte ge fel resultat.
 import hashlib as _hashlib
-from cull.clip_lager import CLIP_FEATURES as _CLIP_FEATURES
-AI_CACHE_PATH = Path.home() / ".cache" / "cull" / "ai_cache.json"
+from dpt.clip_lager import CLIP_FEATURES as _CLIP_FEATURES
+AI_CACHE_PATH = Path.home() / ".cache" / "dpt" / "ai_cache.json"
 AI_FEAT_KEYS = ["armar", "klunga", "boll", "personer", "vast",
                 "bakgrund", "keeper", "ogonkontakt", "nima"] + _CLIP_FEATURES
 
 
 def _ai_feat_version():
-    from cull import inlarning
+    from dpt import inlarning
     return _hashlib.sha1("|".join(inlarning.FEATURES).encode()).hexdigest()[:8]
 
 
@@ -362,12 +362,12 @@ def _uppratningsvinkel(jpg_path, img, roll=None):
     global _VISION_OK
     if _VISION_OK is None:
         try:
-            from cull import vision_lager
+            from dpt import vision_lager
             _VISION_OK = vision_lager.tillganglig()
         except Exception:
             _VISION_OK = False
     if jpg_path and _VISION_OK:
-        from cull import vision_lager
+        from dpt import vision_lager
         v = vision_lager.horisont_vinkel(jpg_path)
         if v is not None:
             return v, "vision"
@@ -436,7 +436,7 @@ def _rakt_bevarande(jpg_path, vinkel):
     if not jpg_path or abs(vinkel) < 0.05:
         return vinkel, False
     try:
-        from cull import vision_lager, leverans
+        from dpt import vision_lager, leverans
         bb = vision_lager.saliens_bbox(jpg_path)
         if bb is None:
             return vinkel, False
@@ -721,7 +721,7 @@ def _nummer_index():
 def kor_efterbehandling(args, katalog):
     """Kör om leveranssteg på en redan exporterad mapp — ingen culling, ingen
     modell-laddning. Opt-in: --iptc/--roster, --husstil/--exp-bump."""
-    from cull import xmp_writer
+    from dpt import xmp_writer
     filer = sorted(p for p in katalog.iterdir()
                    if p.suffix.lower() in BILD_SUFFIX
                    and not p.name.startswith("._"))
@@ -736,7 +736,7 @@ def kor_efterbehandling(args, katalog):
     # IPTC + roster (spelarnamn per bild ur cachade tröjnummer).
     if args.iptc:
         rost = {}
-        from cull import roster as _roster
+        from dpt import roster as _roster
         if args.roster:
             rost = _roster.las_roster(args.roster)
             idx = _nummer_index()
@@ -751,7 +751,7 @@ def kor_efterbehandling(args, katalog):
                       "(tröjnummer ur cachen).", flush=True)
         bildtext_per_fil = None
         if args.bildtext_ai:
-            from cull import bildtext_ai
+            from dpt import bildtext_ai
             idx = _nummer_index()
             with tempfile.TemporaryDirectory() as tmp:
                 raw = [f for f in filer if f.suffix.lower() in RAW_SUFFIX]
@@ -806,7 +806,7 @@ def kor_efterbehandling(args, katalog):
     # Leveransfärdiga JPEG (snabbflöde) enligt profil — gyro-rätat, skalat,
     # komprimerat. IPTC + ev. AI-bildtext bakas in på leverans-JPEG:erna.
     if args.leverans:
-        from cull import leverans as _lev
+        from dpt import leverans as _lev
         prof = _lev.PROFILER.get(args.leverans.upper())
         if not prof:
             print(f"  Okänd leveransprofil: {args.leverans} "
@@ -862,7 +862,7 @@ def kor_instagram_urval(args, katalog):
     injicerar en 4:5-crop i sidecaren. LR öppnar dem 4:5 men redigerbart, med
     all annan framkallning som redan ligger i sidecarsen bevarad."""
     import shutil
-    from cull import leverans as _lev, xmp_writer
+    from dpt import leverans as _lev, xmp_writer
     kat = Path(katalog)
     if not kat.is_dir():
         print(f"Hittar inte mappen: {kat}", flush=True)
@@ -925,7 +925,7 @@ def kor_snabbplock(args, katalog):
     låst i kameran och ta in dem direkt i Lightroom. Läs MEDAN kortet sitter i:
     uchg-flaggan följer inte med en kopia, så den måste läsas på källan."""
     import shutil
-    from cull import xmp_writer
+    from dpt import xmp_writer
     kat = Path(katalog)
     nef_filer = sorted(p for p in kat.iterdir()
                        if p.suffix.lower() in BILD_SUFFIX
@@ -1054,7 +1054,7 @@ def kor_rata_upp(args, katalog):
 
 
 def main():
-    ap = argparse.ArgumentParser(prog="cull",
+    ap = argparse.ArgumentParser(prog="dpt",
                                  description="Teknisk culling av NEF-filer.")
     ap.add_argument("katalog", nargs="?")   # valfri vid --limpa-ai-cache
     ap.add_argument("--topp",       type=int,   default=None)
@@ -1161,7 +1161,7 @@ def main():
                     help="töm AI-feature-cachen och avsluta")
     args = ap.parse_args()
 
-    from cull import version as ver
+    from dpt import version as ver
     print(ver.etikett(), flush=True)
 
     if args.limpa_ai_cache:
@@ -1239,7 +1239,7 @@ def main():
     bevaka = set(args.bevaka.split(",")) if args.bevaka else set()
 
     # Personlig modell (om tränad) — kräver AI-features för alla bilder.
-    from cull import inlarning
+    from dpt import inlarning
     modell_paket = None if args.ingen_modell else inlarning.ladda_modell()
 
     if args.sport:
@@ -1273,7 +1273,7 @@ def main():
     # --- Ladda AI-modeller ---
     modeller = None
     if args.ai:
-        from cull import ai_lager
+        from dpt import ai_lager
         print("Laddar AI-modeller…", flush=True)
         _t = time.perf_counter()
         # Vision-motorn behöver ingen pyiqa-modell (estetik räknas ur filerna).
@@ -1284,7 +1284,7 @@ def main():
                                            med_ogon=bool(modell_paket),
                                            med_clip=bool(modell_paket))
         if args.estetik and args.estetik_motor == "vision":
-            from cull import vision_lager as _vis
+            from dpt import vision_lager as _vis
             print(f"Vision-estetik: {'aktivt (Neural Engine)' if _vis.tillganglig() else 'EJ tillgängligt'}",
                   flush=True)
         tider_fas["Modell-laddning"] = time.perf_counter() - _t
@@ -1509,7 +1509,7 @@ def main():
             # CLIP-text-features (sport-specifika prompter) byggs en gång.
             clip_text = None
             if modeller.get("clip") is not None:
-                from cull import clip_lager
+                from dpt import clip_lager
                 try:
                     clip_text = clip_lager.bygg_text_features(
                         modeller["clip"], sport)
@@ -1517,7 +1517,7 @@ def main():
                     clip_text = None
 
             if imgs:
-                from cull.ai_lager import bonus_batch
+                from dpt.ai_lager import bonus_batch
                 ai_tider = {}
                 # OCR (tröjnummer) bara på topp-kandidaterna efter baspoäng —
                 # täcker slututvalet med marginal utan att OCR:a hela uppdraget.
@@ -1535,7 +1535,7 @@ def main():
                 # Vision-estetik → nima-slot, skalad −1..1 → 1..10 (jämförbar
                 # med NIMA för percentil-bonusen och modellen).
                 if args.estetik and args.estetik_motor == "vision":
-                    from cull import vision_lager as _vis
+                    from dpt import vision_lager as _vis
                     _tv = time.perf_counter()
                     _vtot = len(ref_lista)
                     for _vi, r in enumerate(ref_lista, 1):
@@ -1570,8 +1570,8 @@ def main():
             # avkodade bilder — gratis på kalla körningar; vid cache-träff
             # avkodas ett litet stickprov ur kandidaterna.
             try:
-                from cull import vitbalans
-                from cull.bas import _cascades
+                from dpt import vitbalans
+                from dpt.bas import _cascades
                 prov_imgs = list(imgs)
                 if not prov_imgs:
                     for r in kandidater[:20]:
@@ -1805,8 +1805,8 @@ def main():
         iso_karta = {}
         delta_k = delta_tint = 0.0
         if args.xmp_justering:
-            from cull import vitbalans as _vb
-            from cull.bas import _cascades as _csc
+            from dpt import vitbalans as _vb
+            from dpt.bas import _cascades as _csc
             ansikte_c, _ = _csc()
             delta_k, delta_tint = _vb.korrigering(vb_rapport)
             env_wb = os.environ.copy()
@@ -1927,7 +1927,7 @@ def main():
             kopierade = [ut_dir / r["fil"].name for r in valda]
             rost = {}
             if args.roster:
-                from cull import roster as _roster
+                from dpt import roster as _roster
                 rost = _roster.las_roster(args.roster)
                 if rost:
                     namn_per_fil = {ut_dir / r["fil"].name:
@@ -1938,8 +1938,8 @@ def main():
                           "(via OCR) + AI matchar resten.", flush=True)
             bildtext_per_fil = None
             if args.bildtext_ai:
-                from cull import roster as _roster
-                from cull import bildtext_ai
+                from dpt import roster as _roster
+                from dpt import bildtext_ai
                 lag = (args.ut_namn or "").split(" - ")[0].strip()
                 jobb = [{"id": ut_dir / r["fil"].name,
                          "jpg": r.get("_jpg"),
@@ -1974,7 +1974,7 @@ def main():
         # Leveransfärdiga JPEG (snabbflöde) enligt profil — gyro-rätat, skalat,
         # komprimerat, med IPTC/bildtext på leverans-JPEG:erna.
         if args.leverans:
-            from cull import leverans as _lev
+            from dpt import leverans as _lev
             prof = _lev.PROFILER.get(args.leverans.upper())
             if not prof:
                 print(f"  Okänd leveransprofil: {args.leverans} "

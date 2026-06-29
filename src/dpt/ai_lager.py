@@ -50,7 +50,7 @@ _POSE_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/"
     "pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
 )
-_POSE_MODEL_PATH = Path.home() / ".cache" / "cull" / "pose_landmarker_lite.task"
+_POSE_MODEL_PATH = Path.home() / ".cache" / "dpt" / "pose_landmarker_lite.task"
 
 
 def _hamta_pose_modell():
@@ -81,7 +81,7 @@ _FACE_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/"
     "face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 )
-_FACE_MODEL_PATH = Path.home() / ".cache" / "cull" / "face_landmarker.task"
+_FACE_MODEL_PATH = Path.home() / ".cache" / "dpt" / "face_landmarker.task"
 
 
 def _hamta_face_modell():
@@ -120,20 +120,20 @@ def _valj_device():
 
 
 def _yolo_sokvag(namn):
-    """Absolut sökväg till YOLO-vikten i cull:s skrivbara modellcache
-    (~/.cache/cull/models/). Oberoende av CWD — annars försöker ultralytics
+    """Absolut sökväg till YOLO-vikten i dpt:s skrivbara modellcache
+    (~/.cache/dpt/models/). Oberoende av CWD — annars försöker ultralytics
     ladda ner till nuvarande mapp, som är skrivskyddad när appen startas från
     skrivbordet. Kopierar in en befintlig vikt om cachen saknar den."""
     import shutil
     if os.path.isabs(namn):
         return namn
-    cache = Path.home() / ".cache" / "cull" / "models"
+    cache = Path.home() / ".cache" / "dpt" / "models"
     cache.mkdir(parents=True, exist_ok=True)
     mål = cache / namn
     if mål.exists():
         return str(mål)
     for kand in (Path.home() / "Claude" / namn,
-                 Path.home() / "Claude" / "cull" / namn,
+                 Path.home() / "Claude" / "dpt" / namn,
                  Path.cwd() / namn):
         try:
             if kand.exists():
@@ -172,7 +172,7 @@ def ladda_modeller(med_ocr=False, n_pose=None, yolo_modell="yolo11s.pt",
                     modeller["device"] = "cpu"
         print(f"YOLO ({yolo_modell}): aktivt ({modeller['device'].upper()})")
     except ImportError:
-        sys.exit("AI-läget kräver ultralytics: pipx inject cull ultralytics")
+        sys.exit("AI-läget kräver ultralytics: pipx inject dpt ultralytics")
 
     try:
         pool = []
@@ -200,7 +200,7 @@ def ladda_modeller(med_ocr=False, n_pose=None, yolo_modell="yolo11s.pt",
                 modeller["ocr"] = easyocr.Reader(["en"], gpu=False, verbose=False)
             print("EasyOCR: aktivt")
         except ImportError:
-            print("EasyOCR saknas: pipx inject cull easyocr  (tröjnummer inaktiverat)")
+            print("EasyOCR saknas: pipx inject dpt easyocr  (tröjnummer inaktiverat)")
 
     if med_estetik:
         try:
@@ -210,12 +210,12 @@ def ladda_modeller(med_ocr=False, n_pose=None, yolo_modell="yolo11s.pt",
                     "nima", device=modeller["device"])
             print(f"NIMA-estetik: aktivt ({modeller['device'].upper()})")
         except ImportError:
-            print("NIMA saknas: pipx inject cull pyiqa  (estetik inaktiverat)")
+            print("NIMA saknas: pipx inject dpt pyiqa  (estetik inaktiverat)")
         except Exception as e:
             print(f"NIMA: ej tillgängligt ({e})")
 
     if med_clip:
-        from cull import clip_lager
+        from dpt import clip_lager
         modeller["clip"] = clip_lager.ladda_clip(device=modeller["device"])
 
     return modeller
@@ -837,7 +837,7 @@ def bonus_batch(imgs_bgr, resultat_refs, modeller, hemma_farg, bevaka,
             if clip_pak is not None and clip_text is not None:
                 t0 = perf_counter()
                 try:
-                    from cull.clip_lager import clip_features_batch
+                    from dpt.clip_lager import clip_features_batch
                     clip_vals = clip_features_batch(batch_imgs, clip_pak, clip_text)
                 except Exception:
                     clip_vals = None

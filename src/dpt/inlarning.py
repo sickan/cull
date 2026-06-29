@@ -16,10 +16,10 @@ Features per bild = samma signaler som culling använder (skärpa, exponering,
 ansikten, ögon, firande, klunga, boll, spelarantal, NIMA), normaliserade per
 uppdrag (z-score). En klassbalanserad logistisk regression tränas.
 
-  cull-lar "~/Dropbox/Export/Sport/2026"
-  cull-lar "~/Dropbox/Export/Sport/2026" --rapport --max-neg 120
+  dpt-lar "~/Dropbox/Export/Sport/2026"
+  dpt-lar "~/Dropbox/Export/Sport/2026" --rapport --max-neg 120
 
-Modellen sparas i ~/.config/cull/modell.pkl och används automatiskt av cull.
+Modellen sparas i ~/.config/dpt/modell.pkl och används automatiskt av dpt.
 """
 
 import argparse
@@ -45,23 +45,23 @@ import numpy as np
 # träningsloggen förblir läsbar.
 warnings.filterwarnings("ignore", category=FutureWarning, module="sklearn")
 
-from cull import bas
+from dpt import bas
 
-MODELL_PATH = Path.home() / ".config" / "cull" / "modell.pkl"
+MODELL_PATH = Path.home() / ".config" / "dpt" / "modell.pkl"
 # Modell-bibliotek: namngivna kopior (din_smak / arkiv) för modell-växlaren.
-MODELLER_DIR = Path.home() / ".config" / "cull" / "modeller"
-TRAIN_CACHE_DIR = Path.home() / ".cache" / "cull" / "train_features"
-OKAND_PATH = Path.home() / ".cache" / "cull" / "sport_okand.json"
+MODELLER_DIR = Path.home() / ".config" / "dpt" / "modeller"
+TRAIN_CACHE_DIR = Path.home() / ".cache" / "dpt" / "train_features"
+OKAND_PATH = Path.home() / ".cache" / "dpt" / "sport_okand.json"
 # Raw-format som extraheras via exiftool-preview (samma som core.RAW_SUFFIX).
 _RAW_SUFFIX = {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf"}
 
 # Aktiv inlärning: användarens manuella behåll/förkasta-etiketter (stem → 0/1).
-MANUELLA_PATH = Path.home() / ".config" / "cull" / "manuella_etiketter.json"
+MANUELLA_PATH = Path.home() / ".config" / "dpt" / "manuella_etiketter.json"
 
 # Facit från Photo Mechanic-urval: cullen sparar feature-underlag per match
 # (FACIT_UNDERLAG_DIR), "Lär av match" märker det med urvalet → FACIT_MARKT_DIR.
-FACIT_UNDERLAG_DIR = Path.home() / ".config" / "cull" / "facit_underlag"
-FACIT_MARKT_DIR = Path.home() / ".config" / "cull" / "facit_markt"
+FACIT_UNDERLAG_DIR = Path.home() / ".config" / "dpt" / "facit_underlag"
+FACIT_MARKT_DIR = Path.home() / ".config" / "dpt" / "facit_markt"
 
 
 def hitta_uppdrag_markt():
@@ -116,7 +116,7 @@ def spara_manuell_etikett(stem, behall):
 
 
 # Parvisa preferenser (vinnare slår förlorare) för learning-to-rank.
-PAR_PATH = Path.home() / ".config" / "cull" / "par_etiketter.json"
+PAR_PATH = Path.home() / ".config" / "dpt" / "par_etiketter.json"
 
 
 def ladda_par():
@@ -155,7 +155,7 @@ def _applicera_manuella(uppdrag):
 
 # Kanonisk feature-ordning — måste vara identisk i träning och inferens.
 # Nya features läggs ALLTID sist (annars feltolkas sparade modeller).
-from cull.clip_lager import CLIP_FEATURES
+from dpt.clip_lager import CLIP_FEATURES
 FEATURES = ["skarpa", "exp", "ansikten", "ogon", "armar", "klunga",
             "boll", "personer", "nima",
             "motljus", "rorelse", "bakgrund", "keeper", "ogonkontakt"
@@ -196,7 +196,7 @@ _LAG_SUFFIX = [("dff", "fotboll"), (" fc", "fotboll"), ("fc ", "fotboll"),
                (" hf", "handboll"), ("hf ", "handboll"),
                (" vk", "volleyboll"), ("ibk", "innebandy")]
 
-_SPORT_WEBB_CACHE_PATH = Path.home() / ".cache" / "cull" / "sport_cache.json"
+_SPORT_WEBB_CACHE_PATH = Path.home() / ".cache" / "dpt" / "sport_cache.json"
 
 # Webb-nyckelord per sport (engelska + svenska, söks i DuckDuckGo-svar)
 _SPORT_WEBB_NYCKELORD = {
@@ -301,7 +301,7 @@ def _sport_via_webb(namn, timeout=6):
            + urllib.parse.quote(fraga)
            + "&format=json&no_html=1&skip_disambig=1")
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "cull/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "dpt/1.0"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.loads(r.read().decode("utf-8"))
         text = " ".join([
@@ -386,7 +386,7 @@ def _frame_id(namn):
 
 
 def _ai(yolo_modell="yolo11s.pt", estetik_motor="nima"):
-    from cull import ai_lager
+    from dpt import ai_lager
     # Vision-motorn behöver ingen pyiqa-modell (estetik räknas ur bilderna).
     return ai_lager.ladda_modeller(yolo_modell=yolo_modell,
                                    med_estetik=(estetik_motor != "vision"),
@@ -505,7 +505,7 @@ def features_for_uppdrag(items, modeller, env, progress_namn="", sport=None,
                          estetik_motor="nima"):
     """items = [(path, label)]. Returnerar (X, y, stems) med råa features."""
     import cv2
-    from cull.ai_lager import (_bonus_fran_yolo, _kör_pose, _kör_face,
+    from dpt.ai_lager import (_bonus_fran_yolo, _kör_pose, _kör_face,
                                ogonkontakt_score, nima_poang)
     yolo = modeller["yolo"]
     dev = modeller["device"]
@@ -515,7 +515,7 @@ def features_for_uppdrag(items, modeller, env, progress_namn="", sport=None,
     clip_pak = modeller.get("clip")
     clip_text = None
     if clip_pak is not None:
-        from cull import clip_lager
+        from dpt import clip_lager
         clip_text = clip_lager.bygg_text_features(clip_pak, sport)
 
     X, y = [], []
@@ -539,7 +539,7 @@ def features_for_uppdrag(items, modeller, env, progress_namn="", sport=None,
         yres_list = yolo(bilder, verbose=False, device=dev)
         clip_rows = None
         if clip_text is not None:
-            from cull.clip_lager import clip_features_batch, CLIP_FEATURES
+            from dpt.clip_lager import clip_features_batch, CLIP_FEATURES
             try:
                 clip_rows = clip_features_batch(bilder, clip_pak, clip_text)
             except Exception:
@@ -547,7 +547,7 @@ def features_for_uppdrag(items, modeller, env, progress_namn="", sport=None,
         # NIMA batchat på MPS (ett pass per batch) istället för per bild.
         nima_vals = None
         if nima is not None:
-            from cull.ai_lager import nima_poang_batch
+            from dpt.ai_lager import nima_poang_batch
             try:
                 nima_vals = nima_poang_batch(bilder, nima, dev)
             except Exception:
@@ -560,7 +560,7 @@ def features_for_uppdrag(items, modeller, env, progress_namn="", sport=None,
             fres = _kör_face((img, face)) if face is not None else None
             b = _bonus_fran_yolo(img, yres, pres, modeller, None, set())
             if estetik_motor == "vision":
-                from cull import vision_lager
+                from dpt import vision_lager
                 sc = vision_lager.estetik_poang_bgr(img)
                 nv = (sc[0] + 1.0) * 4.5 + 1.0 if sc is not None else 0.0
             elif nima_vals is not None and j < len(nima_vals):
@@ -1006,7 +1006,7 @@ def poangsatt_med_modell(resultat, paket, sport=None):
 
 def main():
     ap = argparse.ArgumentParser(
-        prog="cull-lar",
+        prog="dpt-lar",
         description="Träna personlig rankningsmodell på dina levererade val.")
     ap.add_argument("root", nargs="?",
                     help="rotkatalog (export- eller FilterPix-träd)")

@@ -22,16 +22,16 @@ import sys
 import tempfile
 from pathlib import Path
 
-from cull import ai_lager, roster as roster_mod
-from cull.core import (BILD_SUFFIX, RAW_SUFFIX, JPG_SUFFIX,
+from dpt import ai_lager, roster as roster_mod
+from dpt.core import (BILD_SUFFIX, RAW_SUFFIX, JPG_SUFFIX,
                        extrahera_previews_batch)
 
-NUMMER_CACHE_PATH = Path.home() / ".cache" / "cull" / "nummer_cache.json"
-OSAKRA_PATH = Path.home() / ".cache" / "cull" / "osakra_nummer.json"
+NUMMER_CACHE_PATH = Path.home() / ".cache" / "dpt" / "nummer_cache.json"
+OSAKRA_PATH = Path.home() / ".cache" / "dpt" / "osakra_nummer.json"
 # Manuellt bekräftade nummer (Steg 2) — grundsanning för framtida träning.
-FACIT_PATH = Path.home() / ".cache" / "cull" / "nummer_facit.json"
+FACIT_PATH = Path.home() / ".cache" / "dpt" / "nummer_facit.json"
 # Beständiga previews för luckorna (överlever /tmp-städning → Steg 2 hittar dem).
-OSAKRA_THUMBS = Path.home() / ".cache" / "cull" / "osakra_thumbs"
+OSAKRA_THUMBS = Path.home() / ".cache" / "dpt" / "osakra_thumbs"
 
 # Grov kostnadsuppskattning per Claude-anrop (nedskalad bild + kort svar).
 KR_PER_CLAUDE = 0.10        # ~1 cent → ~0,10 kr, medvetet i överkant
@@ -92,7 +92,7 @@ COLOR_TROSKEL = 0.10   # andel hemma-färg i utsnittet för att räknas som hemm
 
 def _hemma_andel_crop(crop_bgr, farg_namn):
     """Andel hemma-färgade pixlar i ett spelar-utsnitt (för lag-bestämning)."""
-    from cull.ai_lager import FARG_HSV
+    from dpt.ai_lager import FARG_HSV
     import numpy as np
     import cv2
     if not farg_namn or farg_namn not in FARG_HSV or crop_bgr.size == 0:
@@ -175,7 +175,7 @@ def _namn_unikt(nr, lag_roster):
 
 def _claude_nummer(jpg_path, roster_text, hemma_farg, modell):
     """Frågar Claude vilka tröjnummer som tydligt syns. Returnerar lista siffror."""
-    from cull import bildtext_ai
+    from dpt import bildtext_ai
     b64 = bildtext_ai._bild_base64(jpg_path)
     if not b64:
         return []
@@ -276,7 +276,7 @@ def kor(katalog, yolo_modell="yolo11m.pt", roster_path="", hemma_farg="",
     # 2) Ladda YOLO + EasyOCR (ingen pose/clip behövs här).
     modeller = ai_lager.ladda_modeller(med_ocr=True, n_pose=1, yolo_modell=yolo_modell)
     if modeller.get("ocr") is None:
-        logg("⚠ EasyOCR saknas — kan inte läsa nummer. (pipx inject cull easyocr)")
+        logg("⚠ EasyOCR saknas — kan inte läsa nummer. (pipx inject dpt easyocr)")
         return
     import cv2
     yolo = modeller["yolo"]
@@ -314,7 +314,7 @@ def kor(katalog, yolo_modell="yolo11m.pt", roster_path="", hemma_farg="",
 
     # 3) Claude-fallback (opt-in, takbegränsad) på luckorna.
     if claude and luckor:
-        from cull import bildtext_ai
+        from dpt import bildtext_ai
         if not bildtext_ai.tillganglig():
             logg("  Claude-fallback: ANTHROPIC_API_KEY/anthropic saknas — hoppar.")
         else:
