@@ -19,20 +19,9 @@ from datetime import datetime
 from pathlib import Path
 
 from dpt2.data import db
+from dpt2.data.store import slug_id, spelare_id, iso_datum
 
 CONFIG_GAMMAL = Path.home() / ".config" / "dpt"
-
-_TRANS = str.maketrans({
-    "å": "a", "ä": "a", "ö": "o", "Å": "a", "Ä": "a", "Ö": "o",
-    "é": "e", "è": "e", "ü": "u", "ø": "o", "æ": "ae", "ß": "ss",
-})
-
-
-def slug_id(s):
-    """Ascii-slug för stabila id (Malmö FF → malmo-ff)."""
-    s = (s or "").translate(_TRANS).lower()
-    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
-    return s or "okand"
 
 
 def _normera_lag(namn):
@@ -49,19 +38,6 @@ def _hitta_logga(namn, loggor_dir):
         if p.exists():
             return str(p)
     return None
-
-
-def _iso_datum(s):
-    s = (s or "").strip()
-    if re.fullmatch(r"\d{8}", s):                 # YYYYMMDD → ISO
-        return f"{s[0:4]}-{s[4:6]}-{s[6:8]}"
-    return s or None
-
-
-def _spelare_id(lag_id, sp):
-    nr = (sp.get("nr") or "").strip()
-    namn = slug_id(sp.get("namn", ""))
-    return f"{lag_id}-{nr}-{namn}" if nr else f"{lag_id}-{namn}"
 
 
 def _kamera_ur_stem(stem):
@@ -106,7 +82,7 @@ def migrera_matcher(conn, config_dir):
             "INSERT OR REPLACE INTO matchen"
             "(id,tavling_id,sport,lag_hemma_id,lag_borta_id,datum,tid,arena,"
             " resultat,status,skapad) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            (mid, tav_id, sport, hemma_id, borta_id, _iso_datum(mm.get("datum")),
+            (mid, tav_id, sport, hemma_id, borta_id, iso_datum(mm.get("datum")),
              mm.get("tid") or None, mm.get("arena") or None,
              (mm.get("resultat") or None), status,
              mm.get("skapad") or datetime.now().isoformat(timespec="seconds")))
@@ -116,7 +92,7 @@ def migrera_matcher(conn, config_dir):
             lid = hemma_id if sida == "hemma" else borta_id if sida == "borta" else None
             if not lid:
                 continue
-            sid = _spelare_id(lid, sp)
+            sid = spelare_id(lid, sp)
             conn.execute(
                 "INSERT OR IGNORE INTO spelare(id,lag_id,nr,namn,handle,info) "
                 "VALUES(?,?,?,?,?,?)",

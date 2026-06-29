@@ -74,5 +74,82 @@ class TestCullJobb(unittest.TestCase):
             store.spara_cull_jobb(self.c, urval_id="finns-ej", verktyg="ai")
 
 
+class TestMatchCRUD(unittest.TestCase):
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.match = {
+            "lag_hemma": "Malmö FF", "lag_borta": "Kristianstads DFF",
+            "datum": "2026-06-27", "tid": "14:00", "arena": "Eleda Stadion",
+            "liga": "OBOS Damallsvenskan", "sport": "fotboll", "resultat": "6-0",
+            "spelare": [
+                {"nr": "1", "namn": "Zecira Musovic", "lag": "hemma",
+                 "handle": "@zm", "info": "MV", "start": True},
+                {"nr": "9", "namn": "Mia", "lag": "hemma", "start": False},
+                {"nr": "7", "namn": "Borta-spelare", "lag": "borta"},
+            ],
+        }
+
+    def test_round_trip(self):
+        mid = store.spara_match(self.c, self.match)
+        m = store.hamta_match(self.c, mid)
+        self.assertEqual(m["lag_hemma"], "Malmö FF")
+        self.assertEqual(m["liga"], "OBOS Damallsvenskan")
+        self.assertEqual(m["status"], "avslutad")            # resultat satt
+        self.assertEqual(len(m["spelare"]), 3)
+        zm = next(p for p in m["spelare"] if p["nr"] == "1")
+        self.assertEqual(zm["lag"], "hemma")                 # sida härledd ur lag_id
+        self.assertEqual(zm["handle"], "@zm")
+        self.assertTrue(zm["start"])
+        borta = next(p for p in m["spelare"] if p["nr"] == "7")
+        self.assertEqual(borta["lag"], "borta")
+
+    def test_delad_slug_id(self):
+        store.spara_match(self.c, self.match)
+        self.assertIsNotNone(store.hamta_lag(self.c, "malmo-ff"))   # samma som migrera
+        self.assertIsNotNone(store.hamta_lag(self.c, "kristianstads-dff"))
+
+    def test_status_harleds(self):
+        m = dict(self.match); m["resultat"] = ""; m["datum"] = "2027-01-01"
+        mid = store.spara_match(self.c, m)
+        self.assertEqual(store.hamta_match(self.c, mid)["status"], "kommande")
+
+    def test_redigera_tar_bort_spelare(self):
+        mid = store.spara_match(self.c, self.match)
+        m = store.hamta_match(self.c, mid)
+        m["spelare"] = [p for p in m["spelare"] if p["nr"] != "9"]   # ta bort Mia
+        store.spara_match(self.c, m)
+        kvar = store.hamta_match(self.c, mid)["spelare"]
+        self.assertEqual(len(kvar), 2)
+        self.assertNotIn("9", {p["nr"] for p in kvar})
+
+    def test_lista_matcher(self):
+        store.spara_match(self.c, self.match)
+        rad = store.lista_matcher(self.c)[0]
+        self.assertEqual(rad["lag_hemma"], "Malmö FF")
+        self.assertEqual(rad["liga"], "OBOS Damallsvenskan")
+
+    def test_radera(self):
+        mid = store.spara_match(self.c, self.match)
+        store.radera_match(self.c, mid)
+        self.assertIsNone(store.hamta_match(self.c, mid))
+
+
+class TestLagTavling(unittest.TestCase):
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+
+    def test_upsert_lag_uppdaterar_utan_att_nolla(self):
+        lid = store.upsert_lag(self.c, "Malmö FF", instagram="@malmoff")
+        store.upsert_lag(self.c, "Malmö FF", logga="/x.png")   # bara logga
+        lag = store.hamta_lag(self.c, lid)
+        self.assertEqual(lag["instagram"], "@malmoff")          # bevarat
+        self.assertEqual(lag["logga"], "/x.png")                # tillagt
+
+    def test_upsert_tavling(self):
+        tid = store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll")
+        self.assertEqual(tid, "obos-damallsvenskan")
+        self.assertEqual(len(store.lista_tavlingar(self.c)), 1)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
