@@ -167,6 +167,22 @@ class TestLagTavling(unittest.TestCase):
         self.assertEqual(tid, "obos-damallsvenskan")
         self.assertEqual(len(store.lista_tavlingar(self.c)), 1)
 
+    def test_upsert_tavling_uppdaterar(self):
+        store.upsert_tavling(self.c, "EM Volley", sport="fotboll", typ="liga")
+        store.upsert_tavling(self.c, "EM Volley", sport="volleyboll", typ="masterskap")
+        t = store.lista_tavlingar(self.c)[0]
+        self.assertEqual(t["sport"], "volleyboll")     # uppdaterat
+        self.assertEqual(t["typ"], "masterskap")
+        self.assertEqual(len(store.lista_tavlingar(self.c)), 1)   # ingen dubblett
+
+    def test_radera_lag_och_tavling(self):
+        store.upsert_lag(self.c, "HK Malmö")
+        store.upsert_tavling(self.c, "Handbollsligan", sport="handboll")
+        store.radera_lag(self.c, "hk-malmo")
+        store.radera_tavling(self.c, "handbollsligan")
+        self.assertEqual(store.lista_lag(self.c), [])
+        self.assertEqual(store.lista_tavlingar(self.c), [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

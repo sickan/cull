@@ -89,6 +89,24 @@ export async function sparaLag(lag) {
   return wait({ ok: true, id: lag.id || 'nytt' })
 }
 
+export async function sparaTavling(tavling) {
+  const api = brygga()
+  if (api) return api.spara_tavling(tavling)
+  return wait({ ok: true, id: tavling.id || 'ny' })
+}
+
+export async function raderaLag(id) {
+  const api = brygga()
+  if (api) return api.radera_lag(id)
+  return wait({ ok: true })
+}
+
+export async function raderaTavling(id) {
+  const api = brygga()
+  if (api) return api.radera_tavling(id)
+  return wait({ ok: true })
+}
+
 export async function hamtaTrupp(matchId) {
   const api = brygga()
   if (api) return api.hamta_trupp(matchId)

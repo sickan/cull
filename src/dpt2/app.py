@@ -81,6 +81,22 @@ class Api:
             stall_tredje=lag.get("stall_tredje"))
         return {"ok": bool(lid), "id": lid}
 
+    def spara_tavling(self, tavling):
+        tid = store.upsert_tavling(
+            self.conn, tavling.get("namn", ""),
+            sport=(tavling.get("sport") or "fotboll"),
+            typ=(tavling.get("typ") or "liga"), ort=tavling.get("ort"),
+            arena=tavling.get("arena"), kalender=bool(tavling.get("kalender")))
+        return {"ok": bool(tid), "id": tid}
+
+    def radera_lag(self, id):
+        store.radera_lag(self.conn, id)
+        return {"ok": True}
+
+    def radera_tavling(self, id):
+        store.radera_tavling(self.conn, id)
+        return {"ok": True}
+
     # ── Meta ─────────────────────────────────────────────────────────────────
     def info(self):
         return {"db": str(self.db_path),

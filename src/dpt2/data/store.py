@@ -160,21 +160,41 @@ def lista_lag(conn):
 
 def upsert_tavling(conn, namn, *, sport, typ="liga", logga=None, fran=None,
                    till=None, ort=None, arena=None, kalender=False):
+    """Skapar/uppdaterar en tävling (id = slug av namnet). Uppdaterar typ/sport/
+    ort/arena/logga/kalender på en befintlig. Returnerar tävlings-id."""
     if not (namn or "").strip():
         return None
     tid = slug_id(namn)
-    if conn.execute("SELECT 1 FROM tavling WHERE id=?", (tid,)).fetchone() is None:
+    fin = conn.execute("SELECT 1 FROM tavling WHERE id=?", (tid,)).fetchone()
+    if fin is None:
         conn.execute(
             "INSERT INTO tavling(id,typ,sport,namn,fran,till,ort,arena,logga,"
             "kalender) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (tid, typ, sport, namn, fran, till, ort, arena, logga,
              1 if kalender else 0))
-        conn.commit()
+    else:
+        conn.execute(
+            "UPDATE tavling SET typ=?,sport=?,fran=?,till=?,ort=?,arena=?,"
+            "kalender=? WHERE id=?",
+            (typ, sport, fran, till, ort, arena, 1 if kalender else 0, tid))
+        if logga:
+            conn.execute("UPDATE tavling SET logga=? WHERE id=?", (logga, tid))
+    conn.commit()
     return tid
 
 
 def lista_tavlingar(conn):
     return [dict(r) for r in conn.execute("SELECT * FROM tavling ORDER BY namn")]
+
+
+def radera_lag(conn, lag_id):
+    conn.execute("DELETE FROM lag WHERE id=?", (lag_id,))
+    conn.commit()
+
+
+def radera_tavling(conn, tavling_id):
+    conn.execute("DELETE FROM tavling WHERE id=?", (tavling_id,))
+    conn.commit()
 
 
 # ── Match (normalisering ↔ rekonstruktion av inline-spelare) ─────────────────
