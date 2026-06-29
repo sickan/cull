@@ -42,8 +42,20 @@
     utkast = await hamtaMatch(m.id)
   }
 
+  function nyMatch() {
+    const tmp = {
+      id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande',
+      resultat: '', sport: '', lag_hemma: '', lag_borta: '', liga: '',
+    }
+    matcher = [tmp, ...matcher]
+    oppen = tmp.id
+    utkast = { ...tmp, spelare: [] }
+  }
+
   async function spara() {
-    await sparaMatch(utkast)
+    const m = { ...utkast }
+    if (typeof m.id === 'string' && m.id.startsWith('ny-')) delete m.id
+    await sparaMatch(m)
     matcher = await listaMatcher()
     oppen = null; utkast = null
   }
@@ -132,7 +144,7 @@
     {/each}
   {/if}
 
-  <button class="ny">+ Ny match</button>
+  <button class="ny" on:click={nyMatch}>+ Ny match</button>
 </div>
 
 <style>

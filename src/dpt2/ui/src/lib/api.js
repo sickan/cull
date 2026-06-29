@@ -39,6 +39,18 @@ const MOCK_FULL = {
   },
 }
 
+const MOCK_LAG = [
+  { id: 'fc-rosengard', namn: 'FC Rosengård', instagram: '@fcrosengard', hemsida: 'fcrosengard.se', logga: null, stall_hemma: '#8b1f3a', stall_borta: '#ffffff', stall_tredje: '#16181c' },
+  { id: 'eskilstuna-united', namn: 'Eskilstuna United', instagram: '@eskilstunaunited', hemsida: 'eskilstunaunited.se', logga: null, stall_hemma: '#1d2a6b', stall_borta: '#ffd200', stall_tredje: '' },
+  { id: 'malmo-ff', namn: 'Malmö FF', instagram: '@malmoff_dam', hemsida: 'malmoff.se', logga: null, stall_hemma: '#8fb7de', stall_borta: '#ffffff', stall_tredje: '' },
+  { id: 'hk-malmo', namn: 'HK Malmö', instagram: '@hkmhandboll', hemsida: '', logga: null, stall_hemma: '#0a2342', stall_borta: '#e23', stall_tredje: '' },
+]
+
+const MOCK_TAVLINGAR = [
+  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', ort: '', arena: '', kalender: 0 },
+  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', ort: '', arena: '', kalender: 0 },
+]
+
 const wait = (v) => new Promise((r) => setTimeout(() => r(v), 60))
 
 export async function listaMatcher() {
@@ -57,6 +69,24 @@ export async function sparaMatch(match) {
   const api = brygga()
   if (api) return api.spara_match(match)
   return wait({ ok: true, id: match.id || 'ny' })
+}
+
+export async function listaLag() {
+  const api = brygga()
+  if (api) return api.lista_lag()
+  return wait(structuredClone(MOCK_LAG))
+}
+
+export async function listaTavlingar() {
+  const api = brygga()
+  if (api) return api.lista_tavlingar()
+  return wait(structuredClone(MOCK_TAVLINGAR))
+}
+
+export async function sparaLag(lag) {
+  const api = brygga()
+  if (api) return api.spara_lag(lag)
+  return wait({ ok: true, id: lag.id || 'nytt' })
 }
 
 export const ARMOCK = !brygga()

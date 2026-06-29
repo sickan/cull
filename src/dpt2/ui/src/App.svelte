@@ -1,6 +1,7 @@
 <script>
   import Rail from './lib/Rail.svelte'
   import Matcher from './panels/Matcher.svelte'
+  import Lag from './panels/Lag.svelte'
   import { ARMOCK } from './lib/api.js'
 
   let aktiv = 'matcher'
@@ -31,6 +32,8 @@
 
     {#if aktiv === 'matcher'}
       <Matcher />
+    {:else if aktiv === 'lag'}
+      <Lag />
     {:else}
       <div class="platshallare">
         <h1 class="scd">{NAMN[aktiv]}</h1>
