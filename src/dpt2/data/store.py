@@ -190,6 +190,51 @@ def jobb_for_urval(conn, urval_id):
         "SELECT * FROM cull_jobb WHERE urval_id=? ORDER BY skapad", (urval_id,))]
 
 
+# ── Modeller (din smak / arkiv / hybrid — modell-växlaren) ───────────────────
+def _modell_dict(r):
+    d = dict(r)
+    d["features"] = json.loads(d["features"]) if d.get("features") else None
+    d["aktiv"] = bool(d.get("aktiv"))
+    return d
+
+
+def lista_modeller(conn):
+    """Modellbiblioteket, nyast först (aktiv = vald i växlaren)."""
+    return [_modell_dict(r) for r in conn.execute(
+        "SELECT * FROM modell ORDER BY sparad DESC")]
+
+
+def aktiv_modell(conn):
+    r = conn.execute("SELECT * FROM modell WHERE aktiv=1 LIMIT 1").fetchone()
+    return _modell_dict(r) if r else None
+
+
+def satt_aktiv_modell(conn, modell_id):
+    """Väljer EN aktiv modell (nollar övriga). Returnerar True om den fanns."""
+    r = conn.execute("SELECT 1 FROM modell WHERE id=?", (modell_id,)).fetchone()
+    if not r:
+        return False
+    conn.execute("UPDATE modell SET aktiv=0")
+    conn.execute("UPDATE modell SET aktiv=1 WHERE id=?", (modell_id,))
+    conn.commit()
+    return True
+
+
+def spara_modell(conn, *, typ, pkl_path, features=None, n_uppdrag=None,
+                 n_valda=None, aktiv=False, sparad=None, id=None):
+    """Registrerar en tränad modell (pickle som filref). Returnerar id."""
+    mid = id or ny_id()
+    conn.execute(
+        "INSERT OR REPLACE INTO modell"
+        "(id,typ,aktiv,pkl_path,features,n_uppdrag,n_valda,sparad) "
+        "VALUES(?,?,?,?,?,?,?,?)",
+        (mid, typ, 1 if aktiv else 0, pkl_path,
+         json.dumps(features, ensure_ascii=False) if features is not None else None,
+         n_uppdrag, n_valda, sparad or _nu()))
+    conn.commit()
+    return mid
+
+
 # ── Lag & tävlingar (register) ───────────────────────────────────────────────
 def upsert_lag(conn, namn, *, logga=None, instagram=None, hemsida=None,
                stall_hemma=None, stall_borta=None, stall_tredje=None):

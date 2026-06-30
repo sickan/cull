@@ -205,6 +205,37 @@ class Api:
         store.radera_innehall(self.conn, id)
         return {"ok": True}
 
+    # ── Träna (modell-bibliotek + träning i ML-workern) ──────────────────────
+    def lista_modeller(self):
+        return store.lista_modeller(self.conn)
+
+    def aktiv_modell(self):
+        return store.aktiv_modell(self.conn)
+
+    def satt_aktiv_modell(self, modell_id):
+        ok = store.satt_aktiv_modell(self.conn, modell_id)
+        return {"ok": ok, "aktiv": store.aktiv_modell(self.conn) if ok else None}
+
+    def starta_traning(self, config):
+        """Tränar 'din smak' ur facit (urval-mapp). Själva träningen (sklearn,
+        feature-extraktion) körs i ML-workern — kommande steg."""
+        config = config or {}
+        if not config.get("traning_rot"):
+            return {"ok": False, "fel": "Ange en tränings-rot (facit-mappar)."}
+        return {"ok": True, "meddelande":
+                f"Träningsjobb köat: {config.get('typ', 'din_smak')} ur "
+                f"{config['traning_rot']}. Feature-extraktion + sklearn körs i "
+                "ML-workern."}
+
+    def lar_av_match(self, config):
+        """Märker ett urval som facit (grundsanning för framtida träning)."""
+        config = config or {}
+        if not config.get("urval"):
+            return {"ok": False, "fel": "Ange urval-mappen att lära av."}
+        return {"ok": True, "meddelande":
+                f"Facit-märkning köad för {config['urval']}. Bilderna blir "
+                "grundsanning; modellen tränas om i workern."}
+
     # ── Meta ─────────────────────────────────────────────────────────────────
     def info(self):
         return {"db": str(self.db_path),

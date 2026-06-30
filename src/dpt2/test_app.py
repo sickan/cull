@@ -174,6 +174,25 @@ class TestApi(unittest.TestCase):
         self.assertFalse(self.api.exportera_innehall({"titel": "X"}, "")["ok"])
 
 
+    def test_modell_bibliotek_och_vaxling(self):
+        a = store.spara_modell(self.api.conn, typ="din_smak",
+                               pkl_path="/m/dinsmak.pkl", n_uppdrag=18, aktiv=True)
+        b = store.spara_modell(self.api.conn, typ="arkiv", pkl_path="/m/arkiv.pkl")
+        self.assertEqual(len(self.api.lista_modeller()), 2)
+        self.assertEqual(self.api.aktiv_modell()["id"], a)
+        res = self.api.satt_aktiv_modell(b)
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["aktiv"]["id"], b)
+        self.assertEqual(self.api.aktiv_modell()["id"], b)   # bara en aktiv
+        self.assertFalse(self.api.satt_aktiv_modell("finns-inte")["ok"])
+
+    def test_starta_traning_och_lar_av_match(self):
+        self.assertFalse(self.api.starta_traning({})["ok"])
+        self.assertTrue(self.api.starta_traning({"traning_rot": "/facit"})["ok"])
+        self.assertFalse(self.api.lar_av_match({})["ok"])
+        self.assertTrue(self.api.lar_av_match({"urval": "/urval"})["ok"])
+
+
 class TestGallringConfig(unittest.TestCase):
     def test_bilder_ger_topp(self):
         g = _gallring_av_config({"behall_enhet": "bilder", "behall_varde": 40,

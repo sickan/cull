@@ -257,4 +257,41 @@ export async function raderaInnehall(id) {
   return wait({ ok: true })
 }
 
+// Modeller (din smak / arkiv / hybrid — modell-växlaren). Muteras lokalt i mock.
+let MOCK_MODELLER = [
+  { id: 'm_dinsmak', typ: 'din_smak', aktiv: true, pkl_path: '~/.config/dpt2/modeller/din_smak.pkl',
+    n_uppdrag: 18, n_valda: 642, sparad: '2026-06-29 22:10' },
+  { id: 'm_arkiv', typ: 'arkiv', aktiv: false, pkl_path: '~/.config/dpt2/modeller/arkiv.pkl',
+    n_uppdrag: 51, n_valda: 2104, sparad: '2026-05-12 18:00' },
+  { id: 'm_hybrid', typ: 'hybrid', aktiv: false, pkl_path: '~/.config/dpt2/modeller/hybrid.pkl',
+    n_uppdrag: 69, n_valda: 2746, sparad: '2026-06-20 09:30' },
+]
+
+export async function listaModeller() {
+  const api = brygga()
+  if (api) return api.lista_modeller()
+  return wait(structuredClone(MOCK_MODELLER))
+}
+
+export async function sattAktivModell(id) {
+  const api = brygga()
+  if (api) return api.satt_aktiv_modell(id)
+  MOCK_MODELLER = MOCK_MODELLER.map((m) => ({ ...m, aktiv: m.id === id }))
+  return wait({ ok: true, aktiv: MOCK_MODELLER.find((m) => m.id === id) })
+}
+
+export async function startaTraning(config) {
+  const api = brygga()
+  if (api) return api.starta_traning(config)
+  if (!config.traning_rot) return wait({ ok: false, fel: 'Ange en tränings-rot.' })
+  return wait({ ok: true, meddelande: `Träningsjobb köat: ${config.typ} (mock).` })
+}
+
+export async function larAvMatch(config) {
+  const api = brygga()
+  if (api) return api.lar_av_match(config)
+  if (!config.urval) return wait({ ok: false, fel: 'Ange urval-mappen.' })
+  return wait({ ok: true, meddelande: `Facit-märkning köad för ${config.urval} (mock).` })
+}
+
 export const ARMOCK = !brygga()
