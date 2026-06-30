@@ -11,8 +11,10 @@ Saknas dist/ faller den tillbaka på Vite-dev-servern (localhost:5173).
 
 from pathlib import Path
 
+import json
+
 from dpt2.data import db, store
-from dpt2.tjanster import matchhamtning, leverera, bildsvep
+from dpt2.tjanster import matchhamtning, leverera, bildsvep, korning
 from dpt2.publicering import astro_export as AX
 
 UI_DIR = Path(__file__).parent / "ui"
@@ -27,6 +29,7 @@ class Api:
     def __init__(self, db_path=None):
         self.db_path = Path(db_path) if db_path else db.DB_DEFAULT
         self.conn = db.oppna(self.db_path, check_same_thread=False)
+        self._logg = []      # buffrade worker-events (Logg-panelen)
 
     # ── Matcher ──────────────────────────────────────────────────────────────
     def lista_matcher(self):
@@ -235,6 +238,21 @@ class Api:
         return {"ok": True, "meddelande":
                 f"Facit-märkning köad för {config['urval']}. Bilderna blir "
                 "grundsanning; modellen tränas om i workern."}
+
+    # ── Logg (worker-events via strukturerad IPC) ────────────────────────────
+    def hamta_logg(self):
+        return self._logg
+
+    def rensa_logg(self):
+        self._logg = []
+        return {"ok": True}
+
+    def kor_demo_jobb(self, steg=5):
+        """Kör demo-jobbet i worker-processen och buffrar dess JSON-events —
+        bevisar IPC-röret (samma väg de tunga jobben tar). Returnerar events."""
+        r = korning.kor_subprocess(["demo", json.dumps({"steg": int(steg)})],
+                                   lyssnare=self._logg.append)
+        return {"ok": r["returkod"] == 0, "events": r["events"]}
 
     # ── Meta ─────────────────────────────────────────────────────────────────
     def info(self):

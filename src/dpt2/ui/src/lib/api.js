@@ -294,4 +294,39 @@ export async function larAvMatch(config) {
   return wait({ ok: true, meddelande: `Facit-märkning köad för ${config.urval} (mock).` })
 }
 
+// Logg — worker-events (strukturerad IPC). Buffras i appen; mock genererar ström.
+let MOCK_LOGG = []
+
+function mockDemoEvents(steg) {
+  const ev = [{ typ: 'start', jobb: 'demo' }]
+  for (let i = 1; i <= steg; i++) {
+    ev.push({ typ: 'progress', andel: +(i / steg).toFixed(3), text: `Steg ${i}/${steg}` })
+    ev.push({ typ: 'logg', niva: 'info', text: `bearbetar enhet ${i}` })
+  }
+  ev.push({ typ: 'logg', niva: 'ok', text: 'demo färdig' })
+  ev.push({ typ: 'klar', resultat: { steg } })
+  return ev
+}
+
+export async function hamtaLogg() {
+  const api = brygga()
+  if (api) return api.hamta_logg()
+  return wait(structuredClone(MOCK_LOGG))
+}
+
+export async function rensaLogg() {
+  const api = brygga()
+  if (api) return api.rensa_logg()
+  MOCK_LOGG = []
+  return wait({ ok: true })
+}
+
+export async function korDemoJobb(steg = 5) {
+  const api = brygga()
+  if (api) return api.kor_demo_jobb(steg)
+  const events = mockDemoEvents(steg)
+  MOCK_LOGG = [...MOCK_LOGG, ...events]
+  return wait({ ok: true, events })
+}
+
 export const ARMOCK = !brygga()

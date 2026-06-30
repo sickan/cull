@@ -193,6 +193,18 @@ class TestApi(unittest.TestCase):
         self.assertTrue(self.api.lar_av_match({"urval": "/urval"})["ok"])
 
 
+    def test_logg_kor_demo_buffrar_och_rensar(self):
+        res = self.api.kor_demo_jobb(3)
+        self.assertTrue(res["ok"])
+        typer = [e["typ"] for e in res["events"]]
+        self.assertEqual(typer[0], "start")
+        self.assertIn("klar", typer)
+        # buffrat i appen → Logg-panelen kan hämta
+        self.assertEqual(self.api.hamta_logg(), res["events"])
+        self.api.rensa_logg()
+        self.assertEqual(self.api.hamta_logg(), [])
+
+
 class TestGallringConfig(unittest.TestCase):
     def test_bilder_ger_topp(self):
         g = _gallring_av_config({"behall_enhet": "bilder", "behall_varde": 40,
