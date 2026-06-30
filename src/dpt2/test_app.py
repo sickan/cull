@@ -145,6 +145,35 @@ class TestApi(unittest.TestCase):
         self.assertFalse(res["ok"])           # ingen nyckel → snäll fallback
 
 
+    def test_innehall_spara_forhandsgranska_lista(self):
+        data = {"typ": "match", "titel": "Malmö FF – KDFF", "resultat": "6-0",
+                "malskyttar": "Musovic 12', Persson 45'", "body": "Referat.",
+                "figurer": [{"bild": "1.jpg", "alt": "jubel", "bildtext": "Segern"}]}
+        pre = self.api.forhandsgranska_innehall(data)
+        self.assertEqual(pre["slug"], "malmo-ff-kdff")
+        self.assertIn("titel: Malmö FF – KDFF", pre["md"])
+        self.assertIn("![jubel](1.jpg)", pre["md"])
+        res = self.api.spara_innehall(data)
+        self.assertTrue(res["ok"])
+        lst = self.api.lista_innehall()
+        self.assertEqual(lst[0]["frontmatter"]["malskyttar"], ["Musovic 12'", "Persson 45'"])
+
+    def test_innehall_exportera_skriver_md(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        data = {"typ": "event", "titel": "Sommarcup 2026", "body": "Text."}
+        res = self.api.exportera_innehall(data, d)
+        self.assertTrue(res["ok"])
+        self.assertTrue(res["path"].endswith("sommarcup-2026.md"))
+        from pathlib import Path
+        self.assertIn("typ: event", Path(res["path"]).read_text(encoding="utf-8"))
+        # markerat publicerat i datalagret
+        self.assertTrue(self.api.lista_innehall()[0]["publicerad"])
+
+    def test_innehall_export_utan_katalog(self):
+        self.assertFalse(self.api.exportera_innehall({"titel": "X"}, "")["ok"])
+
+
 class TestGallringConfig(unittest.TestCase):
     def test_bilder_ger_topp(self):
         g = _gallring_av_config({"behall_enhet": "bilder", "behall_varde": 40,

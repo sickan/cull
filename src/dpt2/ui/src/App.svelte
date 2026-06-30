@@ -5,6 +5,7 @@
   import Gallra from './panels/Gallra.svelte'
   import Leverera from './panels/Leverera.svelte'
   import Publicera from './panels/Publicera.svelte'
+  import Innehall from './panels/Innehall.svelte'
   import { ARMOCK } from './lib/api.js'
 
   let aktiv = 'matcher'
@@ -44,6 +45,8 @@
       <Leverera />
     {:else if aktiv === 'publicera'}
       <Publicera />
+    {:else if aktiv === 'innehall'}
+      <Innehall />
     {:else}
       <div class="platshallare">
         <h1 class="scd">{NAMN[aktiv]}</h1>

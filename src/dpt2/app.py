@@ -13,6 +13,7 @@ from pathlib import Path
 
 from dpt2.data import db, store
 from dpt2.tjanster import matchhamtning, leverera, bildsvep
+from dpt2.publicering import astro_export as AX
 
 UI_DIR = Path(__file__).parent / "ui"
 DIST_INDEX = UI_DIR / "dist" / "index.html"
@@ -168,10 +169,71 @@ class Api:
                 f"· {config.get('format', '9x16')}. Rendering sker i ML-workern "
                 "när källfotot valts."}
 
+    # ── Innehåll (CMS → Astro-export) ────────────────────────────────────────
+    def lista_innehall(self, typ=None):
+        return store.lista_innehall(self.conn, typ)
+
+    def forhandsgranska_innehall(self, data):
+        """Genererar .md (utan att skriva) för förhandsvisning."""
+        _fm, _b, slug, md = _innehall_md(data or {})
+        return {"slug": slug, "md": md}
+
+    def spara_innehall(self, data):
+        data = data or {}
+        fm, body, _slug, _md = _innehall_md(data)
+        iid = store.spara_innehall(
+            self.conn, typ=data.get("typ", "match"),
+            match_id=data.get("match_id") or None, status=fm.get("status"),
+            frontmatter=fm, body=body, id=data.get("id") or None)
+        return {"ok": True, "id": iid}
+
+    def exportera_innehall(self, data, export_dir):
+        """Sparar innehållet och skriver <export_dir>/<slug>.md i sajt-repot."""
+        if not export_dir:
+            return {"ok": False, "fel": "Ange en export-katalog."}
+        data = data or {}
+        fm, body, slug, md = _innehall_md(data)
+        iid = store.spara_innehall(
+            self.conn, typ=data.get("typ", "match"),
+            match_id=data.get("match_id") or None, status=fm.get("status"),
+            frontmatter=fm, body=body, id=data.get("id") or None)
+        ut = AX.skriv_md(md, export_dir, slug)
+        store.satt_export_path(self.conn, iid, str(ut))
+        return {"ok": True, "id": iid, "path": str(ut)}
+
+    def radera_innehall(self, id):
+        store.radera_innehall(self.conn, id)
+        return {"ok": True}
+
     # ── Meta ─────────────────────────────────────────────────────────────────
     def info(self):
         return {"db": str(self.db_path),
                 "schemaversion": db.schemaversion(self.conn)}
+
+
+def _innehall_md(data):
+    """CMS-fält (UI-form) → (frontmatter-dict, body, slug, komplett .md).
+    malskyttar kan vara kommaseparerad sträng; figurer = lista {bild,alt,bildtext}
+    läggs sist i brödtexten."""
+    malskyttar = data.get("malskyttar")
+    if isinstance(malskyttar, str):
+        malskyttar = [m.strip() for m in malskyttar.split(",") if m.strip()]
+    fm = {
+        "typ": data.get("typ", "match"),
+        "titel": data.get("titel", ""),
+        "datum": data.get("datum") or None,
+        "liga": data.get("liga") or None,
+        "arena": data.get("arena") or None,
+        "resultat": data.get("resultat") or None,
+        "status": data.get("status") or None,
+        "hero": data.get("hero") or None,
+        "heroPosition": data.get("heroPosition") or None,
+        "pixieset": data.get("pixieset") or None,
+        "malskyttar": malskyttar or None,
+    }
+    figur_md = AX.figurer_markdown(data.get("figurer"))
+    body = "\n\n".join(p for p in ((data.get("body") or "").rstrip(), figur_md) if p)
+    return fm, body, AX.slugga(data.get("titel", "")), AX.render_md(fm, body)
 
 
 def _gallring_av_config(config):

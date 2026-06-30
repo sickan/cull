@@ -198,4 +198,63 @@ export async function skapaStory(config) {
   return wait({ ok: true, meddelande: `Story-val sparat: ${config.moment} · ${config.tema} · ${config.format} (mock).` })
 }
 
+// Innehåll (CMS → Astro-export). Muteras lokalt i mock-läge.
+let MOCK_INNEHALL = [
+  { id: 'i_match1', typ: 'match', status: 'avslutad', publicerad: true,
+    export_path: '/sajt/src/content/match/malmo-ff-kristianstads-dff.md',
+    frontmatter: { titel: 'Malmö FF – Kristianstads DFF', resultat: '6-0' } },
+]
+
+function mockMd(data) {
+  const fm = ['---', `typ: ${data.typ || 'match'}`, `titel: "${data.titel || ''}"`]
+  if (data.datum) fm.push(`datum: ${data.datum}`)
+  if (data.resultat) fm.push(`resultat: "${data.resultat}"`)
+  if (data.hero) fm.push(`hero: ${data.hero}`)
+  if (data.pixieset) fm.push(`pixieset: ${data.pixieset}`)
+  const mal = (typeof data.malskyttar === 'string'
+    ? data.malskyttar.split(',').map((s) => s.trim()).filter(Boolean)
+    : data.malskyttar) || []
+  if (mal.length) { fm.push('malskyttar:'); mal.forEach((m) => fm.push(`  - ${m}`)) }
+  fm.push('---', '')
+  const figs = (data.figurer || []).filter((f) => f.bild)
+    .map((f) => `![${f.alt || ''}](${f.bild})` + (f.bildtext ? `\n*${f.bildtext}*` : ''))
+  return fm.join('\n') + '\n' + [data.body || '', figs.join('\n\n')].filter(Boolean).join('\n\n') + '\n'
+}
+
+const slug = (t) => (t || 'innehall').toLowerCase()
+  .replace(/å|ä/g, 'a').replace(/ö/g, 'o').replace(/&/g, 'och')
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'innehall'
+
+export async function listaInnehall(typ = null) {
+  const api = brygga()
+  if (api) return api.lista_innehall(typ)
+  const l = typ ? MOCK_INNEHALL.filter((i) => i.typ === typ) : MOCK_INNEHALL
+  return wait(structuredClone(l))
+}
+
+export async function forhandsgranskaInnehall(data) {
+  const api = brygga()
+  if (api) return api.forhandsgranska_innehall(data)
+  return wait({ slug: slug(data.titel), md: mockMd(data) })
+}
+
+export async function sparaInnehall(data) {
+  const api = brygga()
+  if (api) return api.spara_innehall(data)
+  return wait({ ok: true, id: data.id || 'i_ny' })
+}
+
+export async function exporteraInnehall(data, exportDir) {
+  const api = brygga()
+  if (api) return api.exportera_innehall(data, exportDir)
+  if (!exportDir) return wait({ ok: false, fel: 'Ange en export-katalog.' })
+  return wait({ ok: true, id: data.id || 'i_ny', path: `${exportDir}/${slug(data.titel)}.md` })
+}
+
+export async function raderaInnehall(id) {
+  const api = brygga()
+  if (api) return api.radera_innehall(id)
+  return wait({ ok: true })
+}
+
 export const ARMOCK = !brygga()
