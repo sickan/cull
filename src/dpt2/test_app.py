@@ -131,6 +131,20 @@ class TestApi(unittest.TestCase):
         self.assertEqual([u["id"] for u in lev], [u1])
 
 
+    def test_skapa_story_kraver_moment(self):
+        self.assertFalse(self.api.skapa_story({})["ok"])
+        res = self.api.skapa_story({"moment": "Avspark", "tema": "Sol", "format": "4x5"})
+        self.assertTrue(res["ok"])
+        self.assertIn("Avspark", res["meddelande"])
+
+    def test_generera_bildsvep_utan_nyckel(self):
+        import os
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            self.skipTest("API-nyckel satt — skarp väg testas ej här")
+        res = self.api.generera_bildsvep("Malmö FF–Växjö DFF 3–0", "fotboll")
+        self.assertFalse(res["ok"])           # ingen nyckel → snäll fallback
+
+
 class TestGallringConfig(unittest.TestCase):
     def test_bilder_ger_topp(self):
         g = _gallring_av_config({"behall_enhet": "bilder", "behall_varde": 40,

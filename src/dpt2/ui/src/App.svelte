@@ -4,6 +4,7 @@
   import Lag from './panels/Lag.svelte'
   import Gallra from './panels/Gallra.svelte'
   import Leverera from './panels/Leverera.svelte'
+  import Publicera from './panels/Publicera.svelte'
   import { ARMOCK } from './lib/api.js'
 
   let aktiv = 'matcher'
@@ -41,6 +42,8 @@
       <Gallra {aktivMatchData} />
     {:else if aktiv === 'leverera'}
       <Leverera />
+    {:else if aktiv === 'publicera'}
+      <Publicera />
     {:else}
       <div class="platshallare">
         <h1 class="scd">{NAMN[aktiv]}</h1>

@@ -176,4 +176,26 @@ export async function levereraUrval(urvalId, config = {}) {
   return wait({ ok: true, status: 'levererad', skrivna: u.bilder, ratade: 0 })
 }
 
+export async function genereraBildsvep(matchinfo, sport = '', hemmaFarg = '') {
+  const api = brygga()
+  if (api) return api.generera_bildsvep(matchinfo, sport, hemmaFarg)
+  return wait({
+    ok: true,
+    referat: 'Malmö FF tog kommandot tidigt och Nellie Lilja sköt in 1–0 innan Izzy D’Aquila ökade på till 2–0 före paus.',
+    bildsvep:
+      '⚽ BILDSVEPET\n\n' + (matchinfo || 'Hemma–Borta 0–0') +
+      ' · OBOS Damallsvenskan · Eleda Stadion\n\n📸 Fler bilder → www.dalecarliaphoto.se/sport\n\n' +
+      'Malmö FF tog kommandot tidigt och Nellie Lilja sköt in 1–0 innan Izzy D’Aquila ökade på till 2–0 före paus.\n\n' +
+      '#MalmöFF #Damallsvenskan #sportfoto #fotboll #Bildsvepet\n\n' +
+      '@malmo_ff @?motstandare @obosdamallsvenskan @svenskfotboll @nikonsverige',
+  })
+}
+
+export async function skapaStory(config) {
+  const api = brygga()
+  if (api) return api.skapa_story(config)
+  if (!config.moment) return wait({ ok: false, fel: 'Välj ett moment.' })
+  return wait({ ok: true, meddelande: `Story-val sparat: ${config.moment} · ${config.tema} · ${config.format} (mock).` })
+}
+
 export const ARMOCK = !brygga()

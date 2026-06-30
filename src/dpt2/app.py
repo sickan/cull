@@ -12,7 +12,7 @@ Saknas dist/ faller den tillbaka på Vite-dev-servern (localhost:5173).
 from pathlib import Path
 
 from dpt2.data import db, store
-from dpt2.tjanster import matchhamtning, leverera
+from dpt2.tjanster import matchhamtning, leverera, bildsvep
 
 UI_DIR = Path(__file__).parent / "ui"
 DIST_INDEX = UI_DIR / "dist" / "index.html"
@@ -145,6 +145,28 @@ class Api:
         store.satt_urval_status(self.conn, urval_id, "levererad")
         return {"ok": True, "status": "levererad",
                 "skrivna": res["skrivna"], "ratade": res["ratade"]}
+
+    # ── Publicera (Bildsvepet-text + Matchdag-story) ─────────────────────────
+    def generera_bildsvep(self, matchinfo, sport="", hemma_farg=""):
+        """Genererar Bildsvepet-bildtext (Claude web search) för granskning."""
+        data = bildsvep.generera(matchinfo, sport=sport, hemma_farg=hemma_farg)
+        if not data:
+            return {"ok": False, "fel": "Kunde inte generera (saknas API-nyckel "
+                    "eller inget svar)."}
+        return {"ok": True, "referat": data.get("referat", ""),
+                "bildsvep": data["bildsvep"]}
+
+    def skapa_story(self, config):
+        """Tar emot story-config (moment/tema/format + foto). Själva renderingen
+        (story_overlay, PIL) körs i workern när ett foto valts via native-
+        dialogen — kommande steg. Här valideras och kvitteras valet."""
+        config = config or {}
+        if not config.get("moment"):
+            return {"ok": False, "fel": "Välj ett moment."}
+        return {"ok": True, "meddelande":
+                f"Story-val sparat: {config.get('moment')} · {config.get('tema', 'Hav')} "
+                f"· {config.get('format', '9x16')}. Rendering sker i ML-workern "
+                "när källfotot valts."}
 
     # ── Meta ─────────────────────────────────────────────────────────────────
     def info(self):
