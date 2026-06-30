@@ -235,6 +235,59 @@ def spara_modell(conn, *, typ, pkl_path, features=None, n_uppdrag=None,
     return mid
 
 
+# ── Facit (träningsunderlag: stem→y-etikett + omräknad feature-vektor) ────────
+def spara_facit(conn, *, match_namn, sport=None, kalla=None, kamera=None,
+                features=None, n=0, behall_mapp=None, lev_mapp=None,
+                match_id=None, skapad=None, id=None):
+    """Skapar/ersätter ett facit-uppdrag (idempotent på id). id härleds ur
+    match_namn (+ kamera) om ej angivet → omkörning av samma uppdrag ersätter.
+    features = lista feature-namn (versionssnapshot, lagras som json)."""
+    fid = id or slug_id(match_namn + (("-" + kamera) if kamera else ""))
+    conn.execute(
+        "INSERT OR REPLACE INTO facit"
+        "(id,match_id,match_namn,kalla,kamera,sport,features,n,behall_mapp,"
+        "lev_mapp,skapad) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        (fid, match_id, match_namn, kalla, kamera, sport,
+         json.dumps(features, ensure_ascii=False) if features is not None else None,
+         n, behall_mapp, lev_mapp, skapad or _nu()))
+    conn.commit()
+    return fid
+
+
+def ersatt_facit_rader(conn, facit_id, rader):
+    """rader = [(stem, y, w, v)] där v = feature-vektor (lista). Ersätter ALLA
+    rader för uppdraget (DELETE+INSERT) → ren omräkning utan dubbletter."""
+    conn.execute("DELETE FROM facit_rad WHERE facit_id=?", (facit_id,))
+    conn.executemany(
+        "INSERT INTO facit_rad(facit_id,stem,y,w,v) VALUES(?,?,?,?,?)",
+        [(facit_id, stem, int(y), float(w),
+          json.dumps(list(v), ensure_ascii=False))
+         for stem, y, w, v in rader])
+    conn.commit()
+
+
+def lista_facit(conn):
+    """Facit-uppdrag för översikt/coverage (utan rader), nyast först."""
+    return [dict(r) for r in conn.execute(
+        "SELECT id,match_namn,kamera,sport,n,features,skapad FROM facit "
+        "ORDER BY skapad DESC")]
+
+
+def facit_for_traning(conn):
+    """Alla facit-uppdrag som (X, y, sport) för inlarning.trana. Läser de
+    lagrade feature-vektorerna (v) — INGA bilder behövs vid träning."""
+    uppdrag = []
+    for f in conn.execute("SELECT id,sport FROM facit"):
+        rader = conn.execute(
+            "SELECT y,v FROM facit_rad WHERE facit_id=? AND v IS NOT NULL",
+            (f["id"],)).fetchall()
+        X = [json.loads(r["v"]) for r in rader]
+        y = [r["y"] for r in rader]
+        if X and any(y):
+            uppdrag.append((X, y, f["sport"] or "okänd"))
+    return uppdrag
+
+
 # ── Lag & tävlingar (register) ───────────────────────────────────────────────
 def upsert_lag(conn, namn, *, logga=None, instagram=None, hemsida=None,
                stall_hemma=None, stall_borta=None, stall_tredje=None):
