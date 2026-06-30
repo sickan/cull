@@ -12,7 +12,7 @@ Saknas dist/ faller den tillbaka på Vite-dev-servern (localhost:5173).
 from pathlib import Path
 
 from dpt2.data import db, store
-from dpt2.tjanster import matchhamtning
+from dpt2.tjanster import matchhamtning, leverera
 
 UI_DIR = Path(__file__).parent / "ui"
 DIST_INDEX = UI_DIR / "dist" / "index.html"
@@ -121,6 +121,27 @@ class Api:
                 "meddelande": "Cull-jobb skapat. Körning av gallringsmotorn "
                               "(feature-extraktion + modell) sker i ML-workern "
                               "— kommande steg."}
+
+    # ── Leverera (icke-destruktiv LR-väg: XMP-sidecars) ──────────────────────
+    def leverera_urval(self, urval_id, config=None):
+        """Skriver XMP-sidecars för urvalets källmapp (husstil-preset + EV-knuff)
+        och sätter urvalets status → levererad. Den lätta, in-process-delen:
+        upprätning via Apple Vision + tröjnummer-OCR körs i ML-workern (kommer)."""
+        config = config or {}
+        urval = store.hamta_urval(self.conn, urval_id)
+        if not urval:
+            return {"ok": False, "fel": "Okänt urval."}
+        filer = leverera.lista_bilder(urval.get("kalla") or "")
+        if not filer:
+            return {"ok": False, "fel": "Hittar inga bildfiler i källmappen "
+                    f"({urval.get('kalla') or '—'})."}
+        res = leverera.skriv_sidecars(
+            filer, husstil_path=(config.get("husstil") or None),
+            exp_bump=float(config.get("exp_bump") or 0.0),
+            objektiv_pa_raw=config.get("objektiv", True))
+        store.satt_urval_status(self.conn, urval_id, "levererad")
+        return {"ok": True, "status": "levererad",
+                "skrivna": res["skrivna"], "ratade": res["ratade"]}
 
     # ── Meta ─────────────────────────────────────────────────────────────────
     def info(self):

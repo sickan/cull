@@ -87,6 +87,34 @@ class TestApi(unittest.TestCase):
         self.assertEqual(jobb[0]["behall_enhet"], "bilder")
 
 
+    def test_leverera_urval_skriver_sidecars_och_satter_status(self):
+        import tempfile
+        from pathlib import Path
+        d = Path(tempfile.mkdtemp())
+        (d / "DSC_0001.nef").write_bytes(b"")
+        (d / "DSC_0002.nef").write_bytes(b"")
+        uid = store.spara_urval(self.api.conn, kalla=str(d), bilder=2)
+        res = self.api.leverera_urval(uid, {"exp_bump": 0.3})
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["skrivna"], 2)
+        self.assertEqual(res["status"], "levererad")
+        self.assertTrue((d / "DSC_0001.xmp").exists())
+        self.assertEqual(store.hamta_urval(self.api.conn, uid)["status"],
+                         "levererad")
+
+    def test_leverera_urval_tom_mapp(self):
+        import tempfile
+        uid = store.spara_urval(self.api.conn, kalla=tempfile.mkdtemp(), bilder=0)
+        res = self.api.leverera_urval(uid)
+        self.assertFalse(res["ok"])
+        # status oförändrad när inget levererades
+        self.assertEqual(store.hamta_urval(self.api.conn, uid)["status"],
+                         "gallrad")
+
+    def test_leverera_okant_urval(self):
+        self.assertFalse(self.api.leverera_urval("finns-inte")["ok"])
+
+
 class TestGallringConfig(unittest.TestCase):
     def test_bilder_ger_topp(self):
         g = _gallring_av_config({"behall_enhet": "bilder", "behall_varde": 40,
