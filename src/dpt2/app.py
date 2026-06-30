@@ -123,6 +123,9 @@ class Api:
                               "— kommande steg."}
 
     # ── Leverera (icke-destruktiv LR-väg: XMP-sidecars) ──────────────────────
+    def lista_urval(self, status=None):
+        return store.lista_urval(self.conn, status=status)
+
     def leverera_urval(self, urval_id, config=None):
         """Skriver XMP-sidecars för urvalets källmapp (husstil-preset + EV-knuff)
         och sätter urvalets status → levererad. Den lätta, in-process-delen:

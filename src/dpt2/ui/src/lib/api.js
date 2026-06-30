@@ -51,6 +51,19 @@ const MOCK_TAVLINGAR = [
   { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', ort: '', arena: '', kalender: 0 },
 ]
 
+// Urval (Gallra producerar, Leverera konsumerar). Muteras lokalt i mock-läge.
+let MOCK_URVAL = [
+  { id: 'u_rosengard', kalla: '/Volumes/NIKON Z 8/DCIM/277Z8_01', kamera: 'NIKON Z 8',
+    bilder: 38, status: 'gallrad', skapad: '2026-06-30 09:12',
+    match_id: 'a1b2c3d4e5f6', lag_hemma: 'Malmö FF', lag_borta: 'Kristianstads DFF' },
+  { id: 'u_handboll', kalla: '/Volumes/NIKON/DCIM/308D5_02', kamera: 'NIKON D5',
+    bilder: 24, status: 'gallrad', skapad: '2026-06-29 20:05',
+    match_id: null, lag_hemma: null, lag_borta: null },
+  { id: 'u_levererad', kalla: '/Volumes/NIKON/DCIM/_leverans_CEV', kamera: 'NIKON Z 8',
+    bilder: 30, status: 'levererad', skapad: '2026-06-28 21:40',
+    match_id: 'fb9679db75f5', lag_hemma: 'FC Rosengård', lag_borta: 'Eskilstuna United' },
+]
+
 const wait = (v) => new Promise((r) => setTimeout(() => r(v), 60))
 
 export async function listaMatcher() {
@@ -145,6 +158,22 @@ export async function startaCull(config) {
     ok: true, urval_id: 'mock', jobb_id: 'mock',
     meddelande: 'Cull-jobb skapat (mock). Gallringsmotorn körs i ML-miljö.',
   })
+}
+
+export async function listaUrval(status = null) {
+  const api = brygga()
+  if (api) return api.lista_urval(status)
+  const lista = status ? MOCK_URVAL.filter((u) => u.status === status) : MOCK_URVAL
+  return wait(structuredClone(lista))
+}
+
+export async function levereraUrval(urvalId, config = {}) {
+  const api = brygga()
+  if (api) return api.leverera_urval(urvalId, config)
+  const u = MOCK_URVAL.find((x) => x.id === urvalId)
+  if (!u) return wait({ ok: false, fel: 'Okänt urval.' })
+  u.status = 'levererad'
+  return wait({ ok: true, status: 'levererad', skrivna: u.bilder, ratade: 0 })
 }
 
 export const ARMOCK = !brygga()

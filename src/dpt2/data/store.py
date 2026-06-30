@@ -82,6 +82,23 @@ def urval_for_match(conn, match_id):
         "SELECT * FROM urval WHERE match_id=? ORDER BY skapad DESC", (match_id,))]
 
 
+def lista_urval(conn, *, status=None, limit=50):
+    """Urval för Leverera-/översiktsvyer, nyast först. Joinar matchen för en
+    etikett (lag_hemma/lag_borta). status filtrerar om satt."""
+    sql = ("SELECT u.id,u.kalla,u.kamera,u.bilder,u.status,u.skapad,u.match_id,"
+           "h.namn AS lag_hemma, b.namn AS lag_borta "
+           "FROM urval u LEFT JOIN matchen m ON u.match_id=m.id "
+           "LEFT JOIN lag h ON m.lag_hemma_id=h.id "
+           "LEFT JOIN lag b ON m.lag_borta_id=b.id ")
+    args = []
+    if status:
+        sql += "WHERE u.status=? "
+        args.append(status)
+    sql += "ORDER BY u.skapad DESC LIMIT ?"
+    args.append(limit)
+    return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+
 # ── Cull-jobb ─────────────────────────────────────────────────────────────────
 def spara_cull_jobb(conn, *, urval_id, verktyg, behall_varde=None,
                     behall_enhet=None, burst_grans=None, trojnummer_ocr=False,

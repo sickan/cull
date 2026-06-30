@@ -114,6 +114,22 @@ class TestApi(unittest.TestCase):
     def test_leverera_okant_urval(self):
         self.assertFalse(self.api.leverera_urval("finns-inte")["ok"])
 
+    def test_lista_urval_med_matchetikett_och_statusfilter(self):
+        import tempfile
+        mid = self.api.spara_match({"lag_hemma": "Malmö FF", "lag_borta": "KDFF",
+                                    "datum": "2026-06-27"})["id"]
+        u1 = store.spara_urval(self.api.conn, kalla=tempfile.mkdtemp(),
+                               bilder=10, match_id=mid)
+        store.spara_urval(self.api.conn, kalla=tempfile.mkdtemp(), bilder=5)
+        alla = self.api.lista_urval()
+        self.assertEqual(len(alla), 2)
+        rad = next(u for u in alla if u["id"] == u1)
+        self.assertEqual(rad["lag_hemma"], "Malmö FF")     # join mot matchen
+        # statusfilter
+        store.satt_urval_status(self.api.conn, u1, "levererad")
+        lev = self.api.lista_urval("levererad")
+        self.assertEqual([u["id"] for u in lev], [u1])
+
 
 class TestGallringConfig(unittest.TestCase):
     def test_bilder_ger_topp(self):
