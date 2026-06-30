@@ -280,18 +280,19 @@ export async function sattAktivModell(id) {
   return wait({ ok: true, aktiv: MOCK_MODELLER.find((m) => m.id === id) })
 }
 
-export async function startaTraning(config) {
+export async function startaOmraknaArkiv(root) {
   const api = brygga()
-  if (api) return api.starta_traning(config)
-  if (!config.traning_rot) return wait({ ok: false, fel: 'Ange en tränings-rot.' })
-  return wait({ ok: true, meddelande: `Träningsjobb köat: ${config.typ} (mock).` })
+  if (api) return api.starta_omrakna_arkiv(root)
+  if (!root) return wait({ ok: false, fel: 'Ange en arkiv-katalog.' })
+  return wait({ ok: true, resultat: { uppdrag: 3, bilder: 412, valda: 71 },
+    events: [{ typ: 'klar', resultat: { uppdrag: 3, bilder: 412, valda: 71 } }] })
 }
 
-export async function larAvMatch(config) {
+export async function startaTraning(config = {}) {
   const api = brygga()
-  if (api) return api.lar_av_match(config)
-  if (!config.urval) return wait({ ok: false, fel: 'Ange urval-mappen.' })
-  return wait({ ok: true, meddelande: `Facit-märkning köad för ${config.urval} (mock).` })
+  if (api) return api.starta_traning(config)
+  return wait({ ok: true, resultat: { n_uppdrag: 3, n_valda: 71 },
+    events: [{ typ: 'klar', resultat: { n_uppdrag: 3, n_valda: 71 } }] })
 }
 
 // Logg — worker-events (strukturerad IPC). Buffras i appen; mock genererar ström.

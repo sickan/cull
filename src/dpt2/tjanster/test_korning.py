@@ -73,5 +73,63 @@ class TestSubprocess(unittest.TestCase):
         self.assertEqual(len(sedda), len(r["events"]))     # lyssnaren fick allt
 
 
+def _har_sklearn():
+    try:
+        import sklearn  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+@unittest.skipUnless(_har_sklearn(), "sklearn saknas")
+class TestTranaJobbViaWorker(unittest.TestCase):
+    """Skarp: seedar en scratch-db med facit och tränar via worker-processen
+    (python -m dpt2.worker trana) — bevisar IPC + träning ur lagrade vektorer."""
+
+    def test_trana_jobb_ger_klar_och_modellfil(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from dpt2.data import db, store
+
+        d = Path(tempfile.mkdtemp())
+        dbp = d / "scratch.db"
+        conn = db.oppna(dbp)
+        for u in range(2):
+            fid = store.spara_facit(conn, match_namn=f"Match {u} 2-0",
+                                    sport="fotboll", n=30)
+            rader = []
+            for i in range(30):
+                hog = i % 2 == 0
+                v = [0.0] * 19
+                v[0] = 5.0 + (i % 3) if hog else (i % 3) * 0.1
+                rader.append((f"m{u}s{i}", 1 if hog else 0, 1.0, v))
+            store.ersatt_facit_rader(conn, fid, rader)
+        conn.close()
+
+        pkl = d / "modell.pkl"
+        r = korning.kor_subprocess(
+            ["trana", json.dumps({"db_path": str(dbp), "modell_path": str(pkl),
+                                  "typ": "arkiv"})])
+        self.assertEqual(r["returkod"], 0)
+        typer = [e["typ"] for e in r["events"]]
+        self.assertIn("klar", typer)
+        self.assertTrue(pkl.exists())
+        klar = next(e for e in r["events"] if e["typ"] == "klar")
+        self.assertEqual(klar["resultat"]["n_uppdrag"], 2)
+
+    def test_trana_utan_facit_ger_fel(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from dpt2.data import db
+
+        dbp = Path(tempfile.mkdtemp()) / "tom.db"
+        db.oppna(dbp).close()
+        r = korning.kor_subprocess(
+            ["trana", json.dumps({"db_path": str(dbp), "typ": "arkiv"})])
+        self.assertEqual(r["events"][-1]["typ"], "fel")
+
+
 if __name__ == "__main__":
     unittest.main()

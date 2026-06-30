@@ -1,13 +1,15 @@
 <script>
   import { onMount } from 'svelte'
-  import { listaModeller, sattAktivModell, startaTraning, larAvMatch } from '../lib/api.js'
+  import { listaModeller, sattAktivModell, startaTraning, startaOmraknaArkiv } from '../lib/api.js'
 
   const TYP_NAMN = { din_smak: 'Din smak', arkiv: 'Arkiv', hybrid: 'Hybrid' }
 
   let modeller = []
   let laddar = true
-  let trana = { typ: 'din_smak', traning_rot: '' }
-  let lar = { urval: '' }
+  let trana = { typ: 'arkiv' }
+  let arkiv = { root: '' }
+  let korOmrakna = false
+  let korTrana = false
   let status = null
 
   $: aktiv = modeller.find((m) => m.aktiv) || null
@@ -22,14 +24,25 @@
     if (r.ok) modeller = modeller.map((x) => ({ ...x, aktiv: x.id === m.id }))
   }
 
-  async function korTraning() {
-    const r = await startaTraning(trana)
-    status = r.ok ? r.meddelande : (r.fel || 'Fel.')
+  async function korOmraknaArkiv() {
+    korOmrakna = true; status = null
+    const r = await startaOmraknaArkiv(arkiv.root)
+    const res = r.resultat
+    status = r.ok && res
+      ? `Omräknat: ${res.uppdrag} uppdrag, ${res.bilder} bilder (${res.valda} valda) → korpus.`
+      : (r.fel || 'Fel vid omräkning.')
+    korOmrakna = false
   }
 
-  async function korLar() {
-    const r = await larAvMatch(lar)
-    status = r.ok ? r.meddelande : (r.fel || 'Fel.')
+  async function korTraning() {
+    korTrana = true; status = null
+    const r = await startaTraning(trana)
+    const res = r.resultat
+    status = r.ok && res
+      ? `Modell tränad: ${res.n_uppdrag} uppdrag, ${res.n_valda} valda. Se Logg.`
+      : (r.fel || 'Inga omräknade facit än — omräkna arkiv först.')
+    if (r.ok) modeller = await listaModeller()
+    korTrana = false
   }
 
   const GRANSKNING = [
@@ -78,35 +91,38 @@
     </div>
 
     <div class="kort">
-      <div class="cardH">Lär av match</div>
-      <p class="not">Märk ett urval (dina behållna bilder) som facit — grundsanningen modellen tränas på.</p>
-      <label class="full">Urval-mapp
+      <div class="cardH">Omräkna arkiv (bygg korpus)</div>
+      <p class="not">Går igenom en arkiv-katalog (match-mapp + Instagram/ = dina val) och extraherar features ur de nedladdade bilderna → träningskorpus. Online-only-filer hoppas; kör om när fler kataloger laddats ned.</p>
+      <label class="full">Arkiv-katalog
         <div class="filrad">
-          <input bind:value={lar.urval} placeholder="/sökväg/till/urval" />
+          <input bind:value={arkiv.root} placeholder="~/Dropbox/Export/Sport/2026" />
           <button class="sek" title="Native filväljare i appen">Välj…</button>
         </div>
       </label>
       <div class="kor">
-        <button class="sek" on:click={korLar} disabled={!lar.urval}>Märk som facit ›</button>
+        <button class="sek" on:click={korOmraknaArkiv} disabled={korOmrakna || !arkiv.root}>
+          {korOmrakna ? 'Omräknar…' : 'Omräkna arkiv ›'}
+        </button>
       </div>
     </div>
 
     <div class="kort">
       <div class="cardH">Träna modell</div>
+      <p class="not">Tränar ur de lagrade facit-vektorerna i korpusen — inga bilder behövs. Live-progress i Logg.</p>
       <div class="grid2">
         <label>Typ
           <select bind:value={trana.typ}>
-            <option value="din_smak">Din smak</option>
             <option value="arkiv">Arkiv</option>
+            <option value="din_smak">Din smak</option>
             <option value="hybrid">Hybrid</option>
           </select>
         </label>
-        <label>Tränings-rot (facit-mappar)
-          <input bind:value={trana.traning_rot} placeholder="/sökväg/till/facit" />
-        </label>
+        <div></div>
       </div>
       <div class="kor">
-        <button class="prim" on:click={korTraning} disabled={!trana.traning_rot}>Träna ›</button>
+        <button class="prim" on:click={korTraning} disabled={korTrana}>
+          {korTrana ? 'Tränar…' : 'Träna ›'}
+        </button>
       </div>
     </div>
 

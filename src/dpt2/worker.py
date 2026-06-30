@@ -12,6 +12,7 @@ data, så de körs på fotografens maskin, inte i CI.
 """
 
 import json
+import os
 import sys
 
 from dpt2.tjanster.korning import event, event_rad
@@ -33,22 +34,68 @@ def jobb_demo(args):
     _emit(event("klar", resultat={"steg": steg}))
 
 
+def _logg(niva="info"):
+    """logg-callback som speglar tjänsternas print → JSON logg-event."""
+    return lambda text: _emit(event("logg", niva=niva, text=str(text)))
+
+
+def _db(args):
+    from dpt2.data import db
+    return db.oppna(os.path.expanduser(args["db_path"]) if args.get("db_path")
+                    else db.DB_DEFAULT, check_same_thread=False)
+
+
+def jobb_omrakna(args):
+    """Bygger träningskorpusen ur ett arkiv-träd: walk → extrahera features ur de
+    (nedladdade) JPG:erna → lagra som facit i dpt2. Online-only hoppas."""
+    from dpt2.motorer import ai_lager
+    from dpt2.tjanster import traning
+    root = args.get("root")
+    if not root:
+        _emit(event("fel", text="Ingen arkiv-rot angiven (root).")); return
+    _emit(event("start", jobb="omrakna"))
+    _emit(event("progress", andel=0.05, text="Laddar modeller…"))
+    modeller = ai_lager.ladda_modeller(n_pose=1, med_estetik=True,
+                                       med_ogon=True, med_clip=True)
+    r = traning.omrakna_arkiv(_db(args), os.path.expanduser(root), modeller,
+                              logg=_logg())
+    _emit(event("klar", resultat=r))
+
+
+def jobb_trana(args):
+    """Tränar modellen ur de LAGRADE facit-vektorerna (inga bilder). Sparar pkl +
+    modell-bibliotekrad."""
+    from dpt2.data import db
+    from dpt2.tjanster import traning
+    _emit(event("start", jobb="trana"))
+    typ = args.get("typ", "arkiv")
+    modell_path = os.path.expanduser(
+        args.get("modell_path")
+        or str(db.DB_DEFAULT.parent / "modeller" / f"{typ}.pkl"))
+    r = traning.trana_modell(_db(args), typ=typ, modell_path=modell_path,
+                             logg=_logg())
+    if r.get("ok"):
+        _emit(event("klar", resultat=r))
+    else:
+        _emit(event("fel", text=r.get("fel", "okänt fel")))
+
+
 def _jobb_ej_implementerad(namn):
     def kor(_args):
         _emit(event("start", jobb=namn))
         _emit(event("logg", niva="info", text=
-              f"Jobbet '{namn}' kräver full ML-miljö (torch/sklearn/mediapipe) "
-              "och körs på fotografens maskin. Motorn pluggas in här."))
+              f"Jobbet '{namn}' kräver full ML-miljö och riktig data; pluggas in här."))
         _emit(event("fel", text=f"'{namn}' ännu inte inkopplad i workern."))
     return kor
 
 
-# Registret: nya tunga jobb läggs till här (gallra→gallring, trana→inlarning,
-# nummer→motorer.nummer, story→story_overlay). Demo är den körbara referensen.
+# Registret: tunga jobb. demo (beroendefritt) + omrakna/trana (väg B) körbara.
+# gallra/nummer/story = nästa att plugga in (gallring/nummer-OCR/story_overlay).
 JOBB = {
     "demo": jobb_demo,
+    "omrakna": jobb_omrakna,
+    "trana": jobb_trana,
     "gallra": _jobb_ej_implementerad("gallra"),
-    "trana": _jobb_ej_implementerad("trana"),
     "nummer": _jobb_ej_implementerad("nummer"),
     "story": _jobb_ej_implementerad("story"),
 }

@@ -186,11 +186,8 @@ class TestApi(unittest.TestCase):
         self.assertEqual(self.api.aktiv_modell()["id"], b)   # bara en aktiv
         self.assertFalse(self.api.satt_aktiv_modell("finns-inte")["ok"])
 
-    def test_starta_traning_och_lar_av_match(self):
-        self.assertFalse(self.api.starta_traning({})["ok"])
-        self.assertTrue(self.api.starta_traning({"traning_rot": "/facit"})["ok"])
-        self.assertFalse(self.api.lar_av_match({})["ok"])
-        self.assertTrue(self.api.lar_av_match({"urval": "/urval"})["ok"])
+    def test_starta_omrakna_utan_root(self):
+        self.assertFalse(self.api.starta_omrakna_arkiv("")["ok"])
 
 
     def test_logg_kor_demo_buffrar_och_rensar(self):

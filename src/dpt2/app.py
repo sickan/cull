@@ -219,25 +219,33 @@ class Api:
         ok = store.satt_aktiv_modell(self.conn, modell_id)
         return {"ok": ok, "aktiv": store.aktiv_modell(self.conn) if ok else None}
 
-    def starta_traning(self, config):
-        """Tränar 'din smak' ur facit (urval-mapp). Själva träningen (sklearn,
-        feature-extraktion) körs i ML-workern — kommande steg."""
-        config = config or {}
-        if not config.get("traning_rot"):
-            return {"ok": False, "fel": "Ange en tränings-rot (facit-mappar)."}
-        return {"ok": True, "meddelande":
-                f"Träningsjobb köat: {config.get('typ', 'din_smak')} ur "
-                f"{config['traning_rot']}. Feature-extraktion + sklearn körs i "
-                "ML-workern."}
+    def starta_omrakna_arkiv(self, root):
+        """Bygger träningskorpusen ur ett arkiv-träd i WORKERN (extraherar
+        features ur de nedladdade JPG:erna → lagrar som facit). Strömmar event
+        till loggbufferten. Online-only-filer hoppas (kör om när fler laddats ned)."""
+        if not root:
+            return {"ok": False, "fel": "Ange en arkiv-katalog."}
+        return self._kor_jobb("omrakna", {"root": root})
 
-    def lar_av_match(self, config):
-        """Märker ett urval som facit (grundsanning för framtida träning)."""
+    def starta_traning(self, config=None):
+        """Tränar modellen ur de LAGRADE facit-vektorerna i workern (inga bilder
+        behövs). Sparar pkl + modell-bibliotekrad och aktiverar den."""
         config = config or {}
-        if not config.get("urval"):
-            return {"ok": False, "fel": "Ange urval-mappen att lära av."}
-        return {"ok": True, "meddelande":
-                f"Facit-märkning köad för {config['urval']}. Bilderna blir "
-                "grundsanning; modellen tränas om i workern."}
+        return self._kor_jobb("trana", {"typ": config.get("typ", "arkiv")})
+
+    def _kor_jobb(self, namn, args):
+        """Kör ett worker-jobb, buffrar dess events i loggen. db_path injiceras så
+        worker-processen jobbar mot SAMMA databas som bryggan. Returnerar
+        {ok, events, resultat}."""
+        args = {**args, "db_path": str(self.db_path)}
+        r = korning.kor_subprocess([namn, json.dumps(args)],
+                                   lyssnare=self._logg.append)
+        klar = next((e for e in reversed(r["events"]) if e["typ"] == "klar"), None)
+        fel = next((e for e in reversed(r["events"]) if e["typ"] == "fel"), None)
+        return {"ok": r["returkod"] == 0 and klar is not None,
+                "resultat": klar.get("resultat") if klar else None,
+                "fel": fel.get("text") if fel else None,
+                "events": r["events"]}
 
     # ── Logg (worker-events via strukturerad IPC) ────────────────────────────
     def hamta_logg(self):
