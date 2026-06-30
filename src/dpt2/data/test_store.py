@@ -184,5 +184,29 @@ class TestLagTavling(unittest.TestCase):
         self.assertEqual(store.lista_tavlingar(self.c), [])
 
 
+    def test_innehall_round_trip(self):
+        iid = store.spara_innehall(
+            self.c, typ="match", status="avslutad",
+            frontmatter={"titel": "A – B", "malskyttar": ["X 12'"]},
+            body="Referat.")
+        d = store.hamta_innehall(self.c, iid)
+        self.assertEqual(d["typ"], "match")
+        self.assertEqual(d["frontmatter"]["titel"], "A – B")    # json round-trip
+        self.assertEqual(d["frontmatter"]["malskyttar"], ["X 12'"])
+        self.assertFalse(d["publicerad"])
+        self.assertEqual(len(store.lista_innehall(self.c)), 1)
+        self.assertEqual(len(store.lista_innehall(self.c, typ="blogg")), 0)
+
+    def test_innehall_export_path_och_radera(self):
+        iid = store.spara_innehall(self.c, typ="event",
+                                   frontmatter={"titel": "Cup"})
+        store.satt_export_path(self.c, iid, "/sajt/content/event/cup.md")
+        d = store.hamta_innehall(self.c, iid)
+        self.assertTrue(d["publicerad"])
+        self.assertEqual(d["export_path"], "/sajt/content/event/cup.md")
+        store.radera_innehall(self.c, iid)
+        self.assertIsNone(store.hamta_innehall(self.c, iid))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

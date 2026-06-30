@@ -99,6 +99,58 @@ def lista_urval(conn, *, status=None, limit=50):
     return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
 
+# ── Innehåll → hemsidan (CMS/Astro-export) ────────────────────────────────────
+def spara_innehall(conn, *, typ, match_id=None, status=None, frontmatter=None,
+                   body=None, export_path=None, publicerad=False, id=None,
+                   skapad=None):
+    """Skapar (eller ersätter) ett innehåll. frontmatter = dict (lagras som json).
+    Returnerar innehåll-id."""
+    iid = id or ny_id()
+    conn.execute(
+        "INSERT OR REPLACE INTO innehall"
+        "(id,typ,match_id,status,frontmatter,body,export_path,publicerad,skapad) "
+        "VALUES(?,?,?,?,?,?,?,?,?)",
+        (iid, typ, match_id, status,
+         json.dumps(frontmatter, ensure_ascii=False) if frontmatter is not None else None,
+         body, export_path, 1 if publicerad else 0, skapad or _nu()))
+    conn.commit()
+    return iid
+
+
+def _innehall_dict(r):
+    d = dict(r)
+    d["frontmatter"] = json.loads(d["frontmatter"]) if d.get("frontmatter") else {}
+    d["publicerad"] = bool(d.get("publicerad"))
+    return d
+
+
+def hamta_innehall(conn, innehall_id):
+    r = conn.execute("SELECT * FROM innehall WHERE id=?", (innehall_id,)).fetchone()
+    return _innehall_dict(r) if r else None
+
+
+def lista_innehall(conn, typ=None):
+    """Innehåll för CMS-vyn, nyast först. typ filtrerar om satt."""
+    if typ:
+        rader = conn.execute("SELECT * FROM innehall WHERE typ=? ORDER BY skapad DESC",
+                             (typ,)).fetchall()
+    else:
+        rader = conn.execute("SELECT * FROM innehall ORDER BY skapad DESC").fetchall()
+    return [_innehall_dict(r) for r in rader]
+
+
+def satt_export_path(conn, innehall_id, export_path, *, publicerad=True):
+    """Märker ett innehåll som exporterat (sökväg till skriven .md)."""
+    conn.execute("UPDATE innehall SET export_path=?, publicerad=? WHERE id=?",
+                 (export_path, 1 if publicerad else 0, innehall_id))
+    conn.commit()
+
+
+def radera_innehall(conn, innehall_id):
+    conn.execute("DELETE FROM innehall WHERE id=?", (innehall_id,))
+    conn.commit()
+
+
 # ── Cull-jobb ─────────────────────────────────────────────────────────────────
 def spara_cull_jobb(conn, *, urval_id, verktyg, behall_varde=None,
                     behall_enhet=None, burst_grans=None, trojnummer_ocr=False,
