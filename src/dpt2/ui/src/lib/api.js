@@ -136,6 +136,12 @@ export async function hamtaTrupp(matchId) {
   return wait({ ok: true, match: { ...full, spelare: merge } })
 }
 
+export async function lasLineup(matchId, filsokvag) {
+  const api = brygga()
+  if (api) return api.las_lineup_fil(matchId, filsokvag)
+  return hamtaTrupp(matchId)   // mock: samma sammanslagning
+}
+
 let _aktivMock = null
 
 export async function sattAktivMatch(id) {
@@ -346,6 +352,25 @@ export async function korDemoJobb(steg = 5) {
   const events = mockDemoEvents(steg)
   MOCK_LOGG = [...MOCK_LOGG, ...events]
   return wait({ ok: true, events })
+}
+
+// Native filväljare — i appen via pywebview-dialog; i webbläsaren en prompt.
+function _promptPath(titel) {
+  const p = (typeof window !== 'undefined' && window.prompt)
+    ? window.prompt(`${titel} (klistra in sökväg):`, '') : null
+  return { ok: !!p, path: p || null }
+}
+
+export async function valjMapp(titel = 'Välj mapp') {
+  const api = brygga()
+  if (api) return api.valj_mapp(titel)
+  return wait(_promptPath(titel))
+}
+
+export async function valjFil(titel = 'Välj fil', filter = null) {
+  const api = brygga()
+  if (api) return api.valj_fil(titel, filter)
+  return wait(_promptPath(titel))
 }
 
 export const ARMOCK = !brygga()

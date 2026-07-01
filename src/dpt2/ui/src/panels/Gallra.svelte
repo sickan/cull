@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { aktivMatch, startaCull, startaGallring } from '../lib/api.js'
+  import { aktivMatch, startaCull, startaGallring, valjMapp } from '../lib/api.js'
 
   export let aktivMatchData = null   // skickas av "Aktivera match" (annars hämtas)
 
@@ -70,7 +70,7 @@
       <label class="full">Källmapp (kort / katalog)
         <div class="filrad">
           <input bind:value={cfg.kalla} placeholder="/Volumes/NIKON Z 8/DCIM/277Z8_01" />
-          <button class="sek" title="Native filväljare i appen">Välj…</button>
+          <button class="sek" on:click={async () => { const r = await valjMapp('Välj källmapp'); if (r.ok) cfg.kalla = r.path }}>Välj…</button>
         </div>
       </label>
 

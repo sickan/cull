@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { listaModeller, sattAktivModell, startaTraning, startaOmraknaArkiv } from '../lib/api.js'
+  import { listaModeller, sattAktivModell, startaTraning, startaOmraknaArkiv, valjMapp } from '../lib/api.js'
 
   const TYP_NAMN = { din_smak: 'Din smak', arkiv: 'Arkiv', hybrid: 'Hybrid' }
 
@@ -96,7 +96,7 @@
       <label class="full">Arkiv-katalog
         <div class="filrad">
           <input bind:value={arkiv.root} placeholder="~/Dropbox/Export/Sport/2026" />
-          <button class="sek" title="Native filväljare i appen">Välj…</button>
+          <button class="sek" on:click={async () => { const r = await valjMapp('Välj arkiv-katalog'); if (r.ok) arkiv.root = r.path }}>Välj…</button>
         </div>
       </label>
       <div class="kor">

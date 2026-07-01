@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { createEventDispatcher } from 'svelte'
-  import { listaMatcher, hamtaMatch, sparaMatch, hamtaTrupp, sattAktivMatch } from '../lib/api.js'
+  import { listaMatcher, hamtaMatch, sparaMatch, hamtaTrupp, sattAktivMatch, lasLineup, valjFil } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
 
@@ -60,6 +60,16 @@
     if (!utkast || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))) return
     hamtar = true
     const res = await hamtaTrupp(utkast.id)
+    hamtar = false
+    if (res?.ok && res.match) utkast = res.match
+  }
+
+  async function lasLineupAnk() {
+    if (!utkast || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))) return
+    const f = await valjFil('Välj laguppställnings-ark (bild/PDF)')
+    if (!f.ok) return
+    hamtar = true
+    const res = await lasLineup(utkast.id, f.path)
     hamtar = false
     if (res?.ok && res.match) utkast = res.match
   }
@@ -153,7 +163,10 @@
                       disabled={hamtar || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))}>
                       {hamtar ? 'Hämtar trupp…' : 'Hämta trupp'}
                     </button>
-                    <button class="sek">Läs laguppställning…</button>
+                    <button class="sek" on:click={lasLineupAnk}
+                      disabled={hamtar || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))}>
+                      Läs laguppställning…
+                    </button>
                   </div>
                   <div class="hoger">
                     <button class="sek" on:click={spara}>Spara</button>

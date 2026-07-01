@@ -290,6 +290,29 @@ class Api:
                                    lyssnare=self._logg.append)
         return {"ok": r["returkod"] == 0, "events": r["events"]}
 
+    # ── Native filväljare (pywebview-dialoger) ───────────────────────────────
+    def valj_mapp(self, titel="Välj mapp"):
+        return self._dialog(folder=True, titel=titel)
+
+    def valj_fil(self, titel="Välj fil", filter=None):
+        return self._dialog(folder=False, titel=titel, filter=filter)
+
+    def _dialog(self, *, folder, titel, filter=None):
+        """Öppnar en native fil-/mappdialog. Returnerar {ok, path}. Graciöst
+        {ok:False} om inget fönster finns (t.ex. i test)."""
+        try:
+            import webview
+            win = webview.windows[0] if getattr(webview, "windows", None) else None
+            if win is None:
+                return {"ok": False, "path": None}
+            typ = webview.FOLDER_DIALOG if folder else webview.OPEN_DIALOG
+            kw = {"file_types": tuple(filter)} if filter else {}
+            res = win.create_file_dialog(typ, **kw)
+            path = res[0] if res else None
+            return {"ok": bool(path), "path": path}
+        except Exception as e:
+            return {"ok": False, "path": None, "fel": str(e)}
+
     # ── Meta ─────────────────────────────────────────────────────────────────
     def info(self):
         return {"db": str(self.db_path),

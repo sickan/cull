@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { aktivMatch, genereraBildsvep, skapaStory } from '../lib/api.js'
+  import { aktivMatch, genereraBildsvep, skapaStory, valjFil } from '../lib/api.js'
 
   let match = null
   let laddar = true
@@ -144,8 +144,8 @@
       </div>
       <label class="full">Källfoto
         <div class="filrad">
-          <input bind:value={story.foto} placeholder="(valfritt nu) /sökväg/bild.jpg" />
-          <button class="sek" title="Native filväljare i appen">Välj…</button>
+          <input bind:value={story.foto} placeholder="/sökväg/bild.jpg" />
+          <button class="sek" on:click={async () => { const r = await valjFil('Välj källfoto'); if (r.ok) story.foto = r.path }}>Välj…</button>
         </div>
       </label>
       <div class="kor">

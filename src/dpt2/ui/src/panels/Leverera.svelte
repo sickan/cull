@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { listaUrval, levereraUrval, startaNummer } from '../lib/api.js'
+  import { listaUrval, levereraUrval, startaNummer, valjFil } from '../lib/api.js'
 
   let urval = []
   let laddar = true
@@ -76,7 +76,7 @@
               <label class="full">Husstil-preset (.xmp)
                 <div class="filrad">
                   <input bind:value={cfg[u.id].husstil} placeholder="(valfritt) /sökväg/husstil.xmp" />
-                  <button class="sek" title="Native filväljare i appen">Välj…</button>
+                  <button class="sek" on:click={async () => { const r = await valjFil('Välj husstil-preset', ['XMP-preset (*.xmp)']); if (r.ok) cfg[u.id].husstil = r.path }}>Välj…</button>
                 </div>
               </label>
               <div class="grid2">

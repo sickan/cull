@@ -194,6 +194,11 @@ class TestApi(unittest.TestCase):
         self.assertFalse(self.api.skapa_story({})["ok"])
         self.assertFalse(self.api.skapa_story({"moment": "Avspark"})["ok"])
 
+    def test_filvaljare_graciost_utan_fonster(self):
+        # inget pywebview-fönster i test → {ok:False}, ingen krasch
+        self.assertFalse(self.api.valj_mapp()["ok"])
+        self.assertFalse(self.api.valj_fil("Välj", ["XMP (*.xmp)"])["ok"])
+
 
     def test_logg_kor_demo_buffrar_och_rensar(self):
         res = self.api.kor_demo_jobb(3)
