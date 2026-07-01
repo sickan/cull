@@ -431,6 +431,48 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
   return wait(_promptPath(titel))
 }
 
+// ── Publicera till SoMe ──────────────────────────────────────────────────────
+function _strippaFb(text) {
+  return (text || '').replace(/[#@][\wåäöÅÄÖ]+/g, '').replace(/[ \t]{2,}/g, ' ')
+    .replace(/ *\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+function _mockPlanera({ bilder = [], caption = '', mal = {} }) {
+  if (!bilder.length) return { ok: false, fel: 'Paketet saknar bilder.' }
+  if (!(mal.story || mal.ig_inlagg || mal.fb)) return { ok: false, fel: 'Välj minst ett mål (story/ig_inlagg/fb).' }
+  const poster = [], varningar = []
+  if (mal.story) bilder.forEach((b, i) => poster.push({ kanal: 'instagram', form: 'story', bilder: [b], text: caption, del: i + 1, av: bilder.length }))
+  if (mal.ig_inlagg) {
+    const bitar = []; for (let i = 0; i < bilder.length; i += 10) bitar.push(bilder.slice(i, i + 10))
+    if (bitar.length > 1) varningar.push(`${bilder.length} bilder till IG-inlägg → ${bitar.length} poster (Graph API tar max 10/karusell).`)
+    bitar.forEach((bit, i) => poster.push({ kanal: 'instagram', form: 'inlägg', bilder: bit, text: caption, del: i + 1, av: bitar.length }))
+  }
+  if (mal.fb) {
+    const fb = bilder.slice(0, 4)
+    if (bilder.length > 4) varningar.push(`${bilder.length} bilder till FB → kapat till 4 (FB-sidans multi-photo-gräns).`)
+    poster.push({ kanal: 'facebook', form: 'inlägg', bilder: fb, text: _strippaFb(caption), del: 1, av: 1 })
+  }
+  return { ok: true, poster, varningar }
+}
+
+export async function listaSomeBilder(mapp) {
+  const api = brygga()
+  if (api) return api.lista_some_bilder(mapp)
+  return wait(Array.from({ length: 15 }, (_, i) => `bild_${String(i + 1).padStart(2, '0')}.jpg`))
+}
+export async function publiceraForhandsvisa(config) {
+  const api = brygga()
+  if (api) return api.publicera_forhandsvisa(config)
+  return wait(_mockPlanera(config || {}))
+}
+export async function publiceraTillSoMe(config) {
+  const api = brygga()
+  if (api) return api.publicera_till_some(config)
+  const plan = _mockPlanera(config || {})
+  if (!plan.ok) return wait(plan)
+  return wait({ ok: true, sparade: plan.poster.length, varningar: plan.varningar,
+    resultat: plan.poster.map((p, i) => ({ ...p, status: 'postad', url: `https://exempel/post/${i + 1}` })) })
+}
+
 // pywebview injicerar window.pywebview.api ASYNKRONT. VIKTIGT: api-OBJEKTET dyker
 // upp innan alla METODER är påkopplade — så vi måste vänta tills en känd metod
 // faktiskt är en funktion, annars kastar första panelens bridge-anrop (t.ex.
