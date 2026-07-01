@@ -8,7 +8,10 @@
   import Innehall from './panels/Innehall.svelte'
   import Trana from './panels/Trana.svelte'
   import Logg from './panels/Logg.svelte'
-  import { ARMOCK } from './lib/api.js'
+  import { erMock } from './lib/api.js'
+
+  // Beräknas vid komponent-init (efter att bryggan väntats in i main.js).
+  const ARMOCK = erMock()
 
   let aktiv = 'matcher'
   let tema = 'light'

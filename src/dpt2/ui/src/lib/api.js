@@ -373,4 +373,23 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
   return wait(_promptPath(titel))
 }
 
-export const ARMOCK = !brygga()
+// pywebview injicerar window.pywebview.api ASYNKRONT (klar vid 'pywebviewready').
+// Vänta på den innan appen monteras — annars ser panelerna ingen brygga och
+// fastnar på mockdata. I webbläsaren (ingen pywebview) resolvar timeouten → mock.
+export function vantaPaBrygga(timeout = 2500) {
+  return new Promise((resolve) => {
+    if (brygga()) return resolve(true)
+    let klar = false
+    const go = (v) => { if (!klar) { klar = true; resolve(v) } }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pywebviewready', () => go(true), { once: true })
+    }
+    const t0 = Date.now()
+    const iv = setInterval(() => {
+      if (brygga()) { clearInterval(iv); go(true) }
+      else if (Date.now() - t0 > timeout) { clearInterval(iv); go(false) }
+    }, 60)
+  })
+}
+
+export const erMock = () => !brygga()
