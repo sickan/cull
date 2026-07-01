@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import {
     listaLag, listaTavlingar, sparaLag, sparaTavling, raderaLag, raderaTavling,
+    valjFil,
   } from '../lib/api.js'
 
   let lag = []
@@ -25,7 +26,6 @@
   function initial(namn) {
     return (namn || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
   }
-
   function flash(id) {
     sparad = id
     setTimeout(() => (sparad = sparad === id ? null : sparad), 1400)
@@ -40,12 +40,31 @@
     if (res?.ok) flash(t.id)
   }
 
+  function sattKind(l, kind) {
+    if (l.kind === kind) return
+    l.kind = kind
+    lag = lag                     // trigga re-render av villkorsfälten
+    gerLag(l)
+  }
+
+  async function valjLoggaLag(l) {
+    const f = await valjFil('Välj logga/porträtt (bild)', ['*.png', '*.jpg', '*.jpeg', '*.webp'])
+    if (f.ok) { l.logga = f.path; lag = lag; gerLag(l) }
+  }
+  async function valjLoggaTavling(t) {
+    const f = await valjFil('Välj tävlingslogga (bild)', ['*.png', '*.jpg', '*.jpeg', '*.webp'])
+    if (f.ok) { t.logga = f.path; tavlingar = tavlingar; gerTavling(t) }
+  }
+  const bildUrl = (p) => (p ? (/^https?:|^file:/.test(p) ? p : 'file://' + p) : '')
+
   function nyttLag() {
-    lag = [...lag, { id: 'nytt-' + Date.now(), namn: '', instagram: '', hemsida: '',
-      stall_hemma: '#2f7cb0', stall_borta: '#ffffff', stall_tredje: '#16181c' }]
+    lag = [...lag, { id: 'nytt-' + Date.now(), namn: '', kind: 'team', instagram: '',
+      hemsida: '', logga: null, stall_hemma: '#2f7cb0', stall_borta: '#ffffff',
+      stall_tredje: '#16181c', profilfarg: '#2f7cb0', klubb: '' }]
   }
   function nyTavling() {
-    tavlingar = [...tavlingar, { id: 'ny-' + Date.now(), namn: '', typ: 'liga', sport: 'fotboll' }]
+    tavlingar = [...tavlingar, { id: 'ny-' + Date.now(), namn: '', typ: 'liga',
+      sport: 'fotboll', hemsida: '', logga: null }]
   }
 
   async function taBortLag(l) {
@@ -71,8 +90,10 @@
       <div class="caps">Tävlingar</div>
       <div class="lista">
         {#each tavlingar as t (t.id)}
-          <div class="kort tav">
-            <div class="logo scd">{initial(t.namn)}</div>
+          <div class="kort">
+            <button class="logo scd" on:click={() => valjLoggaTavling(t)} title="Välj logga">
+              {#if t.logga}<img src={bildUrl(t.logga)} alt="" />{:else}{initial(t.namn)}{/if}
+            </button>
             <div class="falt">
               <input class="namn-in scd" bind:value={t.namn} on:change={() => gerTavling(t)} placeholder="Tävlingens namn" />
               <div class="dubbel">
@@ -83,6 +104,7 @@
                   {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
                 </select>
               </div>
+              <input bind:value={t.hemsida} on:change={() => gerTavling(t)} placeholder="Hemsida" />
             </div>
             {#if sparad === t.id}<span class="flash">✓</span>{/if}
             <button class="x" on:click={() => taBortTavling(t)} title="Ta bort">×</button>
@@ -93,31 +115,50 @@
     </section>
 
     <section>
-      <div class="caps">Lag</div>
+      <div class="caps">Lag &amp; utövare</div>
       <div class="lista">
         {#each lag as l (l.id)}
           <div class="kort">
-            <div class="logo scd">{initial(l.namn)}</div>
+            <button class="logo scd" class:rund={l.kind === 'individ'} on:click={() => valjLoggaLag(l)} title="Välj logga/porträtt">
+              {#if l.logga}<img src={bildUrl(l.logga)} alt="" />{:else}{initial(l.namn)}{/if}
+            </button>
             <div class="falt">
-              <input class="namn-in scd" bind:value={l.namn} on:change={() => gerLag(l)} placeholder="Lagnamn" />
+              <div class="rad1">
+                <input class="namn-in scd" bind:value={l.namn} on:change={() => gerLag(l)}
+                  placeholder={l.kind === 'individ' ? 'Namn' : 'Lagnamn'} />
+                <div class="seg">
+                  <button class:on={l.kind !== 'individ'} on:click={() => sattKind(l, 'team')}>Lag</button>
+                  <button class:on={l.kind === 'individ'} on:click={() => sattKind(l, 'individ')}>Individ</button>
+                </div>
+              </div>
               <div class="dubbel">
                 <input bind:value={l.instagram} on:change={() => gerLag(l)} placeholder="@instagram" />
                 <input bind:value={l.hemsida} on:change={() => gerLag(l)} placeholder="Hemsida" />
               </div>
-              <div class="stall">
-                <span class="lbl">Ställ</span>
-                <input type="color" bind:value={l.stall_hemma} on:change={() => gerLag(l)} title="Hemma" />
-                <input type="color" bind:value={l.stall_borta} on:change={() => gerLag(l)} title="Borta" />
-                <input type="color" bind:value={l.stall_tredje} on:change={() => gerLag(l)} title="Tredje" />
-                <span class="lbl mut">hemma · borta · tredje</span>
-                {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
-              </div>
+
+              {#if l.kind === 'individ'}
+                <div class="stall">
+                  <span class="lbl">Profil</span>
+                  <input type="color" bind:value={l.profilfarg} on:change={() => gerLag(l)} title="Profilfärg" />
+                  <input class="klubb" bind:value={l.klubb} on:change={() => gerLag(l)} placeholder="Klubb / land" />
+                  {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
+                </div>
+              {:else}
+                <div class="stall">
+                  <span class="lbl">Ställ</span>
+                  <input type="color" bind:value={l.stall_hemma} on:change={() => gerLag(l)} title="Hemma" />
+                  <input type="color" bind:value={l.stall_borta} on:change={() => gerLag(l)} title="Borta" />
+                  <input type="color" bind:value={l.stall_tredje} on:change={() => gerLag(l)} title="Tredje" />
+                  <span class="lbl mut">hemma · borta · tredje</span>
+                  {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
+                </div>
+              {/if}
             </div>
             <button class="x" on:click={() => taBortLag(l)} title="Ta bort">×</button>
           </div>
         {/each}
       </div>
-      <button class="ny" on:click={nyttLag}>+ Lägg till lag</button>
+      <button class="ny" on:click={nyttLag}>+ Lägg till lag / utövare</button>
     </section>
   {/if}
 </div>
@@ -137,17 +178,30 @@
   .kort { display: flex; gap: 14px; align-items: flex-start; background: var(--kort);
     border: 1px solid var(--div); border-radius: var(--r); padding: 14px;
     box-shadow: var(--skugga); position: relative; }
-  .logo { width: 42px; height: 42px; flex: none; border-radius: 10px;
-    background: var(--acc-soft); color: var(--acc); display: flex;
-    align-items: center; justify-content: center; font-size: 15px; font-weight: 700; }
+  .logo { width: 42px; height: 42px; flex: none; border-radius: 10px; border: 0;
+    background: var(--acc-soft); color: var(--acc); display: flex; overflow: hidden;
+    align-items: center; justify-content: center; font-size: 15px; font-weight: 700;
+    cursor: pointer; padding: 0; }
+  .logo.rund { border-radius: 50%; }
+  .logo:hover { outline: 2px solid var(--acc); outline-offset: 1px; }
+  .logo img { width: 100%; height: 100%; object-fit: cover; }
 
   .falt { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .rad1 { display: flex; gap: 8px; align-items: center; }
+  .rad1 .namn-in { flex: 1; min-width: 0; }
   .dubbel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   input, select { padding: 7px 10px; border: 1px solid var(--div); border-radius: 8px;
     background: var(--panel); color: var(--t-head); font-size: 13px; }
   input:focus, select:focus { outline: none; border-color: var(--acc); }
   .namn-in { font-size: 15px; font-weight: 700; }
+
+  .seg { display: flex; flex: none; border: 1px solid var(--div); border-radius: 8px; overflow: hidden; }
+  .seg button { padding: 6px 12px; border: 0; background: var(--panel); color: var(--t-mut);
+    font-size: 12px; font-weight: 600; cursor: pointer; }
+  .seg button.on { background: var(--acc); color: var(--kort); }
+
   .stall { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .klubb { flex: 1; min-width: 120px; }
   .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.05em; color: var(--t-caps); }
   .lbl.mut { font-weight: 500; color: var(--t-help); text-transform: none; letter-spacing: 0; }
