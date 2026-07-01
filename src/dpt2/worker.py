@@ -103,6 +103,27 @@ def jobb_gallra(args):
         _emit(event("fel", text=r.get("fel", "okänt fel")))
 
 
+def jobb_nummer(args):
+    """Läser tröjnummer på ett urvals bilder → keywords (YOLO + EasyOCR)."""
+    from dpt2.motorer import ai_lager
+    from dpt2.tjanster import nummer_korning
+    urval_id = args.get("urval_id")
+    if not urval_id:
+        _emit(event("fel", text="Inget urval_id angivet.")); return
+    _emit(event("start", jobb="nummer"))
+    _emit(event("progress", andel=0.05, text="Laddar YOLO + EasyOCR…"))
+    modeller = ai_lager.ladda_modeller(med_ocr=True, n_pose=1)
+    def progress(n, tot):
+        _emit(event("progress", andel=round(0.1 + 0.85 * n / max(1, tot), 3),
+                    text=f"OCR {n}/{tot}"))
+    r = nummer_korning.kor_nummer(_db(args), urval_id, modeller,
+                                  logg=_logg(), progress=progress)
+    if r.get("ok"):
+        _emit(event("klar", resultat=r))
+    else:
+        _emit(event("fel", text=r.get("fel", "okänt fel")))
+
+
 def _jobb_ej_implementerad(namn):
     def kor(_args):
         _emit(event("start", jobb=namn))
@@ -119,7 +140,7 @@ JOBB = {
     "omrakna": jobb_omrakna,
     "trana": jobb_trana,
     "gallra": jobb_gallra,
-    "nummer": _jobb_ej_implementerad("nummer"),
+    "nummer": jobb_nummer,
     "story": _jobb_ej_implementerad("story"),
 }
 

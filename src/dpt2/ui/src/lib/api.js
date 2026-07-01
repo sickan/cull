@@ -182,6 +182,15 @@ export async function levereraUrval(urvalId, config = {}) {
   return wait({ ok: true, status: 'levererad', skrivna: u.bilder, ratade: 0 })
 }
 
+export async function startaNummer(urvalId) {
+  const api = brygga()
+  if (api) return api.starta_nummer(urvalId)
+  const u = MOCK_URVAL.find((x) => x.id === urvalId)
+  const n = u ? u.bilder : 0
+  return wait({ ok: true, resultat: { totalt: n, skrivna: Math.round(n * 0.8), luckor: Math.round(n * 0.1) },
+    meddelande: `Tröjnummer skrivna på ${Math.round(n * 0.8)} av ${n} bilder.` })
+}
+
 export async function genereraBildsvep(matchinfo, sport = '', hemmaFarg = '') {
   const api = brygga()
   if (api) return api.generera_bildsvep(matchinfo, sport, hemmaFarg)

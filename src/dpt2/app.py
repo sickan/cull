@@ -141,6 +141,19 @@ class Api:
     def lista_urval(self, status=None):
         return store.lista_urval(self.conn, status=status)
 
+    def starta_nummer(self, urval_id):
+        """Läser tröjnummer på urvalets bilder → keywords, i workern (YOLO+OCR).
+        Roster + hemmafärg härleds ur matchen. Strömmar event till loggen."""
+        if not urval_id:
+            return {"ok": False, "fel": "Inget urval_id."}
+        r = self._kor_jobb("nummer", {"urval_id": urval_id})
+        res = r.get("resultat")
+        return {"ok": r["ok"], "resultat": res, "fel": r.get("fel"),
+                "meddelande": (f"Tröjnummer skrivna på {res['skrivna']} av "
+                               f"{res['totalt']} bilder ({res['luckor']} luckor)."
+                               if r["ok"] and res
+                               else (r.get("fel") or "Kunde inte läsa nummer."))}
+
     def leverera_urval(self, urval_id, config=None):
         """Skriver XMP-sidecars för urvalets källmapp (husstil-preset + EV-knuff)
         och sätter urvalets status → levererad. Den lätta, in-process-delen:

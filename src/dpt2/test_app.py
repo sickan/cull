@@ -192,6 +192,9 @@ class TestApi(unittest.TestCase):
     def test_starta_gallring_utan_urval(self):
         self.assertFalse(self.api.starta_gallring("")["ok"])
 
+    def test_starta_nummer_utan_urval(self):
+        self.assertFalse(self.api.starta_nummer("")["ok"])
+
 
     def test_logg_kor_demo_buffrar_och_rensar(self):
         res = self.api.kor_demo_jobb(3)

@@ -1,11 +1,12 @@
 <script>
   import { onMount } from 'svelte'
-  import { listaUrval, levereraUrval } from '../lib/api.js'
+  import { listaUrval, levereraUrval, startaNummer } from '../lib/api.js'
 
   let urval = []
   let laddar = true
   let oppen = null          // expanderat urval-id
   let korId = null          // urval som levereras just nu
+  let nummerId = null       // urval som läser tröjnummer just nu
   let resultat = {}         // urval-id → {skrivna, ratade} / {fel}
   let cfg = {}              // urval-id → { husstil, exp_bump, objektiv }
 
@@ -34,6 +35,13 @@
       oppen = null
     }
     korId = null
+  }
+
+  async function lasNummer(u) {
+    nummerId = u.id
+    const r = await startaNummer(u.id)
+    resultat = { ...resultat, [u.id]: { ...r, nummer: true } }
+    nummerId = null
   }
 
   const label = (u) =>
@@ -83,15 +91,20 @@
                 {#if resultat[u.id] && !resultat[u.id].ok}
                   <span class="status fel">{resultat[u.id].fel}</span>
                 {/if}
+                <button class="sek" on:click={() => lasNummer(u)} disabled={nummerId === u.id}>
+                  {nummerId === u.id ? 'Läser nummer…' : 'Läs tröjnummer'}
+                </button>
                 <button class="prim" on:click={() => leverera(u)} disabled={korId === u.id}>
                   {korId === u.id ? 'Skriver sidecars…' : 'Leverera ›'}
                 </button>
               </div>
-              <p class="not">Upprätning via Apple Vision och tröjnummer-OCR körs i ML-workern (kommande). Nu skrivs husstil + exponering.</p>
+              <p class="not">Läs tröjnummer (YOLO + OCR, roster ur matchen) skriver nummer-keywords. Leverera skriver husstil/exponering-sidecars. Upprätning via Apple Vision kommer.</p>
             </div>
           {/if}
 
-          {#if resultat[u.id] && resultat[u.id].ok}
+          {#if resultat[u.id] && resultat[u.id].ok && resultat[u.id].nummer}
+            <div class="klar">✓ Tröjnummer skrivna på {resultat[u.id].resultat.skrivna} av {resultat[u.id].resultat.totalt} bilder ({resultat[u.id].resultat.luckor} luckor).</div>
+          {:else if resultat[u.id] && resultat[u.id].ok}
             <div class="klar">✓ {resultat[u.id].skrivna} sidecars skrivna{resultat[u.id].ratade ? `, ${resultat[u.id].ratade} rätade` : ''}.</div>
           {/if}
         </div>

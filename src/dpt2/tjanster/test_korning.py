@@ -59,6 +59,10 @@ class TestWorkerMain(unittest.TestCase):
         worker.main(["gallra", "{}"])           # returnerar före modell-laddning
         self.assertEqual(self.rader[-1]["typ"], "fel")
 
+    def test_nummer_utan_urval_id_ger_fel(self):
+        worker.main(["nummer", "{}"])
+        self.assertEqual(self.rader[-1]["typ"], "fel")
+
     def test_ej_implementerat_jobb_ger_fel_event(self):
         worker.main(["gallra", "{}"])
         self.assertEqual(self.rader[-1]["typ"], "fel")
