@@ -296,5 +296,32 @@ class TestMigrering(unittest.TestCase):
         self.assertEqual(c.execute("SELECT namn FROM lag WHERE id='x'").fetchone()[0], "X")
 
 
+class TestSomeMaterial(unittest.TestCase):
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.mid = store.spara_match(self.c, {"lag_hemma": "A", "lag_borta": "B"})
+
+    def test_spara_och_lista_nyast_forst(self):
+        store.spara_some_material(self.c, kanal="instagram", format="story",
+                                  match_id=self.mid, moment="Avspark", tema="Hav",
+                                  fil="/foto/b1.jpg", skapad="2026-06-30T10:00:00")
+        store.spara_some_material(self.c, kanal="facebook", format="inlägg",
+                                  match_id=self.mid, moment="Avspark",
+                                  fil="/foto/b1.jpg", skapad="2026-06-30T11:00:00")
+        rader = store.lista_some_material(self.c, self.mid)
+        self.assertEqual(len(rader), 2)
+        self.assertEqual(rader[0]["kanal"], "facebook")     # nyast först
+        self.assertEqual(rader[1]["format"], "story")
+
+    def test_lista_filtrerar_pa_match(self):
+        store.spara_some_material(self.c, kanal="instagram", format="story",
+                                  match_id=self.mid)
+        self.assertEqual(store.lista_some_material(self.c, "okand-match"), [])
+
+    def test_utan_match_id_ok(self):
+        sid = store.spara_some_material(self.c, kanal="instagram", format="story")
+        self.assertTrue(sid)                                # match_id=None → ingen FK
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

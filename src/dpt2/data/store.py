@@ -556,3 +556,24 @@ def merge_in_trupp(conn, match_id, nya_spelare, *, bevara_start=False):
         m.get("spelare", []), nya_spelare, bevara_start=bevara_start)
     spara_match(conn, m)
     return hamta_match(conn, match_id)
+
+
+# ── SoMe-material (Publicera) ─────────────────────────────────────────────────
+def spara_some_material(conn, *, kanal, format, match_id=None, moment=None,
+                        tema=None, fil=None, id=None, skapad=None):
+    """Spårar EN publicerad post (Instagram/Facebook/TikTok). Skrivs först när en
+    post faktiskt gått ut (inte i dry-run). Returnerar some_material-id."""
+    sid = id or ny_id()
+    conn.execute(
+        "INSERT OR REPLACE INTO some_material"
+        "(id,match_id,kanal,format,moment,tema,fil,skapad) VALUES(?,?,?,?,?,?,?,?)",
+        (sid, match_id, kanal, format, moment, tema, fil, skapad or _nu()))
+    conn.commit()
+    return sid
+
+
+def lista_some_material(conn, match_id):
+    """Publicerade poster för en match, nyast först (Publicera-panelens historik)."""
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM some_material WHERE match_id=? ORDER BY skapad DESC",
+        (match_id,))]

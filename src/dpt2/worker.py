@@ -136,6 +136,34 @@ def jobb_story(args):
         _emit(event("fel", text=r.get("fel", "okänt fel")))
 
 
+def jobb_publicera(args):
+    """Publicerar ett paket (färdiga bilder + caption) till SoMe-kanalerna.
+    dry_run som default — utan skarp=True rörs inga API:er, bara planen loggas."""
+    from dpt2.tjanster import meta_api, publicera_korning
+    config = args.get("config") or {}
+    dry_run = not args.get("skarp")
+    _emit(event("start", jobb="publicera"))
+    def progress(n, tot):
+        _emit(event("progress", andel=round(n / max(1, tot), 3),
+                    text=f"Post {n}/{tot}"))
+    # Kanal-adapter för skarp körning: stub (test av flödet) eller riktig ur env.
+    poster = None
+    if not dry_run:
+        poster = (meta_api.stub_poster(_logg()) if args.get("stub")
+                  else meta_api.fran_env(logg=_logg()))
+        if poster is None:
+            _emit(event("fel", text="Skarp publicering saknar Meta-token "
+                        "(META_ACCESS_TOKEN). Kör med stub=True eller dry-run."))
+            return
+    r = publicera_korning.kor_publicering(
+        _db(args), config, poster=poster, dry_run=dry_run,
+        logg=_logg(), progress=progress)
+    if r.get("ok"):
+        _emit(event("klar", resultat=r))
+    else:
+        _emit(event("fel", text=r.get("fel", "okänt fel")))
+
+
 def _jobb_ej_implementerad(namn):
     def kor(_args):
         _emit(event("start", jobb=namn))
@@ -154,6 +182,7 @@ JOBB = {
     "gallra": jobb_gallra,
     "nummer": jobb_nummer,
     "story": jobb_story,
+    "publicera": jobb_publicera,
 }
 
 
