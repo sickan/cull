@@ -51,7 +51,19 @@ class TestKalender(unittest.TestCase):
     def test_fel_status_ger_tom_lista(self):
         t = FejkTransport({("GET", "/api/events"): (401, {"error": "Ogiltig API-nyckel"})})
         k = Kalender(api_key="fel", transport=t)
-        self.assertEqual(k.lista_jobb(), [])
+        self.assertEqual(k.lista_jobb(forsok=1), [])   # forsok=1 → ingen backoff-sömn
+
+    def test_retry_vid_kall_start(self):
+        # Första anropet failar (kall Worker), andra ger data → retry räddar.
+        class Flaky:
+            def __init__(s): s.n = 0
+            def __call__(s, m, url, *, headers=None, body=None, timeout=20):
+                s.n += 1
+                if s.n == 1:
+                    raise RuntimeError("connection reset")
+                return 200, {"events": [{"id": "1"}]}
+        k = Kalender(api_key="x", transport=Flaky())
+        self.assertEqual(len(k.lista_jobb()), 1)       # andra försöket lyckas
 
 
 if __name__ == "__main__":
