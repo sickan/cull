@@ -70,6 +70,27 @@ def satt_urval_bilder(conn, urval_id, n):
     conn.commit()
 
 
+def ersatt_urval_bilder(conn, urval_id, rader):
+    """rader = [(stem, behall, poang)]. Ersätter per-bild-urvalet (DELETE+INSERT)
+    och sätter urval.bilder = antal behållna. Grund för Leverera/nummer."""
+    conn.execute("DELETE FROM urval_bild WHERE urval_id=?", (urval_id,))
+    conn.executemany(
+        "INSERT INTO urval_bild(urval_id,stem,behall,poang) VALUES(?,?,?,?)",
+        [(urval_id, stem, 1 if behall else 0,
+          float(poang) if poang is not None else None)
+         for stem, behall, poang in rader])
+    conn.execute("UPDATE urval SET bilder=? WHERE id=?",
+                 (sum(1 for _, b, _ in rader if b), urval_id))
+    conn.commit()
+
+
+def behall_stems(conn, urval_id):
+    """Stammar som gallringen behöll (behall=1). Tom lista om urvalet inte
+    gallrats per bild ännu → konsumenter faller tillbaka på hela mappen."""
+    return [r[0] for r in conn.execute(
+        "SELECT stem FROM urval_bild WHERE urval_id=? AND behall=1", (urval_id,))]
+
+
 def satt_urval_status(conn, urval_id, status):
     """gallrad → levererad → publicerad."""
     if status not in ("gallrad", "levererad", "publicerad"):

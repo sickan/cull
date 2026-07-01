@@ -18,6 +18,16 @@ class TestUrval(unittest.TestCase):
         self.assertEqual(u["kamera"], "NIKON Z 8")
         self.assertEqual(u["status"], "gallrad")      # default
 
+    def test_per_bild_urval_round_trip(self):
+        uid = store.spara_urval(self.c, kalla="x", bilder=0)
+        store.ersatt_urval_bilder(self.c, uid, [
+            ("s1", 1, 0.91), ("s2", 0, 0.30), ("s3", 1, 0.77)])
+        self.assertEqual(sorted(store.behall_stems(self.c, uid)), ["s1", "s3"])
+        self.assertEqual(store.hamta_urval(self.c, uid)["bilder"], 2)  # behåll-antal
+        # idempotent: omkörning ersätter
+        store.ersatt_urval_bilder(self.c, uid, [("s1", 1, 0.91)])
+        self.assertEqual(store.behall_stems(self.c, uid), ["s1"])
+
     def test_status_livscykel(self):
         uid = store.spara_urval(self.c, kalla="x", bilder=10)
         store.satt_urval_status(self.c, uid, "levererad")
@@ -206,6 +216,23 @@ class TestLagTavling(unittest.TestCase):
         self.assertEqual(d["export_path"], "/sajt/content/event/cup.md")
         store.radera_innehall(self.c, iid)
         self.assertIsNone(store.hamta_innehall(self.c, iid))
+
+
+class TestMigrering(unittest.TestCase):
+    def test_fresh_db_ar_v2_med_urval_bild(self):
+        c = db.oppna(":memory:")
+        self.assertEqual(db.schemaversion(c), 2)
+        self.assertIn("urval_bild", db.tabeller(c))
+
+    def test_migrera_v1_till_v2(self):
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.execute("PRAGMA user_version=1")
+        c.execute("CREATE TABLE urval(id TEXT PRIMARY KEY)")   # v1-läge
+        db._migrera(c, 1)
+        namn = [r[0] for r in c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")]
+        self.assertIn("urval_bild", namn)
 
 
 if __name__ == "__main__":

@@ -95,7 +95,11 @@ def kor_gallring(conn, urval_id, modeller, *, env=None, logg=print, progress=Non
         logg("  Ingen tränad modell — handsatt poängformel.")
     valda, info = gallra(resultat, cfg, modellpoang_satt=paket is not None)
 
-    store.satt_urval_bilder(conn, urval_id, len(valda))
+    # Persistera per-bild-urvalet (behåll-flagga + poäng) → Leverera/nummer.
+    behall_id = {r["fil"] for r in valda}
+    store.ersatt_urval_bilder(conn, urval_id, [
+        (Path(r["fil"]).stem, r["fil"] in behall_id, r.get("poang"))
+        for r in resultat])
     logg(f"✓ Behåller {len(valda)} av {len(resultat)}.")
     return {"ok": True, "totalt": len(resultat), "behall": len(valda),
             "modell": (jobb or {}).get("modell") if paket is not None else "handsatt",

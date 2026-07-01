@@ -94,6 +94,15 @@ CREATE TABLE urval (
 );
 CREATE INDEX idx_urval_match ON urval(match_id);
 
+-- Per-bild-urval: vilka bilder gallringen behöll (grund för Leverera/nummer).
+CREATE TABLE urval_bild (
+  urval_id TEXT NOT NULL REFERENCES urval(id) ON DELETE CASCADE,
+  stem     TEXT NOT NULL,
+  behall   INTEGER NOT NULL DEFAULT 0,     -- 1 = behållen av gallringen
+  poang    REAL,                            -- modell/handsatt-poäng
+  PRIMARY KEY (urval_id, stem)
+);
+
 CREATE TABLE cull_jobb (
   id            TEXT PRIMARY KEY,
   urval_id      TEXT REFERENCES urval(id) ON DELETE CASCADE,

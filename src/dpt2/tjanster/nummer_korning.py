@@ -46,6 +46,9 @@ def kor_nummer(conn, urval_id, modeller, *, env=None, min_konf=0.45,
     lag_roster = roster_av_match(conn, urval.get("match_id"))
     kalla = urval.get("kalla") or ""
     grupper = N._bilder_per_stam(Path(kalla))
+    kept = set(store.behall_stems(conn, urval_id))
+    if kept:                                  # bara gallringens behållna bilder
+        grupper = {s: f for s, f in grupper.items() if s in kept}
     if not grupper:
         return {"ok": False, "fel": f"Inga bildfiler i källmappen ({kalla})."}
     ocr = modeller.get("ocr")

@@ -163,6 +163,9 @@ class Api:
         if not urval:
             return {"ok": False, "fel": "Okänt urval."}
         filer = leverera.lista_bilder(urval.get("kalla") or "")
+        kept = set(store.behall_stems(self.conn, urval_id))
+        if kept:                              # bara gallringens behållna bilder
+            filer = [f for f in filer if f.stem in kept]
         if not filer:
             return {"ok": False, "fel": "Hittar inga bildfiler i källmappen "
                     f"({urval.get('kalla') or '—'})."}

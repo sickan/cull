@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -71,9 +71,17 @@ def init_db(conn):
 
 
 def _migrera(conn, fran_version):
-    """Framtida inkrementella migreringssteg (v1→v2 osv.). Tom i v1."""
-    raise NotImplementedError(
-        f"Ingen migreringsväg från schemaversion {fran_version} ännu.")
+    """Inkrementella migreringssteg. Varje steg är additivt och idempotent."""
+    if fran_version < 2:
+        # v2: per-bild-urval (vilka bilder gallringen behöll).
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS urval_bild (
+          urval_id TEXT NOT NULL REFERENCES urval(id) ON DELETE CASCADE,
+          stem     TEXT NOT NULL,
+          behall   INTEGER NOT NULL DEFAULT 0,
+          poang    REAL,
+          PRIMARY KEY (urval_id, stem)
+        );""")
 
 
 def tabeller(conn):
