@@ -116,9 +116,15 @@
   function nyttJobb() {
     modal = { title: '', start_at: '', end_at: '', location: '', description: '', category: '', all_day: false }
   }
+  // datetime-local kräver 'YYYY-MM-DDTHH:mm' — heldagsjobb lagras som rent datum
+  // ('2026-10-24') och skulle annars lämna fältet tomt (placeholder).
+  const tillLokal = (v) => {
+    const s = (v || '').slice(0, 16)
+    return !s ? '' : s.includes('T') ? s : s + 'T00:00'
+  }
   function andra(j) {
     modal = { ...j, category: j.category || '',
-      start_at: (j.start_at || '').slice(0, 16), end_at: (j.end_at || '').slice(0, 16) }
+      start_at: tillLokal(j.start_at), end_at: tillLokal(j.end_at) }
   }
   async function taBort(j) {
     await raderaFotojobb(j.id)
@@ -126,6 +132,10 @@
   }
   async function sparaModal() {
     const d = { ...modal, category: modal.category || null }
+    if (d.all_day) {          // heldag lagras som rent datum (inklusivt slut)
+      d.start_at = (d.start_at || '').slice(0, 10)
+      d.end_at = (d.end_at || d.start_at || '').slice(0, 10)
+    }
     await sparaFotojobb(d)
     modal = null
     await laddaOm()
