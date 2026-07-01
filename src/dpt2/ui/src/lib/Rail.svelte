@@ -5,6 +5,7 @@
 
   const grupper = [
     { rubrik: 'Planera', poster: [
+      { id: 'fotojobb', namn: 'Fotojobb' },
       { id: 'matcher', namn: 'Matcher' },
       { id: 'lag', namn: 'Lag & tävlingar' },
     ] },
@@ -17,12 +18,18 @@
     { rubrik: 'System', poster: [
       { id: 'trana', namn: 'Träna' },
       { id: 'logg', namn: 'Logg' },
+      { id: 'installningar', namn: 'Inställningar' },
     ] },
   ]
 </script>
 
 <nav>
-  <div class="brand scd">Dalecarlia<span>Photo Tools</span></div>
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+      <path d="M4 19c1.5-6 5-9 9-9 1.8 0 3 .6 3 .6l2-2.2M18 5.5l1.2 2.4M11 10.5c-.5 2 .2 4.5 2 6.5" />
+    </svg>
+    <div class="ord scd">Dalecarlia Photo<span>Photo Tools · v2.1.0</span></div>
+  </div>
   {#each grupper as g}
     <div class="rubrik">{g.rubrik}</div>
     {#each g.poster as p}
@@ -40,12 +47,12 @@
     background: var(--panel); border-right: 1px solid var(--div);
     padding: 14px 12px 24px;
   }
-  .brand {
-    font-weight: 700; font-size: 16px; color: var(--t-head);
-    padding: 6px 8px 4px; line-height: 1.1; display: flex; flex-direction: column;
-  }
-  .brand span { font-family: var(--font); font-weight: 500; font-size: 11px;
-    letter-spacing: 0.14em; text-transform: uppercase; color: var(--acc); }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 6px 8px 4px; }
+  .mark { width: 26px; height: 26px; flex: none; color: var(--acc); }
+  .ord { font-weight: 700; font-size: 15px; color: var(--t-head); line-height: 1.05;
+    display: flex; flex-direction: column; }
+  .ord span { font-family: var(--font); font-weight: 600; font-size: 9px;
+    letter-spacing: 0.22em; text-transform: uppercase; color: var(--acc); margin-top: 3px; }
   .rubrik {
     font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--t-caps); padding: 16px 10px 6px;

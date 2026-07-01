@@ -1,5 +1,7 @@
 <script>
+  import { onMount } from 'svelte'
   import Rail from './lib/Rail.svelte'
+  import Fotojobb from './panels/Fotojobb.svelte'
   import Matcher from './panels/Matcher.svelte'
   import Lag from './panels/Lag.svelte'
   import Gallra from './panels/Gallra.svelte'
@@ -8,25 +10,23 @@
   import Innehall from './panels/Innehall.svelte'
   import Trana from './panels/Trana.svelte'
   import Logg from './panels/Logg.svelte'
-  import { erMock } from './lib/api.js'
+  import Installningar from './panels/Installningar.svelte'
+  import { erMock, aktivMatch } from './lib/api.js'
 
-  // Beräknas vid komponent-init (efter att bryggan väntats in i main.js).
   const ARMOCK = erMock()
 
-  let aktiv = 'matcher'
+  let aktiv = 'fotojobb'
   let tema = 'light'
-  let aktivMatchData = null   // matchen som "Aktivera match" skickar till Gallra
+  let aktivMatchData = null
+  let aktivM = null            // global aktiv match (topp-widget)
 
-  const NAMN = {
-    matcher: 'Matcher', lag: 'Lag & tävlingar', gallra: 'Gallra',
-    leverera: 'Leverera', publicera: 'Publicera', innehall: 'Innehåll',
-    trana: 'Träna', logg: 'Logg',
-  }
+  onMount(async () => { aktivM = await aktivMatch() })
 
   function vaxlaTema() {
     tema = tema === 'light' ? 'dark' : 'light'
     document.documentElement.setAttribute('data-theme', tema)
   }
+  function aktiveraFranMatcher(m) { aktivMatchData = m; aktivM = m; aktiv = 'gallra' }
 </script>
 
 <div class="app">
@@ -34,14 +34,28 @@
 
   <main>
     <div class="topbar">
-      {#if ARMOCK}<span class="mock">mockdata · ingen Python-brygga</span>{/if}
-      <button class="tema" on:click={vaxlaTema} title="Växla tema">
-        {tema === 'light' ? '☾' : '☀'}
+      <button class="widget match" on:click={() => (aktiv = 'matcher')} title="Aktiv match">
+        <span class="dot" class:pa={aktivM}></span>
+        <span class="wtext">
+          <span class="wlbl">Aktiv match</span>
+          <span class="wval scd">{aktivM ? `${aktivM.lag_hemma} – ${aktivM.lag_borta}` : 'Ingen vald'}</span>
+        </span>
       </button>
+      <button class="widget urval" on:click={() => (aktiv = 'gallra')} title="Urval">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="ic"><path d="M3 7.5A2 2 0 015 5.5h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+        <span class="wtext">
+          <span class="wval scd">Inget urval valt</span>
+          <span class="wlbl">Klicka för att välja</span>
+        </span>
+      </button>
+      {#if ARMOCK}<span class="mock">mock</span>{/if}
+      <button class="tema" on:click={vaxlaTema} title="Växla tema">{tema === 'light' ? '☾' : '☀'}</button>
     </div>
 
-    {#if aktiv === 'matcher'}
-      <Matcher on:aktiverad={(e) => { aktivMatchData = e.detail; aktiv = 'gallra' }} />
+    {#if aktiv === 'fotojobb'}
+      <Fotojobb on:navigera={(e) => (aktiv = e.detail)} />
+    {:else if aktiv === 'matcher'}
+      <Matcher on:aktiverad={(e) => aktiveraFranMatcher(e.detail)} />
     {:else if aktiv === 'lag'}
       <Lag />
     {:else if aktiv === 'gallra'}
@@ -56,31 +70,34 @@
       <Trana />
     {:else if aktiv === 'logg'}
       <Logg />
-    {:else}
-      <div class="platshallare">
-        <h1 class="scd">{NAMN[aktiv]}</h1>
-        <p>Den här panelen byggs i en kommande fas.</p>
-      </div>
+    {:else if aktiv === 'installningar'}
+      <Installningar />
     {/if}
   </main>
 </div>
 
 <style>
   .app { display: flex; height: 100vh; overflow: hidden; }
-  main { flex: 1; min-width: 0; overflow-y: auto; position: relative; }
+  main { flex: 1; min-width: 0; overflow-y: auto; position: relative; display: flex; flex-direction: column; }
   .topbar {
     position: sticky; top: 0; z-index: 5; display: flex; align-items: center;
-    justify-content: flex-end; gap: 12px; height: 46px; padding: 0 22px;
+    justify-content: flex-end; gap: 10px; min-height: 58px; padding: 10px 22px;
     background: color-mix(in srgb, var(--sand) 86%, transparent);
-    backdrop-filter: blur(8px); border-bottom: 1px solid var(--div3);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--div3); flex: none;
   }
-  .mock { font-size: 11px; color: var(--varn); font-weight: 600;
-    background: color-mix(in srgb, var(--varn) 14%, transparent);
-    padding: 3px 9px; border-radius: 999px; }
-  .tema { width: 32px; height: 32px; border: 1px solid var(--div); border-radius: 8px;
-    background: var(--kort); color: var(--t-head); font-size: 15px; }
+  .widget { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 14px;
+    background: var(--kort); border: 1px solid var(--div); border-radius: 20px; color: var(--t-head); }
+  .widget:hover { border-color: var(--acc); }
+  .widget.match { margin-right: auto; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--t-help); flex: none; }
+  .dot.pa { background: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+  .ic { width: 17px; height: 17px; color: var(--t-mut); flex: none; }
+  .wtext { display: flex; flex-direction: column; line-height: 1.1; text-align: left; }
+  .wlbl { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t-mut); font-weight: 600; }
+  .wval { font-size: 13px; font-weight: 700; color: var(--t-head); }
+  .mock { font-size: 10px; color: var(--varn); font-weight: 700;
+    background: color-mix(in srgb, var(--varn) 14%, transparent); padding: 3px 8px; border-radius: 999px; }
+  .tema { width: 40px; height: 40px; border: 1px solid var(--div); border-radius: 20px;
+    background: var(--kort); color: var(--t-head); font-size: 15px; flex: none; }
   .tema:hover { background: var(--div3); }
-  .platshallare { padding: 40px 26px; color: var(--t-mut); }
-  .platshallare h1 { color: var(--t-head); font-size: 25px; margin: 0 0 6px; }
-  .platshallare p { font-size: 13px; }
 </style>
