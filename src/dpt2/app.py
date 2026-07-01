@@ -74,15 +74,20 @@ class Api:
     def lista_lag(self):
         return store.lista_lag(self.conn)
 
+    def lista_lag_for_tavling(self, tavling_id):
+        return store.lista_lag_for_tavling(self.conn, tavling_id)
+
     def lista_tavlingar(self):
         return store.lista_tavlingar(self.conn)
 
     def spara_lag(self, lag):
         lid = store.upsert_lag(
-            self.conn, lag.get("namn", ""), logga=lag.get("logga"),
-            instagram=lag.get("instagram"), hemsida=lag.get("hemsida"),
-            stall_hemma=lag.get("stall_hemma"), stall_borta=lag.get("stall_borta"),
-            stall_tredje=lag.get("stall_tredje"))
+            self.conn, lag.get("namn", ""), kind=lag.get("kind"),
+            logga=lag.get("logga"), instagram=lag.get("instagram"),
+            hemsida=lag.get("hemsida"), stall_hemma=lag.get("stall_hemma"),
+            stall_borta=lag.get("stall_borta"),
+            stall_tredje=lag.get("stall_tredje"),
+            profilfarg=lag.get("profilfarg"), klubb=lag.get("klubb"))
         return {"ok": bool(lid), "id": lid}
 
     def spara_tavling(self, tavling):
@@ -90,7 +95,8 @@ class Api:
             self.conn, tavling.get("namn", ""),
             sport=(tavling.get("sport") or "fotboll"),
             typ=(tavling.get("typ") or "liga"), ort=tavling.get("ort"),
-            arena=tavling.get("arena"), kalender=bool(tavling.get("kalender")))
+            arena=tavling.get("arena"), hemsida=tavling.get("hemsida"),
+            kalender=bool(tavling.get("kalender")))
         return {"ok": bool(tid), "id": tid}
 
     def radera_lag(self, id):

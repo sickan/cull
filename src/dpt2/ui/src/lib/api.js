@@ -11,19 +11,19 @@ const MOCK_MATCHER = [
     id: 'fb9679db75f5', datum: '2026-08-15', tid: '15:00',
     arena: 'Malmö Idrottsplats', status: 'kommande', resultat: '',
     sport: 'fotboll', lag_hemma: 'FC Rosengård', lag_borta: 'Eskilstuna United',
-    liga: 'OBOS Damallsvenskan',
+    liga: 'OBOS Damallsvenskan', hemfarg: '#8b1f3a', bortafarg: '#1d2a6b',
   },
   {
     id: 'a1b2c3d4e5f6', datum: '2026-06-27', tid: '14:00',
     arena: 'Eleda Stadion', status: 'avslutad', resultat: '6-0',
     sport: 'fotboll', lag_hemma: 'Malmö FF', lag_borta: 'Kristianstads DFF',
-    liga: 'OBOS Damallsvenskan',
+    liga: 'OBOS Damallsvenskan', hemfarg: '#8fb7de', bortafarg: '#C0392B',
   },
   {
     id: 'c0ffee001122', datum: '2026-09-03', tid: '19:00',
     arena: 'Baltiska Hallen', status: 'kommande', resultat: '',
     sport: 'handboll', lag_hemma: 'HK Malmö', lag_borta: 'IK Sävehof',
-    liga: 'Handbollsligan',
+    liga: 'Handbollsligan', hemfarg: '#0a2342', bortafarg: '#1E824C',
   },
 ]
 
@@ -40,16 +40,24 @@ const MOCK_FULL = {
 }
 
 const MOCK_LAG = [
-  { id: 'fc-rosengard', namn: 'FC Rosengård', instagram: '@fcrosengard', hemsida: 'fcrosengard.se', logga: null, stall_hemma: '#8b1f3a', stall_borta: '#ffffff', stall_tredje: '#16181c' },
-  { id: 'eskilstuna-united', namn: 'Eskilstuna United', instagram: '@eskilstunaunited', hemsida: 'eskilstunaunited.se', logga: null, stall_hemma: '#1d2a6b', stall_borta: '#ffd200', stall_tredje: '' },
-  { id: 'malmo-ff', namn: 'Malmö FF', instagram: '@malmoff_dam', hemsida: 'malmoff.se', logga: null, stall_hemma: '#8fb7de', stall_borta: '#ffffff', stall_tredje: '' },
-  { id: 'hk-malmo', namn: 'HK Malmö', instagram: '@hkmhandboll', hemsida: '', logga: null, stall_hemma: '#0a2342', stall_borta: '#e23', stall_tredje: '' },
+  { id: 'fc-rosengard', namn: 'FC Rosengård', kind: 'team', instagram: '@fcrosengard', hemsida: 'fcrosengard.se', logga: null, stall_hemma: '#8b1f3a', stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '', klubb: '' },
+  { id: 'eskilstuna-united', namn: 'Eskilstuna United', kind: 'team', instagram: '@eskilstunaunited', hemsida: 'eskilstunaunited.se', logga: null, stall_hemma: '#1d2a6b', stall_borta: '#ffd200', stall_tredje: '', profilfarg: '', klubb: '' },
+  { id: 'malmo-ff', namn: 'Malmö FF', kind: 'team', instagram: '@malmoff_dam', hemsida: 'malmoff.se', logga: null, stall_hemma: '#8fb7de', stall_borta: '#ffffff', stall_tredje: '', profilfarg: '', klubb: '' },
+  { id: 'hk-malmo', namn: 'HK Malmö', kind: 'team', instagram: '@hkmhandboll', hemsida: '', logga: null, stall_hemma: '#0a2342', stall_borta: '#e23', stall_tredje: '', profilfarg: '', klubb: '' },
+  { id: 'rebecca-peterson', namn: 'Rebecca Peterson', kind: 'individ', instagram: '@rebeccapeterson', hemsida: '', logga: null, stall_hemma: '', stall_borta: '', stall_tredje: '', profilfarg: '#2F7CB0', klubb: 'Sverige' },
 ]
 
 const MOCK_TAVLINGAR = [
-  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', ort: '', arena: '', kalender: 0 },
-  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', ort: '', arena: '', kalender: 0 },
+  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', ort: '', arena: '', hemsida: 'damallsvenskan.se', logga: null, kalender: 0 },
+  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', ort: '', arena: '', hemsida: '', logga: null, kalender: 0 },
 ]
+
+// Mock: vilka lag som deltar i en tävling (tavling_lag). I appen kommer detta
+// ur store.lista_lag_for_tavling; här räcker en enkel sport-baserad filtrering.
+const MOCK_TAVLING_LAG = {
+  'obos-damallsvenskan': ['fc-rosengard', 'eskilstuna-united', 'malmo-ff'],
+  'handbollsligan': ['hk-malmo'],
+}
 
 // Urval (Gallra producerar, Leverera konsumerar). Muteras lokalt i mock-läge.
 let MOCK_URVAL = [
@@ -88,6 +96,13 @@ export async function listaLag() {
   const api = brygga()
   if (api) return api.lista_lag()
   return wait(structuredClone(MOCK_LAG))
+}
+
+export async function listaLagForTavling(tavlingId) {
+  const api = brygga()
+  if (api) return api.lista_lag_for_tavling(tavlingId)
+  const ids = MOCK_TAVLING_LAG[tavlingId] || []
+  return wait(structuredClone(MOCK_LAG.filter((l) => ids.includes(l.id))))
 }
 
 export async function listaTavlingar() {
