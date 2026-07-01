@@ -11,6 +11,7 @@ går genom en injicerbar `transport`-seam → testbar utan nät (jfr tjanster.cl
 
 import json
 import os
+import time
 
 BAS_URL = "https://dpt-calendar-sync.stig-johansson.workers.dev"
 
@@ -54,16 +55,23 @@ class Kalender:
             return False
 
     # ── jobb ───────────────────────────────────────────────────────────────────
-    def lista_jobb(self):
+    def lista_jobb(self, forsok=3):
         """Alla aktiva jobb. Med nyckel → skyddat API (alla fält); annars publikt
-        (endast kommande, säkra fält)."""
-        if self.har_nyckel():
-            status, data = self._anrop("GET", "/api/events", auth=True)
-        else:
-            status, data = self._anrop("GET", "/api/public/events")
-        if status != 200 or not data:
-            return []
-        return data.get("events", data if isinstance(data, list) else [])
+        (endast kommande, säkra fält). Gör om anropet vid fel/icke-200 (kall
+        Cloudflare-Worker vid appstart failar ofta på FÖRSTA anropet)."""
+        vag = "/api/events" if self.har_nyckel() else "/api/public/events"
+        for i in range(max(1, forsok)):
+            try:
+                status, data = self._anrop("GET", vag, auth=self.har_nyckel())
+            except Exception:
+                status, data = 0, None
+            if status == 200:
+                if isinstance(data, dict):
+                    return data.get("events", [])
+                return data if isinstance(data, list) else []
+            if i < forsok - 1:
+                time.sleep(0.6)      # kort backoff, låt Workern vakna
+        return []
 
     def skapa_jobb(self, jobb):
         status, data = self._anrop("POST", "/api/events", body=jobb, auth=True)
