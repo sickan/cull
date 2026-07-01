@@ -52,6 +52,15 @@
     const cr = mal.getBoundingClientRect(), br = bodyEl.getBoundingClientRect()
     bodyEl.scrollTop += (cr.top - br.top) - 14
   }
+  function scrollTopp() { if (bodyEl) bodyEl.scrollTo({ top: 0, behavior: 'smooth' }) }
+
+  // Dagens post (intervall-medvetet: idag inom [start, end] — även heldag).
+  function arIdag(j) {
+    const t = new Date()
+    const idag = t.getFullYear() * 10000 + (t.getMonth() + 1) * 100 + t.getDate()
+    const s = dateKey(j.start_at), e = dateKey(j.end_at) || s
+    return s && idag >= s && idag <= e
+  }
 
   const katFarg = (c) => (c ? KAT_FARG[c] || NULLKAT : NULLKAT)
   const del = (iso) => (iso || '').split('T')[0].split('-').map(Number)
@@ -140,7 +149,10 @@
             on:click={() => (katFilter = f)}>{f}</button>
         {/each}
       </div>
-      <button class="tillidag" on:click={scrollTillIdag}>↓ Till idag</button>
+      <div class="hopp">
+        <button class="tillidag" on:click={scrollTopp}>↑ Till toppen</button>
+        <button class="tillidag" on:click={scrollTillIdag}>↓ Till idag</button>
+      </div>
     </div>
   </div>
 
@@ -194,10 +206,11 @@
             <div class="lista">
               {#each g.jobb as j (j.id)}
                 {#if j.all_day}
-                  <div class="rad heldag" data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
+                  <div class="rad heldag" class:idag={arIdag(j)} data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
                     <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
                     <span class="rtitel">{j.title}</span>
                     <span class="hlbl">Heldag</span>
+                    {#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}
                     <span class="synk" class:vantar={!synkad(j)}>{synkText(j)}</span>
                     <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
                       <option value="">Okategoriserat</option>
@@ -208,13 +221,13 @@
                     <button class="mini" on:click={() => taBort(j)}>Ta bort</button>
                   </div>
                 {:else}
-                  <div class="rad" data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
+                  <div class="rad" class:idag={arIdag(j)} data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
                     <div class="datum scd">
                       <div class="d" style="color:{katFarg(j.category)}">{del(j.start_at)[2] || '–'}</div>
                       <div class="wd">{veckodag(j.start_at)}</div>
                     </div>
                     <div class="mitt">
-                      <div class="rtitel stor">{j.title}</div>
+                      <div class="rtitel stor">{j.title}{#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}</div>
                       <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
                       <div class="undermeta">
                         <span class="synk" class:vantar={!synkad(j)}>{synkText(j)}</span>
@@ -301,10 +314,15 @@
 
   .livedate { font-size: 12px; color: var(--t-mut); margin-top: 3px; font-variant-numeric: tabular-nums; }
   .filterrad { margin-top: 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .hopp { display: flex; gap: 7px; flex: none; }
   .tillidag { display: inline-flex; align-items: center; gap: 6px; background: var(--kort);
     border: 1px solid var(--div); border-radius: 999px; padding: 6px 13px; font-size: 12.5px;
     font-weight: 600; color: var(--t-mut); flex: none; }
   .tillidag:hover { border-color: var(--acc); color: var(--acc); }
+  .idagbricka { display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px;
+    background: var(--acc); color: #fff; vertical-align: middle; }
+  .rad.idag { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-soft), var(--skugga); }
   .chips { display: flex; gap: 7px; flex-wrap: wrap; }
   .chip { padding: 5px 13px; border: 1px solid var(--div); border-radius: 999px;
     background: var(--kort); color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
