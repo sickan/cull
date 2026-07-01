@@ -118,7 +118,11 @@ class Api:
 
     def lista_fotojobb(self):
         try:
-            return self.kalender.lista_jobb()
+            jobb = self.kalender.lista_jobb()
+            if isinstance(jobb, list):
+                jobb = [j for j in jobb if not j.get("deleted")
+                        and j.get("status") != "cancelled"]
+            return jobb
         except Exception as e:
             return {"fel": str(e)}
 

@@ -48,9 +48,15 @@
   const synkad = (j) => !!j.google_event_id
   const synkText = (j) => (synkad(j) ? 'Google ✓' : 'Väntar')
 
-  $: filtrerade = jobb.filter((j) =>
-    katFilter === 'Alla' ? true
-      : katFilter === 'Okategoriserat' ? !j.category : j.category === katFilter)
+  // "Kommande" = från 7 dagar bakåt och framåt (inte hela historiken).
+  const _g = new Date(); _g.setDate(_g.getDate() - 7)
+  const GRANS = _g.toISOString().slice(0, 10)
+
+  $: filtrerade = jobb.filter((j) => {
+    const kat = katFilter === 'Alla' ? true
+      : katFilter === 'Okategoriserat' ? !j.category : j.category === katFilter
+    return kat && (j.start_at || '').slice(0, 10) >= GRANS
+  })
   $: grupper = gruppera(filtrerade)
 
   function gruppera(lista) {
