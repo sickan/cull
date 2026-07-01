@@ -1,5 +1,5 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte'
+  import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte'
   import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
@@ -9,6 +9,9 @@
   let laddar = true
   let layout = 'lista'          // lista | tidslinje
   let katFilter = 'Alla'
+  let bodyEl                    // scroll-container (för "Till idag")
+  let now = new Date()          // live-klocka
+  let klockIv
 
   let modal = null              // redigeringsutkast eller null
 
@@ -21,11 +24,34 @@
   const NULLKAT = 'rgba(35,32,26,.45)'
   const FILTER = ['Alla', ...KATEGORIER, 'Okategoriserat']
 
+  const WDAG = ['söndag', 'måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag', 'lördag']
+  const pad = (n) => String(n).padStart(2, '0')
+  $: liveDate = `${WDAG[now.getDay()]} ${now.getDate()} ${MAN[now.getMonth()].toLowerCase()} ${now.getFullYear()} · ${pad(now.getHours())}:${pad(now.getMinutes())}`
+
   onMount(async () => {
     ;[jobb, status] = await Promise.all([listaFotojobb(), kalenderStatus()])
     if (!Array.isArray(jobb)) jobb = []
     laddar = false
+    klockIv = setInterval(() => (now = new Date()), 30000)
+    await tick()
+    setTimeout(scrollTillIdag, 80)
   })
+  onDestroy(() => clearInterval(klockIv))
+
+  function dateKey(iso) {
+    const d = del(iso)
+    return d.length === 3 ? d[0] * 10000 + d[1] * 100 + d[2] : 0
+  }
+  function scrollTillIdag() {
+    if (!bodyEl) return
+    const kort = [...bodyEl.querySelectorAll('[data-jobdate]')]
+    if (!kort.length) return
+    const t = new Date()
+    const idag = t.getFullYear() * 10000 + (t.getMonth() + 1) * 100 + t.getDate()
+    const mal = kort.find((c) => +c.getAttribute('data-jobdate') <= idag) || kort[kort.length - 1]
+    const cr = mal.getBoundingClientRect(), br = bodyEl.getBoundingClientRect()
+    bodyEl.scrollTop += (cr.top - br.top) - 14
+  }
 
   const katFarg = (c) => (c ? KAT_FARG[c] || NULLKAT : NULLKAT)
   const del = (iso) => (iso || '').split('T')[0].split('-').map(Number)
@@ -48,19 +74,14 @@
   const synkad = (j) => !!j.google_event_id
   const synkText = (j) => (synkad(j) ? 'Google ✓' : 'Väntar')
 
-  // "Kommande" = från 7 dagar bakåt och framåt (inte hela historiken).
-  const _g = new Date(); _g.setDate(_g.getDate() - 7)
-  const GRANS = _g.toISOString().slice(0, 10)
-
-  $: filtrerade = jobb.filter((j) => {
-    const kat = katFilter === 'Alla' ? true
-      : katFilter === 'Okategoriserat' ? !j.category : j.category === katFilter
-    return kat && (j.start_at || '').slice(0, 10) >= GRANS
-  })
+  $: filtrerade = jobb.filter((j) =>
+    katFilter === 'Alla' ? true
+      : katFilter === 'Okategoriserat' ? !j.category : j.category === katFilter)
   $: grupper = gruppera(filtrerade)
 
   function gruppera(lista) {
-    const sorted = [...lista].sort((a, b) => (a.start_at || '').localeCompare(b.start_at || ''))
+    // Fallande: senaste aktiviteterna överst (framtid → historik), scroll-till-idag hittar dagens.
+    const sorted = [...lista].sort((a, b) => (b.start_at || '').localeCompare(a.start_at || ''))
     const m = new Map()
     for (const j of sorted) {
       const k = manadNyckel(j.start_at)
@@ -101,6 +122,7 @@
       <div>
         <span class="kicker">Fotojobb</span>
         <h1 class="scd">Kommande</h1>
+        <div class="livedate">{liveDate}</div>
       </div>
       <div class="hverktyg">
         <div class="seg">
@@ -118,10 +140,11 @@
             on:click={() => (katFilter = f)}>{f}</button>
         {/each}
       </div>
+      <button class="tillidag" on:click={scrollTillIdag}>↓ Till idag</button>
     </div>
   </div>
 
-  <div class="body">
+  <div class="body" bind:this={bodyEl}>
     {#if laddar}
       <p class="tom">Laddar fotojobb…</p>
     {:else}
@@ -140,47 +163,76 @@
       {:else}
         {#each grupper as g}
           <div class="manad scd">{g.label}</div>
-          <div class="lista">
-            {#each g.jobb as j (j.id)}
-              {#if j.all_day}
-                <div class="rad heldag" style="border-left-color:{katFarg(j.category)}">
-                  <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
-                  <span class="rtitel">{j.title}</span>
-                  <span class="hlbl">Heldag</span>
-                  <span class="synk" class:vantar={!synkad(j)}>{synkText(j)}</span>
-                  <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
-                    <option value="">Okategoriserat</option>
-                    {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
-                  </select>
-                  <span class="spacer"></span>
-                  <button class="mini" on:click={() => andra(j)}>Ändra</button>
-                  <button class="mini" on:click={() => taBort(j)}>Ta bort</button>
-                </div>
-              {:else}
-                <div class="rad" style="border-left-color:{katFarg(j.category)}">
-                  <div class="datum scd">
-                    <div class="d" style="color:{katFarg(j.category)}">{del(j.start_at)[2] || '–'}</div>
-                    <div class="wd">{veckodag(j.start_at)}</div>
+          {#if layout === 'tidslinje'}
+            <div class="tidslinje">
+              {#each g.jobb as j (j.id)}
+                <div class="tlrad" data-jobdate={dateKey(j.start_at)}>
+                  <div class="tltid scd">
+                    <div class="tlt">{j.all_day ? '–' : klocka(j.start_at)}</div>
+                    <div class="tld">{veckodag(j.start_at)} {del(j.start_at)[2] || ''}</div>
                   </div>
-                  <div class="mitt">
-                    <div class="rtitel stor">{j.title}</div>
-                    <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
-                    <div class="undermeta">
-                      <span class="synk" class:vantar={!synkad(j)}>{synkText(j)}</span>
+                  <div class="tlspar" style="border-left-color:{katFarg(j.category)}">
+                    <span class="tldot" style="background:{katFarg(j.category)}"></span>
+                    <div class="tlkort">
+                      <div class="tlinfo">
+                        <div class="rtitel stor">{j.title}</div>
+                        <div class="when">{j.all_day ? 'Heldag · ' + heldagText(j) : ''}{j.location ? (j.all_day ? ' · ' : '') + j.location : ''}</div>
+                      </div>
                       <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
                         <option value="">Okategoriserat</option>
                         {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
                       </select>
+                      <span class="synk" class:vantar={!synkad(j)}>{synkText(j)}</span>
+                      <button class="mini" on:click={() => andra(j)}>Ändra</button>
+                      <button class="mini kryss" on:click={() => taBort(j)}>×</button>
                     </div>
                   </div>
-                  <div class="rknapp">
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <div class="lista">
+              {#each g.jobb as j (j.id)}
+                {#if j.all_day}
+                  <div class="rad heldag" data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
+                    <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
+                    <span class="rtitel">{j.title}</span>
+                    <span class="hlbl">Heldag</span>
+                    <span class="synk" class:vantar={!synkad(j)}>{synkText(j)}</span>
+                    <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
+                      <option value="">Okategoriserat</option>
+                      {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
+                    </select>
+                    <span class="spacer"></span>
                     <button class="mini" on:click={() => andra(j)}>Ändra</button>
                     <button class="mini" on:click={() => taBort(j)}>Ta bort</button>
                   </div>
-                </div>
-              {/if}
-            {/each}
-          </div>
+                {:else}
+                  <div class="rad" data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
+                    <div class="datum scd">
+                      <div class="d" style="color:{katFarg(j.category)}">{del(j.start_at)[2] || '–'}</div>
+                      <div class="wd">{veckodag(j.start_at)}</div>
+                    </div>
+                    <div class="mitt">
+                      <div class="rtitel stor">{j.title}</div>
+                      <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
+                      <div class="undermeta">
+                        <span class="synk" class:vantar={!synkad(j)}>{synkText(j)}</span>
+                        <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
+                          <option value="">Okategoriserat</option>
+                          {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
+                        </select>
+                      </div>
+                    </div>
+                    <div class="rknapp">
+                      <button class="mini" on:click={() => andra(j)}>Ändra</button>
+                      <button class="mini" on:click={() => taBort(j)}>Ta bort</button>
+                    </div>
+                  </div>
+                {/if}
+              {/each}
+            </div>
+          {/if}
         {/each}
       {/if}
     {/if}
@@ -247,7 +299,12 @@
   .prim.liten { padding: 7px 13px; font-size: 12.5px; }
   .prim:disabled { opacity: 0.5; }
 
-  .filterrad { margin-top: 13px; }
+  .livedate { font-size: 12px; color: var(--t-mut); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .filterrad { margin-top: 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .tillidag { display: inline-flex; align-items: center; gap: 6px; background: var(--kort);
+    border: 1px solid var(--div); border-radius: 999px; padding: 6px 13px; font-size: 12.5px;
+    font-weight: 600; color: var(--t-mut); flex: none; }
+  .tillidag:hover { border-color: var(--acc); color: var(--acc); }
   .chips { display: flex; gap: 7px; flex-wrap: wrap; }
   .chip { padding: 5px 13px; border: 1px solid var(--div); border-radius: 999px;
     background: var(--kort); color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
@@ -292,6 +349,20 @@
   .synk.vantar { background: color-mix(in srgb, var(--varn) 16%, transparent); color: var(--varn); }
   .katsel { padding: 4px 8px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
     color: var(--t-mut); font-size: 11.5px; font-family: inherit; }
+
+  /* Tidslinje */
+  .tidslinje { display: flex; flex-direction: column; }
+  .tlrad { display: grid; grid-template-columns: 56px 1fr; gap: 14px; }
+  .tltid { text-align: right; padding-top: 14px; }
+  .tlt { font-size: 13px; font-weight: 700; color: var(--t-head); font-variant-numeric: tabular-nums; }
+  .tld { font-size: 10px; color: var(--t-mut); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+  .tlspar { position: relative; border-left: 2px solid var(--div); padding: 0 0 12px 22px; }
+  .tldot { position: absolute; left: -6px; top: 20px; width: 10px; height: 10px; border-radius: 50%;
+    border: 2px solid var(--kort); }
+  .tlkort { background: var(--kort); border: 1px solid var(--div); border-radius: 10px; box-shadow: var(--skugga);
+    padding: 11px 13px; display: flex; align-items: center; gap: 11px; }
+  .tlinfo { flex: 1; min-width: 0; }
+  .mini.kryss { width: 28px; padding: 6px 0; text-align: center; font-size: 15px; line-height: 1; }
 
   .foot { padding: 10px 30px; border-top: 1px solid var(--div3); font-size: 12px; color: var(--t-help); }
 
