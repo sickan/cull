@@ -49,7 +49,7 @@
     {:else if aktiv === 'leverera'}
       <Leverera />
     {:else if aktiv === 'publicera'}
-      <Publicera />
+      <Publicera on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'innehall'}
       <Innehall />
     {:else if aktiv === 'trana'}
