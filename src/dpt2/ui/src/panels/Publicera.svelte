@@ -1,6 +1,7 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte'
-  import { aktivMatch, genereraBildsvep, skapaStory, valjFil, valjMapp, listaLag } from '../lib/api.js'
+  import { aktivMatch, genereraBildsvep, skapaStory, valjFil, valjMapp, listaLag,
+    listaSomeBilder, publiceraTillSoMe } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
   const bytMatch = () => dispatch('navigera', 'matcher')
@@ -33,6 +34,68 @@
   let bs = null
   let kopierad = false
   let mal = { web: true, post: true, story: false }
+
+  // Publicera till SoMe (fan-out IG story/inlägg + FB)
+  let someCaption = ''
+  let someMapp = ''
+  let someBilder = []
+  let someMal = { story: true, ig_inlagg: true, fb: false }
+  let somePlan = { ok: false, poster: [], varningar: [] }
+  let someLage = 'idle'         // idle | dry | progress | done | fel
+  let someResultat = []
+  let someFel = ''
+  let someGen = false
+
+  // Live-plan = synkron lokal beräkning (samma LÅSTA regler som backend). Bryggan
+  // (publiceraTillSoMe) används för skarp körning; förhandsvisning behöver inte await.
+  const _strippaFb = (t) => (t || '').replace(/[#@][\wåäöÅÄÖ]+/g, '').replace(/[ \t]{2,}/g, ' ')
+    .replace(/ *\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+  function planLokalt(bilder, caption, mal) {
+    if (!bilder.length) return { ok: false, fel: 'Paketet saknar bilder.', poster: [], varningar: [] }
+    if (!(mal.story || mal.ig_inlagg || mal.fb)) return { ok: false, fel: 'Välj minst ett mål (story/inlägg/FB).', poster: [], varningar: [] }
+    const poster = [], varningar = []
+    if (mal.story) bilder.forEach((b, i) => poster.push({ kanal: 'instagram', form: 'story', bilder: [b], text: caption, del: i + 1, av: bilder.length }))
+    if (mal.ig_inlagg) {
+      const bitar = []; for (let i = 0; i < bilder.length; i += 10) bitar.push(bilder.slice(i, i + 10))
+      if (bitar.length > 1) varningar.push(`${bilder.length} bilder till IG-inlägg → ${bitar.length} poster (Graph API tar max 10/karusell).`)
+      bitar.forEach((bit, i) => poster.push({ kanal: 'instagram', form: 'inlägg', bilder: bit, text: caption, del: i + 1, av: bitar.length }))
+    }
+    if (mal.fb) {
+      const fb = bilder.slice(0, 4)
+      if (bilder.length > 4) varningar.push(`${bilder.length} bilder till FB → kapat till 4 (FB-sidans multi-photo-gräns).`)
+      poster.push({ kanal: 'facebook', form: 'inlägg', bilder: fb, text: _strippaFb(caption), del: 1, av: 1 })
+    }
+    return { ok: true, poster, varningar }
+  }
+  $: somePlan = planLokalt(someBilder, someCaption, someMal)
+  $: someStoryP = (somePlan.poster || []).filter((p) => p.form === 'story')
+  $: someIgP = (somePlan.poster || []).filter((p) => p.kanal === 'instagram' && p.form === 'inlägg')
+  $: someFbP = (somePlan.poster || []).find((p) => p.kanal === 'facebook')
+  $: someRunCount = (somePlan.poster || []).length
+  const postLabel = (p) => `${p.kanal === 'instagram' ? 'Instagram' : 'Facebook'} · ${p.form === 'story' ? 'Story' : 'Inlägg'}${p.av > 1 ? ' ' + p.del + '/' + p.av : ''}`
+
+  async function valjSomeMapp() {
+    const r = await valjMapp('Välj mapp med färdiga bilder')
+    if (r.ok) { someMapp = r.path; someBilder = await listaSomeBilder(r.path) }
+  }
+  const fbTokens = (t) => (t || '').split(/(\s+)/).map((s) => ({ s, bort: /^[#@][\wåäöÅÄÖ]+$/.test(s) }))
+  async function someGenerera() {
+    someGen = true
+    const info = match ? `${match.lag_hemma}–${match.lag_borta}${match.resultat ? ' ' + match.resultat : ''}` : ''
+    const r = await genereraBildsvep(info, match?.sport || '', fargForLag(match?.lag_hemma) || '')
+    someGen = false
+    if (r?.ok) someCaption = r.bildsvep
+  }
+  function someTestkor() { if (somePlan.ok) someLage = 'dry' }
+  async function somePublicera() {
+    if (!someBilder.length) return
+    someLage = 'progress'; someResultat = []; someFel = ''
+    const r = await publiceraTillSoMe({ bilder: someBilder, caption: someCaption, mal: someMal,
+      match_id: match?.id, moment: story.moment, tema: story.tema })
+    if (r?.ok) { someLage = 'done'; someResultat = r.resultat || [] }
+    else { someLage = 'fel'; someFel = r?.fel || 'Fel vid publicering.' }
+  }
+  const someReset = () => { someLage = 'idle'; someResultat = [] }
 
   onMount(async () => {
     ;[match, lagAlla] = await Promise.all([aktivMatch(), listaLag()])
@@ -85,6 +148,7 @@
   <div class="tabs">
     <button class:on={flik === 'matchdag'} on:click={() => (flik = 'matchdag')}>Matchdag</button>
     <button class:on={flik === 'bildsvep'} on:click={() => (flik = 'bildsvep')}>Bildsvepet</button>
+    <button class:on={flik === 'some'} on:click={() => (flik = 'some')}>SoMe</button>
   </div>
 
   {#if laddar}
@@ -142,7 +206,7 @@
         <div class="hoger">{#if storyFlash}<span class="ok">✓ Skapad</span>{/if}<button class="prim" on:click={korStory} disabled={storyKor}>{storyKor ? 'Skapar…' : 'Skapa story ›'}</button></div>
       </div>
     </div>
-  {:else}
+  {:else if flik === 'bildsvep'}
     <div class="stack">
       <!-- Instagram-urval (4:5) -->
       <div class="kort rad-kort">
@@ -171,6 +235,83 @@
             <div class="utfot"><span class="hint">Granska fakta och @-handles (markerade med ?) innan du postar.</span><button class="sek" on:click={kopiera}>{kopierad ? '✓ Kopierat' : 'Kopiera'}</button></div>
           </div>
         {/if}
+      </div>
+    </div>
+  {:else if flik === 'some'}
+    <div class="stack">
+      <div class="kort">
+        <div class="khuvud">
+          <span class="kic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4M12 2v13"/></svg></span>
+          <div class="ktxt"><span class="kt scd">Publicera till SoMe</span><span class="ks">Ett paket — välj bildset och text per kanal, se planen, publicera.</span></div>
+        </div>
+
+        {#if match}
+          <div class="matchrad">
+            <span class="brickor"><span class="bricka" style={brickStil(fargForLag(match.lag_hemma))}>{initialer(match.lag_hemma)}</span><span class="bricka away" style={brickStil(fargForLag(match.lag_borta))}>{initialer(match.lag_borta)}</span></span>
+            <div class="mrinfo"><div class="mrfix">{match.lag_hemma} – {match.lag_borta}</div><div class="mrsub">knyter match, moment &amp; tema till paketet</div></div>
+            <button class="lank" on:click={bytMatch}>Byt ›</button>
+          </div>
+        {/if}
+
+        <div class="capsrad"><span class="caps">Bildtext (delas av alla kanaler)</span><button class="genlank" on:click={someGenerera} disabled={someGen}>{someGen ? 'Genererar…' : '✨ Generera'}</button></div>
+        <textarea class="somecap" bind:value={someCaption} rows="3" placeholder="Bildsvep-text med #hashtags och @mentions…"></textarea>
+
+        <div class="capsrad2"><span class="caps">Bilder</span><button class="valjbild" on:click={valjSomeMapp}>{someBilder.length ? someBilder.length + ' bilder · byt mapp' : 'Välj bildmapp…'}</button></div>
+
+        <div class="caps mt">Kanaler &amp; bildset</div>
+        <div class="kanaler">
+          <div class="kanal">
+            <button class="krad" on:click={() => (someMal.story = !someMal.story)}>
+              <span class="box" class:pa={someMal.story}>{someMal.story ? '✓' : ''}</span>
+              <span class="knamn">Instagram Story</span>
+              {#if someMal.story && someBilder.length}<span class="antal">{someStoryP.length} stories</span>{/if}
+            </button>
+            {#if someMal.story && someBilder.length}<div class="strip">{#each someBilder as _b, i}<span class="thumb"><b>{i + 1}</b></span>{/each}</div>{/if}
+          </div>
+
+          <div class="kanal">
+            <button class="krad" on:click={() => (someMal.ig_inlagg = !someMal.ig_inlagg)}>
+              <span class="box" class:pa={someMal.ig_inlagg}>{someMal.ig_inlagg ? '✓' : ''}</span>
+              <span class="knamn">Instagram-inlägg</span>
+              {#if someMal.ig_inlagg && someBilder.length}<span class="antal">{someIgP.length > 1 ? someIgP.length + ' inlägg' : 'karusell'}</span>{/if}
+            </button>
+            {#if someMal.ig_inlagg && someBilder.length}
+              <div class="strip">{#each someBilder.slice(0, 10) as _b, i}<span class="thumb">{#if i === 0}<em>omslag</em>{/if}</span>{/each}{#if someBilder.length > 10}<span class="thumb plus">+{someBilder.length - 10}</span>{/if}</div>
+              {#each somePlan.varningar.filter((v) => v.includes('IG-inlägg')) as v}<div class="varn">⚠ {v}</div>{/each}
+            {/if}
+          </div>
+
+          <div class="kanal">
+            <button class="krad" on:click={() => (someMal.fb = !someMal.fb)}>
+              <span class="box" class:pa={someMal.fb}>{someMal.fb ? '✓' : ''}</span>
+              <span class="knamn">Facebook-sida</span>
+              {#if someMal.fb && someBilder.length}<span class="antal">max 4 bilder</span>{/if}
+            </button>
+            {#if someMal.fb && someBilder.length}
+              <div class="strip">{#each someBilder.slice(0, 6) as _b, i}<span class="thumb" class:dim={i >= 4}></span>{/each}</div>
+              {#each somePlan.varningar.filter((v) => v.includes('FB')) as v}<div class="varn">⚠ {v}</div>{/each}
+              <div class="fbdiff"><div class="fbdifflbl">Facebook-text (utan #/@)</div><div class="fbtokens">{#each fbTokens(someCaption) as tk}<span class:bort={tk.bort}>{tk.s}</span>{/each}</div></div>
+            {/if}
+          </div>
+        </div>
+
+        {#if someLage === 'dry'}
+          <div class="drybanner">Testkörning — <b>inget postades</b>. Planen är vad som skulle skickas.</div>
+          <div class="planlista">{#each somePlan.poster as p}<div class="planrad"><span class="pdot"></span><span class="pl">{postLabel(p)}</span><span class="pn">{p.bilder.length} bild</span></div>{/each}</div>
+        {:else if someLage === 'progress'}
+          <div class="progress"><span class="spin"></span><div><div class="pt">Postar… {someRunCount} poster</div><div class="ps">Avbryt inte — poster som gått igenom rullas inte tillbaka.</div></div></div>
+        {:else if someLage === 'done'}
+          <div class="donebox"><div class="donehuvud"><span class="okc">✓</span><span>Klart · {someResultat.length} poster publicerade</span><button class="lank rst" on:click={someReset}>Nytt paket</button></div>{#each someResultat as p}<div class="donerad"><span class="okc">✓</span><span class="dl">{postLabel(p)}</span>{#if p.url}<a class="oppna" href={p.url} target="_blank" rel="noreferrer">öppna ›</a>{/if}</div>{/each}</div>
+        {:else if someLage === 'fel'}
+          <div class="felbox">⚠ {someFel}</div>
+        {/if}
+        {#if somePlan.fel && someBilder.length === 0 && someLage === 'idle'}<div class="hint mt">{somePlan.fel}</div>{/if}
+
+        <div class="korrad">
+          <button class="prim" on:click={somePublicera} disabled={!someBilder.length || someLage === 'progress'}>Publicera skarpt · {someRunCount} poster</button>
+          <button class="sek" on:click={someTestkor} disabled={!someBilder.length}>Testkör</button>
+          <span class="summa">{someBilder.length ? someRunCount + ' poster' : 'Välj bilder och minst ett mål'}</span>
+        </div>
       </div>
     </div>
   {/if}
@@ -246,4 +387,61 @@
   textarea { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; line-height: 1.5; white-space: pre-wrap; padding: 11px; border: 1px solid var(--div); border-radius: 8px; background: var(--panel); color: var(--t-head); resize: vertical; }
   .utfot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .hint { font-size: 11.5px; color: var(--t-help); }
+
+  /* Publicera till SoMe */
+  .mt { margin-top: 16px; }
+  .matchrad { display: flex; align-items: center; gap: 11px; border: 1px solid var(--div3);
+    border-radius: 10px; background: var(--panel); padding: 10px 13px; margin-bottom: 16px; }
+  .mrinfo { flex: 1; min-width: 0; }
+  .mrfix { font-size: 13px; font-weight: 600; color: var(--t-head); }
+  .mrsub { font-size: 11px; color: var(--t-mut); }
+  .capsrad2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 16px 0 8px; }
+  .capsrad2 .caps { margin: 0; }
+  .genlank { border: 0; background: none; color: var(--acc); font-size: 11px; font-weight: 600; }
+  .somecap { width: 100%; background: var(--panel); border: 1px solid var(--div); border-radius: 8px;
+    padding: 9px 11px; font-size: 12.5px; line-height: 1.55; color: var(--t-head); font-family: inherit; outline: none; resize: vertical; }
+  .somecap:focus { border-color: var(--acc); }
+  .valjbild { border: 1px solid var(--div); background: var(--kort); border-radius: 8px; padding: 7px 12px;
+    font-size: 12.5px; font-weight: 600; color: var(--t-mut); }
+  .valjbild:hover { border-color: var(--acc); color: var(--acc); }
+
+  .kanaler { display: flex; flex-direction: column; gap: 10px; }
+  .kanal { border: 1px solid var(--div3); border-radius: 11px; background: var(--panel); overflow: hidden; }
+  .krad { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 13px; border: 0; background: transparent; text-align: left; }
+  .knamn { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--t-head); }
+  .antal { font-size: 11px; font-weight: 600; color: var(--acc); background: var(--acc-soft); padding: 3px 9px; border-radius: 999px; }
+  .strip { display: flex; gap: 6px; padding: 0 13px 11px; overflow-x: auto; }
+  .thumb { width: 44px; height: 55px; border-radius: 5px; flex: none; position: relative;
+    border: 1px solid var(--div); display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 8px, var(--kort) 8px, var(--kort) 16px); }
+  .thumb b { font-family: var(--font-c); font-size: 11px; color: var(--t-mut); }
+  .thumb em { position: absolute; top: 2px; left: 3px; font-size: 8px; font-style: normal;
+    font-family: var(--mono, monospace); background: var(--kort); border-radius: 3px; padding: 0 3px; color: var(--t-mut); }
+  .thumb.plus { background: var(--kort); font-size: 11px; color: var(--t-mut); }
+  .thumb.dim { opacity: 0.4; }
+  .varn { display: flex; align-items: center; gap: 7px; padding: 9px 13px; border-top: 1px solid var(--div3);
+    background: color-mix(in srgb, var(--varn) 9%, transparent); font-size: 11.5px; color: var(--varn); }
+  .fbdiff { padding: 11px 13px; border-top: 1px solid var(--div3); }
+  .fbdifflbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-caps); margin-bottom: 6px; }
+  .fbtokens { font-size: 12px; line-height: 1.5; color: var(--t-head); font-family: var(--mono, monospace); }
+  .fbtokens .bort { color: var(--rose); text-decoration: line-through; opacity: 0.6; }
+
+  .drybanner { margin-top: 14px; border: 1px solid var(--acc-border); border-radius: 10px; background: var(--acc-soft); padding: 11px 13px; font-size: 12px; color: var(--t-head); }
+  .planlista { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .planrad { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--t-head); padding: 3px 0; }
+  .pdot { width: 7px; height: 7px; border-radius: 50%; background: var(--acc); flex: none; }
+  .pl { flex: 1; } .pn { color: var(--t-mut); font-size: 11px; }
+  .progress { margin-top: 14px; display: flex; align-items: center; gap: 11px; border: 1px solid var(--div3); border-radius: 10px; background: var(--panel); padding: 13px; }
+  .spin { width: 24px; height: 24px; border-radius: 50%; border: 3px solid var(--acc-soft); border-top-color: var(--acc); flex: none; animation: sospin 0.8s linear infinite; }
+  @keyframes sospin { to { transform: rotate(360deg); } }
+  .pt { font-size: 13.5px; font-weight: 600; color: var(--t-head); } .ps { font-size: 11.5px; color: var(--t-mut); }
+  .donebox { margin-top: 14px; border: 1px solid var(--div3); border-radius: 10px; background: var(--panel); padding: 13px; }
+  .donehuvud { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13.5px; font-weight: 600; color: var(--t-head); }
+  .okc { color: var(--ok); font-weight: 700; }
+  .rst { margin-left: auto; }
+  .donerad { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--t-head); padding: 3px 0; }
+  .dl { flex: 1; } .oppna { color: var(--acc); text-decoration: none; font-weight: 600; }
+  .felbox { margin-top: 14px; border: 1px solid var(--div3); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; color: var(--varn); background: color-mix(in srgb, var(--varn) 8%, transparent); }
+  .korrad { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--div3); }
+  .summa { margin-left: auto; font-size: 11.5px; color: var(--t-help); }
 </style>

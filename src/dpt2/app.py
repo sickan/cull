@@ -14,7 +14,8 @@ from pathlib import Path
 import json
 
 from dpt2.data import db, store
-from dpt2.tjanster import matchhamtning, leverera, bildsvep, korning
+from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
+                           publicera_korning, publicera_some, meta_api)
 from dpt2.tjanster.kalender import Kalender
 from dpt2.publicering import astro_export as AX
 
@@ -246,6 +247,36 @@ class Api:
                 "fel": r.get("fel"),
                 "meddelande": (f"Story renderad: {res['path']}" if r["ok"] and res
                                else (r.get("fel") or "Kunde inte rendera story."))}
+
+    # ── Publicera till SoMe (fan-out IG story/inlägg + FB) ───────────────────
+    def lista_some_bilder(self, mapp):
+        """Färdiga JPG:er i en mapp (för bildvalet). Tom lista om mappen saknas."""
+        try:
+            return [str(p) for p in leverera.lista_bilder(mapp)] if mapp else []
+        except Exception:
+            return []
+
+    def publicera_forhandsvisa(self, config):
+        """Ren plan (dry-run) ur {bilder, caption, mal} — rör inga API:er.
+        Returnerar {ok, poster, varningar} eller {ok:False, fel}."""
+        config = config or {}
+        return publicera_some.planera({
+            "bilder": config.get("bilder") or [],
+            "caption": config.get("caption") or "",
+            "mal": config.get("mal") or {}})
+
+    def publicera_till_some(self, config):
+        """Skarp publicering. Kräver Meta-token (annars informativt fel — state 8).
+        Returnerar {ok, resultat, sparade, varningar} eller {ok:False, fel}."""
+        config = config or {}
+        poster = meta_api.fran_env(logg=self._logg.append)
+        if poster is None:
+            return {"ok": False, "fel": "Skarp publicering saknar Meta-token — "
+                    "sätt META_ACCESS_TOKEN, IG_USER_ID, FB_PAGE_ID och DPT_BILD_BAS_URL "
+                    "i miljön. Testkör (dry-run) fungerar utan token."}
+        config.setdefault("match_id", store.hamta_installning(self.conn, "aktiv_match_id"))
+        return publicera_korning.kor_publicering(
+            self.conn, config, poster=poster, dry_run=False, logg=self._logg.append)
 
     # ── Innehåll (CMS → Astro-export) ────────────────────────────────────────
     def lista_innehall(self, typ=None):
