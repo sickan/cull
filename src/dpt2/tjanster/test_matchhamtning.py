@@ -1,0 +1,104 @@
+"""Tester för match-hämtning — injicerad fejk-klient, inga skarpa anrop."""
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from dpt2.tjanster import matchhamtning as MH
+
+
+class _Block:
+    def __init__(self, text):
+        self.type = "text"; self.text = text
+
+
+class _Svar:
+    def __init__(self, text, stop_reason="end_turn"):
+        self.content = [_Block(text)]; self.stop_reason = stop_reason
+        self.usage = None
+
+
+class _Messages:
+    def __init__(self, svar):
+        self.svar = list(svar); self.anrop = 0; self.sista_kw = None
+
+    def create(self, **kw):
+        self.sista_kw = kw
+        s = self.svar[self.anrop]; self.anrop += 1; return s
+
+
+class _Klient:
+    def __init__(self, svar):
+        self.messages = _Messages(svar)
+
+    def _content_text(self):
+        c = self.messages.sista_kw["messages"][0]["content"]
+        return c if isinstance(c, str) else json.dumps(c)
+
+
+class TestKlubb(unittest.TestCase):
+    def test_kand_och_okand(self):
+        self.assertEqual(MH.klubb("FC Rosengård")["ig"], "fcrosengard")
+        self.assertEqual(MH.klubb("Okänt Lag"), {})
+
+
+class TestHamtaSpelare(unittest.TestCase):
+    def test_returnerar_data_och_url_i_prompt(self):
+        kl = _Klient([_Svar('{"spelare": [{"nr":"9","namn":"A","lag":"hemma"}]}')])
+        d = MH.hamta_spelare("FC Rosengård", "Okänt Lag",
+                             logg=lambda *_: None, klient=kl)
+        self.assertEqual(len(d["spelare"]), 1)
+        prompt = kl._content_text()
+        self.assertIn("fcrosengard.se", prompt)              # känd → URL
+        self.assertIn("hitta officiell truppsida", prompt)   # okänd → fallback
+        self.assertIn("tools", kl.messages.sista_kw)         # web_search
+
+    def test_inget_lag(self):
+        self.assertIsNone(MH.hamta_spelare("", "", logg=lambda *_: None,
+                                           klient=_Klient([])))
+
+
+class TestHamtaUppstallning(unittest.TestCase):
+    def test_matches_url_i_prompt(self):
+        kl = _Klient([_Svar('{"spelare": [{"nr":"9","namn":"A","lag":"hemma",'
+                            '"start":true}]}')])
+        d = MH.hamta_uppstallning("FC Rosengård", "Eskilstuna United",
+                                  datum="2026-08-15", logg=lambda *_: None, klient=kl)
+        self.assertEqual(len(d["spelare"]), 1)
+        self.assertIn("fcrosengard.se/sv/matches", kl._content_text())
+
+
+class TestLasLineup(unittest.TestCase):
+    def test_pdf_block(self):
+        p = Path(tempfile.mkdtemp()) / "ark.pdf"
+        p.write_bytes(b"%PDF-1.4 fejk")
+        block = MH._innehall_block(p)
+        self.assertEqual(block["type"], "document")
+        self.assertEqual(block["source"]["media_type"], "application/pdf")
+
+    def test_okant_format(self):
+        p = Path(tempfile.mkdtemp()) / "ark.txt"
+        p.write_text("x")
+        self.assertIsNone(MH._innehall_block(p))
+
+    def test_las_flode_med_pdf(self):
+        p = Path(tempfile.mkdtemp()) / "ark.pdf"
+        p.write_bytes(b"%PDF-1.4 fejk")
+        kl = _Klient([_Svar('{"matchinfo":"(D) A - B 20260609 Arena",'
+                            '"spelare":[{"nr":"12","namn":"X","lag":"hemma"}]}')])
+        d = MH.las_lineup(p, logg=lambda *_: None, klient=kl)
+        self.assertEqual(d["matchinfo"], "(D) A - B 20260609 Arena")
+        # första content-blocket ska vara PDF-dokumentet
+        innehall = kl.messages.sista_kw["messages"][0]["content"]
+        self.assertEqual(innehall[0]["type"], "document")
+
+    def test_okant_format_ger_none_utan_anrop(self):
+        p = Path(tempfile.mkdtemp()) / "ark.txt"; p.write_text("x")
+        kl = _Klient([])
+        self.assertIsNone(MH.las_lineup(p, logg=lambda *_: None, klient=kl))
+        self.assertEqual(kl.messages.anrop, 0)               # inget anrop
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

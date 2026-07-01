@@ -1,0 +1,55 @@
+/* Skagen Hav — designtokens (ljus + mörk via [data-theme]) + sektionsaccent. */
+:root {
+  --sand: #f4eee2;
+  --panel: #fbf8f1;
+  --kort: #ffffff;
+  --div: #e6ddca;
+  --div3: #efe8d8;
+  --ink: #1c1a15;
+  --t-head: #20242a;
+  --t-mut: #6b6456;
+  --t-help: #908872;
+  --t-caps: #a99f86;
+  --acc: #2f7cb0;          /* Hav (sport) */
+  --acc-soft: #e4eff6;
+  --sol: #c9871f;
+  --hav: #2f7cb0;
+  --rose: #c9657f;
+  --ok: #2f9e6e;
+  --varn: #c98a2f;
+  --skugga: 0 1px 2px rgba(40, 34, 20, 0.06), 0 6px 18px rgba(40, 34, 20, 0.06);
+  --r: 12px;
+  --font: "Saira", system-ui, -apple-system, sans-serif;
+  --font-c: "Saira Condensed", "Saira", system-ui, sans-serif;
+}
+[data-theme='dark'] {
+  --sand: #0a0d11;
+  --panel: #11161c;
+  --kort: #161c23;
+  --div: #232c36;
+  --div3: #1c242c;
+  --ink: #f2efe8;
+  --t-head: #eef2f6;
+  --t-mut: #97a3b0;
+  --t-help: #6f7c89;
+  --t-caps: #5c6873;
+  --acc: #8fd0e8;
+  --acc-soft: #16323d;
+  --sol: #f0b45a;
+  --hav: #8fd0e8;
+  --rose: #e59cb0;
+  --skugga: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--font);
+  color: var(--t-head);
+  background: var(--sand);
+  -webkit-font-smoothing: antialiased;
+}
+.scd { font-family: var(--font-c); letter-spacing: 0.01em; }
+
+button { font-family: inherit; cursor: pointer; }
+input, select { font-family: inherit; }
