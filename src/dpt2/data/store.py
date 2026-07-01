@@ -530,9 +530,10 @@ def lista_matcher(conn):
     """Matchlista (utan spelare) för kalender/översikt, nyast först."""
     rader = conn.execute(
         "SELECT m.id,m.datum,m.tid,m.arena,m.status,m.resultat,m.sport,"
-        "h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga, "
+        "m.tavling_id, h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga, "
         "h.stall_hemma AS hemfarg, b.stall_hemma AS bortafarg, "
-        "h.logga AS hemlogga, b.logga AS bortalogga "
+        "h.logga AS hemlogga, b.logga AS bortalogga, "
+        "(SELECT COUNT(*) FROM match_trupp mt WHERE mt.match_id=m.id) AS trupp_n "
         "FROM matchen m LEFT JOIN lag h ON m.lag_hemma_id=h.id "
         "LEFT JOIN lag b ON m.lag_borta_id=b.id "
         "LEFT JOIN tavling t ON m.tavling_id=t.id "

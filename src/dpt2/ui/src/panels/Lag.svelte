@@ -64,7 +64,18 @@
   }
   function nyTavling() {
     tavlingar = [...tavlingar, { id: 'ny-' + Date.now(), namn: '', typ: 'liga',
-      sport: 'fotboll', hemsida: '', logga: null }]
+      sport: 'fotboll', fran: '', ort: '', arena: '', hemsida: '', logga: null, kalender: 0 }]
+  }
+
+  function laggTavlingIKalender(t) {
+    t.kalender = t.kalender ? 0 : 1
+    tavlingar = tavlingar
+    gerTavling(t)
+  }
+
+  async function lasSpelare(l) {
+    const f = await valjFil('Välj spelarlista (CSV/blad/foto)')
+    if (f.ok) { l._spelarfil = f.path; lag = lag }   // import till registret = backend-TODO
   }
 
   async function taBortLag(l) {
@@ -96,15 +107,29 @@
             </button>
             <div class="falt">
               <input class="namn-in scd" bind:value={t.namn} on:change={() => gerTavling(t)} placeholder="Tävlingens namn" />
-              <div class="dubbel">
+              <div class="trippel">
                 <select bind:value={t.typ} on:change={() => gerTavling(t)}>
                   {#each TYPER as ty}<option value={ty}>{TYP_ETIKETT[ty]}</option>{/each}
                 </select>
                 <select bind:value={t.sport} on:change={() => gerTavling(t)}>
                   {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
                 </select>
+                <input bind:value={t.fran} on:change={() => gerTavling(t)} placeholder="Period (t.ex. apr–okt 2026)" />
+              </div>
+              <div class="dubbel">
+                <input bind:value={t.ort} on:change={() => gerTavling(t)} placeholder="Ort" />
+                <input bind:value={t.arena} on:change={() => gerTavling(t)} placeholder="Arena" />
               </div>
               <input bind:value={t.hemsida} on:change={() => gerTavling(t)} placeholder="Hemsida" />
+              <div class="kalfot">
+                <span class="kalik">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg>
+                </span>
+                <span class="kaltxt">Lägg hela tävlingen i kalendern som flerdagarsuppdrag</span>
+                <button class="kalbtn" class:i={t.kalender} on:click={() => laggTavlingIKalender(t)}>
+                  {t.kalender ? 'I kalendern ✓' : 'Lägg i Google Calendar ›'}
+                </button>
+              </div>
             </div>
             {#if sparad === t.id}<span class="flash">✓</span>{/if}
             <button class="x" on:click={() => taBortTavling(t)} title="Ta bort">×</button>
@@ -152,6 +177,9 @@
                   <span class="lbl mut">hemma · borta · tredje</span>
                   {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
                 </div>
+                <button class="spelarbtn" on:click={() => lasSpelare(l)}>
+                  {l._spelarfil ? 'Trupp: ' + l._spelarfil.split('/').pop() : 'Läs in spelare…'}
+                </button>
               {/if}
             </div>
             <button class="x" on:click={() => taBortLag(l)} title="Ta bort">×</button>
@@ -190,6 +218,19 @@
   .rad1 { display: flex; gap: 8px; align-items: center; }
   .rad1 .namn-in { flex: 1; min-width: 0; }
   .dubbel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .trippel { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .kalfot { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 10px 12px;
+    background: var(--panel); border: 1px solid var(--div3); border-radius: 9px; }
+  .kalik { width: 30px; height: 30px; border-radius: 8px; background: var(--acc-soft); color: var(--acc);
+    display: flex; align-items: center; justify-content: center; flex: none; }
+  .kalik svg { width: 16px; height: 16px; }
+  .kaltxt { flex: 1; min-width: 0; font-size: 12px; color: var(--t-mut); }
+  .kalbtn { flex: none; background: var(--acc); color: #fff; border: 0; border-radius: 7px;
+    padding: 8px 13px; font-size: 12.5px; font-weight: 600; }
+  .kalbtn.i { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+  .spelarbtn { width: 100%; background: var(--kort); border: 1px solid var(--div); border-radius: 8px;
+    padding: 8px 10px; font-size: 12.5px; color: var(--t-mut); font-weight: 500; }
+  .spelarbtn:hover { border-color: var(--acc); color: var(--acc); }
   input, select { padding: 7px 10px; border: 1px solid var(--div); border-radius: 8px;
     background: var(--panel); color: var(--t-head); font-size: 13px; }
   input:focus, select:focus { outline: none; border-color: var(--acc); }

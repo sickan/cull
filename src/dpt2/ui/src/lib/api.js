@@ -11,19 +11,22 @@ const MOCK_MATCHER = [
     id: 'fb9679db75f5', datum: '2026-08-15', tid: '15:00',
     arena: 'Malmö Idrottsplats', status: 'kommande', resultat: '',
     sport: 'fotboll', lag_hemma: 'FC Rosengård', lag_borta: 'Eskilstuna United',
-    liga: 'OBOS Damallsvenskan', hemfarg: '#8b1f3a', bortafarg: '#1d2a6b',
+    liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan',
+    hemfarg: '#8b1f3a', bortafarg: '#1d2a6b', trupp_n: 3,
   },
   {
     id: 'a1b2c3d4e5f6', datum: '2026-06-27', tid: '14:00',
     arena: 'Eleda Stadion', status: 'avslutad', resultat: '6-0',
     sport: 'fotboll', lag_hemma: 'Malmö FF', lag_borta: 'Kristianstads DFF',
-    liga: 'OBOS Damallsvenskan', hemfarg: '#8fb7de', bortafarg: '#C0392B',
+    liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan',
+    hemfarg: '#8fb7de', bortafarg: '#C0392B', trupp_n: 0,
   },
   {
     id: 'c0ffee001122', datum: '2026-09-03', tid: '19:00',
     arena: 'Baltiska Hallen', status: 'kommande', resultat: '',
     sport: 'handboll', lag_hemma: 'HK Malmö', lag_borta: 'IK Sävehof',
-    liga: 'Handbollsligan', hemfarg: '#0a2342', bortafarg: '#1E824C',
+    liga: 'Handbollsligan', tavling_id: 'handbollsligan',
+    hemfarg: '#0a2342', bortafarg: '#1E824C', trupp_n: 0,
   },
 ]
 
@@ -48,8 +51,8 @@ const MOCK_LAG = [
 ]
 
 const MOCK_TAVLINGAR = [
-  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', ort: '', arena: '', hemsida: 'damallsvenskan.se', logga: null, kalender: 0 },
-  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', ort: '', arena: '', hemsida: '', logga: null, kalender: 0 },
+  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', fran: 'apr–okt 2026', till: '', ort: 'Sverige', arena: '', hemsida: 'svenskelitfotboll.se', logga: null, kalender: 0 },
+  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', fran: 'sep 2026 – apr 2027', till: '', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
 ]
 
 // Mock: vilka lag som deltar i en tävling (tavling_lag). I appen kommer detta
@@ -58,6 +61,15 @@ const MOCK_TAVLING_LAG = {
   'obos-damallsvenskan': ['fc-rosengard', 'eskilstuna-united', 'malmo-ff'],
   'handbollsligan': ['hk-malmo'],
 }
+
+// Fotojobb (Google Calendar via deployade tjänsten). Formen matchar tjänstens
+// jobb-modell (INTEGRATION.md). Muteras lokalt i mock-läge.
+let MOCK_FOTOJOBB = [
+  { id: 'fj1', title: 'Match – Malmö / Kristianstad', start_at: '2026-07-19T14:00:00', end_at: '2026-07-19T16:30:00', all_day: false, location: 'Malmö IP', description: '', category: 'Sport', status: 'confirmed', google_event_id: 'g1', source: 'dpt' },
+  { id: 'fj2', title: 'Möte (skapad i Google)', start_at: '2026-07-15T09:00:00', end_at: '2026-07-15T09:30:00', all_day: false, location: '', description: '', category: null, status: 'confirmed', google_event_id: 'g2', source: 'google' },
+  { id: 'fj3', title: 'Landskap – soluppgång vid Grenen', start_at: '2026-07-12T04:30:00', end_at: '2026-07-12T06:00:00', all_day: false, location: 'Grenen', description: '', category: 'Landskap', status: 'confirmed', google_event_id: null, source: 'dpt' },
+  { id: 'fj4', title: 'Mässa & workshop', start_at: '2026-06-29', end_at: '2026-07-03', all_day: true, location: '', description: '', category: 'Övrigt', status: 'confirmed', google_event_id: 'g4', source: 'dpt' },
+]
 
 // Urval (Gallra producerar, Leverera konsumerar). Muteras lokalt i mock-läge.
 let MOCK_URVAL = [
@@ -109,6 +121,37 @@ export async function listaTavlingar() {
   const api = brygga()
   if (api) return api.lista_tavlingar()
   return wait(structuredClone(MOCK_TAVLINGAR))
+}
+
+// ── Fotojobb / Google Calendar ───────────────────────────────────────────────
+export async function kalenderStatus() {
+  const api = brygga()
+  if (api) return api.kalender_status()
+  return wait({ har_nyckel: false, ansluten: false, bas_url: 'https://dpt-calendar-sync.stig-johansson.workers.dev' })
+}
+
+export async function listaFotojobb() {
+  const api = brygga()
+  if (api) return api.lista_fotojobb()
+  return wait(structuredClone(MOCK_FOTOJOBB))
+}
+
+export async function sparaFotojobb(jobb) {
+  const api = brygga()
+  if (api) return api.spara_fotojobb(jobb)
+  if (jobb.id) {
+    MOCK_FOTOJOBB = MOCK_FOTOJOBB.map((j) => (j.id === jobb.id ? { ...j, ...jobb } : j))
+  } else {
+    MOCK_FOTOJOBB = [...MOCK_FOTOJOBB, { ...jobb, id: 'fj' + Date.now(), google_event_id: null, source: 'dpt', status: 'confirmed' }]
+  }
+  return wait({ ok: true })
+}
+
+export async function raderaFotojobb(id) {
+  const api = brygga()
+  if (api) return api.radera_fotojobb(id)
+  MOCK_FOTOJOBB = MOCK_FOTOJOBB.filter((j) => j.id !== id)
+  return wait({ ok: true })
 }
 
 export async function sparaLag(lag) {

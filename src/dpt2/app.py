@@ -15,6 +15,7 @@ import json
 
 from dpt2.data import db, store
 from dpt2.tjanster import matchhamtning, leverera, bildsvep, korning
+from dpt2.tjanster.kalender import Kalender
 from dpt2.publicering import astro_export as AX
 
 UI_DIR = Path(__file__).parent / "ui"
@@ -30,6 +31,7 @@ class Api:
         self.db_path = Path(db_path) if db_path else db.DB_DEFAULT
         self.conn = db.oppna(self.db_path, check_same_thread=False)
         self._logg = []      # buffrade worker-events (Logg-panelen)
+        self.kalender = Kalender()   # klient mot deployade Calendar Sync-tjänsten
 
     # ── Matcher ──────────────────────────────────────────────────────────────
     def lista_matcher(self):
@@ -96,6 +98,7 @@ class Api:
             sport=(tavling.get("sport") or "fotboll"),
             typ=(tavling.get("typ") or "liga"), ort=tavling.get("ort"),
             arena=tavling.get("arena"), hemsida=tavling.get("hemsida"),
+            fran=tavling.get("fran"), till=tavling.get("till"),
             kalender=bool(tavling.get("kalender")))
         return {"ok": bool(tid), "id": tid}
 
@@ -106,6 +109,41 @@ class Api:
     def radera_tavling(self, id):
         store.radera_tavling(self.conn, id)
         return {"ok": True}
+
+    # ── Fotojobb (Google Calendar via deployade tjänsten) ────────────────────
+    def kalender_status(self):
+        """Status för Inställningar-panelen: nyckel satt + tjänsten nåbar."""
+        har = self.kalender.har_nyckel()
+        return {"har_nyckel": har, "ansluten": self.kalender.halsa() if har else False,
+                "bas_url": self.kalender.bas_url}
+
+    def lista_fotojobb(self):
+        try:
+            jobb = self.kalender.lista_jobb()
+            if isinstance(jobb, list):
+                jobb = [j for j in jobb if not j.get("deleted")
+                        and j.get("status") != "cancelled"]
+            return jobb
+        except Exception as e:
+            return {"fel": str(e)}
+
+    def spara_fotojobb(self, jobb):
+        """Skapar (utan id) eller uppdaterar (med id) ett fotojobb hos tjänsten."""
+        jid = jobb.get("id")
+        data = {k: jobb.get(k) for k in
+                ("title", "start_at", "end_at", "location", "description",
+                 "category", "all_day") if k in jobb}
+        try:
+            return (self.kalender.uppdatera_jobb(jid, data) if jid
+                    else self.kalender.skapa_jobb(data))
+        except Exception as e:
+            return {"ok": False, "fel": str(e)}
+
+    def radera_fotojobb(self, jobb_id):
+        try:
+            return self.kalender.radera_jobb(jobb_id)
+        except Exception as e:
+            return {"ok": False, "fel": str(e)}
 
     # ── Aktiv match (delas av Efter match-panelerna) ─────────────────────────
     def satt_aktiv_match(self, id):

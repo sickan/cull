@@ -1,219 +1,226 @@
 <script>
   import { onMount } from 'svelte'
-  import {
-    listaInnehall, forhandsgranskaInnehall, sparaInnehall,
-    exporteraInnehall, raderaInnehall,
-  } from '../lib/api.js'
+  import { forhandsgranskaInnehall, exporteraInnehall, listaMatcher, genereraBildsvep, valjMapp } from '../lib/api.js'
 
-  const TYPER = ['match', 'event', 'landskap', 'portratt', 'blogg']
-  const HERO_POS = ['', 'center', 'top', 'bottom']
+  const CTYPER = [
+    { id: 'match', namn: 'Matcher', soon: false },
+    { id: 'landskap', namn: 'Landskap', soon: true },
+    { id: 'portratt', namn: 'Porträtt', soon: true },
+    { id: 'blogg', namn: 'Blogg', soon: true },
+  ]
+  const STATUSAR = ['kommande', 'pagaende', 'avslutad']
+  const STATUS_ETI = { kommande: 'Kommande', pagaende: 'Pågående', avslutad: 'Avslutad' }
 
-  let lista = []
-  let laddar = true
-  let form = null            // null = ingen redigering
-  let preview = null         // genererad .md
+  let ctyp = 'match'
+  let matcher = []
+  let pick = ''
+  let auto = true
+  let cms = { status: 'kommande', hem: '', borta: '', resultat: '', halvtid: '',
+    datum: '', serie: '', arena: '', galleri: '', malskyttar: '', svep: '', figurer: [] }
+  let md = ''
   let exportDir = ''
-  let status = null
-
-  function tomForm() {
-    return {
-      id: null, typ: 'match', titel: '', datum: '', liga: '', arena: '',
-      resultat: '', status: '', hero: '', heroPosition: '', pixieset: '',
-      malskyttar: '', body: '', figurer: [],
-    }
-  }
+  let sparad = false
+  let genKor = false
 
   onMount(async () => {
-    lista = await listaInnehall()
-    laddar = false
+    matcher = await listaMatcher()
+    if (matcher[0]) { pick = matcher[0].id; fyllFranMatch(matcher[0]) }
+    await forhandsgranska()
   })
 
-  async function ladda() { lista = await listaInnehall() }
-
-  function nytt() { form = tomForm(); preview = null; status = null }
-  function redigera(i) {
-    const fm = i.frontmatter || {}
-    form = {
-      id: i.id, typ: i.typ, titel: fm.titel || '', datum: fm.datum || '',
-      liga: fm.liga || '', arena: fm.arena || '', resultat: fm.resultat || '',
-      status: i.status || fm.status || '', hero: fm.hero || '',
-      heroPosition: fm.heroPosition || '', pixieset: fm.pixieset || '',
-      malskyttar: (fm.malskyttar || []).join(', '), body: i.body || '', figurer: [],
-    }
-    preview = null; status = null
+  function harledStatus(datum, tid, resultat) {
+    if (resultat) return 'avslutad'
+    if (!datum) return 'kommande'
+    const d = datum.split('-').map(Number)
+    if (d.length !== 3) return 'kommande'
+    const t = (tid || '00:00').split(':').map(Number)
+    const start = new Date(d[0], d[1] - 1, d[2], t[0] || 0, t[1] || 0)
+    return new Date() >= start ? 'pagaende' : 'kommande'
   }
 
-  function laggFigur() { form.figurer = [...form.figurer, { bild: '', alt: '', bildtext: '' }] }
-  function taFigur(ix) { form.figurer = form.figurer.filter((_, i) => i !== ix) }
+  function fyllFranMatch(m) {
+    cms.hem = m.lag_hemma || ''; cms.borta = m.lag_borta || ''
+    cms.resultat = m.resultat || ''; cms.datum = m.datum || ''
+    cms.arena = m.arena || ''; cms.serie = m.liga || ''
+    if (auto) cms.status = harledStatus(m.datum, m.tid, m.resultat)
+    cms = cms
+  }
+  function valjMatch(e) {
+    pick = e.target.value
+    const m = matcher.find((x) => x.id === pick)
+    if (m) fyllFranMatch(m)
+    forhandsgranska()
+  }
+  $: if (auto) cms.status = harledStatus(cms.datum, '', cms.resultat)
 
   async function forhandsgranska() {
-    const r = await forhandsgranskaInnehall(form)
-    preview = r.md
+    const data = { typ: 'match', titel: `${cms.hem} – ${cms.borta}`, status: cms.status,
+      datum: cms.datum, resultat: cms.resultat, malskyttar: cms.malskyttar,
+      pixieset: cms.galleri, body: cms.svep, figurer: cms.figurer }
+    const r = await forhandsgranskaInnehall(data)
+    md = r?.md || ''
   }
 
+  function laggBild() { cms.figurer = [...cms.figurer, { bild: '', alt: '', bildtext: '' }] }
+  function taBild(i) { cms.figurer = cms.figurer.filter((_, j) => j !== i) }
+
+  async function genereraSvep() {
+    genKor = true
+    const info = `${cms.hem}–${cms.borta}${cms.resultat ? ' ' + cms.resultat : ''}`
+    const r = await genereraBildsvep(info, 'fotboll', '')
+    genKor = false
+    if (r?.ok) { cms.svep = r.bildsvep; forhandsgranska() }
+  }
   async function spara() {
-    const r = await sparaInnehall(form)
-    status = r.ok ? 'Sparat.' : (r.fel || 'Fel.')
-    if (r.ok) { form.id = r.id; await ladda() }
-  }
-
-  async function exportera() {
-    const r = await exporteraInnehall(form, exportDir)
-    status = r.ok ? `Exporterat → ${r.path}` : (r.fel || 'Fel.')
-    if (r.ok) { form.id = r.id; await ladda() }
-  }
-
-  async function tabort(i) {
-    await raderaInnehall(i.id)
-    if (form && form.id === i.id) form = null
-    await ladda()
+    if (!exportDir) { const r = await valjMapp('Välj content/matcher-katalog'); if (r.ok) exportDir = r.path; else return }
+    const data = { typ: 'match', titel: `${cms.hem} – ${cms.borta}`, status: cms.status,
+      datum: cms.datum, resultat: cms.resultat, malskyttar: cms.malskyttar, pixieset: cms.galleri,
+      body: cms.svep, figurer: cms.figurer }
+    const r = await exporteraInnehall(data, exportDir)
+    sparad = !!r?.ok
+    if (sparad) setTimeout(() => (sparad = false), 2600)
   }
 </script>
 
 <div class="panel">
   <header>
     <h1 class="scd">Innehåll</h1>
-    <span class="sub">CMS för hemsidan — genererar Markdown och exporterar till sajt-repot</span>
+    <span class="sub">Skapa innehåll till hemsidan — frontmatter och bilder blir en färdig .md-fil</span>
   </header>
 
-  {#if laddar}
-    <p class="tom">Laddar…</p>
-  {:else}
-    <div class="lista">
-      {#each lista as i (i.id)}
-        <div class="rad">
-          <span class="badge">{i.typ}</span>
-          <button class="titel scd" on:click={() => redigera(i)}>
-            {(i.frontmatter && i.frontmatter.titel) || '(namnlöst)'}
-          </button>
-          {#if i.publicerad}<span class="pub">✓ publicerad</span>{/if}
-          <button class="x" on:click={() => tabort(i)} title="Ta bort">×</button>
+  <div class="ctabs">
+    {#each CTYPER as ct}
+      <button class:on={ctyp === ct.id} disabled={ct.soon} on:click={() => (ctyp = ct.id)}>
+        {ct.namn}{#if ct.soon}<span class="soon">snart</span>{/if}
+      </button>
+    {/each}
+  </div>
+
+  <div class="kort">
+    <div class="caps">Publicera till hemsidan</div>
+    <div class="grid2">
+      <div class="f"><label>Match / event</label>
+        <select value={pick} on:change={valjMatch}>
+          {#each matcher as m}<option value={m.id}>{m.lag_hemma} – {m.lag_borta}{m.datum ? ' · ' + m.datum : ''}</option>{/each}
+        </select>
+      </div>
+      <div class="f">
+        <div class="statushuvud"><label>Status på hemsidan</label><button class="autochip" class:on={auto} on:click={() => (auto = !auto)}>Auto</button></div>
+        <div class="seg">
+          {#each STATUSAR as s}<button class:on={cms.status === s} on:click={() => { if (!auto) cms.status = s }} disabled={auto}>{STATUS_ETI[s]}</button>{/each}
         </div>
-      {/each}
-      <button class="nytt" on:click={nytt}>+ Nytt innehåll</button>
+        <div class="hint">Härleds från datum & tid · Avslutad sätts när du skapar Resultat-story</div>
+      </div>
     </div>
 
-    {#if form}
-      <div class="kort">
-        <div class="grid2">
-          <label>Typ
-            <select bind:value={form.typ}>
-              {#each TYPER as t}<option value={t}>{t}</option>{/each}
-            </select>
-          </label>
-          <label>Status
-            <input bind:value={form.status} placeholder="avslutad / kommande" />
-          </label>
-        </div>
-        <label class="full">Titel
-          <input bind:value={form.titel} placeholder="Malmö FF – Kristianstads DFF" />
-        </label>
-        <div class="grid3">
-          <label>Datum<input bind:value={form.datum} placeholder="2026-06-27" /></label>
-          <label>Liga<input bind:value={form.liga} /></label>
-          <label>Arena<input bind:value={form.arena} /></label>
-        </div>
-        <div class="grid3">
-          <label>Resultat<input bind:value={form.resultat} placeholder="6-0" /></label>
-          <label>Hero (omslag)<input bind:value={form.hero} placeholder="bilder/hero.jpg" /></label>
-          <label>Hero-position
-            <select bind:value={form.heroPosition}>
-              {#each HERO_POS as p}<option value={p}>{p || '(default)'}</option>{/each}
-            </select>
-          </label>
-        </div>
-        <label class="full">Pixieset (galleri-länk)
-          <input bind:value={form.pixieset} placeholder="https://…pixieset.com/…" />
-        </label>
-        <label class="full">Målskyttar (kommaseparerat)
-          <input bind:value={form.malskyttar} placeholder="Musovic 12', Persson 45'" />
-        </label>
-        <label class="full">Brödtext
-          <textarea rows="5" bind:value={form.body} placeholder="Referat…"></textarea>
-        </label>
+    <div class="grid2 mt">
+      <div class="f"><label>Hemmalag</label><input bind:value={cms.hem} on:change={forhandsgranska} /></div>
+      <div class="f"><label>Bortalag</label><input bind:value={cms.borta} on:change={forhandsgranska} /></div>
+      <div class="f"><label>Resultat</label><input bind:value={cms.resultat} on:change={forhandsgranska} /></div>
+      <div class="f"><label>Halvtid</label><input bind:value={cms.halvtid} /></div>
+      <div class="f"><label>Datum</label><input bind:value={cms.datum} on:change={forhandsgranska} /></div>
+      <div class="f"><label>Serie</label><input bind:value={cms.serie} /></div>
+    </div>
+    <div class="f mt"><label>Arena</label><input bind:value={cms.arena} /></div>
+    <div class="f mt"><label>Galleri-URL (Pixieset)</label><input class="mono" bind:value={cms.galleri} on:change={forhandsgranska} /></div>
+    <div class="f mt"><label>Målskyttar</label><input bind:value={cms.malskyttar} on:change={forhandsgranska} /></div>
+  </div>
 
-        <div class="figurer">
-          <div class="caps">Figurer (bild · alt · bildtext)</div>
-          {#each form.figurer as f, ix}
-            <div class="figrad">
-              <input bind:value={f.bild} placeholder="bild.jpg" />
-              <input bind:value={f.alt} placeholder="alt-text" />
-              <input bind:value={f.bildtext} placeholder="bildtext" />
-              <button class="x" on:click={() => taFigur(ix)}>×</button>
-            </div>
-          {/each}
-          <button class="sek liten" on:click={laggFigur}>+ Figur</button>
+  <div class="kort">
+    <div class="caps">Bilder · höjdpunkter</div>
+    <div class="figurer">
+      {#each cms.figurer as b, i}
+        <div class="figrad">
+          <div class="figbild"><span>figur {i + 1}</span></div>
+          <div class="figin">
+            <input bind:value={b.alt} placeholder="Alt-text (tillgänglighet)" />
+            <input bind:value={b.bildtext} on:change={forhandsgranska} placeholder="Bildtext" />
+          </div>
+          <button class="figx" on:click={() => taBild(i)}>×</button>
         </div>
+      {/each}
+      <button class="figadd" on:click={laggBild}>+ Lägg till bild</button>
+    </div>
+  </div>
 
-        <div class="exportrad">
-          <input class="exp" bind:value={exportDir} placeholder="Export-katalog (sajt-repo)/src/content/match" />
-          <button class="sek" on:click={forhandsgranska}>Förhandsgranska</button>
-          <button class="sek" on:click={spara}>Spara</button>
-          <button class="prim" on:click={exportera} disabled={!exportDir || !form.titel}>Exportera .md ›</button>
-        </div>
-        {#if status}<div class="status">{status}</div>{/if}
+  <div class="kort svepkort">
+    <span class="svepik"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20l1-4 11-11 3 3-11 11z"/><path d="M14 6l3 3"/></svg></span>
+    <div class="sveptxt"><div class="svt">Instagram Bildsvepet</div><div class="svs">Genereras från matchinfo</div></div>
+    <button class="prim" on:click={genereraSvep} disabled={genKor}>{genKor ? 'Genererar…' : 'Generera'}</button>
+  </div>
+  <div class="kort nogap">
+    <textarea bind:value={cms.svep} on:change={forhandsgranska} rows="4" placeholder="Klicka Generera så skriver bildsvep.py en bildtext från matchinfo — redigerbar."></textarea>
+  </div>
 
-        {#if preview}
-          <pre class="md">{preview}</pre>
-        {/if}
-      </div>
-    {/if}
-  {/if}
+  <div class="kort">
+    <div class="mdhuvud"><span class="caps">Markdown · förhandsvisning</span></div>
+    <pre>{md}</pre>
+    <div class="mdfot">
+      <button class="prim" on:click={spara}>Spara .md-fil</button>
+      {#if sparad}<span class="ok">✓ Sparad till content/matcher/</span>{/if}
+    </div>
+  </div>
 </div>
 
 <style>
-  .panel { padding: 22px 26px 48px; max-width: 820px; }
-  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .panel { padding: 22px 24px 40px; max-width: 760px; }
+  header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   h1 { margin: 0; font-size: 25px; font-weight: 700; color: var(--t-head); }
   .sub { font-size: 13px; color: var(--t-mut); }
-  .tom { color: var(--t-help); font-size: 13px; }
 
-  .lista { display: flex; flex-direction: column; gap: 8px; margin: 18px 0; }
-  .rad { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-    background: var(--kort); border: 1px solid var(--div); border-radius: var(--r); }
-  .badge { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600;
-    text-transform: uppercase; background: var(--div3); color: var(--t-mut); }
-  .titel { flex: 1; text-align: left; background: none; border: 0; font-size: 14px;
-    font-weight: 600; color: var(--t-head); cursor: pointer; }
-  .titel:hover { color: var(--acc); }
-  .pub { font-size: 11.5px; color: var(--ok); }
-  .x { width: 24px; height: 24px; border: 1px solid var(--div); border-radius: 6px;
-    background: var(--kort); color: var(--t-mut); font-size: 15px; line-height: 1; }
-  .x:hover { border-color: var(--varn); color: var(--varn); }
-  .nytt { align-self: flex-start; padding: 8px 14px; border: 1px dashed var(--div);
-    border-radius: 8px; background: none; color: var(--t-mut); font-size: 13px; }
-  .nytt:hover { border-color: var(--acc); color: var(--acc); }
+  .ctabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .ctabs button { padding: 8px 15px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
+    color: var(--t-mut); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .ctabs button.on { background: var(--acc); border-color: var(--acc); color: #fff; }
+  .ctabs button:disabled { opacity: 0.6; }
+  .soon { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.8; }
 
-  .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
-    box-shadow: var(--skugga); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
-  label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-caps); }
-  .full { width: 100%; }
-  .caps { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
-    color: var(--t-caps); margin-bottom: 8px; }
-  input, select, textarea { padding: 8px 10px; border: 1px solid var(--div); border-radius: 8px;
-    background: var(--panel); color: var(--t-head); font-size: 13px; font-weight: 400;
-    text-transform: none; letter-spacing: 0; }
-  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--acc); }
-  textarea { font-family: inherit; resize: vertical; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r); box-shadow: var(--skugga); padding: 16px; margin-top: 14px; }
+  .kort.nogap { margin-top: -8px; }
+  .caps { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-caps); margin-bottom: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .mt { margin-top: 12px; }
+  .f { display: flex; flex-direction: column; gap: 5px; }
+  label { font-size: 11px; color: var(--t-mut); }
+  input, select, textarea { font-family: inherit; width: 100%; background: var(--panel); border: 1px solid var(--div);
+    border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--t-head); outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--acc); }
+  .mono { font-family: var(--mono, ui-monospace, monospace); font-size: 12.5px; }
+  textarea { line-height: 1.55; resize: vertical; }
 
-  .figurer { display: flex; flex-direction: column; gap: 8px; }
-  .figrad { display: grid; grid-template-columns: 1.2fr 1fr 1.4fr auto; gap: 8px; align-items: center; }
-  .liten { align-self: flex-start; padding: 6px 12px; font-size: 12.5px; }
+  .statushuvud { display: flex; align-items: center; justify-content: space-between; }
+  .autochip { border: 1px solid var(--div); background: var(--panel); border-radius: 6px; padding: 2px 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t-mut); }
+  .autochip.on { background: var(--acc-soft); border-color: var(--acc-border); color: var(--acc); }
+  .seg { display: flex; background: var(--div3); border-radius: 8px; padding: 3px; gap: 3px; }
+  .seg button { flex: 1; padding: 6px; border: 0; border-radius: 6px; background: transparent; color: var(--t-mut); font-size: 12px; font-weight: 600; }
+  .seg button.on { background: var(--kort); color: var(--t-head); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .seg button:disabled { cursor: default; }
+  .hint { font-size: 10.5px; color: var(--t-help); margin-top: 5px; line-height: 1.45; }
 
-  .exportrad { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .exp { flex: 1; min-width: 220px; }
-  .status { font-size: 12.5px; color: var(--ok); }
-  .md { background: var(--panel); border: 1px solid var(--div); border-radius: 8px;
-    padding: 14px; font-family: var(--mono, ui-monospace, monospace); font-size: 12px;
-    line-height: 1.5; white-space: pre-wrap; color: var(--t-body); overflow-x: auto; }
+  .figurer { display: flex; flex-direction: column; gap: 10px; }
+  .figrad { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--div3); border-radius: 10px; padding: 10px; background: var(--panel); }
+  .figbild { width: 92px; height: 69px; flex: none; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 8px, var(--kort) 8px, var(--kort) 16px); }
+  .figbild span { font-family: var(--mono, ui-monospace, monospace); font-size: 10px; color: var(--t-mut); }
+  .figin { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .figin input { background: var(--kort); font-size: 12.5px; padding: 7px 9px; }
+  .figx { flex: none; width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--div); background: var(--kort); color: var(--t-mut); font-size: 16px; }
+  .figadd { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px dashed var(--div); border-radius: 10px; padding: 11px; color: var(--t-mut); font-size: 13px; font-weight: 500; background: transparent; }
+  .figadd:hover { border-color: var(--acc); color: var(--acc); }
 
-  .sek { padding: 8px 14px; border: 1px solid var(--div); border-radius: 8px;
-    background: var(--kort); color: var(--t-head); font-size: 13px; font-weight: 500; }
-  .sek:hover { background: var(--div3); }
-  .prim { padding: 9px 18px; border: 0; border-radius: 8px; background: var(--acc);
-    color: var(--kort); font-size: 13px; font-weight: 600; }
-  .prim:disabled { opacity: 0.5; cursor: default; }
+  .svepkort { display: flex; align-items: center; gap: 14px; }
+  .svepik { width: 38px; height: 38px; border-radius: 10px; background: var(--acc-soft); color: var(--acc); display: flex; align-items: center; justify-content: center; flex: none; }
+  .svepik svg { width: 18px; height: 18px; }
+  .sveptxt { flex: 1; min-width: 0; }
+  .svt { font-size: 14.5px; font-weight: 600; color: var(--t-head); }
+  .svs { font-size: 11.5px; color: var(--t-mut); margin-top: 1px; }
+
+  .mdhuvud { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  pre { margin: 0; background: var(--panel); border: 1px solid var(--div3); border-radius: 8px; padding: 14px;
+    font-family: var(--mono, ui-monospace, monospace); font-size: 12px; line-height: 1.6; color: var(--t-head);
+    white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; }
+  .mdfot { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  .prim { background: var(--acc); color: #fff; border: 0; border-radius: 7px; padding: 9px 16px; font-size: 13px; font-weight: 600; flex: none; }
+  .prim:disabled { opacity: 0.5; }
+  .ok { font-size: 12.5px; color: var(--ok); font-weight: 600; }
 </style>
