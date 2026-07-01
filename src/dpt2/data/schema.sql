@@ -19,6 +19,7 @@ CREATE TABLE tavling (
   typ       TEXT NOT NULL CHECK (typ IN ('liga','turnering','masterskap')),
   sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','volleyboll','beachvolley','tennis')),
   namn      TEXT NOT NULL,
+  hemsida   TEXT,                       -- tävlingens webbplats
   fran      TEXT,                       -- ISO-datum (period.från)
   till      TEXT,                       -- ISO-datum (period.till)
   ort       TEXT,
@@ -30,12 +31,24 @@ CREATE TABLE tavling (
 CREATE TABLE lag (
   id           TEXT PRIMARY KEY,
   namn         TEXT NOT NULL,
+  kind         TEXT NOT NULL DEFAULT 'team'
+                 CHECK (kind IN ('team','individ')),  -- lagsport vs individuell utövare
   hemsida      TEXT,
   instagram    TEXT,
-  logga        TEXT,                     -- filsökväg
-  stall_hemma  TEXT,                     -- hex-färg
+  logga        TEXT,                     -- filsökväg (logga/porträtt)
+  stall_hemma  TEXT,                     -- hex-färg (team)
   stall_borta  TEXT,
-  stall_tredje TEXT
+  stall_tredje TEXT,
+  profilfarg   TEXT,                     -- hex-färg (individ: en enda)
+  klubb        TEXT                      -- individ: klubb/land (ersätter trupp)
+);
+
+-- Vilka lag som deltar i en tävling (tävling äger sina lag). Fyller lagväljaren
+-- i Matcher: hemma/borta filtreras till den valda tävlingens lag.
+CREATE TABLE tavling_lag (
+  tavling_id TEXT NOT NULL REFERENCES tavling(id) ON DELETE CASCADE,
+  lag_id     TEXT NOT NULL REFERENCES lag(id) ON DELETE CASCADE,
+  PRIMARY KEY (tavling_id, lag_id)
 );
 
 CREATE TABLE spelare (

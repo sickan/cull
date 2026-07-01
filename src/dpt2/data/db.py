@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -82,6 +82,32 @@ def _migrera(conn, fran_version):
           poang    REAL,
           PRIMARY KEY (urval_id, stem)
         );""")
+    if fran_version < 3:
+        # v3: tävling.hemsida, lag Individ-stöd (kind/profilfarg/klubb),
+        # tavling_lag-relation (tävling äger sina lag). Additivt.
+        for kol, ddl in (
+            ("hemsida", "ALTER TABLE tavling ADD COLUMN hemsida TEXT"),
+        ):
+            if not _har_kolumn(conn, "tavling", kol):
+                conn.execute(ddl)
+        for kol, ddl in (
+            ("kind", "ALTER TABLE lag ADD COLUMN kind TEXT NOT NULL DEFAULT 'team'"),
+            ("profilfarg", "ALTER TABLE lag ADD COLUMN profilfarg TEXT"),
+            ("klubb", "ALTER TABLE lag ADD COLUMN klubb TEXT"),
+        ):
+            if not _har_kolumn(conn, "lag", kol):
+                conn.execute(ddl)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS tavling_lag (
+          tavling_id TEXT NOT NULL REFERENCES tavling(id) ON DELETE CASCADE,
+          lag_id     TEXT NOT NULL REFERENCES lag(id) ON DELETE CASCADE,
+          PRIMARY KEY (tavling_id, lag_id)
+        );""")
+
+
+def _har_kolumn(conn, tabell, kolumn):
+    return any(r[1] == kolumn
+               for r in conn.execute(f"PRAGMA table_info({tabell})"))
 
 
 def tabeller(conn):

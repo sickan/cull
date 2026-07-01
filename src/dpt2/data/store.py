@@ -316,24 +316,28 @@ def facit_for_traning(conn):
 
 
 # ── Lag & tävlingar (register) ───────────────────────────────────────────────
-def upsert_lag(conn, namn, *, logga=None, instagram=None, hemsida=None,
-               stall_hemma=None, stall_borta=None, stall_tredje=None):
+def upsert_lag(conn, namn, *, kind=None, logga=None, instagram=None,
+               hemsida=None, stall_hemma=None, stall_borta=None,
+               stall_tredje=None, profilfarg=None, klubb=None):
     """Skapar/uppdaterar ett lag (id = slug av namnet). Tomma fält rör inte
-    befintliga värden. Returnerar lag-id."""
+    befintliga värden. kind = 'team' | 'individ' (lagsport vs utövare).
+    Returnerar lag-id."""
     if not (namn or "").strip():
         return None
     lid = slug_id(namn)
     fin = conn.execute("SELECT * FROM lag WHERE id=?", (lid,)).fetchone()
     if fin is None:
         conn.execute(
-            "INSERT INTO lag(id,namn,hemsida,instagram,logga,stall_hemma,"
-            "stall_borta,stall_tredje) VALUES(?,?,?,?,?,?,?,?)",
-            (lid, namn, hemsida, instagram, logga, stall_hemma, stall_borta,
-             stall_tredje))
+            "INSERT INTO lag(id,namn,kind,hemsida,instagram,logga,stall_hemma,"
+            "stall_borta,stall_tredje,profilfarg,klubb) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            (lid, namn, kind or "team", hemsida, instagram, logga, stall_hemma,
+             stall_borta, stall_tredje, profilfarg, klubb))
     else:
-        ny = {"namn": namn, "hemsida": hemsida, "instagram": instagram,
-              "logga": logga, "stall_hemma": stall_hemma,
-              "stall_borta": stall_borta, "stall_tredje": stall_tredje}
+        ny = {"namn": namn, "kind": kind, "hemsida": hemsida,
+              "instagram": instagram, "logga": logga, "stall_hemma": stall_hemma,
+              "stall_borta": stall_borta, "stall_tredje": stall_tredje,
+              "profilfarg": profilfarg, "klubb": klubb}
         satt = {k: v for k, v in ny.items() if v not in (None, "")}
         if satt:
             kol = ", ".join(f"{k}=?" for k in satt)
@@ -353,24 +357,27 @@ def lista_lag(conn):
 
 
 def upsert_tavling(conn, namn, *, sport, typ="liga", logga=None, fran=None,
-                   till=None, ort=None, arena=None, kalender=False):
+                   till=None, ort=None, arena=None, hemsida=None,
+                   kalender=False):
     """Skapar/uppdaterar en tävling (id = slug av namnet). Uppdaterar typ/sport/
-    ort/arena/logga/kalender på en befintlig. Returnerar tävlings-id."""
+    ort/arena/hemsida/logga/kalender på en befintlig. Returnerar tävlings-id."""
     if not (namn or "").strip():
         return None
     tid = slug_id(namn)
     fin = conn.execute("SELECT 1 FROM tavling WHERE id=?", (tid,)).fetchone()
     if fin is None:
         conn.execute(
-            "INSERT INTO tavling(id,typ,sport,namn,fran,till,ort,arena,logga,"
-            "kalender) VALUES(?,?,?,?,?,?,?,?,?,?)",
-            (tid, typ, sport, namn, fran, till, ort, arena, logga,
+            "INSERT INTO tavling(id,typ,sport,namn,hemsida,fran,till,ort,arena,"
+            "logga,kalender) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            (tid, typ, sport, namn, hemsida, fran, till, ort, arena, logga,
              1 if kalender else 0))
     else:
         conn.execute(
             "UPDATE tavling SET typ=?,sport=?,fran=?,till=?,ort=?,arena=?,"
             "kalender=? WHERE id=?",
             (typ, sport, fran, till, ort, arena, 1 if kalender else 0, tid))
+        if hemsida:
+            conn.execute("UPDATE tavling SET hemsida=? WHERE id=?", (hemsida, tid))
         if logga:
             conn.execute("UPDATE tavling SET logga=? WHERE id=?", (logga, tid))
     conn.commit()
@@ -379,6 +386,24 @@ def upsert_tavling(conn, namn, *, sport, typ="liga", logga=None, fran=None,
 
 def lista_tavlingar(conn):
     return [dict(r) for r in conn.execute("SELECT * FROM tavling ORDER BY namn")]
+
+
+# ── Tävling ↔ lag (tävling äger sina deltagande lag) ─────────────────────────
+def koppla_lag_till_tavling(conn, tavling_id, lag_id):
+    """Registrerar att laget deltar i tävlingen (idempotent)."""
+    if not (tavling_id and lag_id):
+        return
+    conn.execute(
+        "INSERT OR IGNORE INTO tavling_lag(tavling_id,lag_id) VALUES(?,?)",
+        (tavling_id, lag_id))
+    conn.commit()
+
+
+def lista_lag_for_tavling(conn, tavling_id):
+    """Lagen som deltar i en tävling (för lagväljaren i Matcher)."""
+    return [dict(r) for r in conn.execute(
+        "SELECT l.* FROM lag l JOIN tavling_lag tl ON tl.lag_id=l.id "
+        "WHERE tl.tavling_id=? ORDER BY l.namn", (tavling_id,))]
 
 
 def radera_lag(conn, lag_id):
@@ -417,6 +442,11 @@ def spara_match(conn, match):
                             sport=sport or "fotboll") if match.get("liga") else None
     hemma_id = upsert_lag(conn, match.get("lag_hemma", ""))
     borta_id = upsert_lag(conn, match.get("lag_borta", ""))
+
+    # Tävling äger sina lag: koppla in hemma/borta i den valda tävlingen.
+    if tav_id:
+        koppla_lag_till_tavling(conn, tav_id, hemma_id)
+        koppla_lag_till_tavling(conn, tav_id, borta_id)
 
     mid = (match.get("id") or "").strip() or ny_id()
     datum = iso_datum(match.get("datum"))
@@ -500,7 +530,9 @@ def lista_matcher(conn):
     """Matchlista (utan spelare) för kalender/översikt, nyast först."""
     rader = conn.execute(
         "SELECT m.id,m.datum,m.tid,m.arena,m.status,m.resultat,m.sport,"
-        "h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga "
+        "h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga, "
+        "h.stall_hemma AS hemfarg, b.stall_hemma AS bortafarg, "
+        "h.logga AS hemlogga, b.logga AS bortalogga "
         "FROM matchen m LEFT JOIN lag h ON m.lag_hemma_id=h.id "
         "LEFT JOIN lag b ON m.lag_borta_id=b.id "
         "LEFT JOIN tavling t ON m.tavling_id=t.id "
@@ -524,3 +556,24 @@ def merge_in_trupp(conn, match_id, nya_spelare, *, bevara_start=False):
         m.get("spelare", []), nya_spelare, bevara_start=bevara_start)
     spara_match(conn, m)
     return hamta_match(conn, match_id)
+
+
+# ── SoMe-material (Publicera) ─────────────────────────────────────────────────
+def spara_some_material(conn, *, kanal, format, match_id=None, moment=None,
+                        tema=None, fil=None, id=None, skapad=None):
+    """Spårar EN publicerad post (Instagram/Facebook/TikTok). Skrivs först när en
+    post faktiskt gått ut (inte i dry-run). Returnerar some_material-id."""
+    sid = id or ny_id()
+    conn.execute(
+        "INSERT OR REPLACE INTO some_material"
+        "(id,match_id,kanal,format,moment,tema,fil,skapad) VALUES(?,?,?,?,?,?,?,?)",
+        (sid, match_id, kanal, format, moment, tema, fil, skapad or _nu()))
+    conn.commit()
+    return sid
+
+
+def lista_some_material(conn, match_id):
+    """Publicerade poster för en match, nyast först (Publicera-panelens historik)."""
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM some_material WHERE match_id=? ORDER BY skapad DESC",
+        (match_id,))]

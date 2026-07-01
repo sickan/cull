@@ -1,9 +1,32 @@
 <script>
-  import { onMount } from 'svelte'
-  import { aktivMatch, genereraBildsvep, skapaStory, valjFil } from '../lib/api.js'
+  import { onMount, createEventDispatcher } from 'svelte'
+  import { aktivMatch, genereraBildsvep, skapaStory, valjFil, listaLag } from '../lib/api.js'
+
+  const dispatch = createEventDispatcher()
+  const bytMatch = () => dispatch('navigera', 'matcher')
 
   let match = null
+  let lagAlla = []
   let laddar = true
+
+  // ── Lag-brickor i ställfärg (samma uttryck som Matcher) ────────────────────
+  function initialer(namn) {
+    return (namn || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 3).toUpperCase()
+  }
+  function _lum(hex) {
+    const h = (hex || '').replace('#', '')
+    if (h.length < 3) return 1
+    const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16)
+    return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
+  }
+  function brickStil(farg) {
+    const f = farg || '#c9bfa8'
+    return `background:${f};color:${_lum(f) > 0.62 ? 'rgba(35,32,26,.85)' : '#fff'}`
+  }
+  function fargForLag(namn) {
+    const l = lagAlla.find((x) => x.namn === namn)
+    return l ? (l.stall_hemma || l.profilfarg) : ''
+  }
 
   // Bildsvepet
   let bs = { matchinfo: '', sport: '', hemmafarg: '' }
@@ -25,7 +48,7 @@
   const FARGER = ['', 'vit', 'svart', 'röd', 'blå', 'gul', 'grön', 'orange']
 
   onMount(async () => {
-    match = await aktivMatch()
+    ;[match, lagAlla] = await Promise.all([aktivMatch(), listaLag()])
     if (match) {
       bs.matchinfo = `${match.lag_hemma}–${match.lag_borta}` +
         (match.resultat ? ` ${match.resultat}` : '')
@@ -66,15 +89,22 @@
   {:else}
     {#if match}
       <div class="aktiv">
-        <span class="prick"></span>
-        <div>
-          <div class="caps">Aktiv match</div>
-          <div class="namn scd">{match.lag_hemma} – {match.lag_borta}</div>
-          <div class="meta">{match.datum}{match.arena ? ' · ' + match.arena : ''}</div>
+        <div class="brickor">
+          <span class="bricka" style={brickStil(fargForLag(match.lag_hemma))}>{initialer(match.lag_hemma)}</span>
+          <span class="bricka away" style={brickStil(fargForLag(match.lag_borta))}>{initialer(match.lag_borta)}</span>
         </div>
+        <div class="ainfo">
+          <div class="caps">Aktiv match{match.liga ? ' · ' + match.liga : ''}</div>
+          <div class="namn scd">{match.lag_hemma} – {match.lag_borta}</div>
+          <div class="meta">{match.datum || ''}{match.tid ? ' · ' + match.tid : ''}{match.arena ? ' · ' + match.arena : ''}</div>
+        </div>
+        <button class="byt" on:click={bytMatch}>Byt i Matcher ›</button>
       </div>
     {:else}
-      <div class="ingen">Ingen aktiv match — aktivera en i <b>Matcher</b> för automatisk ifyllnad (valfritt).</div>
+      <div class="ingen">
+        <span>Ingen aktiv match vald — story och bildsvep fylls automatiskt när en match är aktiv.</span>
+        <button class="byt" on:click={bytMatch}>Välj match ›</button>
+      </div>
     {/if}
 
     <!-- Bildsvepet -->
@@ -167,13 +197,23 @@
   .sub { font-size: 13px; color: var(--t-mut); }
   .tom { color: var(--t-help); font-size: 13px; }
 
-  .aktiv { display: flex; gap: 12px; align-items: center; margin: 18px 0;
+  .aktiv { display: flex; gap: 14px; align-items: center; margin: 18px 0;
     padding: 12px 14px; background: var(--acc-soft); border-radius: var(--r); }
-  .prick { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
+  .brickor { display: flex; align-items: center; flex: none; }
+  .bricka { display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 50%; flex: none;
+    font-family: 'Saira Condensed', sans-serif; font-size: 12px; font-weight: 700;
+    border: 2px solid var(--kort); box-shadow: 0 0 0 1px var(--div); }
+  .bricka.away { margin-left: -10px; }
+  .ainfo { flex: 1; min-width: 0; }
   .ingen { margin: 18px 0; padding: 12px 14px; background: var(--panel);
-    border: 1px dashed var(--div); border-radius: var(--r); font-size: 13px; color: var(--t-mut); }
+    border: 1px dashed var(--div); border-radius: var(--r); font-size: 13px; color: var(--t-mut);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .namn { font-size: 16px; font-weight: 700; color: var(--t-head); }
   .meta { font-size: 12px; color: var(--t-mut); }
+  .byt { flex: none; padding: 7px 13px; border: 1px solid var(--div); border-radius: 8px;
+    background: var(--kort); color: var(--acc); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .byt:hover { border-color: var(--acc); }
 
   .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
     box-shadow: var(--skugga); padding: 18px; display: flex; flex-direction: column; gap: 16px;

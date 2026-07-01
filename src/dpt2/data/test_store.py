@@ -193,6 +193,40 @@ class TestLagTavling(unittest.TestCase):
         self.assertEqual(store.lista_lag(self.c), [])
         self.assertEqual(store.lista_tavlingar(self.c), [])
 
+    def test_upsert_tavling_hemsida(self):
+        store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll",
+                             hemsida="damallsvenskan.se")
+        store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll")  # rör ej
+        t = store.lista_tavlingar(self.c)[0]
+        self.assertEqual(t["hemsida"], "damallsvenskan.se")   # bevarat
+
+    def test_lag_individ(self):
+        lid = store.upsert_lag(self.c, "Rebecca Peterson", kind="individ",
+                               profilfarg="#2F7CB0", klubb="Sverige")
+        lag = store.hamta_lag(self.c, lid)
+        self.assertEqual(lag["kind"], "individ")
+        self.assertEqual(lag["profilfarg"], "#2F7CB0")
+        self.assertEqual(lag["klubb"], "Sverige")
+        # default kind = team
+        tid = store.upsert_lag(self.c, "Malmö FF")
+        self.assertEqual(store.hamta_lag(self.c, tid)["kind"], "team")
+
+    def test_tavling_ager_sina_lag(self):
+        # spara_match ska koppla hemma+borta till tävlingen (tavling_lag).
+        store.spara_match(self.c, {
+            "lag_hemma": "Malmö FF", "lag_borta": "FC Rosengård",
+            "liga": "OBOS Damallsvenskan", "sport": "fotboll"})
+        lag = store.lista_lag_for_tavling(self.c, "obos-damallsvenskan")
+        namn = sorted(l["namn"] for l in lag)
+        self.assertEqual(namn, ["FC Rosengård", "Malmö FF"])
+
+    def test_koppla_lag_idempotent(self):
+        store.upsert_lag(self.c, "HK Malmö")
+        store.upsert_tavling(self.c, "Handbollsligan", sport="handboll")
+        store.koppla_lag_till_tavling(self.c, "handbollsligan", "hk-malmo")
+        store.koppla_lag_till_tavling(self.c, "handbollsligan", "hk-malmo")  # igen
+        self.assertEqual(len(store.lista_lag_for_tavling(self.c, "handbollsligan")), 1)
+
 
     def test_innehall_round_trip(self):
         iid = store.spara_innehall(
@@ -219,20 +253,74 @@ class TestLagTavling(unittest.TestCase):
 
 
 class TestMigrering(unittest.TestCase):
-    def test_fresh_db_ar_v2_med_urval_bild(self):
+    def test_fresh_db_ar_v3_med_tavling_lag(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 2)
+        self.assertEqual(db.schemaversion(c), 3)
         self.assertIn("urval_bild", db.tabeller(c))
+        self.assertIn("tavling_lag", db.tabeller(c))
 
-    def test_migrera_v1_till_v2(self):
+    def test_migrera_v1_till_v3(self):
+        # v1-läge: urval + register-tabellerna (som alltid funnits). Migreringen
+        # kör hela kedjan v1→v3 (urval_bild + tavling_lag + nya kolumner).
         import sqlite3
         c = sqlite3.connect(":memory:")
         c.execute("PRAGMA user_version=1")
-        c.execute("CREATE TABLE urval(id TEXT PRIMARY KEY)")   # v1-läge
+        c.execute("CREATE TABLE urval(id TEXT PRIMARY KEY)")
+        c.execute("CREATE TABLE tavling(id TEXT PRIMARY KEY, namn TEXT)")
+        c.execute("CREATE TABLE lag(id TEXT PRIMARY KEY, namn TEXT)")
         db._migrera(c, 1)
         namn = [r[0] for r in c.execute(
             "SELECT name FROM sqlite_master WHERE type='table'")]
         self.assertIn("urval_bild", namn)
+        self.assertIn("tavling_lag", namn)
+        self.assertIn("kind", [r[1] for r in c.execute("PRAGMA table_info(lag)")])
+
+    def test_migrera_v2_till_v3(self):
+        # Bygg ett v2-läge (lag/tavling utan nya kolumner) och migrera additivt.
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA user_version=2")
+        c.execute("CREATE TABLE tavling(id TEXT PRIMARY KEY, namn TEXT)")
+        c.execute("CREATE TABLE lag(id TEXT PRIMARY KEY, namn TEXT)")
+        c.execute("INSERT INTO lag VALUES('x','X')")
+        db._migrera(c, 2)
+        tk = [r[1] for r in c.execute("PRAGMA table_info(lag)")]
+        self.assertIn("kind", tk)
+        self.assertIn("profilfarg", tk)
+        self.assertIn("hemsida", [r[1] for r in c.execute("PRAGMA table_info(tavling)")])
+        self.assertIn("tavling_lag", [r[0] for r in c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")])
+        # befintliga rader får default-kind via COALESCE-läsning (kolumnen är NULL
+        # för gamla rader men NOT NULL-defaulten gäller nya inserts)
+        self.assertEqual(c.execute("SELECT namn FROM lag WHERE id='x'").fetchone()[0], "X")
+
+
+class TestSomeMaterial(unittest.TestCase):
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.mid = store.spara_match(self.c, {"lag_hemma": "A", "lag_borta": "B"})
+
+    def test_spara_och_lista_nyast_forst(self):
+        store.spara_some_material(self.c, kanal="instagram", format="story",
+                                  match_id=self.mid, moment="Avspark", tema="Hav",
+                                  fil="/foto/b1.jpg", skapad="2026-06-30T10:00:00")
+        store.spara_some_material(self.c, kanal="facebook", format="inlägg",
+                                  match_id=self.mid, moment="Avspark",
+                                  fil="/foto/b1.jpg", skapad="2026-06-30T11:00:00")
+        rader = store.lista_some_material(self.c, self.mid)
+        self.assertEqual(len(rader), 2)
+        self.assertEqual(rader[0]["kanal"], "facebook")     # nyast först
+        self.assertEqual(rader[1]["format"], "story")
+
+    def test_lista_filtrerar_pa_match(self):
+        store.spara_some_material(self.c, kanal="instagram", format="story",
+                                  match_id=self.mid)
+        self.assertEqual(store.lista_some_material(self.c, "okand-match"), [])
+
+    def test_utan_match_id_ok(self):
+        sid = store.spara_some_material(self.c, kanal="instagram", format="story")
+        self.assertTrue(sid)                                # match_id=None → ingen FK
 
 
 if __name__ == "__main__":
