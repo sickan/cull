@@ -431,22 +431,29 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
   return wait(_promptPath(titel))
 }
 
-// pywebview injicerar window.pywebview.api ASYNKRONT (klar vid 'pywebviewready').
-// Vänta på den innan appen monteras — annars ser panelerna ingen brygga och
-// fastnar på mockdata. I webbläsaren (ingen pywebview) resolvar timeouten → mock.
-export function vantaPaBrygga(timeout = 2500) {
+// pywebview injicerar window.pywebview.api ASYNKRONT. VIKTIGT: api-OBJEKTET dyker
+// upp innan alla METODER är påkopplade — så vi måste vänta tills en känd metod
+// faktiskt är en funktion, annars kastar första panelens bridge-anrop (t.ex.
+// Fotojobb.lista_fotojobb) och vyn blir tom tills panelen remountas.
+const bryggaKlar = () => {
+  const a = brygga()
+  return !!(a && typeof a.lista_fotojobb === 'function')
+}
+
+export function vantaPaBrygga(timeout = 6000) {
   return new Promise((resolve) => {
-    if (brygga()) return resolve(true)
+    if (bryggaKlar()) return resolve(true)
     let klar = false
     const go = (v) => { if (!klar) { klar = true; resolve(v) } }
+    const kolla = () => (bryggaKlar() ? (go(true), true) : false)
     if (typeof window !== 'undefined') {
-      window.addEventListener('pywebviewready', () => go(true), { once: true })
+      window.addEventListener('pywebviewready', kolla)
     }
     const t0 = Date.now()
     const iv = setInterval(() => {
-      if (brygga()) { clearInterval(iv); go(true) }
+      if (kolla()) clearInterval(iv)
       else if (Date.now() - t0 > timeout) { clearInterval(iv); go(false) }
-    }, 60)
+    }, 50)
   })
 }
 
