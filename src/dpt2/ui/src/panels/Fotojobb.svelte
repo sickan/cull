@@ -29,10 +29,17 @@
   $: liveDate = `${WDAG[now.getDay()]} ${now.getDate()} ${MAN[now.getMonth()].toLowerCase()} ${now.getFullYear()} · ${pad(now.getHours())}:${pad(now.getMinutes())}`
 
   onMount(async () => {
-    ;[jobb, status] = await Promise.all([listaFotojobb(), kalenderStatus()])
-    if (!Array.isArray(jobb)) jobb = []
-    laddar = false
     klockIv = setInterval(() => (now = new Date()), 30000)
+    try {
+      const j = await listaFotojobb()
+      jobb = Array.isArray(j) ? j : []
+    } catch (_) {
+      jobb = []
+    } finally {
+      laddar = false        // släpp ALLTID laddningsläget, även vid fel/timeout
+    }
+    // Synk-status i bakgrunden — blockera inte agendan på hälsokollen (kall Worker).
+    kalenderStatus().then((s) => (status = s)).catch(() => {})
     await tick()
     setTimeout(scrollTillIdag, 80)
   })
