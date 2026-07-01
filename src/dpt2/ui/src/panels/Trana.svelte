@@ -109,8 +109,8 @@
         <span class="prick"></span>
         <div>
           <div class="caps">Aktiv modell</div>
-          <div class="namn scd">{TYP_NAMN[aktiv.typ] || aktiv.typ}</div>
-          <div class="meta">{aktiv.n_uppdrag ?? '–'} uppdrag · {aktiv.n_valda ?? '–'} valda · {aktiv.sparad || ''}</div>
+          <div class="namn scd">{TYP_NAMN[aktiv.typ] || aktiv.typ}<span class="inne">{aktiv.n_uppdrag ?? 0} matcher inne</span></div>
+          <div class="meta">{aktiv.n_valda ?? '–'} valda · {aktiv.sparad || ''}</div>
         </div>
       </div>
     {/if}
@@ -270,7 +270,8 @@
   .aktiv { display: flex; gap: 12px; align-items: center; margin: 18px 0;
     padding: 12px 14px; background: var(--acc-soft); border-radius: var(--r); }
   .prick { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
-  .namn { font-size: 16px; font-weight: 700; color: var(--t-head); }
+  .namn { font-size: 16px; font-weight: 700; color: var(--t-head); display: flex; align-items: center; gap: 9px; }
+  .inne { font-size: 11px; font-weight: 600; color: var(--acc); background: var(--acc-soft); padding: 2px 8px; border-radius: 5px; }
   .meta { font-size: 12px; color: var(--t-mut); }
 
   .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
