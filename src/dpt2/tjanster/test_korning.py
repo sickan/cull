@@ -63,6 +63,10 @@ class TestWorkerMain(unittest.TestCase):
         worker.main(["nummer", "{}"])
         self.assertEqual(self.rader[-1]["typ"], "fel")
 
+    def test_story_utan_moment_ger_fel(self):
+        worker.main(["story", '{"config": {}}'])
+        self.assertEqual(self.rader[-1]["typ"], "fel")
+
     def test_ej_implementerat_jobb_ger_fel_event(self):
         worker.main(["gallra", "{}"])
         self.assertEqual(self.rader[-1]["typ"], "fel")

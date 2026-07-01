@@ -185,16 +185,20 @@ class Api:
                 "bildsvep": data["bildsvep"]}
 
     def skapa_story(self, config):
-        """Tar emot story-config (moment/tema/format + foto). Själva renderingen
-        (story_overlay, PIL) körs i workern när ett foto valts via native-
-        dialogen — kommande steg. Här valideras och kvitteras valet."""
-        config = config or {}
+        """Renderar en Matchdag-story i workern (story_overlay). Matchdata fylls
+        ur den aktiva matchen om ingen match_id anges. Returnerar sökväg till JPG."""
+        config = dict(config or {})
         if not config.get("moment"):
             return {"ok": False, "fel": "Välj ett moment."}
-        return {"ok": True, "meddelande":
-                f"Story-val sparat: {config.get('moment')} · {config.get('tema', 'Hav')} "
-                f"· {config.get('format', '9x16')}. Rendering sker i ML-workern "
-                "när källfotot valts."}
+        if not config.get("foto"):
+            return {"ok": False, "fel": "Ange ett källfoto."}
+        config.setdefault("match_id", store.hamta_installning(self.conn, "aktiv_match_id"))
+        r = self._kor_jobb("story", {"config": config})
+        res = r.get("resultat")
+        return {"ok": r["ok"], "path": res.get("path") if res else None,
+                "fel": r.get("fel"),
+                "meddelande": (f"Story renderad: {res['path']}" if r["ok"] and res
+                               else (r.get("fel") or "Kunde inte rendera story."))}
 
     # ── Innehåll (CMS → Astro-export) ────────────────────────────────────────
     def lista_innehall(self, typ=None):

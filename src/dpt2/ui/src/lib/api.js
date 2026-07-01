@@ -210,7 +210,10 @@ export async function skapaStory(config) {
   const api = brygga()
   if (api) return api.skapa_story(config)
   if (!config.moment) return wait({ ok: false, fel: 'Välj ett moment.' })
-  return wait({ ok: true, meddelande: `Story-val sparat: ${config.moment} · ${config.tema} · ${config.format} (mock).` })
+  if (!config.foto) return wait({ ok: false, fel: 'Ange ett källfoto.' })
+  const prefix = config.format === '4x5' ? 'inlagg' : 'story'
+  return wait({ ok: true, path: `~/.config/dpt2/stories/${prefix}_${config.moment.toLowerCase()}.jpg`,
+    meddelande: `Story renderad: ${config.moment} · ${config.tema} · ${config.format}.` })
 }
 
 // Innehåll (CMS → Astro-export). Muteras lokalt i mock-läge.

@@ -131,11 +131,6 @@ class TestApi(unittest.TestCase):
         self.assertEqual([u["id"] for u in lev], [u1])
 
 
-    def test_skapa_story_kraver_moment(self):
-        self.assertFalse(self.api.skapa_story({})["ok"])
-        res = self.api.skapa_story({"moment": "Avspark", "tema": "Sol", "format": "4x5"})
-        self.assertTrue(res["ok"])
-        self.assertIn("Avspark", res["meddelande"])
 
     def test_generera_bildsvep_utan_nyckel(self):
         import os
@@ -194,6 +189,10 @@ class TestApi(unittest.TestCase):
 
     def test_starta_nummer_utan_urval(self):
         self.assertFalse(self.api.starta_nummer("")["ok"])
+
+    def test_skapa_story_kraver_moment_och_foto(self):
+        self.assertFalse(self.api.skapa_story({})["ok"])
+        self.assertFalse(self.api.skapa_story({"moment": "Avspark"})["ok"])
 
 
     def test_logg_kor_demo_buffrar_och_rensar(self):

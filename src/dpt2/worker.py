@@ -124,6 +124,18 @@ def jobb_nummer(args):
         _emit(event("fel", text=r.get("fel", "okänt fel")))
 
 
+def jobb_story(args):
+    """Renderar en Matchdag-story (story_overlay, PIL) ur config + matchdata."""
+    from dpt2.tjanster import story_korning
+    _emit(event("start", jobb="story"))
+    _emit(event("progress", andel=0.2, text="Renderar…"))
+    r = story_korning.kor_story(_db(args), args.get("config") or {}, logg=_logg())
+    if r.get("ok"):
+        _emit(event("klar", resultat=r))
+    else:
+        _emit(event("fel", text=r.get("fel", "okänt fel")))
+
+
 def _jobb_ej_implementerad(namn):
     def kor(_args):
         _emit(event("start", jobb=namn))
@@ -141,7 +153,7 @@ JOBB = {
     "trana": jobb_trana,
     "gallra": jobb_gallra,
     "nummer": jobb_nummer,
-    "story": _jobb_ej_implementerad("story"),
+    "story": jobb_story,
 }
 
 
