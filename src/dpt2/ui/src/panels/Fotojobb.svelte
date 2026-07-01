@@ -5,7 +5,7 @@
   const dispatch = createEventDispatcher()
 
   let jobb = []
-  let status = { har_nyckel: false, ansluten: false }
+  let status = null            // null = okänd (visa ej offline-banner förrän känd)
   let laddar = true
   let layout = 'lista'          // lista | tidslinje
   let katFilter = 'Alla'
@@ -167,7 +167,7 @@
     {#if laddar}
       <p class="tom">Laddar fotojobb…</p>
     {:else}
-      {#if status.har_nyckel === false}
+      {#if status && status.har_nyckel === false}
         <div class="offline">
           <span>Inte ansluten till Google Calendar-tjänsten — sätt <code>CALENDAR_SYNC_API_KEY</code> och anslut i Inställningar.</span>
           <button class="prim liten" on:click={() => dispatch('navigera', 'installningar')}>Inställningar ›</button>
