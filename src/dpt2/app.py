@@ -122,9 +122,20 @@ class Api:
             self.conn, uid, cfg, verktyg=config.get("verktyg", "ai"),
             hemmafarg=config.get("hemmafarg"), modell=config.get("modell"))
         return {"ok": True, "urval_id": uid, "jobb_id": jid,
-                "meddelande": "Cull-jobb skapat. Körning av gallringsmotorn "
-                              "(feature-extraktion + modell) sker i ML-workern "
-                              "— kommande steg."}
+                "meddelande": "Cull-jobb skapat — kör gallringen."}
+
+    def starta_gallring(self, urval_id):
+        """Kör gallringsmotorn i workern (extraktion + poäng + urval) för ett
+        redan skapat urval. Strömmar event till loggen; uppdaterar urval.bilder."""
+        if not urval_id:
+            return {"ok": False, "fel": "Inget urval_id."}
+        r = self._kor_jobb("gallra", {"urval_id": urval_id})
+        res = r.get("resultat")
+        return {"ok": r["ok"], "resultat": res, "fel": r.get("fel"),
+                "meddelande": (f"Gallring klar: behåller {res['behall']} av "
+                               f"{res['totalt']} ({res['modell']})."
+                               if r["ok"] and res
+                               else (r.get("fel") or "Gallringen kunde inte köras."))}
 
     # ── Leverera (icke-destruktiv LR-väg: XMP-sidecars) ──────────────────────
     def lista_urval(self, status=None):

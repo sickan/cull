@@ -80,6 +80,29 @@ def jobb_trana(args):
         _emit(event("fel", text=r.get("fel", "okänt fel")))
 
 
+def jobb_gallra(args):
+    """Kör cull på ett urval (läser kalla + cull_jobb ur db): extrahera features
+    → poängsätt (modell/handsatt) → urvalsmotor → uppdatera urval.bilder."""
+    from dpt2.motorer import ai_lager
+    from dpt2.tjanster import gallring_korning
+    urval_id = args.get("urval_id")
+    if not urval_id:
+        _emit(event("fel", text="Inget urval_id angivet.")); return
+    _emit(event("start", jobb="gallra"))
+    _emit(event("progress", andel=0.05, text="Laddar modeller…"))
+    modeller = ai_lager.ladda_modeller(n_pose=1, med_estetik=True,
+                                       med_ogon=True, med_clip=True)
+    def progress(n, tot):
+        _emit(event("progress", andel=round(0.1 + 0.85 * n / max(1, tot), 3),
+                    text=f"Extraherar {n}/{tot}"))
+    r = gallring_korning.kor_gallring(_db(args), urval_id, modeller,
+                                      logg=_logg(), progress=progress)
+    if r.get("ok"):
+        _emit(event("klar", resultat=r))
+    else:
+        _emit(event("fel", text=r.get("fel", "okänt fel")))
+
+
 def _jobb_ej_implementerad(namn):
     def kor(_args):
         _emit(event("start", jobb=namn))
@@ -95,7 +118,7 @@ JOBB = {
     "demo": jobb_demo,
     "omrakna": jobb_omrakna,
     "trana": jobb_trana,
-    "gallra": _jobb_ej_implementerad("gallra"),
+    "gallra": jobb_gallra,
     "nummer": _jobb_ej_implementerad("nummer"),
     "story": _jobb_ej_implementerad("story"),
 }

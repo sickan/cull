@@ -154,10 +154,16 @@ export async function aktivMatch() {
 export async function startaCull(config) {
   const api = brygga()
   if (api) return api.starta_cull(config)
-  return wait({
-    ok: true, urval_id: 'mock', jobb_id: 'mock',
-    meddelande: 'Cull-jobb skapat (mock). Gallringsmotorn körs i ML-miljö.',
-  })
+  return wait({ ok: true, urval_id: 'mock', jobb_id: 'mock',
+    meddelande: 'Cull-jobb skapat.' })
+}
+
+export async function startaGallring(urvalId) {
+  const api = brygga()
+  if (api) return api.starta_gallring(urvalId)
+  return wait({ ok: true,
+    resultat: { totalt: 1184, behall: 118, modell: 'din_smak' },
+    meddelande: 'Gallring klar: behåller 118 av 1184 (din_smak).' })
 }
 
 export async function listaUrval(status = null) {

@@ -55,6 +55,10 @@ class TestWorkerMain(unittest.TestCase):
         self.assertEqual(worker.main(["finns-inte"]), 2)
         self.assertEqual(self.rader[-1]["typ"], "fel")
 
+    def test_gallra_utan_urval_id_ger_fel(self):
+        worker.main(["gallra", "{}"])           # returnerar före modell-laddning
+        self.assertEqual(self.rader[-1]["typ"], "fel")
+
     def test_ej_implementerat_jobb_ger_fel_event(self):
         worker.main(["gallra", "{}"])
         self.assertEqual(self.rader[-1]["typ"], "fel")

@@ -64,6 +64,12 @@ def spara_urval(conn, *, kalla, bilder, match_id=None, kamera=None,
     return uid
 
 
+def satt_urval_bilder(conn, urval_id, n):
+    """Uppdaterar antalet bilder i ett urval (sätts av gallringen = behåll-antal)."""
+    conn.execute("UPDATE urval SET bilder=? WHERE id=?", (int(n), urval_id))
+    conn.commit()
+
+
 def satt_urval_status(conn, urval_id, status):
     """gallrad → levererad → publicerad."""
     if status not in ("gallrad", "levererad", "publicerad"):

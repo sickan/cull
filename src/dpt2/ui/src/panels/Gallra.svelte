@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { aktivMatch, startaCull } from '../lib/api.js'
+  import { aktivMatch, startaCull, startaGallring } from '../lib/api.js'
 
   export let aktivMatchData = null   // skickas av "Aktivera match" (annars hämtas)
 
@@ -34,7 +34,12 @@
   async function kor_gallring() {
     kor = true; resultat = null
     const c = { ...cfg, match_id: match?.id || null }
-    resultat = await startaCull(c)
+    const skapad = await startaCull(c)
+    if (skapad.ok && skapad.urval_id) {
+      resultat = await startaGallring(skapad.urval_id)   // kör motorn i workern
+    } else {
+      resultat = skapad
+    }
     kor = false
   }
 </script>
