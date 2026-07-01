@@ -41,10 +41,13 @@
 
   const del = (iso) => (iso || '').split('T')[0].split('-').map(Number)
   function periodText(t) {
-    const f = (t.fran || '').split('-'), ti = (t.till || '').split('-')
-    if (f.length < 2 || ti.length < 2) return ''
-    const yr = ti[0] === f[0] ? f[0] : `${f[0]}–${ti[0]}`
-    return `${MK[+f[1] - 1]}–${MK[+ti[1] - 1]} ${yr}`
+    const f = (t.fran || ''), ti = (t.till || '')
+    if (/^\d{4}-\d{2}/.test(f) && /^\d{4}-\d{2}/.test(ti)) {
+      const a = f.split('-'), b = ti.split('-')
+      const yr = b[0] === a[0] ? a[0] : `${a[0]}–${b[0]}`
+      return `${MK[+a[1] - 1]}–${MK[+b[1] - 1]} ${yr}`
+    }
+    return f            // fri text ("apr–okt 2026")
   }
   function initialer(namn) {
     return (namn || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()

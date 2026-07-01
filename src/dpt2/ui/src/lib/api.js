@@ -51,8 +51,8 @@ const MOCK_LAG = [
 ]
 
 const MOCK_TAVLINGAR = [
-  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', fran: '2026-04', till: '2026-10', ort: 'Sverige', arena: '', hemsida: 'damallsvenskan.se', logga: null, kalender: 0 },
-  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', fran: '2026-09', till: '2027-04', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
+  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', fran: 'apr–okt 2026', till: '', ort: 'Sverige', arena: '', hemsida: 'svenskelitfotboll.se', logga: null, kalender: 0 },
+  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', fran: 'sep 2026 – apr 2027', till: '', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
 ]
 
 // Mock: vilka lag som deltar i en tävling (tavling_lag). I appen kommer detta

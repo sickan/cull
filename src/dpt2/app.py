@@ -98,6 +98,7 @@ class Api:
             sport=(tavling.get("sport") or "fotboll"),
             typ=(tavling.get("typ") or "liga"), ort=tavling.get("ort"),
             arena=tavling.get("arena"), hemsida=tavling.get("hemsida"),
+            fran=tavling.get("fran"), till=tavling.get("till"),
             kalender=bool(tavling.get("kalender")))
         return {"ok": bool(tid), "id": tid}
 
