@@ -57,11 +57,7 @@
     const idag = t.getFullYear() * 10000 + (t.getMonth() + 1) * 100 + t.getDate()
     const mal = kort.find((c) => +c.getAttribute('data-jobdate') <= idag) || kort[kort.length - 1]
     const cr = mal.getBoundingClientRect(), br = bodyEl.getBoundingClientRect()
-    // Landa lite förbi dagens kort (inte flush mot toppen) — i den fallande
-    // sorteringen (framtid överst, historik underst) ligger den senast
-    // passerade aktiviteten direkt NEDANFÖR dagens kort, så några extra
-    // pixlar scroll här ger den rum att synas utan att man behöver scrolla mer.
-    bodyEl.scrollTop += (cr.top - br.top) + 34
+    bodyEl.scrollTop += (cr.top - br.top) - 14
   }
   function scrollTopp() { if (bodyEl) bodyEl.scrollTo({ top: 0, behavior: 'smooth' }) }
 
