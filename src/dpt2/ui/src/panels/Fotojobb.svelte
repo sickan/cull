@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte'
-  import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus } from '../lib/api.js'
+  import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
 
@@ -112,7 +112,18 @@
     return a[1] === b[1] ? `${a[2]}–${b[2]} ${MAN_KORT[b[1] - 1]}` : `${s} – ${b[2]} ${MAN_KORT[b[1] - 1]}`
   }
   const synkad = (j) => !!j.google_event_id
-  const synkText = (j) => (synkad(j) ? 'Google ✓' : 'Väntar')
+  const synkText = (j) => (j.utkast ? 'Utkast' : synkad(j) ? 'Google ✓' : 'Väntar')
+
+  // Utkast (tävling → Fotojobb): sparas bara lokalt tills detta anropas —
+  // pushar då till Calendar Sync-tjänsten på riktigt och tar bort utkastet.
+  let synkFelId = null
+  let synkFelMsg = ''
+  async function aktiveraSynk(j) {
+    synkFelId = null
+    const r = await aktiveraSynkFotojobb(j.id)
+    if (r?.ok) await laddaOm()
+    else { synkFelId = j.id; synkFelMsg = r?.fel || 'Kunde inte aktivera synk.' }
+  }
 
   $: filtrerade = jobb.filter((j) =>
     katFilter === 'Alla' ? true
@@ -230,12 +241,14 @@
                       <div class="tlinfo">
                         <div class="rtitel stor">{j.title}</div>
                         <div class="when">{j.all_day ? 'Heldag · ' + heldagText(j) : ''}{j.location ? (j.all_day ? ' · ' : '') + j.location : ''}</div>
+                        {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                       </div>
                       <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
                         <option value="">Okategoriserat</option>
                         {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
                       </select>
-                      <span class="synk" class:vantar={!synkad(j)}>{synkText(j)}</span>
+                      <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
+                      {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
                       <button class="mini" on:click={() => andra(j)}>Ändra</button>
                       <button class="mini kryss" on:click={() => taBort(j)}>×</button>
                     </div>
@@ -252,14 +265,16 @@
                     <span class="rtitel">{j.title}</span>
                     <span class="hlbl">Heldag</span>
                     {#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}
-                    <span class="synk" class:vantar={!synkad(j)}>{synkText(j)}</span>
+                    <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
                     <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
                       <option value="">Okategoriserat</option>
                       {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
                     </select>
                     <span class="spacer"></span>
+                    {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
                     <button class="mini" on:click={() => andra(j)}>Ändra</button>
                     <button class="mini" on:click={() => taBort(j)}>Ta bort</button>
+                    {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                   </div>
                 {:else}
                   <div class="rad" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}">
@@ -271,14 +286,16 @@
                       <div class="rtitel stor">{j.title}{#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}</div>
                       <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
                       <div class="undermeta">
-                        <span class="synk" class:vantar={!synkad(j)}>{synkText(j)}</span>
+                        <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
                         <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
                           <option value="">Okategoriserat</option>
                           {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
                         </select>
+                        {#if synkFelId === j.id}<span class="synkfel">⚠ {synkFelMsg}</span>{/if}
                       </div>
                     </div>
                     <div class="rknapp">
+                      {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
                       <button class="mini" on:click={() => andra(j)}>Ändra</button>
                       <button class="mini" on:click={() => taBort(j)}>Ta bort</button>
                     </div>
@@ -398,17 +415,21 @@
     font-size: 12.5px; color: var(--t-mut); }
   .mini:hover { border-color: var(--acc); color: var(--acc); }
 
-  .rad.heldag { padding: 11px 16px; }
+  .rad.heldag { padding: 11px 16px; flex-wrap: wrap; }
   .hrange { font-size: 12px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; flex: none; }
   .hlbl { font-size: 10px; font-weight: 600; color: var(--t-mut); text-transform: uppercase; letter-spacing: 0.07em; flex: none; }
   .spacer { flex: 1; }
   .rad.heldag .rtitel { flex: none; }
+  .rad.heldag .synkfel { flex-basis: 100%; }
 
   .synk { font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
     background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); flex: none; white-space: nowrap; }
   .synk.vantar { background: color-mix(in srgb, var(--varn) 16%, transparent); color: var(--varn); }
+  .synk.utkast { background: var(--div3); color: var(--t-mut); }
   .katsel { padding: 4px 8px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
     color: var(--t-mut); font-size: 11.5px; font-family: inherit; }
+  .synkbtn { border-color: var(--acc); color: var(--acc); font-weight: 600; }
+  .synkfel { font-size: 11px; color: var(--rose); }
 
   /* Tidslinje */
   .tidslinje { display: flex; flex-direction: column; }

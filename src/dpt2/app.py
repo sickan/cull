@@ -179,6 +179,42 @@ class Api:
         store.radera_tavling(self.conn, id)
         return {"ok": True}
 
+    def lagg_tavling_i_kalender(self, tavling_id):
+        """Skapar ett lokalt fotojobb-utkast (Okategoriserat, EJ synkat) för
+        tävlingens period — flerdagarsuppdrag. Kräver att tävlingen redan har
+        start- och slutdatum. Pushas inte till Calendar Sync-tjänsten förrän
+        aktivera_synk_fotojobb anropas uttryckligen i Fotojobb-panelen.
+        Returnerar {ok, utkast_id} eller {ok:False, fel}."""
+        t = store.hamta_tavling(self.conn, tavling_id)
+        if not t:
+            return {"ok": False, "fel": "Okänd tävling."}
+        if not (t.get("fran") and t.get("till")):
+            return {"ok": False, "fel": "Ange start- och slutdatum på tävlingen först."}
+        uid = store.skapa_fotojobb_utkast(
+            self.conn, tavling_id=tavling_id, title=t["namn"],
+            start_at=t["fran"], end_at=t["till"],
+            location=t.get("arena") or t.get("ort"), all_day=True)
+        self._satt_tavling_kalender(t, True)
+        return {"ok": True, "utkast_id": uid}
+
+    def ta_bort_tavling_ur_kalender(self, tavling_id):
+        """Tar bort tävlingens fotojobb-utkast, om det inte redan aktiverats
+        (då finns inget lokalt utkast kvar att ta bort — no-op)."""
+        t = store.hamta_tavling(self.conn, tavling_id)
+        store.radera_fotojobb_utkast_for_tavling(self.conn, tavling_id)
+        if t:
+            self._satt_tavling_kalender(t, False)
+        return {"ok": True}
+
+    def _satt_tavling_kalender(self, t, pa):
+        """Skriver om tävlingens kalender-flagga (övriga fält round-trippas
+        oförändrade — upsert_tavling kräver dem, men rör bara det som ändras)."""
+        store.upsert_tavling(
+            self.conn, t["namn"], sport=t["sport"], typ=t["typ"],
+            fran=t.get("fran"), till=t.get("till"), ort=t.get("ort"),
+            arena=t.get("arena"), hemsida=t.get("hemsida"), logga=t.get("logga"),
+            kalender=pa)
+
     # ── Fotojobb (Google Calendar via deployade tjänsten) ────────────────────
     def kalender_status(self):
         """Status för Inställningar-panelen: nyckel satt + tjänsten nåbar."""
@@ -187,17 +223,26 @@ class Api:
                 "bas_url": self.kalender.bas_url}
 
     def lista_fotojobb(self):
+        """Lokala utkast (väntar på manuell synk) + riktiga jobb hos tjänsten.
+        Utkast taggas `utkast: True` så UI:t kan visa "Aktivera synk"-läget;
+        de har aldrig ett google_event_id eftersom de aldrig pushats än."""
+        utkast = [_utkast_till_jobbdict(u)
+                  for u in store.lista_fotojobb_utkast(self.conn)]
         try:
             jobb = self.kalender.lista_jobb()
-            if isinstance(jobb, list):
-                jobb = [j for j in jobb if not j.get("deleted")
-                        and j.get("status") != "cancelled"]
-            return jobb
-        except Exception as e:
-            return {"fel": str(e)}
+            jobb = [j for j in jobb if not j.get("deleted")
+                    and j.get("status") != "cancelled"] if isinstance(jobb, list) else []
+        except Exception:
+            jobb = []
+        return utkast + jobb
 
     def spara_fotojobb(self, jobb):
-        """Skapar (utan id) eller uppdaterar (med id) ett fotojobb hos tjänsten."""
+        """Skapar (utan id) eller uppdaterar (med id) ett fotojobb. Ett utkast
+        (jobb.utkast=True) sparas bara LOKALT — pushas aldrig till tjänsten
+        förrän aktivera_synk_fotojobb anropas explicit."""
+        if jobb.get("utkast") and jobb.get("id"):
+            store.spara_fotojobb_utkast_falt(self.conn, jobb["id"], jobb)
+            return {"ok": True}
         jid = jobb.get("id")
         data = {k: jobb.get(k) for k in
                 ("title", "start_at", "end_at", "location", "description",
@@ -209,10 +254,33 @@ class Api:
             return {"ok": False, "fel": str(e)}
 
     def radera_fotojobb(self, jobb_id):
+        """Raderar ett utkast lokalt om id:t pekar på ett, annars ett riktigt
+        jobb hos tjänsten."""
+        if store.hamta_fotojobb_utkast(self.conn, jobb_id):
+            store.radera_fotojobb_utkast(self.conn, jobb_id)
+            return {"ok": True}
         try:
             return self.kalender.radera_jobb(jobb_id)
         except Exception as e:
             return {"ok": False, "fel": str(e)}
+
+    def aktivera_synk_fotojobb(self, utkast_id):
+        """Skickar ett lokalt utkast till Calendar Sync-tjänsten på riktigt
+        (som i sin tur speglar det till Google). Tar bort det lokala utkastet
+        vid lyckad synk — annars behålls det så man kan försöka igen."""
+        u = store.hamta_fotojobb_utkast(self.conn, utkast_id)
+        if not u:
+            return {"ok": False, "fel": "Utkastet finns inte längre."}
+        data = {"title": u["title"], "start_at": u["start_at"],
+                "end_at": u["end_at"], "all_day": bool(u["all_day"]),
+                "location": u.get("location"), "category": u.get("category")}
+        try:
+            r = self.kalender.skapa_jobb(data)
+        except Exception as e:
+            return {"ok": False, "fel": str(e)}
+        if r.get("ok"):
+            store.radera_fotojobb_utkast(self.conn, utkast_id)
+        return r
 
     # ── Aktiv match (delas av Efter match-panelerna) ─────────────────────────
     def satt_aktiv_match(self, id):
@@ -532,6 +600,18 @@ class Api:
     def info(self):
         return {"db": str(self.db_path),
                 "schemaversion": db.schemaversion(self.conn)}
+
+
+def _utkast_till_jobbdict(u):
+    """Ett fotojobb_utkast-rad → samma dict-form som ett riktigt fotojobb från
+    Calendar Sync-tjänsten, så Fotojobb-panelen kan rendera dem i samma lista
+    (sortering/gruppering/idag-logik funkar oförändrat). google_event_id=None
+    eftersom det aldrig pushats; `utkast: True` skiljer ut det i UI:t."""
+    return {"id": u["id"], "title": u["title"], "start_at": u["start_at"],
+            "end_at": u["end_at"], "all_day": bool(u["all_day"]),
+            "location": u.get("location") or "", "description": "",
+            "category": u.get("category"), "status": "confirmed",
+            "google_event_id": None, "source": "dpt", "utkast": True}
 
 
 def _innehall_md(data):

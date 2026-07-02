@@ -3,6 +3,7 @@
   import {
     listaLag, listaTavlingar, sparaLag, sparaTavling, raderaLag, raderaTavling,
     valjFil, lasLagTrupp, hamtaLagTrupp, sparaSpelare, raderaSpelare,
+    laggTavlingIKalender, taBortTavlingUrKalender,
   } from '../lib/api.js'
 
   let lag = []
@@ -64,13 +65,24 @@
   }
   function nyTavling() {
     tavlingar = [...tavlingar, { id: 'ny-' + Date.now(), namn: '', typ: 'liga',
-      sport: 'fotboll', fran: '', ort: '', arena: '', hemsida: '', logga: null, kalender: 0 }]
+      sport: 'fotboll', fran: '', till: '', ort: '', arena: '', hemsida: '', logga: null, kalender: 0 }]
   }
 
-  function laggTavlingIKalender(t) {
-    t.kalender = t.kalender ? 0 : 1
-    tavlingar = tavlingar
-    gerTavling(t)
+  // Tävling → fotojobb-utkast (Okategoriserat, ej synkat). Aktiveras/kategoriseras
+  // sedan i Fotojobb-panelen — knappen här bara SKAPAR utkastet lokalt.
+  let kalFelId = null
+  let kalFelMsg = ''
+  async function vaxlaTavlingKalender(t) {
+    kalFelId = null
+    if (t.kalender) {
+      t.kalender = 0
+      tavlingar = tavlingar
+      await taBortTavlingUrKalender(t.id)
+      return
+    }
+    const r = await laggTavlingIKalender(t.id)
+    if (r?.ok) { t.kalender = 1; tavlingar = tavlingar }
+    else { kalFelId = t.id; kalFelMsg = r?.fel || 'Kunde inte lägga till i kalendern.' }
   }
 
   // ── Trupp-källväljare (URL / CSV / bild / PDF) ─────────────────────────────
@@ -169,14 +181,17 @@
             </button>
             <div class="falt">
               <input class="namn-in scd" bind:value={t.namn} on:change={() => gerTavling(t)} placeholder="Tävlingens namn" />
-              <div class="trippel">
+              <div class="dubbel">
                 <select bind:value={t.typ} on:change={() => gerTavling(t)}>
                   {#each TYPER as ty}<option value={ty}>{TYP_ETIKETT[ty]}</option>{/each}
                 </select>
                 <select bind:value={t.sport} on:change={() => gerTavling(t)}>
                   {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
                 </select>
-                <input bind:value={t.fran} on:change={() => gerTavling(t)} placeholder="Period (t.ex. apr–okt 2026)" />
+              </div>
+              <div class="dubbel">
+                <label class="datumf"><span class="lbl">Start</span><input type="date" bind:value={t.fran} on:change={() => gerTavling(t)} /></label>
+                <label class="datumf"><span class="lbl">Slut</span><input type="date" bind:value={t.till} on:change={() => gerTavling(t)} /></label>
               </div>
               <div class="dubbel">
                 <input bind:value={t.ort} on:change={() => gerTavling(t)} placeholder="Ort" />
@@ -187,11 +202,12 @@
                 <span class="kalik">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg>
                 </span>
-                <span class="kaltxt">Lägg hela tävlingen i kalendern som flerdagarsuppdrag</span>
-                <button class="kalbtn" class:i={t.kalender} on:click={() => laggTavlingIKalender(t)}>
-                  {t.kalender ? 'I kalendern ✓' : 'Lägg i Google Calendar ›'}
+                <span class="kaltxt">Läggs som ett Okategoriserat utkast i Fotojobb — du kategoriserar och aktiverar synk dit</span>
+                <button class="kalbtn" class:i={t.kalender} on:click={() => vaxlaTavlingKalender(t)}>
+                  {t.kalender ? 'Utkast i Fotojobb ✓' : 'Lägg i Google Calendar ›'}
                 </button>
               </div>
+              {#if kalFelId === t.id}<div class="kalfel">⚠ {kalFelMsg}</div>{/if}
             </div>
             {#if sparad === t.id}<span class="flash">✓</span>{/if}
             <button class="x" on:click={() => taBortTavling(t)} title="Ta bort">×</button>
@@ -320,7 +336,8 @@
   .rad1 { display: flex; gap: 8px; align-items: center; }
   .rad1 .namn-in { flex: 1; min-width: 0; }
   .dubbel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .trippel { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .datumf { display: flex; flex-direction: column; gap: 4px; }
+  .datumf input { width: 100%; box-sizing: border-box; }
   .kalfot { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 10px 12px;
     background: var(--panel); border: 1px solid var(--div3); border-radius: 9px; }
   .kalik { width: 30px; height: 30px; border-radius: 8px; background: var(--acc-soft); color: var(--acc);
@@ -330,6 +347,7 @@
   .kalbtn { flex: none; background: var(--acc); color: #fff; border: 0; border-radius: 7px;
     padding: 8px 13px; font-size: 12.5px; font-weight: 600; }
   .kalbtn.i { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+  .kalfel { font-size: 11px; color: var(--rose); margin-top: -2px; }
   .trupprad { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .spelarbtn { background: var(--kort); border: 1px solid var(--div); border-radius: 8px;
     padding: 8px 12px; font-size: 12.5px; color: var(--t-mut); font-weight: 500; flex: none; }

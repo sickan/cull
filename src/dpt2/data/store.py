@@ -462,6 +462,65 @@ def lista_tavlingar(conn):
     return [dict(r) for r in conn.execute("SELECT * FROM tavling ORDER BY namn")]
 
 
+def hamta_tavling(conn, tavling_id):
+    r = conn.execute("SELECT * FROM tavling WHERE id=?", (tavling_id,)).fetchone()
+    return dict(r) if r else None
+
+
+# ── Fotojobb-utkast (tävling → Fotojobb, väntar på manuell synk) ─────────────
+def skapa_fotojobb_utkast(conn, *, tavling_id, title, start_at, end_at,
+                          location=None, all_day=True):
+    """Skapar (eller återanvänder) ett lokalt fotojobb-utkast för tävlingen.
+    En tävling har högst ETT utkast åt gången (UNIQUE tavling_id). Returnerar
+    utkast-id."""
+    fin = conn.execute("SELECT id FROM fotojobb_utkast WHERE tavling_id=?",
+                       (tavling_id,)).fetchone()
+    if fin:
+        return fin["id"]
+    uid = ny_id()
+    conn.execute(
+        "INSERT INTO fotojobb_utkast(id,tavling_id,title,start_at,end_at,"
+        "all_day,location,category,skapad) VALUES(?,?,?,?,?,?,?,?,?)",
+        (uid, tavling_id, title, start_at, end_at, 1 if all_day else 0,
+         location, None, _nu()))
+    conn.commit()
+    return uid
+
+
+def lista_fotojobb_utkast(conn):
+    return [dict(r) for r in
+            conn.execute("SELECT * FROM fotojobb_utkast ORDER BY start_at")]
+
+
+def hamta_fotojobb_utkast(conn, utkast_id):
+    r = conn.execute("SELECT * FROM fotojobb_utkast WHERE id=?",
+                     (utkast_id,)).fetchone()
+    return dict(r) if r else None
+
+
+def spara_fotojobb_utkast_falt(conn, utkast_id, falt):
+    """Uppdaterar valfria fält (kategori, titel, datum …) på ett utkast innan
+    synk. Okända nycklar i falt ignoreras."""
+    tillatna = {"title", "start_at", "end_at", "all_day", "location", "category"}
+    satt = {k: v for k, v in (falt or {}).items() if k in tillatna}
+    if not satt:
+        return
+    kol = ", ".join(f"{k}=?" for k in satt)
+    conn.execute(f"UPDATE fotojobb_utkast SET {kol} WHERE id=?",
+                 (*satt.values(), utkast_id))
+    conn.commit()
+
+
+def radera_fotojobb_utkast(conn, utkast_id):
+    conn.execute("DELETE FROM fotojobb_utkast WHERE id=?", (utkast_id,))
+    conn.commit()
+
+
+def radera_fotojobb_utkast_for_tavling(conn, tavling_id):
+    conn.execute("DELETE FROM fotojobb_utkast WHERE tavling_id=?", (tavling_id,))
+    conn.commit()
+
+
 # ── Tävling ↔ lag (tävling äger sina deltagande lag) ─────────────────────────
 def koppla_lag_till_tavling(conn, tavling_id, lag_id):
     """Registrerar att laget deltar i tävlingen (idempotent)."""

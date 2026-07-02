@@ -200,6 +200,14 @@ class TestLagTavling(unittest.TestCase):
         t = store.lista_tavlingar(self.c)[0]
         self.assertEqual(t["hemsida"], "damallsvenskan.se")   # bevarat
 
+    def test_hamta_tavling(self):
+        tid = store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll",
+                                   fran="2026-04-01", till="2026-10-31")
+        t = store.hamta_tavling(self.c, tid)
+        self.assertEqual(t["namn"], "OBOS Damallsvenskan")
+        self.assertEqual(t["fran"], "2026-04-01")
+        self.assertIsNone(store.hamta_tavling(self.c, "finns-ej"))
+
     def test_lag_individ(self):
         lid = store.upsert_lag(self.c, "Rebecca Peterson", kind="individ",
                                profilfarg="#2F7CB0", klubb="Sverige")
@@ -339,18 +347,71 @@ class TestLagTavling(unittest.TestCase):
         self.assertIsNone(store.hamta_innehall(self.c, iid))
 
 
+class TestFotojobbUtkast(unittest.TestCase):
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.tid = store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll",
+                                        fran="2026-04-01", till="2026-10-31")
+
+    def test_skapa_och_lista(self):
+        uid = store.skapa_fotojobb_utkast(
+            self.c, tavling_id=self.tid, title="OBOS Damallsvenskan",
+            start_at="2026-04-01", end_at="2026-10-31", location="Sverige")
+        self.assertIsNotNone(uid)
+        utkast = store.lista_fotojobb_utkast(self.c)
+        self.assertEqual(len(utkast), 1)
+        self.assertEqual(utkast[0]["title"], "OBOS Damallsvenskan")
+        self.assertIsNone(utkast[0]["category"])       # Okategoriserat
+
+    def test_idempotent_per_tavling(self):
+        # Re-klick på "Lägg i Google Calendar" ska INTE skapa en dubblett.
+        u1 = store.skapa_fotojobb_utkast(self.c, tavling_id=self.tid,
+                                         title="A", start_at="2026-04-01", end_at="2026-10-31")
+        u2 = store.skapa_fotojobb_utkast(self.c, tavling_id=self.tid,
+                                         title="A", start_at="2026-04-01", end_at="2026-10-31")
+        self.assertEqual(u1, u2)
+        self.assertEqual(len(store.lista_fotojobb_utkast(self.c)), 1)
+
+    def test_spara_falt(self):
+        uid = store.skapa_fotojobb_utkast(self.c, tavling_id=self.tid,
+                                          title="A", start_at="2026-04-01", end_at="2026-10-31")
+        store.spara_fotojobb_utkast_falt(self.c, uid, {"category": "Sport", "okand": "hoppas"})
+        u = store.hamta_fotojobb_utkast(self.c, uid)
+        self.assertEqual(u["category"], "Sport")
+
+    def test_radera(self):
+        uid = store.skapa_fotojobb_utkast(self.c, tavling_id=self.tid,
+                                          title="A", start_at="2026-04-01", end_at="2026-10-31")
+        store.radera_fotojobb_utkast(self.c, uid)
+        self.assertIsNone(store.hamta_fotojobb_utkast(self.c, uid))
+
+    def test_radera_for_tavling(self):
+        store.skapa_fotojobb_utkast(self.c, tavling_id=self.tid,
+                                    title="A", start_at="2026-04-01", end_at="2026-10-31")
+        store.radera_fotojobb_utkast_for_tavling(self.c, self.tid)
+        self.assertEqual(store.lista_fotojobb_utkast(self.c), [])
+
+    def test_tas_bort_med_tavlingen(self):
+        # ON DELETE CASCADE — utkastet ska försvinna om tävlingen raderas.
+        store.skapa_fotojobb_utkast(self.c, tavling_id=self.tid,
+                                    title="A", start_at="2026-04-01", end_at="2026-10-31")
+        store.radera_tavling(self.c, self.tid)
+        self.assertEqual(store.lista_fotojobb_utkast(self.c), [])
+
+
 class TestMigrering(unittest.TestCase):
-    def test_fresh_db_ar_v4_med_trupp_kalla(self):
+    def test_fresh_db_ar_v5_med_fotojobb_utkast(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 4)
+        self.assertEqual(db.schemaversion(c), 5)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
+        self.assertIn("fotojobb_utkast", db.tabeller(c))
         self.assertIn("trupp_kalla",
                       [r[1] for r in c.execute("PRAGMA table_info(lag)")])
 
-    def test_migrera_v1_till_v4(self):
+    def test_migrera_v1_till_v5(self):
         # v1-läge: urval + register-tabellerna (som alltid funnits). Migreringen
-        # kör hela kedjan v1→v4 (urval_bild + tavling_lag + nya kolumner).
+        # kör hela kedjan v1→v5 (urval_bild + tavling_lag + nya kolumner/tabell).
         import sqlite3
         c = sqlite3.connect(":memory:")
         c.execute("PRAGMA user_version=1")
@@ -362,6 +423,7 @@ class TestMigrering(unittest.TestCase):
             "SELECT name FROM sqlite_master WHERE type='table'")]
         self.assertIn("urval_bild", namn)
         self.assertIn("tavling_lag", namn)
+        self.assertIn("fotojobb_utkast", namn)
         kolumner = [r[1] for r in c.execute("PRAGMA table_info(lag)")]
         self.assertIn("kind", kolumner)
         self.assertIn("trupp_kalla", kolumner)

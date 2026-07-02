@@ -13,7 +13,7 @@ class TestApi(unittest.TestCase):
 
     def test_info(self):
         info = self.api.info()
-        self.assertEqual(info["schemaversion"], 4)
+        self.assertEqual(info["schemaversion"], 5)
 
     def test_match_round_trip_genom_bryggan(self):
         res = self.api.spara_match({
@@ -307,6 +307,127 @@ class TestApi(unittest.TestCase):
         self.assertEqual(self.api.hamta_logg(), res["events"])
         self.api.rensa_logg()
         self.assertEqual(self.api.hamta_logg(), [])
+
+
+class _FakeKalender:
+    """Ersätter Api.kalender i tester som rör synk — inga riktiga nätverksanrop
+    (den skarpa Kalender() gör HTTP mot Calendar Sync-tjänsten även vid fel)."""
+
+    def __init__(self):
+        self.skapade = []
+
+    def har_nyckel(self):
+        return True
+
+    def halsa(self):
+        return True
+
+    def lista_jobb(self):
+        return []
+
+    def skapa_jobb(self, jobb):
+        self.skapade.append(jobb)
+        return {"ok": True, "jobb": {**jobb, "id": "remote1", "google_event_id": "g1"}}
+
+    def uppdatera_jobb(self, jid, jobb):
+        return {"ok": True}
+
+    def radera_jobb(self, jid):
+        return {"ok": True}
+
+
+class TestFotojobbUtkastBridge(unittest.TestCase):
+    """Tävling → lokalt fotojobb-utkast → aktivera synk (skickas till tjänsten).
+    Validerings-/lokala vägarna testas utan fake (rör aldrig self.kalender);
+    de som faktiskt synkar använder _FakeKalender för att undvika nätverk."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+
+    def test_lagg_tavling_i_kalender_kraver_datum(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll"})
+        r = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")
+        self.assertFalse(r["ok"])
+        self.assertIn("datum", r["fel"])
+
+    def test_lagg_tavling_i_kalender_okand_tavling(self):
+        self.assertFalse(self.api.lagg_tavling_i_kalender("finns-ej")["ok"])
+
+    def test_lagg_tavling_i_kalender_skapar_utkast(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31",
+                                "ort": "Sverige"})
+        r = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")
+        self.assertTrue(r["ok"])
+        self.assertTrue(r["utkast_id"])
+        # kalender-flaggan persisteras på tävlingen
+        t = next(x for x in self.api.lista_tavlingar() if x["id"] == "obos-damallsvenskan")
+        self.assertTrue(t["kalender"])
+        # utkastet dyker upp i Fotojobb-listan, taggat utkast=True, aldrig pushat
+        self.api.kalender = _FakeKalender()
+        jobb = self.api.lista_fotojobb()
+        self.assertEqual(len(jobb), 1)
+        self.assertTrue(jobb[0]["utkast"])
+        self.assertIsNone(jobb[0]["google_event_id"])
+        self.assertIsNone(jobb[0]["category"])          # Okategoriserat
+        self.assertEqual(self.api.kalender.skapade, [])  # inget pushat än
+
+    def test_lagg_tavling_i_kalender_idempotent(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        r1 = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")
+        r2 = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")
+        self.assertEqual(r1["utkast_id"], r2["utkast_id"])
+
+    def test_ta_bort_tavling_ur_kalender(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        self.api.lagg_tavling_i_kalender("obos-damallsvenskan")
+        r = self.api.ta_bort_tavling_ur_kalender("obos-damallsvenskan")
+        self.assertTrue(r["ok"])
+        t = next(x for x in self.api.lista_tavlingar() if x["id"] == "obos-damallsvenskan")
+        self.assertFalse(t["kalender"])
+        self.api.kalender = _FakeKalender()
+        self.assertEqual(self.api.lista_fotojobb(), [])
+
+    def test_kategorisera_utkast_sparas_bara_lokalt(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
+        self.api.kalender = _FakeKalender()
+        r = self.api.spara_fotojobb({"id": uid, "utkast": True, "category": "Sport"})
+        self.assertTrue(r["ok"])
+        self.assertEqual(self.api.kalender.skapade, [])   # rörde aldrig tjänsten
+        jobb = self.api.lista_fotojobb()
+        self.assertEqual(jobb[0]["category"], "Sport")
+
+    def test_radera_utkast_via_radera_fotojobb(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
+        self.api.kalender = _FakeKalender()
+        r = self.api.radera_fotojobb(uid)
+        self.assertTrue(r["ok"])
+        self.assertEqual(self.api.lista_fotojobb(), [])
+
+    def test_aktivera_synk_pushar_och_tar_bort_utkastet(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31",
+                                "arena": "Eleda Stadion"})
+        uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
+        fake = _FakeKalender()
+        self.api.kalender = fake
+        r = self.api.aktivera_synk_fotojobb(uid)
+        self.assertTrue(r["ok"])
+        self.assertEqual(len(fake.skapade), 1)
+        self.assertEqual(fake.skapade[0]["title"], "OBOS Damallsvenskan")
+        self.assertEqual(fake.skapade[0]["location"], "Eleda Stadion")
+        # utkastet är borta lokalt — det som nu finns kommer från tjänsten (lista_jobb)
+        self.assertIsNone(store.hamta_fotojobb_utkast(self.api.conn, uid))
+
+    def test_aktivera_synk_okant_utkast(self):
+        r = self.api.aktivera_synk_fotojobb("finns-ej")
+        self.assertFalse(r["ok"])
 
 
 class TestGallringConfig(unittest.TestCase):

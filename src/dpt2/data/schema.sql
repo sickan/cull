@@ -25,7 +25,22 @@ CREATE TABLE tavling (
   ort       TEXT,
   arena     TEXT,
   logga     TEXT,                       -- filsökväg
-  kalender  INTEGER NOT NULL DEFAULT 0  -- utlagd i Google Calendar (bool)
+  kalender  INTEGER NOT NULL DEFAULT 0  -- fotojobb-utkast skapat (se fotojobb_utkast)
+);
+
+-- Lokalt fotojobb-utkast (tävling → "Lägg i Google Calendar"). Väntar på att
+-- fotografen kategoriserar och uttryckligen aktiverar synk i Fotojobb-panelen
+-- — pushas ALDRIG till Calendar Sync-tjänsten (och därmed Google) förrän dess.
+CREATE TABLE fotojobb_utkast (
+  id         TEXT PRIMARY KEY,
+  tavling_id TEXT UNIQUE REFERENCES tavling(id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  start_at   TEXT NOT NULL,
+  end_at     TEXT NOT NULL,
+  all_day    INTEGER NOT NULL DEFAULT 1,
+  location   TEXT,
+  category   TEXT,
+  skapad     TEXT NOT NULL
 );
 
 CREATE TABLE lag (

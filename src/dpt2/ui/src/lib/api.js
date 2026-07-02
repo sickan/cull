@@ -51,8 +51,8 @@ const MOCK_LAG = [
 ]
 
 const MOCK_TAVLINGAR = [
-  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', fran: 'apr–okt 2026', till: '', ort: 'Sverige', arena: '', hemsida: 'svenskelitfotboll.se', logga: null, kalender: 0 },
-  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', fran: 'sep 2026 – apr 2027', till: '', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
+  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', fran: '2026-04-01', till: '2026-10-31', ort: 'Sverige', arena: '', hemsida: 'svenskelitfotboll.se', logga: null, kalender: 0 },
+  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', fran: '2026-09-01', till: '2027-04-30', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
 ]
 
 // Mock: vilka lag som deltar i en tävling (tavling_lag). I appen kommer detta
@@ -70,6 +70,14 @@ let MOCK_FOTOJOBB = [
   { id: 'fj3', title: 'Landskap – soluppgång vid Grenen', start_at: '2026-07-12T04:30:00', end_at: '2026-07-12T06:00:00', all_day: false, location: 'Grenen', description: '', category: 'Landskap', status: 'confirmed', google_event_id: null, source: 'dpt' },
   { id: 'fj4', title: 'Mässa & workshop', start_at: '2026-06-29', end_at: '2026-07-03', all_day: true, location: '', description: '', category: 'Övrigt', status: 'confirmed', google_event_id: 'g4', source: 'dpt' },
 ]
+
+// Lokala fotojobb-utkast (tävling → "Lägg i Google Calendar", väntar på
+// manuell synk). Muteras lokalt i mock-läge; sammanfogas med MOCK_FOTOJOBB i
+// listaFotojobb — speglar app.py:s lista_fotojobb (utkast + riktiga jobb).
+let MOCK_FOTOJOBB_UTKAST = []
+const _utkastTillJobb = (u) => ({ id: u.id, title: u.title, start_at: u.start_at,
+  end_at: u.end_at, all_day: u.all_day, location: u.location || '', description: '',
+  category: u.category, status: 'confirmed', google_event_id: null, source: 'dpt', utkast: true })
 
 // Urval (Gallra producerar, Leverera konsumerar). Muteras lokalt i mock-läge.
 let MOCK_URVAL = [
@@ -133,12 +141,16 @@ export async function kalenderStatus() {
 export async function listaFotojobb() {
   const api = brygga()
   if (api) return api.lista_fotojobb()
-  return wait(structuredClone(MOCK_FOTOJOBB))
+  return wait([...MOCK_FOTOJOBB_UTKAST.map(_utkastTillJobb), ...structuredClone(MOCK_FOTOJOBB)])
 }
 
 export async function sparaFotojobb(jobb) {
   const api = brygga()
   if (api) return api.spara_fotojobb(jobb)
+  if (jobb.utkast && jobb.id) {
+    MOCK_FOTOJOBB_UTKAST = MOCK_FOTOJOBB_UTKAST.map((u) => (u.id === jobb.id ? { ...u, ...jobb } : u))
+    return wait({ ok: true })
+  }
   if (jobb.id) {
     MOCK_FOTOJOBB = MOCK_FOTOJOBB.map((j) => (j.id === jobb.id ? { ...j, ...jobb } : j))
   } else {
@@ -150,7 +162,23 @@ export async function sparaFotojobb(jobb) {
 export async function raderaFotojobb(id) {
   const api = brygga()
   if (api) return api.radera_fotojobb(id)
+  if (MOCK_FOTOJOBB_UTKAST.some((u) => u.id === id)) {
+    MOCK_FOTOJOBB_UTKAST = MOCK_FOTOJOBB_UTKAST.filter((u) => u.id !== id)
+    return wait({ ok: true })
+  }
   MOCK_FOTOJOBB = MOCK_FOTOJOBB.filter((j) => j.id !== id)
+  return wait({ ok: true })
+}
+
+export async function aktiveraSynkFotojobb(utkastId) {
+  const api = brygga()
+  if (api) return api.aktivera_synk_fotojobb(utkastId)
+  const u = MOCK_FOTOJOBB_UTKAST.find((x) => x.id === utkastId)
+  if (!u) return wait({ ok: false, fel: 'Utkastet finns inte längre.' })
+  MOCK_FOTOJOBB_UTKAST = MOCK_FOTOJOBB_UTKAST.filter((x) => x.id !== utkastId)
+  MOCK_FOTOJOBB = [...MOCK_FOTOJOBB, { id: 'fj' + Date.now(), title: u.title,
+    start_at: u.start_at, end_at: u.end_at, all_day: u.all_day, location: u.location || '',
+    description: '', category: u.category, status: 'confirmed', google_event_id: 'gmock', source: 'dpt' }]
   return wait({ ok: true })
 }
 
@@ -175,6 +203,28 @@ export async function raderaLag(id) {
 export async function raderaTavling(id) {
   const api = brygga()
   if (api) return api.radera_tavling(id)
+  return wait({ ok: true })
+}
+
+// ── Tävling → Fotojobb-utkast (väntar på manuell synk) ──────────────────────
+export async function laggTavlingIKalender(tavlingId) {
+  const api = brygga()
+  if (api) return api.lagg_tavling_i_kalender(tavlingId)
+  const t = MOCK_TAVLINGAR.find((x) => x.id === tavlingId)
+  if (!t?.fran || !t?.till) return wait({ ok: false, fel: 'Ange start- och slutdatum på tävlingen först.' })
+  const finns = MOCK_FOTOJOBB_UTKAST.find((u) => u.tavling_id === tavlingId)
+  if (finns) return wait({ ok: true, utkast_id: finns.id })
+  const uid = 'utkast_' + Date.now()
+  MOCK_FOTOJOBB_UTKAST = [...MOCK_FOTOJOBB_UTKAST, { id: uid, tavling_id: tavlingId,
+    title: t.namn, start_at: t.fran, end_at: t.till, all_day: true,
+    location: t.arena || t.ort || '', category: null }]
+  return wait({ ok: true, utkast_id: uid })
+}
+
+export async function taBortTavlingUrKalender(tavlingId) {
+  const api = brygga()
+  if (api) return api.ta_bort_tavling_ur_kalender(tavlingId)
+  MOCK_FOTOJOBB_UTKAST = MOCK_FOTOJOBB_UTKAST.filter((u) => u.tavling_id !== tavlingId)
   return wait({ ok: true })
 }
 

@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -107,6 +107,22 @@ def _migrera(conn, fran_version):
         # v4: lagets trupp-källa ("från hemsida" / "CSV" / "bild" / "PDF").
         if not _har_kolumn(conn, "lag", "trupp_kalla"):
             conn.execute("ALTER TABLE lag ADD COLUMN trupp_kalla TEXT")
+    if fran_version < 5:
+        # v5: lokalt fotojobb-utkast (tävling → "Lägg i Google Calendar") som
+        # väntar på att fotografen kategoriserar och aktiverar synk manuellt —
+        # pushas ALDRIG till Calendar Sync-tjänsten förrän det uttryckligen görs.
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS fotojobb_utkast (
+          id         TEXT PRIMARY KEY,
+          tavling_id TEXT UNIQUE REFERENCES tavling(id) ON DELETE CASCADE,
+          title      TEXT NOT NULL,
+          start_at   TEXT NOT NULL,
+          end_at     TEXT NOT NULL,
+          all_day    INTEGER NOT NULL DEFAULT 1,
+          location   TEXT,
+          category   TEXT,
+          skapad     TEXT NOT NULL
+        );""")
 
 
 def _har_kolumn(conn, tabell, kolumn):
