@@ -107,19 +107,24 @@
   const arMatch = () => !utkast || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))
 
   let hamtar = false
-  async function lasUttag(sida, grupp) {
+  async function lasUttag(sida) {
     if (arMatch()) return
-    const f = await valjFil(grupp === 'start'
-      ? 'Välj startelva (blad/CSV/foto)' : 'Välj övrig uttagen trupp (blad/CSV/foto)')
+    const f = await valjFil('Välj startelva (matchblad/CSV/foto)')
     if (!f.ok) return
     hamtar = true
-    const res = await lasUttagFil(utkast.id, f.path, sida, grupp)
+    const res = await lasUttagFil(utkast.id, f.path, sida)
     hamtar = false
     if (res?.ok && res.match) utkast = res.match
   }
+  const truppStorlek = (namn) => lagAlla.find((x) => x.namn === namn)?.trupp_n || 0
   const truppNot = (namn) => {
-    const l = lagAlla.find((x) => x.namn === namn)
-    return l?.trupp_n ? `ur trupp · ${l.trupp_n} spelare` : 'ingen trupp i Lag & tävlingar'
+    const n = truppStorlek(namn)
+    return n ? `ur trupp · ${n} spelare` : 'ingen trupp i Lag & tävlingar'
+  }
+  const startelvaEtikett = (namn, nStart) => {
+    if (!nStart) return 'ej uppladdad'
+    const n = truppStorlek(namn)
+    return n ? `${nStart} av ${n}` : `${nStart} spelare`
   }
   async function hamtaTruppen() {
     if (arMatch()) return
@@ -227,7 +232,6 @@
                     <div class="lagbox2">
                       {#each [{ sida: 'hemma', namn: utkast.lag_hemma, lista: hemSpelare }, { sida: 'borta', namn: utkast.lag_borta, lista: bortaSpelare }] as kol}
                         {@const nStart = kol.lista.filter((p) => p.start).length}
-                        {@const nBank = kol.lista.filter((p) => !p.start).length}
                         <div class="lbox">
                           <div class="lhuvud">
                             <span class="lbricka" style={brickStil(fargForLag(kol.namn))}>{initialer(kol.namn)}</span>
@@ -236,25 +240,15 @@
                               <div class="lsub">{kol.sida === 'hemma' ? 'Hemma' : 'Borta'} · {truppNot(kol.namn)}</div>
                             </div>
                           </div>
-                          {#if kol.lista.length}
-                            <div class="spelare">
-                              {#each kol.lista as p}<span class="sp" class:start={p.start}>{#if p.nr}<b>{p.nr}</b>{/if} {p.namn}</span>{/each}
-                            </div>
-                          {/if}
-                          <div class="grupplbl">Startelva</div>
-                          <button class="lbtn" class:i={nStart > 0} on:click={() => lasUttag(kol.sida, 'start')} disabled={hamtar || arMatch()}>
+                          <div class="grupplbl">Startelva <span class="grupplbl-sub">· delmängd av truppen</span></div>
+                          <button class="lbtn" class:i={nStart > 0} on:click={() => lasUttag(kol.sida)} disabled={hamtar || arMatch()}>
                             <span>{nStart ? 'Byt fil…' : 'Ladda upp startelva…'}</span>
-                            <span class="lbtn-n">{nStart ? nStart + ' spelare' : 'ej uppladdad'}</span>
-                          </button>
-                          <div class="grupplbl">Övrig uttagen trupp</div>
-                          <button class="lbtn" class:i={nBank > 0} on:click={() => lasUttag(kol.sida, 'bank')} disabled={hamtar || arMatch()}>
-                            <span>{nBank ? 'Byt fil…' : 'Ladda upp övrig trupp…'}</span>
-                            <span class="lbtn-n">{nBank ? nBank + ' avbytare' : 'ej uppladdad'}</span>
+                            <span class="lbtn-n">{startelvaEtikett(kol.namn, nStart)}</span>
                           </button>
                         </div>
                       {/each}
                     </div>
-                    <div class="hint">Startelva och övrig trupp läses ur blad/CSV/foto och matchas mot respektive lags <b>trupp</b> i Lag &amp; tävlingar — uttaget sparas på matchen. <button class="lank" on:click={hamtaTruppen} disabled={hamtar || arMatch()}>{hamtar ? 'Hämtar…' : 'Hämta trupp automatiskt'}</button></div>
+                    <div class="hint">Hela truppen kommer från <b>Lag &amp; tävlingar</b>. Startelvan är en delmängd som läses ur matchblad/CSV/foto strax innan match — matchas mot lagets trupp och sparas på matchen. <button class="lank" on:click={hamtaTruppen} disabled={hamtar || arMatch()}>{hamtar ? 'Hämtar…' : 'Hämta trupp automatiskt'}</button></div>
 
                     <div class="gcalkort">
                       <span class="gcalik">
@@ -366,13 +360,10 @@
   .lnamn-wrap { min-width: 0; }
   .lnamn { font-size: 12.5px; font-weight: 600; color: var(--t-head); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lsub { font-size: 10.5px; color: var(--t-mut); }
-  .spelare { display: flex; flex-wrap: wrap; gap: 5px; }
-  .sp { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--div3); color: var(--t-mut); }
-  .sp.start { background: var(--acc-soft); color: var(--acc); }
-  .sp b { color: var(--t-head); }
   .uttagrad { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
   .uttagnot { font-size: 10px; color: var(--t-help); }
-  .grupplbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-help); margin-bottom: -6px; }
+  .grupplbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-help); margin-bottom: 4px; }
+  .grupplbl-sub { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--t-help); }
   .lbtn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
     background: var(--kort); border: 1px solid var(--div); border-radius: 7px; padding: 7px 10px;
     font-size: 12px; color: var(--t-mut); }

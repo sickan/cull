@@ -74,11 +74,13 @@ class Api:
         uppd = store.merge_in_trupp(self.conn, match_id, data.get("spelare", []))
         return {"ok": True, "match": uppd}
 
-    def las_uttag_fil(self, match_id, filsokvag, sida, grupp):
-        """Matchdaguttag: läser ETT lags startelva eller övriga uttagna trupp ur
-        blad/CSV/foto och kopplar till matchen. sida='hemma'|'borta',
-        grupp='start'|'bank'. Spelarna matchas mot lagets trupp (samma
-        id-regel), start sätts för gruppen. Returnerar {ok, match}."""
+    def las_uttag_fil(self, match_id, filsokvag, sida):
+        """Matchdaguttag: läser ETT lags STARTELVA — en delmängd av lagets
+        trupp (Lag & tävlingar) — ur matchblad/CSV/foto strax innan match och
+        kopplar till matchen. sida='hemma'|'borta'. Spelarna matchas mot
+        lagets trupp (samma id-regel); en ny startelva ERSÄTTER sidans
+        tidigare uttag helt (ingen bänk sparas längre — bara startelvan).
+        Returnerar {ok, match} eller {ok:False, fel}."""
         m = store.hamta_match(self.conn, match_id)
         if not m:
             return {"ok": False, "fel": "Okänd match."}
@@ -89,17 +91,12 @@ class Api:
             data = matchhamtning.las_trupp_fil(filsokvag, logg=logg)
         if not data or not data.get("spelare"):
             return {"ok": False, "fel": "Kunde inte tolka några spelare ur filen."}
-        start = grupp == "start"
         nya = [{"nr": sp.get("nr", ""), "namn": sp.get("namn", ""),
-                "lag": sida, "start": start,
+                "lag": sida, "start": True,
                 "handle": "", "info": sp.get("position", "")}
                for sp in data["spelare"]]
-        if start:
-            # Ny startelva ersätter sidans gamla start-flaggor.
-            for sp in m.get("spelare", []):
-                if sp.get("lag") == sida:
-                    sp["start"] = False
-            store.spara_match(self.conn, m)
+        m["spelare"] = [sp for sp in m.get("spelare", []) if sp.get("lag") != sida]
+        store.spara_match(self.conn, m)
         uppd = store.merge_in_trupp(self.conn, match_id, nya, bevara_start=True)
         return {"ok": True, "match": uppd}
 

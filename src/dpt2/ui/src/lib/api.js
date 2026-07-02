@@ -207,17 +207,16 @@ export async function raderaSpelare(spelareId) {
   return wait({ ok: true })
 }
 
-export async function lasUttagFil(matchId, filsokvag, sida, grupp) {
+export async function lasUttagFil(matchId, filsokvag, sida) {
   const api = brygga()
-  if (api) return api.las_uttag_fil(matchId, filsokvag, sida, grupp)
-  // Mock: lägg på några spelare i rätt grupp på rätt sida.
+  if (api) return api.las_uttag_fil(matchId, filsokvag, sida)
+  // Mock: startelvan ERSÄTTER sidans tidigare uttag (ingen bänk längre).
   const full = MOCK_FULL[matchId] || { ...MOCK_MATCHER.find((m) => m.id === matchId), spelare: [] }
-  const nya = Array.from({ length: grupp === 'start' ? 11 : 7 }, (_, i) => ({
-    nr: String(i + 1), namn: `Spelare ${i + 1}`, lag: sida, handle: '', info: '',
-    start: grupp === 'start',
+  const nya = Array.from({ length: 11 }, (_, i) => ({
+    nr: String(i + 1), namn: `Spelare ${i + 1}`, lag: sida, handle: '', info: '', start: true,
   }))
-  const fanns = new Set((full.spelare || []).map((p) => p.nr + p.lag))
-  return wait({ ok: true, match: { ...full, spelare: [...(full.spelare || []), ...nya.filter((p) => !fanns.has(p.nr + p.lag))] } })
+  const ovrigaSidan = (full.spelare || []).filter((p) => p.lag !== sida)
+  return wait({ ok: true, match: { ...full, spelare: [...ovrigaSidan, ...nya] } })
 }
 
 export async function hamtaTrupp(matchId) {

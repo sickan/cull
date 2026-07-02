@@ -236,7 +236,7 @@ class TestApi(unittest.TestCase):
         self.api.spara_lag({"namn": "Malmö FF"})
         self.assertFalse(self.api.spara_spelare("malmo-ff", {"namn": ""})["ok"])
 
-    def test_las_uttag_fil_startelva_och_bank(self):
+    def test_las_uttag_fil_startelva(self):
         import tempfile
         from pathlib import Path
         mid = self.api.spara_match({
@@ -246,8 +246,7 @@ class TestApi(unittest.TestCase):
         d = Path(tempfile.mkdtemp())
         (d / "start.csv").write_text("Nr,Namn\n1,Musovic\n6,Öling\n",
                                      encoding="utf-8")
-        (d / "bank.csv").write_text("Nr,Namn\n21,Reserv Ett\n", encoding="utf-8")
-        r = self.api.las_uttag_fil(mid, str(d / "start.csv"), "hemma", "start")
+        r = self.api.las_uttag_fil(mid, str(d / "start.csv"), "hemma")
         self.assertTrue(r["ok"])
         hemma_start = [p for p in r["match"]["spelare"]
                        if p["lag"] == "hemma" and p["start"]]
@@ -255,20 +254,16 @@ class TestApi(unittest.TestCase):
         # bortalagets startelva orörd
         self.assertTrue(any(p["lag"] == "borta" and p["start"]
                             for p in r["match"]["spelare"]))
-        r2 = self.api.las_uttag_fil(mid, str(d / "bank.csv"), "hemma", "bank")
-        hemma = [p for p in r2["match"]["spelare"] if p["lag"] == "hemma"]
-        self.assertEqual(len([p for p in hemma if p["start"]]), 2)   # kvar
-        self.assertEqual(len([p for p in hemma if not p["start"]]), 1)
-        # ny startelva ersätter sidans gamla start-flaggor
+        # ny startelva ERSÄTTER sidans tidigare uttag helt (ingen bänk kvar)
         (d / "start2.csv").write_text("Nr,Namn\n7,Ny Elva\n", encoding="utf-8")
-        r3 = self.api.las_uttag_fil(mid, str(d / "start2.csv"), "hemma", "start")
-        start3 = [p["namn"] for p in r3["match"]["spelare"]
-                  if p["lag"] == "hemma" and p["start"]]
-        self.assertEqual(start3, ["Ny Elva"])
+        r2 = self.api.las_uttag_fil(mid, str(d / "start2.csv"), "hemma")
+        hemma = [p for p in r2["match"]["spelare"] if p["lag"] == "hemma"]
+        self.assertEqual([p["namn"] for p in hemma], ["Ny Elva"])
+        self.assertTrue(hemma[0]["start"])
 
     def test_las_uttag_fil_okand_match(self):
         self.assertFalse(self.api.las_uttag_fil("finns-ej", "/x.csv",
-                                                "hemma", "start")["ok"])
+                                                "hemma")["ok"])
 
     def test_publicera_live_story_validering(self):
         self.assertFalse(self.api.publicera_live_story({})["ok"])
