@@ -71,6 +71,27 @@ class TestApi(unittest.TestCase):
         self.assertTrue(res["ok"])
         self.assertEqual(self.api.aktiv_match()["id"], mid)
 
+    def test_aktivt_urval(self):
+        # Utan urval: None. Med urval men utan uttryckligt val: senaste gallrade.
+        self.assertIsNone(self.api.aktivt_urval())
+        u1 = store.spara_urval(self.api.conn, kalla="/a", bilder=10)
+        u2 = store.spara_urval(self.api.conn, kalla="/b", bilder=20)
+        # skapad har sekundupplösning — gör ordningen deterministisk i testet
+        self.api.conn.execute(
+            "UPDATE urval SET skapad='2099-01-01T00:00:00' WHERE id=?", (u2,))
+        self.assertEqual(self.api.aktivt_urval()["id"], u2)   # nyast gallrad
+        # Uttryckligt val vinner.
+        res = self.api.satt_aktivt_urval(u1)
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["urval"]["id"], u1)
+        self.assertEqual(self.api.aktivt_urval()["id"], u1)
+        # Aktivt urval följer med genom statusbyten (levererad ≠ bortglömd).
+        store.satt_urval_status(self.api.conn, u1, "levererad")
+        self.assertEqual(self.api.aktivt_urval()["id"], u1)
+        # Pekar valet på ett raderat urval faller vi tillbaka till senaste gallrade.
+        self.api.conn.execute("DELETE FROM urval WHERE id=?", (u1,))
+        self.assertEqual(self.api.aktivt_urval()["id"], u2)
+
     def test_starta_cull_skapar_urval_och_jobb(self):
         mid = self.api.spara_match({"lag_hemma": "A", "lag_borta": "B",
                                     "datum": "2026-01-01"})["id"]

@@ -365,6 +365,23 @@ class Api:
         mid = store.hamta_installning(self.conn, "aktiv_match_id")
         return store.hamta_match(self.conn, mid) if mid else None
 
+    # ── Aktivt urval (topbar-chippet; går ①Gallra → ②Leverera → ③Publicera) ──
+    def satt_aktivt_urval(self, id):
+        store.satt_installning(self.conn, "aktivt_urval_id", id or "")
+        return {"ok": True, "urval": self.aktivt_urval()}
+
+    def aktivt_urval(self):
+        """Globala aktiva urvalet: uttryckligen valt om det finns kvar, annars
+        senaste gallrade (Leverera-fallbacken), annars senaste överhuvudtaget."""
+        uid = store.hamta_installning(self.conn, "aktivt_urval_id")
+        alla = store.lista_urval(self.conn)
+        if uid:
+            for u in alla:
+                if u["id"] == uid:
+                    return u
+        return next((u for u in alla if u["status"] == "gallrad"),
+                    alla[0] if alla else None)
+
     # ── Gallra (skapar urval + cull_jobb; motorn körs i ML-miljö) ────────────
     def starta_cull(self, config):
         from dpt2.motorer.gallring import Gallring
@@ -385,6 +402,9 @@ class Api:
             return {"ok": False, "fel": "Inget urval_id."}
         r = self._kor_jobb("gallra", {"urval_id": urval_id})
         res = r.get("resultat")
+        if r["ok"]:
+            # Färdiggallrat urval blir det aktiva (topbar-chippet, Leverera).
+            store.satt_installning(self.conn, "aktivt_urval_id", urval_id)
         return {"ok": r["ok"], "resultat": res, "fel": r.get("fel"),
                 "meddelande": (f"Gallring klar: behåller {res['behall']} av "
                                f"{res['totalt']} ({res['modell']})."

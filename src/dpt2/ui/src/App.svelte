@@ -11,7 +11,7 @@
   import Trana from './panels/Trana.svelte'
   import Logg from './panels/Logg.svelte'
   import Installningar from './panels/Installningar.svelte'
-  import { erMock, aktivMatch } from './lib/api.js'
+  import { erMock, aktivMatch, aktivtUrval } from './lib/api.js'
 
   const ARMOCK = erMock()
 
@@ -19,8 +19,15 @@
   let tema = 'light'
   let aktivMatchData = null
   let aktivM = null            // global aktiv match (topp-widget)
+  let aktivU = null            // globalt aktivt urval (topp-widget)
 
-  onMount(async () => { aktivM = await aktivMatch() })
+  onMount(async () => {
+    ;[aktivM, aktivU] = await Promise.all([aktivMatch(), aktivtUrval()])
+  })
+
+  async function uppdateraUrval() { aktivU = await aktivtUrval() }
+  const urvalEtikett = (u) => !u ? ''
+    : (u.lag_hemma ? `${u.lag_hemma} – ${u.lag_borta}` : (u.kalla || '').split('/').pop())
 
   function vaxlaTema() {
     tema = tema === 'light' ? 'dark' : 'light'
@@ -41,11 +48,17 @@
           <span class="wval scd">{aktivM ? `${aktivM.lag_hemma} – ${aktivM.lag_borta}` : 'Ingen vald'}</span>
         </span>
       </button>
-      <button class="widget urval" on:click={() => (aktiv = 'gallra')} title="Urval">
+      <button class="widget urval" on:click={() => (aktiv = aktivU ? 'leverera' : 'gallra')}
+        title={aktivU ? 'Aktivt urval — gå till Leverera' : 'Inget urval — gå till Gallra'}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="ic"><path d="M3 7.5A2 2 0 015 5.5h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
         <span class="wtext">
-          <span class="wval scd">Inget urval valt</span>
-          <span class="wlbl">Klicka för att välja</span>
+          {#if aktivU}
+            <span class="wlbl">Aktivt urval · {aktivU.status}</span>
+            <span class="wval scd">{urvalEtikett(aktivU)} · {aktivU.bilder} bilder</span>
+          {:else}
+            <span class="wval scd">Inget urval valt</span>
+            <span class="wlbl">Klicka för att välja</span>
+          {/if}
         </span>
       </button>
       {#if ARMOCK}<span class="mock">mock</span>{/if}
@@ -59,9 +72,9 @@
     {:else if aktiv === 'lag'}
       <Lag />
     {:else if aktiv === 'gallra'}
-      <Gallra {aktivMatchData} on:navigera={(e) => (aktiv = e.detail)} />
+      <Gallra {aktivMatchData} on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
     {:else if aktiv === 'leverera'}
-      <Leverera on:navigera={(e) => (aktiv = e.detail)} />
+      <Leverera on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
     {:else if aktiv === 'publicera'}
       <Publicera on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'innehall'}

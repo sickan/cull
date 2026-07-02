@@ -341,6 +341,24 @@ export async function aktivMatch() {
   return wait(_aktivMock)
 }
 
+// ── Aktivt urval (topbar-chippet; ①Gallra → ②Leverera → ③Publicera) ──────────
+let _aktivtUrvalId = null
+
+export async function sattAktivtUrval(id) {
+  const api = brygga()
+  if (api) return api.satt_aktivt_urval(id)
+  _aktivtUrvalId = id
+  return wait({ ok: true })
+}
+
+export async function aktivtUrval() {
+  const api = brygga()
+  if (api) return api.aktivt_urval()
+  const u = MOCK_URVAL.find((x) => x.id === _aktivtUrvalId)
+    || MOCK_URVAL.find((x) => x.status === 'gallrad') || MOCK_URVAL[0] || null
+  return wait(u ? structuredClone(u) : null)
+}
+
 export async function startaCull(config) {
   const api = brygga()
   if (api) return api.starta_cull(config)

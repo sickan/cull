@@ -1,7 +1,9 @@
 <script>
-  import { onMount } from 'svelte'
-  import { startaCull, startaGallring, valjMapp, aktivMatch, listaLag } from '../lib/api.js'
+  import { onMount, createEventDispatcher } from 'svelte'
+  import { startaCull, startaGallring, valjMapp, aktivMatch, listaLag, sattAktivtUrval } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
+
+  const dispatch = createEventDispatcher()
 
   export let aktivMatchData = null
 
@@ -53,6 +55,10 @@
     if (c?.urval_id) {
       const g = await startaGallring(c.urval_id)
       res[vilket] = g?.meddelande || (g?.resultat ? `behåller ${g.resultat.behall} av ${g.resultat.totalt}` : 'Klar')
+      if (g?.ok) {
+        await sattAktivtUrval(c.urval_id)   // nya urvalet blir det aktiva
+        dispatch('urval')                   // topbar-chippet uppdaterar sig
+      }
     } else {
       res[vilket] = c?.meddelande || 'Urval skapat'
     }

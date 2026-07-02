@@ -1,7 +1,9 @@
 <script>
-  import { onMount } from 'svelte'
-  import { listaUrval, levereraUrval, startaNummer, valjMapp } from '../lib/api.js'
+  import { onMount, createEventDispatcher } from 'svelte'
+  import { listaUrval, levereraUrval, startaNummer, valjMapp, aktivtUrval } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
+
+  const dispatch = createEventDispatcher()
 
   let urval = []
   let mal = null                // urvalet som levereras (senaste gallrade)
@@ -15,8 +17,8 @@
     iptc: true, oppnaI: 'Lightroom', husstil: '(ingen)', expKnuff: '0.5' }
 
   onMount(async () => {
-    urval = await listaUrval()
-    mal = urval.find((u) => u.status === 'gallrad') || urval[0] || null
+    ;[urval, mal] = await Promise.all([listaUrval(), aktivtUrval()])
+    if (!mal) mal = urval.find((u) => u.status === 'gallrad') || urval[0] || null
     laddar = false
   })
 
@@ -32,7 +34,7 @@
     const r = await levereraUrval(mal.id, cfg)
     levererar = false
     status = r.ok ? (r.skrivna ? `${r.skrivna} sidecars skrivna.` : 'Levererat.') : (r.fel || 'Fel vid leverans.')
-    if (r.ok) { mal = { ...mal, status: 'levererad' } }
+    if (r.ok) { mal = { ...mal, status: 'levererad' }; dispatch('urval') }
   }
   async function korNummer() {
     if (!mal) return
