@@ -6,6 +6,7 @@
     listaUrval, raderaMatch, sattMatchSynk,
   } from '../lib/api.js'
   import Combobox from '../lib/Combobox.svelte'
+  import { grenFarg, grenEtikett } from '../lib/gren.js'
 
   const dispatch = createEventDispatcher()
 
@@ -229,7 +230,8 @@
 
           <div class="matcher">
             {#each g.matcher as m (m.id)}
-              <div class="match">
+              <div class="match"
+                style="border-left:3px {m.hem_gren ? 'solid' : 'dashed'} {grenFarg(m.hem_gren)}">
                 <div class="rad" role="button" tabindex="0" on:click={() => toggla(m)}
                   on:keydown={(e) => e.key === 'Enter' && toggla(m)}>
                   <div class="datum scd">
@@ -239,6 +241,7 @@
                   <div class="fixtur">
                     <div class="fx scd">{m.lag_hemma} – {m.lag_borta}</div>
                     <div class="fmeta">
+                      {#if m.hem_gren}<span class="grenlbl scd" style="color:{grenFarg(m.hem_gren)}">{grenEtikett(m.hem_gren)}</span>{/if}
                       <span>{[SPORT_ETIKETT[m.sport] || '', m.arena, harTid(m.tid) ? m.tid : 'Heldag'].filter(Boolean).join(' · ')}</span>
                       {#if !harTid(m.tid)}<span class="heldagstagg">Heldag</span>{/if}
                     </div>
@@ -413,6 +416,7 @@
   .fixtur { flex: 1; min-width: 0; }
   .fx { font-size: 17px; font-weight: 700; color: var(--t-head); }
   .fmeta { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--t-mut); margin-top: 2px; }
+  .grenlbl { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; flex: none; }
   .heldagstagg { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
     color: var(--acc); background: var(--acc-soft); padding: 2px 7px; border-radius: 5px; flex: none; }
   .status { font-size: 13px; font-weight: 600; color: var(--t-mut); flex: none; }

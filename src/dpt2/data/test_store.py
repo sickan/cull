@@ -147,6 +147,14 @@ class TestMatchCRUD(unittest.TestCase):
         self.assertEqual(rad["lag_hemma"], "Malmö FF")
         self.assertEqual(rad["liga"], "OBOS Damallsvenskan")
 
+    def test_hem_gren_harleds_ur_hemmalaget(self):
+        # Gren-markören: matchens gren = hemmalagets; utan gren = "ej satt".
+        mid = store.spara_match(self.c, self.match)
+        self.assertFalse(store.lista_matcher(self.c)[0]["hem_gren"])
+        store.upsert_lag(self.c, "Malmö FF", gren="dam")
+        self.assertEqual(store.lista_matcher(self.c)[0]["hem_gren"], "dam")
+        self.assertEqual(store.hamta_match(self.c, mid)["hem_gren"], "dam")
+
     def test_radera(self):
         mid = store.spara_match(self.c, self.match)
         store.radera_match(self.c, mid)

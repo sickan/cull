@@ -3,6 +3,7 @@
   import { aktivMatch, genereraBildsvep, valjMapp, listaLag,
     listaSomeBilder, publiceraTillSoMe, oppnaILightroom, publiceraLiveStory } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
+  import { grenFarg, grenEtikett } from '../lib/gren.js'
 
   const dispatch = createEventDispatcher()
   const bytMatch = () => dispatch('navigera', 'matcher')
@@ -48,6 +49,9 @@
   let livePub = { kor: false, klar: false, publicerad: false, fel: '', url: '' }
 
   $: mallfalt = MALLFALT[moment] || []
+  // Gren-markör i previewn: bara när en bild är vald + aktiva matchens gren är känd.
+  // Samexisterar med tema-kickern — tema = innehållstyp, gren = kön/klass.
+  $: ovGren = liveVald !== null ? (match?.hem_gren || '') : ''
   // 9:16-förhandsvisning: kicker = mall, stor text = mallens nyckelfält.
   $: fixtur = match ? `${match.lag_hemma} – ${match.lag_borta}` : 'Hemma – Borta'
   $: ov = {
@@ -306,6 +310,10 @@
                 {#if !brutna[liveBilder[liveVald]]}
                   <img class="ovfoto" src={bildUrl(liveBilder[liveVald])} alt="" on:error={() => (brutna = { ...brutna, [liveBilder[liveVald]]: true })} />
                 {/if}
+                {#if ovGren}
+                  <span class="ovribba" style="background:{grenFarg(ovGren)}"></span>
+                  <span class="ovgren scd">{grenEtikett(ovGren)}</span>
+                {/if}
                 <div class="ovscrim">
                   <span class="ovkick" style="background:{TEMAFARG[tema]}">{moment}</span>
                   <div class="ovbig scd">{ov.big}</div>
@@ -508,6 +516,9 @@
     background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 10px, var(--panel) 10px, var(--panel) 20px); }
   .ovbox.harbild { background: linear-gradient(160deg, #5a6b7a, #2c3742); }
   .ovfoto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .ovribba { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; z-index: 2; }
+  .ovgren { position: absolute; top: 9px; left: 12px; z-index: 2; font-size: 8.5px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
   .ovscrim { position: relative; padding: 14px 12px; background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0)); }
   .ovkick { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #fff; padding: 2px 7px; border-radius: 4px; margin-bottom: 7px; }
   .ovbig { font-size: 20px; font-weight: 700; color: #fff; line-height: 1.05; overflow-wrap: break-word; }

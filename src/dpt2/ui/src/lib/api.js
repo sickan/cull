@@ -11,14 +11,14 @@ const MOCK_MATCHER = [
     id: 'fb9679db75f5', datum: '2026-08-15', tid: '15:00',
     arena: 'Malmö Idrottsplats', status: 'kommande', resultat: '',
     sport: 'fotboll', lag_hemma: 'FC Rosengård', lag_borta: 'Eskilstuna United',
-    liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan',
+    liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan', hem_gren: 'dam',
     hemfarg: '#8b1f3a', bortafarg: '#1d2a6b', trupp_n: 3, synk_jobb_id: null,
   },
   {
     id: 'a1b2c3d4e5f6', datum: '2026-06-27', tid: '14:00',
     arena: 'Eleda Stadion', status: 'avslutad', resultat: '6-0',
     sport: 'fotboll', lag_hemma: 'Malmö FF', lag_borta: 'Kristianstads DFF',
-    liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan',
+    liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan', hem_gren: 'dam',
     hemfarg: '#8fb7de', bortafarg: '#C0392B', trupp_n: 0, synk_jobb_id: 'fj1',
     galleri: 'https://malmoff.pixieset.com/damallsvenskan-27jun/',
     sida_url: 'https://dalecarliaphoto.se/sport/2026-06-27-malmo-ff-kristianstad',
@@ -27,8 +27,15 @@ const MOCK_MATCHER = [
     id: 'c0ffee001122', datum: '2026-09-03', tid: '',   // tid ej fastställd → heldag
     arena: 'Baltiska Hallen', status: 'kommande', resultat: '',
     sport: 'handboll', lag_hemma: 'HK Malmö', lag_borta: 'IK Sävehof',
-    liga: 'Handbollsligan', tavling_id: 'handbollsligan',
+    liga: 'Handbollsligan', tavling_id: 'handbollsligan', hem_gren: 'herr',
     hemfarg: '#0a2342', bortafarg: '#1E824C', trupp_n: 0,
+  },
+  {
+    id: 'dead00beef00', datum: '2026-07-18', tid: '11:00',
+    arena: 'Båstad', status: 'kommande', resultat: '',
+    sport: 'tennis', lag_hemma: 'Rebecca Peterson', lag_borta: 'Kvalmotståndare',
+    liga: 'Nordea Open', tavling_id: null, hem_gren: '',   // individ utan gren → "ej satt"
+    hemfarg: '#2F7CB0', bortafarg: '', trupp_n: 0,
   },
 ]
 

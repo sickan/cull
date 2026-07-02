@@ -728,6 +728,13 @@ def hamta_match(conn, match_id):
         r = conn.execute("SELECT namn FROM lag WHERE id=?", (lag_id,)).fetchone()
         return r[0] if r else ""
 
+    # Matchens gren härleds ur hemmalaget (designregel; tom = "ej satt").
+    def _gren(lag_id):
+        if not lag_id:
+            return ""
+        r = conn.execute("SELECT gren FROM lag WHERE id=?", (lag_id,)).fetchone()
+        return (r[0] or "") if r else ""
+
     liga = ""
     if m["tavling_id"]:
         r = conn.execute("SELECT namn FROM tavling WHERE id=?",
@@ -750,6 +757,7 @@ def hamta_match(conn, match_id):
         "id": m["id"], "lag_hemma": _namn(m["lag_hemma_id"]),
         "lag_borta": _namn(m["lag_borta_id"]),
         "lag_hemma_id": m["lag_hemma_id"], "lag_borta_id": m["lag_borta_id"],
+        "hem_gren": _gren(m["lag_hemma_id"]),
         "datum": m["datum"] or "",
         "tid": m["tid"] or "", "arena": m["arena"] or "", "liga": liga,
         "sport": m["sport"] or "", "resultat": m["resultat"] or "",
@@ -765,6 +773,7 @@ def lista_matcher(conn):
     rader = conn.execute(
         "SELECT m.id,m.datum,m.tid,m.arena,m.status,m.resultat,m.sport,"
         "m.tavling_id, h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga, "
+        "h.gren AS hem_gren, "
         "h.stall_hemma AS hemfarg, b.stall_hemma AS bortafarg, "
         "h.logga AS hemlogga, b.logga AS bortalogga, "
         "(SELECT COUNT(*) FROM match_trupp mt WHERE mt.match_id=m.id) AS trupp_n, "
