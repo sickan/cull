@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import {
     listaLag, listaTavlingar, sparaLag, sparaTavling, raderaLag, raderaTavling,
-    valjFil,
+    valjFil, lasLagTrupp,
   } from '../lib/api.js'
 
   let lag = []
@@ -73,9 +73,45 @@
     gerTavling(t)
   }
 
-  async function lasSpelare(l) {
-    const f = await valjFil('Välj spelarlista (CSV/blad/foto)')
-    if (f.ok) { l._spelarfil = f.path; lag = lag }   // import till registret = backend-TODO
+  // ── Trupp-källväljare (URL / CSV / bild / PDF) ─────────────────────────────
+  let truppOppen = null          // lag-id vars källväljare är utfälld
+  let truppUrl = ''              // URL-fältet (förifylls med lagets hemsida)
+  let truppKor = false
+  let truppFel = ''
+
+  function togglaTrupp(l) {
+    if (truppOppen === l.id) { truppOppen = null; return }
+    truppOppen = l.id
+    truppUrl = l.hemsida || ''
+    truppFel = ''
+  }
+
+  async function lasTrupp(l, kalla) {
+    let arg = ''
+    if (kalla === 'url') {
+      arg = (truppUrl || '').trim()
+    } else {
+      const filter = { csv: ['*.csv'], bild: ['*.jpg', '*.jpeg', '*.png', '*.heic', '*.heif'],
+        pdf: ['*.pdf'] }[kalla]
+      const f = await valjFil('Välj spelarlista', filter)
+      if (!f.ok) return
+      arg = f.path
+    }
+    truppKor = true; truppFel = ''
+    const r = await lasLagTrupp(l.id, kalla, arg)
+    truppKor = false
+    if (r?.ok) {
+      l.trupp_n = r.antal; l.trupp_kalla = r.trupp_kalla
+      lag = lag; truppOppen = null
+      flash(l.id)
+    } else {
+      truppFel = r?.fel || 'Kunde inte läsa in truppen.'
+    }
+  }
+
+  function truppEtikett(l) {
+    if (!l.trupp_n) return 'ingen trupp inläst'
+    return `${l.trupp_n} spelare i trupp${l.trupp_kalla ? ' · ' + l.trupp_kalla : ''}`
   }
 
   async function taBortLag(l) {
@@ -177,9 +213,27 @@
                   <span class="lbl mut">hemma · borta · tredje</span>
                   {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
                 </div>
-                <button class="spelarbtn" on:click={() => lasSpelare(l)}>
-                  {l._spelarfil ? 'Trupp: ' + l._spelarfil.split('/').pop() : 'Läs in spelare…'}
-                </button>
+                <div class="trupprad">
+                  <button class="spelarbtn" on:click={() => togglaTrupp(l)}>Läs in spelare…</button>
+                  <span class="truppinfo">{truppEtikett(l)}</span>
+                </div>
+                {#if truppOppen === l.id}
+                  <div class="truppvaljare">
+                    <div class="truppcaps">Läs in trupp från</div>
+                    <div class="truppurl">
+                      <input bind:value={truppUrl} placeholder="Hemsida eller URL till laguppställning…" />
+                      <button class="hamta" on:click={() => lasTrupp(l, 'url')} disabled={truppKor}>{truppKor ? 'Hämtar…' : 'Hämta'}</button>
+                    </div>
+                    <div class="avdelare"><span class="linje"></span><span class="eller">eller ladda upp fil</span><span class="linje"></span></div>
+                    <div class="filknappar">
+                      <button on:click={() => lasTrupp(l, 'csv')} disabled={truppKor}>CSV</button>
+                      <button on:click={() => lasTrupp(l, 'bild')} disabled={truppKor}>Bild · JPG / PNG / HEIF</button>
+                      <button on:click={() => lasTrupp(l, 'pdf')} disabled={truppKor}>PDF</button>
+                    </div>
+                    {#if truppFel}<div class="truppfel">⚠ {truppFel}</div>
+                    {:else}<div class="trupphint">Sidan/filen tolkas och spelarna läggs i lagets trupp.</div>{/if}
+                  </div>
+                {/if}
               {/if}
             </div>
             <button class="x" on:click={() => taBortLag(l)} title="Ta bort">×</button>
@@ -228,9 +282,29 @@
   .kalbtn { flex: none; background: var(--acc); color: #fff; border: 0; border-radius: 7px;
     padding: 8px 13px; font-size: 12.5px; font-weight: 600; }
   .kalbtn.i { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
-  .spelarbtn { width: 100%; background: var(--kort); border: 1px solid var(--div); border-radius: 8px;
-    padding: 8px 10px; font-size: 12.5px; color: var(--t-mut); font-weight: 500; }
+  .trupprad { display: flex; align-items: center; gap: 10px; }
+  .spelarbtn { background: var(--kort); border: 1px solid var(--div); border-radius: 8px;
+    padding: 8px 12px; font-size: 12.5px; color: var(--t-mut); font-weight: 500; flex: none; }
   .spelarbtn:hover { border-color: var(--acc); color: var(--acc); }
+  .truppinfo { font-size: 11px; color: var(--t-mut); }
+  .truppvaljare { border: 1px solid var(--div3); border-radius: 9px; background: var(--panel);
+    padding: 11px; display: flex; flex-direction: column; gap: 9px; }
+  .truppcaps { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-caps); }
+  .truppurl { display: flex; gap: 6px; }
+  .truppurl input { flex: 1; min-width: 0; background: var(--kort); font-size: 12px; padding: 7px 9px; }
+  .hamta { background: var(--acc); color: #fff; border: 0; border-radius: 7px; padding: 7px 13px;
+    font-size: 12px; font-weight: 600; flex: none; }
+  .hamta:disabled { opacity: 0.5; }
+  .avdelare { display: flex; align-items: center; gap: 8px; }
+  .linje { height: 1px; flex: 1; background: var(--div3); }
+  .eller { font-size: 10px; color: var(--t-help); }
+  .filknappar { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filknappar button { background: var(--kort); border: 1px solid var(--div); border-radius: 7px;
+    padding: 6px 11px; font-size: 12px; color: var(--t-head); }
+  .filknappar button:hover:not(:disabled) { border-color: var(--acc); color: var(--acc); }
+  .filknappar button:disabled { opacity: 0.5; }
+  .trupphint { font-size: 10px; color: var(--t-help); line-height: 1.45; }
+  .truppfel { font-size: 11px; color: var(--rose); }
   input, select { padding: 7px 10px; border: 1px solid var(--div); border-radius: 8px;
     background: var(--panel); color: var(--t-head); font-size: 13px; }
   input:focus, select:focus { outline: none; border-color: var(--acc); }

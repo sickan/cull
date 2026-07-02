@@ -43,10 +43,10 @@ const MOCK_FULL = {
 }
 
 const MOCK_LAG = [
-  { id: 'fc-rosengard', namn: 'FC Rosengård', kind: 'team', instagram: '@fcrosengard', hemsida: 'fcrosengard.se', logga: null, stall_hemma: '#8b1f3a', stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '', klubb: '' },
-  { id: 'eskilstuna-united', namn: 'Eskilstuna United', kind: 'team', instagram: '@eskilstunaunited', hemsida: 'eskilstunaunited.se', logga: null, stall_hemma: '#1d2a6b', stall_borta: '#ffd200', stall_tredje: '', profilfarg: '', klubb: '' },
-  { id: 'malmo-ff', namn: 'Malmö FF', kind: 'team', instagram: '@malmoff_dam', hemsida: 'malmoff.se', logga: null, stall_hemma: '#8fb7de', stall_borta: '#ffffff', stall_tredje: '', profilfarg: '', klubb: '' },
-  { id: 'hk-malmo', namn: 'HK Malmö', kind: 'team', instagram: '@hkmhandboll', hemsida: '', logga: null, stall_hemma: '#0a2342', stall_borta: '#e23', stall_tredje: '', profilfarg: '', klubb: '' },
+  { id: 'fc-rosengard', namn: 'FC Rosengård', kind: 'team', instagram: '@fcrosengard', hemsida: 'fcrosengard.se', logga: null, stall_hemma: '#8b1f3a', stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '', klubb: '', trupp_n: 22, trupp_kalla: 'från hemsida' },
+  { id: 'eskilstuna-united', namn: 'Eskilstuna United', kind: 'team', instagram: '@eskilstunaunited', hemsida: 'eskilstunaunited.se', logga: null, stall_hemma: '#1d2a6b', stall_borta: '#ffd200', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 0, trupp_kalla: '' },
+  { id: 'malmo-ff', namn: 'Malmö FF', kind: 'team', instagram: '@malmoff_dam', hemsida: 'malmoff.se', logga: null, stall_hemma: '#8fb7de', stall_borta: '#ffffff', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 20, trupp_kalla: 'CSV' },
+  { id: 'hk-malmo', namn: 'HK Malmö', kind: 'team', instagram: '@hkmhandboll', hemsida: '', logga: null, stall_hemma: '#0a2342', stall_borta: '#e23', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 0, trupp_kalla: '' },
   { id: 'rebecca-peterson', namn: 'Rebecca Peterson', kind: 'individ', instagram: '@rebeccapeterson', hemsida: '', logga: null, stall_hemma: '', stall_borta: '', stall_tredje: '', profilfarg: '#2F7CB0', klubb: 'Sverige' },
 ]
 
@@ -176,6 +176,26 @@ export async function raderaTavling(id) {
   const api = brygga()
   if (api) return api.radera_tavling(id)
   return wait({ ok: true })
+}
+
+export async function lasLagTrupp(lagId, kalla, arg = '') {
+  const api = brygga()
+  if (api) return api.las_lag_trupp(lagId, kalla, arg)
+  const etikett = { url: 'från hemsida', csv: 'CSV', bild: 'bild', pdf: 'PDF' }[kalla] || kalla
+  return wait({ ok: true, antal: 22, trupp_kalla: etikett })
+}
+
+export async function lasUttagFil(matchId, filsokvag, sida, grupp) {
+  const api = brygga()
+  if (api) return api.las_uttag_fil(matchId, filsokvag, sida, grupp)
+  // Mock: lägg på några spelare i rätt grupp på rätt sida.
+  const full = MOCK_FULL[matchId] || { ...MOCK_MATCHER.find((m) => m.id === matchId), spelare: [] }
+  const nya = Array.from({ length: grupp === 'start' ? 11 : 7 }, (_, i) => ({
+    nr: String(i + 1), namn: `Spelare ${i + 1}`, lag: sida, handle: '', info: '',
+    start: grupp === 'start',
+  }))
+  const fanns = new Set((full.spelare || []).map((p) => p.nr + p.lag))
+  return wait({ ok: true, match: { ...full, spelare: [...(full.spelare || []), ...nya.filter((p) => !fanns.has(p.nr + p.lag))] } })
 }
 
 export async function hamtaTrupp(matchId) {
@@ -429,6 +449,22 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
   const api = brygga()
   if (api) return api.valj_fil(titel, filter)
   return wait(_promptPath(titel))
+}
+
+// ── Publicera → Live (snabb story) ───────────────────────────────────────────
+export async function oppnaILightroom(sokvag = '') {
+  const api = brygga()
+  if (api) return api.oppna_i_lightroom(sokvag)
+  return wait({ ok: true, app: 'Adobe Lightroom Classic (mock)' })
+}
+
+export async function publiceraLiveStory(config) {
+  const api = brygga()
+  if (api) return api.publicera_live_story(config)
+  if (!config?.moment) return wait({ ok: false, fel: 'Välj ett moment.' })
+  if (!config?.foto) return wait({ ok: false, fel: 'Välj en bild i steg 2.' })
+  return wait({ ok: true, path: `${config.ut_mapp || '~/Dropbox/DPT/Live'}/story_${config.moment.toLowerCase()}.jpg`,
+    publicerad: true, url: 'https://exempel/story/1' })
 }
 
 // ── Publicera till SoMe ──────────────────────────────────────────────────────

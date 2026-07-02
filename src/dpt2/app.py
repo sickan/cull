@@ -74,6 +74,35 @@ class Api:
         uppd = store.merge_in_trupp(self.conn, match_id, data.get("spelare", []))
         return {"ok": True, "match": uppd}
 
+    def las_uttag_fil(self, match_id, filsokvag, sida, grupp):
+        """Matchdaguttag: läser ETT lags startelva eller övriga uttagna trupp ur
+        blad/CSV/foto och kopplar till matchen. sida='hemma'|'borta',
+        grupp='start'|'bank'. Spelarna matchas mot lagets trupp (samma
+        id-regel), start sätts för gruppen. Returnerar {ok, match}."""
+        m = store.hamta_match(self.conn, match_id)
+        if not m:
+            return {"ok": False, "fel": "Okänd match."}
+        logg = self._logg.append
+        if str(filsokvag).lower().endswith(".csv"):
+            data = matchhamtning.tolka_trupp_csv(filsokvag, logg=logg)
+        else:
+            data = matchhamtning.las_trupp_fil(filsokvag, logg=logg)
+        if not data or not data.get("spelare"):
+            return {"ok": False, "fel": "Kunde inte tolka några spelare ur filen."}
+        start = grupp == "start"
+        nya = [{"nr": sp.get("nr", ""), "namn": sp.get("namn", ""),
+                "lag": sida, "start": start,
+                "handle": "", "info": sp.get("position", "")}
+               for sp in data["spelare"]]
+        if start:
+            # Ny startelva ersätter sidans gamla start-flaggor.
+            for sp in m.get("spelare", []):
+                if sp.get("lag") == sida:
+                    sp["start"] = False
+            store.spara_match(self.conn, m)
+        uppd = store.merge_in_trupp(self.conn, match_id, nya, bevara_start=True)
+        return {"ok": True, "match": uppd}
+
     # ── Lag & tävlingar ──────────────────────────────────────────────────────
     def lista_lag(self):
         return store.lista_lag(self.conn)
@@ -107,6 +136,33 @@ class Api:
     def radera_lag(self, id):
         store.radera_lag(self.conn, id)
         return {"ok": True}
+
+    def las_lag_trupp(self, lag_id, kalla, arg=""):
+        """Läser in LAGETS trupp från en källa och slår in den i registret.
+        kalla: 'url' (hemsida, arg=URL) | 'csv' | 'bild' | 'pdf' (arg=filsökväg).
+        Returnerar {ok, antal, trupp_kalla} eller {ok:False, fel}."""
+        lag = store.hamta_lag(self.conn, lag_id)
+        if not lag:
+            return {"ok": False, "fel": "Okänt lag."}
+        logg = self._logg.append
+        if kalla == "url":
+            data = matchhamtning.hamta_trupp_for_lag(
+                lag["namn"], url=arg, logg=logg)
+            etikett = "från hemsida"
+        elif kalla == "csv":
+            data = matchhamtning.tolka_trupp_csv(arg, logg=logg)
+            etikett = "CSV"
+        elif kalla in ("bild", "pdf"):
+            data = matchhamtning.las_trupp_fil(arg, logg=logg)
+            etikett = "bild" if kalla == "bild" else "PDF"
+        else:
+            return {"ok": False, "fel": f"Okänd källa: {kalla}"}
+        if not data or not data.get("spelare"):
+            return {"ok": False, "fel": "Kunde inte tolka några spelare "
+                    "(saknas API-nyckel eller tom källa)."}
+        antal = store.merge_lag_trupp(
+            self.conn, lag_id, data["spelare"], kalla=etikett)
+        return {"ok": True, "antal": antal, "trupp_kalla": etikett}
 
     def radera_tavling(self, id):
         store.radera_tavling(self.conn, id)
@@ -248,6 +304,70 @@ class Api:
                 "fel": r.get("fel"),
                 "meddelande": (f"Story renderad: {res['path']}" if r["ok"] and res
                                else (r.get("fel") or "Kunde inte rendera story."))}
+
+    # ── Publicera → Live (snabb story vid planen) ────────────────────────────
+    def oppna_i_lightroom(self, sokvag=""):
+        """Startar Lightroom (Classic om den finns), med mappen/filerna som
+        argument så importen pekar rätt. Returnerar {ok} eller {ok:False, fel}."""
+        import subprocess
+        from pathlib import Path as _P
+        appar = ["Adobe Lightroom Classic", "Adobe Lightroom"]
+        sokvag = str(sokvag or "").strip()
+        for app in appar:
+            cmd = ["open", "-a", app] + ([sokvag] if sokvag and
+                                         _P(sokvag).expanduser().exists() else [])
+            try:
+                r = subprocess.run(cmd, capture_output=True, timeout=15)
+                if r.returncode == 0:
+                    return {"ok": True, "app": app}
+            except Exception:
+                continue
+        return {"ok": False, "fel": "Hittade ingen Lightroom-installation."}
+
+    def publicera_live_story(self, config):
+        """Live-flödets 'Publicera story ›': renderar 9:16-overlayen i workern
+        (ut_mapp = Dropbox-mappen, så filen sparas där) och publicerar den som
+        IG Story via SoMe-flödet. Returnerar {ok, path, publicerad, fel?}."""
+        config = dict(config or {})
+        if not config.get("moment"):
+            return {"ok": False, "fel": "Välj ett moment."}
+        if not config.get("foto"):
+            return {"ok": False, "fel": "Välj en bild i steg 2."}
+        config.setdefault("match_id",
+                          store.hamta_installning(self.conn, "aktiv_match_id"))
+        config["format"] = "9x16"
+        r = self._kor_jobb("story", {"config": config})
+        res = r.get("resultat") or {}
+        path = res.get("path")
+        if not (r["ok"] and path):
+            return {"ok": False, "publicerad": False,
+                    "fel": r.get("fel") or "Kunde inte rendera storyn."}
+
+        poster = meta_api.fran_env(logg=self._logg.append)
+        if poster is None:
+            return {"ok": True, "path": path, "publicerad": False,
+                    "fel": "Storyn är renderad och sparad till Dropbox, men "
+                    "inte publicerad — Meta-token saknas (koppla konto i "
+                    "Inställningar)."}
+        upp = bildhosting.ladda_upp([path], logg=self._logg.append)
+        if not upp.get("ok"):
+            return {"ok": True, "path": path, "publicerad": False,
+                    "fel": f"Sparad till Dropbox, men bilduppladdningen föll: "
+                    f"{upp.get('fel')}"}
+        pub = publicera_korning.kor_publicering(
+            self.conn, {"bilder": [path], "caption": "",
+                        "mal": {"story": True},
+                        "match_id": config.get("match_id"),
+                        "moment": config.get("moment"),
+                        "tema": config.get("tema")},
+            poster=poster, dry_run=False, logg=self._logg.append)
+        if not pub.get("ok"):
+            return {"ok": True, "path": path, "publicerad": False,
+                    "fel": f"Sparad till Dropbox, men publiceringen föll: "
+                    f"{pub.get('fel')}"}
+        url = next((p.get("url") for p in pub.get("resultat", [])
+                    if p.get("url")), None)
+        return {"ok": True, "path": path, "publicerad": True, "url": url}
 
     # ── Publicera till SoMe (fan-out IG story/inlägg + FB) ───────────────────
     def lista_some_bilder(self, mapp):

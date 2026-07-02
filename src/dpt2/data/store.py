@@ -353,7 +353,50 @@ def hamta_lag(conn, lag_id):
 
 
 def lista_lag(conn):
-    return [dict(r) for r in conn.execute("SELECT * FROM lag ORDER BY namn")]
+    return [dict(r) for r in conn.execute(
+        "SELECT lag.*, (SELECT COUNT(*) FROM spelare s WHERE s.lag_id=lag.id) "
+        "AS trupp_n FROM lag ORDER BY namn")]
+
+
+def merge_lag_trupp(conn, lag_id, spelare, *, kalla=None):
+    """Slår in en inläst trupp på LAGET (spelare-tabellen, inte match_trupp).
+    Upsert per (lag, nr/namn) — samma id-regel som spara_match, så befintliga
+    match_trupp-länkar överlever. Sätter lag.trupp_kalla. Returnerar antal
+    spelare i lagets trupp efter merge, eller None om laget är okänt."""
+    if not hamta_lag(conn, lag_id):
+        return None
+    for sp in (spelare or []):
+        namn = str(sp.get("namn", "")).strip()
+        if not namn:
+            continue
+        rad = {"nr": str(sp.get("nr", "")).strip(), "namn": namn}
+        sid = spelare_id(lag_id, rad)
+        fin = conn.execute("SELECT id FROM spelare WHERE id=?", (sid,)).fetchone()
+        pos = str(sp.get("position", "") or "").strip() or None
+        handle = str(sp.get("handle", "") or "").strip() or None
+        info = str(sp.get("info", "") or "").strip() or None
+        if fin is None:
+            conn.execute(
+                "INSERT INTO spelare(id,lag_id,nr,namn,position,handle,info) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (sid, lag_id, rad["nr"] or None, namn, pos, handle, info))
+        else:
+            conn.execute(
+                "UPDATE spelare SET nr=?, namn=?, position=COALESCE(?,position), "
+                "handle=COALESCE(?,handle), info=COALESCE(?,info) WHERE id=?",
+                (rad["nr"] or None, namn, pos, handle, info, sid))
+    if kalla:
+        conn.execute("UPDATE lag SET trupp_kalla=? WHERE id=?", (kalla, lag_id))
+    conn.commit()
+    return conn.execute("SELECT COUNT(*) FROM spelare WHERE lag_id=?",
+                        (lag_id,)).fetchone()[0]
+
+
+def lag_trupp(conn, lag_id):
+    """Lagets hela trupp (spelare-rader), sorterad på nummer."""
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM spelare WHERE lag_id=? "
+        "ORDER BY CAST(nr AS INTEGER), namn", (lag_id,))]
 
 
 def upsert_tavling(conn, namn, *, sport, typ="liga", logga=None, fran=None,

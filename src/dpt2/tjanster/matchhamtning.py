@@ -110,6 +110,35 @@ SCHEMA_LINEUP = (
     '"start": true, "mv": true, "kapten": false}]}'
 )
 
+SYSTEM_LAGTRUPP = (
+    "Du är en sportresearcher. Din uppgift är att hämta hela spelartruppen "
+    "för ETT lag från lagets OFFICIELLA hemsida. "
+    "Om en URL anges: besök den direkt utan att söka via Google. "
+    "Om ingen URL anges: hitta klubbens officiella webbsida och gå till truppsidan. "
+    "Officiell klubbsida är alltid facit — tredjepartssidor (Transfermarkt, "
+    "Sofascore, Wikipedia) har ofta föråldrade uppgifter; använd dem bara som "
+    "komplement (position, nationalitet). Täck HELA truppen. "
+    "Hitta ALDRIG på nummer eller namn — ta bara med det som finns i källan. "
+    "Svara ENBART med ett JSON-objekt enligt schemat, ingen annan text."
+)
+SCHEMA_LAGTRUPP = (
+    '{"lag": "lagnamn", '
+    '"spelare": [{"nr": "10", "namn": "Remy Siemsen", "position": "Forward"}], '
+    '"kallor": ["https://www.fcrosengard.se/sv/players"]}'
+)
+
+SYSTEM_TRUPP_ARK = (
+    "Du läser en spelarlista/trupplista för ETT lag (blad, foto av papper, "
+    "PDF eller skärmdump) och returnerar ENBART ett JSON-objekt enligt "
+    "schemat — ingen annan text.\n"
+    "- Extrahera varje spelares tröjnummer, namn och position om den framgår.\n"
+    "- Hitta ALDRIG på nummer eller namn; utelämna det du inte kan läsa säkert."
+)
+SCHEMA_TRUPP_ARK = (
+    '{"lag": "lagnamn eller tom sträng", '
+    '"spelare": [{"nr": "12", "namn": "Jennifer Falk", "position": "Målvakt"}]}'
+)
+
 HEIC_SUFFIX = {".heic", ".heif"}
 BILD_SUFFIX = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 LINEUP_MAX_KANT = 2000
@@ -231,6 +260,109 @@ def _innehall_block(path):
         return None
     return {"type": "image",
             "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}}
+
+
+def hamta_trupp_for_lag(namn, url="", sport="", logg=print, klient=None):
+    """Hämtar ETT lags trupp från en hemsida (URL:en om angiven, annars via
+    web-sök). Returnerar {lag, spelare:[{nr,namn,position}], kallor} eller None."""
+    if not (namn or "").strip():
+        logg("⚠ Ange ett lag.")
+        return None
+    klient = _klient_eller_skapa(klient, logg)
+    if klient is None:
+        return None
+
+    url = (url or "").strip() or klubb(namn).get("squad_url", "")
+    fraga = (f"Hämta spelartruppen för {namn}: besök {url}" if url
+             else f"Hämta spelartruppen för {namn}: hitta officiell truppsida")
+    if sport and sport.lower() not in ("", "auto"):
+        fraga += f"\nSport: {sport}"
+    fraga += f"\n\nReturnera JSON:\n{SCHEMA_LAGTRUPP}"
+
+    data = claude.fraga_json(klient, SYSTEM_LAGTRUPP, fraga,
+                             verktyg=claude.web_search_verktyg(max_uses=4),
+                             logg=logg)
+    if data:
+        logg(f"✓ Hittade {len(data.get('spelare', []))} spelare.")
+    return data
+
+
+def las_trupp_fil(filsokvag, logg=print, klient=None):
+    """Läser ETT lags trupplista ur bild/PDF via vision. Returnerar
+    {lag, spelare:[{nr,namn,position}]} eller None."""
+    block = _innehall_block(filsokvag)
+    if block is None:
+        logg(f"⚠ Kunde inte läsa filen ({Path(filsokvag).suffix}). "
+             "Stöder HEIC/JPG/PNG/PDF.")
+        return None
+    klient = _klient_eller_skapa(klient, logg)
+    if klient is None:
+        return None
+
+    fraga = "Läs trupplistan och returnera JSON enligt schemat:\n" \
+        + SCHEMA_TRUPP_ARK
+    data = claude.fraga_json_innehall(
+        klient, SYSTEM_TRUPP_ARK, [block, {"type": "text", "text": fraga}],
+        logg=logg)
+    if data:
+        logg(f"✓ Läste {len(data.get('spelare', []))} spelare.")
+    return data
+
+
+# ── CSV-trupp (ren Python — ingen modell) ────────────────────────────────────
+_CSV_NR = {"nr", "nummer", "no", "number", "#", "tröjnummer", "trojnummer"}
+_CSV_NAMN = {"namn", "name", "spelare", "player"}
+_CSV_POS = {"position", "pos", "roll"}
+
+
+def tolka_trupp_csv(filsokvag, logg=print):
+    """Tolkar en trupp-CSV → {spelare:[{nr,namn,position}]} eller None.
+    Kolumnmappning via rubrikrad (nr/namn/position, sv+en); utan rubrik antas
+    kolumnordningen nr,namn[,position]."""
+    import csv
+    try:
+        text = Path(filsokvag).read_text(encoding="utf-8-sig")
+    except Exception as e:
+        logg(f"⚠ Kunde inte läsa CSV: {e}")
+        return None
+    try:
+        dialect = csv.Sniffer().sniff(text[:2048], delimiters=",;\t")
+    except Exception:
+        dialect = csv.excel
+    rader = [r for r in csv.reader(text.splitlines(), dialect) if any(
+        c.strip() for c in r)]
+    if not rader:
+        logg("⚠ CSV-filen är tom.")
+        return None
+
+    huvud = [c.strip().lower() for c in rader[0]]
+    ix = {"nr": None, "namn": None, "position": None}
+    for i, kol in enumerate(huvud):
+        if kol in _CSV_NR:
+            ix["nr"] = i
+        elif kol in _CSV_NAMN:
+            ix["namn"] = i
+        elif kol in _CSV_POS:
+            ix["position"] = i
+    har_rubrik = ix["namn"] is not None
+    if not har_rubrik:
+        ix = {"nr": 0, "namn": 1 if len(rader[0]) > 1 else 0,
+              "position": 2 if len(rader[0]) > 2 else None}
+
+    spelare = []
+    for rad in (rader[1:] if har_rubrik else rader):
+        def _c(i):
+            return rad[i].strip() if i is not None and i < len(rad) else ""
+        namn = _c(ix["namn"])
+        if not namn:
+            continue
+        spelare.append({"nr": _c(ix["nr"]), "namn": namn,
+                        "position": _c(ix["position"])})
+    if not spelare:
+        logg("⚠ Hittade inga spelare i CSV-filen.")
+        return None
+    logg(f"✓ Läste {len(spelare)} spelare ur CSV.")
+    return {"spelare": spelare}
 
 
 def las_lineup(filsokvag, sport="", logg=print, klient=None):

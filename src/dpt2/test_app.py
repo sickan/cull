@@ -13,7 +13,7 @@ class TestApi(unittest.TestCase):
 
     def test_info(self):
         info = self.api.info()
-        self.assertEqual(info["schemaversion"], 3)
+        self.assertEqual(info["schemaversion"], 4)
 
     def test_match_round_trip_genom_bryggan(self):
         res = self.api.spara_match({
@@ -189,6 +189,68 @@ class TestApi(unittest.TestCase):
 
     def test_starta_nummer_utan_urval(self):
         self.assertFalse(self.api.starta_nummer("")["ok"])
+
+    def test_las_lag_trupp_via_csv(self):
+        import tempfile
+        from pathlib import Path
+        self.api.spara_lag({"namn": "Malmö FF"})
+        p = Path(tempfile.mkdtemp()) / "trupp.csv"
+        p.write_text("Nr,Namn,Position\n1,Zecira Musovic,Målvakt\n"
+                     "9,Anna Anvegård,Forward\n", encoding="utf-8")
+        r = self.api.las_lag_trupp("malmo-ff", "csv", str(p))
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["antal"], 2)
+        self.assertEqual(r["trupp_kalla"], "CSV")
+        rad = next(l for l in self.api.lista_lag() if l["id"] == "malmo-ff")
+        self.assertEqual(rad["trupp_n"], 2)
+        self.assertEqual(rad["trupp_kalla"], "CSV")
+
+    def test_las_lag_trupp_validering(self):
+        self.assertFalse(self.api.las_lag_trupp("finns-ej", "csv", "/x.csv")["ok"])
+        self.api.spara_lag({"namn": "Malmö FF"})
+        self.assertFalse(self.api.las_lag_trupp("malmo-ff", "voodoo", "")["ok"])
+        # tom/oläsbar källa → informativt fel
+        self.assertFalse(self.api.las_lag_trupp("malmo-ff", "csv",
+                                                "/finns/inte.csv")["ok"])
+
+    def test_las_uttag_fil_startelva_och_bank(self):
+        import tempfile
+        from pathlib import Path
+        mid = self.api.spara_match({
+            "lag_hemma": "Malmö FF", "lag_borta": "KDFF",
+            "spelare": [{"nr": "99", "namn": "Gammal Start", "lag": "borta",
+                         "start": True}]})["id"]
+        d = Path(tempfile.mkdtemp())
+        (d / "start.csv").write_text("Nr,Namn\n1,Musovic\n6,Öling\n",
+                                     encoding="utf-8")
+        (d / "bank.csv").write_text("Nr,Namn\n21,Reserv Ett\n", encoding="utf-8")
+        r = self.api.las_uttag_fil(mid, str(d / "start.csv"), "hemma", "start")
+        self.assertTrue(r["ok"])
+        hemma_start = [p for p in r["match"]["spelare"]
+                       if p["lag"] == "hemma" and p["start"]]
+        self.assertEqual(len(hemma_start), 2)
+        # bortalagets startelva orörd
+        self.assertTrue(any(p["lag"] == "borta" and p["start"]
+                            for p in r["match"]["spelare"]))
+        r2 = self.api.las_uttag_fil(mid, str(d / "bank.csv"), "hemma", "bank")
+        hemma = [p for p in r2["match"]["spelare"] if p["lag"] == "hemma"]
+        self.assertEqual(len([p for p in hemma if p["start"]]), 2)   # kvar
+        self.assertEqual(len([p for p in hemma if not p["start"]]), 1)
+        # ny startelva ersätter sidans gamla start-flaggor
+        (d / "start2.csv").write_text("Nr,Namn\n7,Ny Elva\n", encoding="utf-8")
+        r3 = self.api.las_uttag_fil(mid, str(d / "start2.csv"), "hemma", "start")
+        start3 = [p["namn"] for p in r3["match"]["spelare"]
+                  if p["lag"] == "hemma" and p["start"]]
+        self.assertEqual(start3, ["Ny Elva"])
+
+    def test_las_uttag_fil_okand_match(self):
+        self.assertFalse(self.api.las_uttag_fil("finns-ej", "/x.csv",
+                                                "hemma", "start")["ok"])
+
+    def test_publicera_live_story_validering(self):
+        self.assertFalse(self.api.publicera_live_story({})["ok"])
+        self.assertFalse(self.api.publicera_live_story(
+            {"moment": "Avspark"})["ok"])                    # ingen bild vald
 
     def test_skapa_story_kraver_moment_och_foto(self):
         self.assertFalse(self.api.skapa_story({})["ok"])

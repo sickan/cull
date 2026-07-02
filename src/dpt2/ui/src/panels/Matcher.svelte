@@ -2,7 +2,7 @@
   import { onMount, createEventDispatcher } from 'svelte'
   import {
     listaMatcher, hamtaMatch, sparaMatch, hamtaTrupp, sattAktivMatch,
-    lasLineup, valjFil, listaTavlingar, listaLag, listaLagForTavling,
+    lasUttagFil, valjFil, listaTavlingar, listaLag, listaLagForTavling,
     listaUrval, sparaFotojobb,
   } from '../lib/api.js'
   import Combobox from '../lib/Combobox.svelte'
@@ -107,14 +107,19 @@
   const arMatch = () => !utkast || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))
 
   let hamtar = false
-  async function lasUttaget() {
+  async function lasUttag(sida, grupp) {
     if (arMatch()) return
-    const f = await valjFil('Välj laguppställnings-ark (bild/PDF)')
+    const f = await valjFil(grupp === 'start'
+      ? 'Välj startelva (blad/CSV/foto)' : 'Välj övrig uttagen trupp (blad/CSV/foto)')
     if (!f.ok) return
     hamtar = true
-    const res = await lasLineup(utkast.id, f.path)
+    const res = await lasUttagFil(utkast.id, f.path, sida, grupp)
     hamtar = false
     if (res?.ok && res.match) utkast = res.match
+  }
+  const truppNot = (namn) => {
+    const l = lagAlla.find((x) => x.namn === namn)
+    return l?.trupp_n ? `ur trupp · ${l.trupp_n} spelare` : 'ingen trupp i Lag & tävlingar'
   }
   async function hamtaTruppen() {
     if (arMatch()) return
@@ -213,20 +218,22 @@
                         on:pick={(e) => valjTavling(e.detail)} on:create={(e) => skapaTavling(e.detail)} />
                     </label>
                     <div class="rad3">
-                      <input bind:value={utkast.datum} placeholder="ÅÅÅÅ-MM-DD" />
-                      <input bind:value={utkast.tid} placeholder="HH:MM" />
+                      <input type="date" bind:value={utkast.datum} />
+                      <input type="time" bind:value={utkast.tid} />
                       <input bind:value={utkast.arena} placeholder="Arena" />
                     </div>
 
-                    <div class="caps2">Laguppställning per lag</div>
+                    <div class="uttagrad"><span class="caps2">Matchdaguttag</span><span class="uttagnot">kopplat till matchen</span></div>
                     <div class="lagbox2">
                       {#each [{ sida: 'hemma', namn: utkast.lag_hemma, lista: hemSpelare }, { sida: 'borta', namn: utkast.lag_borta, lista: bortaSpelare }] as kol}
+                        {@const nStart = kol.lista.filter((p) => p.start).length}
+                        {@const nBank = kol.lista.filter((p) => !p.start).length}
                         <div class="lbox">
                           <div class="lhuvud">
                             <span class="lbricka" style={brickStil(fargForLag(kol.namn))}>{initialer(kol.namn)}</span>
                             <div class="lnamn-wrap">
                               <div class="lnamn scd">{kol.namn || (kol.sida === 'hemma' ? 'Hemmalag' : 'Bortalag')}</div>
-                              <div class="lsub">{kol.sida === 'hemma' ? 'Hemma' : 'Borta'} · {kol.lista.length} spelare</div>
+                              <div class="lsub">{kol.sida === 'hemma' ? 'Hemma' : 'Borta'} · {truppNot(kol.namn)}</div>
                             </div>
                           </div>
                           {#if kol.lista.length}
@@ -234,11 +241,20 @@
                               {#each kol.lista as p}<span class="sp" class:start={p.start}>{#if p.nr}<b>{p.nr}</b>{/if} {p.namn}</span>{/each}
                             </div>
                           {/if}
-                          <button class="lbtn" on:click={lasUttaget} disabled={hamtar || arMatch()}>Läs in uttaget lag…</button>
+                          <div class="grupplbl">Startelva</div>
+                          <button class="lbtn" class:i={nStart > 0} on:click={() => lasUttag(kol.sida, 'start')} disabled={hamtar || arMatch()}>
+                            <span>{nStart ? 'Byt fil…' : 'Ladda upp startelva…'}</span>
+                            <span class="lbtn-n">{nStart ? nStart + ' spelare' : 'ej uppladdad'}</span>
+                          </button>
+                          <div class="grupplbl">Övrig uttagen trupp</div>
+                          <button class="lbtn" class:i={nBank > 0} on:click={() => lasUttag(kol.sida, 'bank')} disabled={hamtar || arMatch()}>
+                            <span>{nBank ? 'Byt fil…' : 'Ladda upp övrig trupp…'}</span>
+                            <span class="lbtn-n">{nBank ? nBank + ' avbytare' : 'ej uppladdad'}</span>
+                          </button>
                         </div>
                       {/each}
                     </div>
-                    <div class="hint">Läs blad/CSV/foto — spelarna matchas mot respektive lags trupp. <button class="lank" on:click={hamtaTruppen} disabled={hamtar || arMatch()}>{hamtar ? 'Hämtar…' : 'Hämta trupp automatiskt'}</button></div>
+                    <div class="hint">Startelva och övrig trupp läses ur blad/CSV/foto och matchas mot respektive lags <b>trupp</b> i Lag &amp; tävlingar — uttaget sparas på matchen. <button class="lank" on:click={hamtaTruppen} disabled={hamtar || arMatch()}>{hamtar ? 'Hämtar…' : 'Hämta trupp automatiskt'}</button></div>
 
                     <div class="gcalkort">
                       <span class="gcalik">
@@ -331,8 +347,8 @@
   .editor { border-top: 1px solid var(--div3); padding: 16px 14px; display: flex; flex-direction: column; gap: 12px; }
   .rad2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .rad3 { display: flex; gap: 10px; }
-  .rad3 input:nth-child(1) { width: 130px; flex: none; }
-  .rad3 input:nth-child(2) { width: 90px; flex: none; }
+  .rad3 input:nth-child(1) { width: 150px; flex: none; }
+  .rad3 input:nth-child(2) { width: 104px; flex: none; }
   .rad3 input:nth-child(3) { flex: 1; min-width: 0; }
   label { display: flex; flex-direction: column; gap: 5px; font-size: 10px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-caps); }
@@ -354,8 +370,14 @@
   .sp { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--div3); color: var(--t-mut); }
   .sp.start { background: var(--acc-soft); color: var(--acc); }
   .sp b { color: var(--t-head); }
-  .lbtn { width: 100%; background: var(--kort); border: 1px solid var(--div); border-radius: 7px; padding: 7px 10px;
+  .uttagrad { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+  .uttagnot { font-size: 10px; color: var(--t-help); }
+  .grupplbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-help); margin-bottom: -6px; }
+  .lbtn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: var(--kort); border: 1px solid var(--div); border-radius: 7px; padding: 7px 10px;
     font-size: 12px; color: var(--t-mut); }
+  .lbtn.i { border-color: color-mix(in srgb, var(--acc) 45%, var(--div)); color: var(--t-head); }
+  .lbtn-n { font-size: 10.5px; color: var(--t-mut); flex: none; }
   .lbtn:hover:not(:disabled) { border-color: var(--acc); color: var(--acc); }
   .lbtn:disabled { opacity: 0.5; }
   .hint { font-size: 10.5px; color: var(--t-help); line-height: 1.45; }

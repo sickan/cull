@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8771", "--directory", "src/cull/assets"],
       "port": 8771
+    },
+    {
+      "name": "dpt2-ui-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "src/dpt2/ui"],
+      "port": 5173
     }
   ]
 }

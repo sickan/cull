@@ -17,7 +17,10 @@ from dpt2.motorer.nummer import _env
 
 def _matchfalt(conn, config):
     """Fyller lag/liga/arena/ställning/mål/startelva ur matchen (match_id) med
-    config som fallback."""
+    config som fallback — utom mallfälten (stallning/mal_rad/startelva/lag_borta):
+    där vinner config, eftersom Live-flödet skickar explicit ifyllda fält
+    (t.ex. halvtidsställning eller 'Nästa match'-motståndare) som ska slå
+    matchens lagrade värden."""
     m = store.hamta_match(conn, config.get("match_id")) if config.get("match_id") else None
     m = m or {}
     startelva = None
@@ -27,12 +30,12 @@ def _matchfalt(conn, config):
         startelva = "\n".join(namn) if namn else None
     return {
         "lag_hemma": m.get("lag_hemma") or config.get("lag_hemma", ""),
-        "lag_borta": m.get("lag_borta") or config.get("lag_borta", ""),
+        "lag_borta": config.get("lag_borta") or m.get("lag_borta", ""),
         "liga": m.get("liga") or config.get("liga", ""),
         "arena": m.get("arena") or config.get("arena", ""),
-        "stallning": m.get("resultat") or config.get("stallning", ""),
-        "mal_rad": m.get("malskyttar") or config.get("mal_rad", ""),
-        "startelva": startelva,
+        "stallning": config.get("stallning") or m.get("resultat", ""),
+        "mal_rad": config.get("mal_rad") or m.get("malskyttar", ""),
+        "startelva": config.get("startelva") or startelva,
     }
 
 
@@ -54,6 +57,8 @@ def kor_story(conn, config, *, env=None, logg=print):
         foto, config["moment"], f["lag_hemma"], f["lag_borta"],
         liga=f["liga"], stallning=f["stallning"], mal_rad=f["mal_rad"],
         arena=f["arena"], startelva=f["startelva"],
+        avspark_tid=config.get("avspark_tid", ""),
+        next_when=config.get("next_when", ""),
         tema=config.get("tema", "Hav"), format=config.get("format", "9x16"),
         ut_mapp=ut_mapp, env=env or _env())
     logg(f"✓ Story renderad: {ut}")

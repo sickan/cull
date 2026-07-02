@@ -100,5 +100,78 @@ class TestLasLineup(unittest.TestCase):
         self.assertEqual(kl.messages.anrop, 0)               # inget anrop
 
 
+class TestHamtaTruppForLag(unittest.TestCase):
+    def test_explicit_url_i_prompt(self):
+        kl = _Klient([_Svar('{"lag":"Malmö FF","spelare":'
+                            '[{"nr":"1","namn":"Musovic","position":"Målvakt"}]}')])
+        d = MH.hamta_trupp_for_lag("Malmö FF", url="https://malmoff.se/truppen",
+                                   logg=lambda *_: None, klient=kl)
+        self.assertEqual(len(d["spelare"]), 1)
+        self.assertIn("malmoff.se/truppen", kl._content_text())
+        self.assertIn("tools", kl.messages.sista_kw)         # web_search
+
+    def test_klubbregister_url_som_fallback(self):
+        kl = _Klient([_Svar('{"spelare":[{"nr":"9","namn":"A"}]}')])
+        MH.hamta_trupp_for_lag("FC Rosengård", logg=lambda *_: None, klient=kl)
+        self.assertIn("fcrosengard.se", kl._content_text())  # ur KLUBBAR
+
+    def test_inget_lag(self):
+        self.assertIsNone(MH.hamta_trupp_for_lag("", logg=lambda *_: None,
+                                                 klient=_Klient([])))
+
+
+class TestLasTruppFil(unittest.TestCase):
+    def test_las_trupp_pdf(self):
+        p = Path(tempfile.mkdtemp()) / "trupp.pdf"
+        p.write_bytes(b"%PDF-1.4 fejk")
+        kl = _Klient([_Svar('{"lag":"Malmö FF","spelare":'
+                            '[{"nr":"1","namn":"Musovic","position":"Målvakt"}]}')])
+        d = MH.las_trupp_fil(p, logg=lambda *_: None, klient=kl)
+        self.assertEqual(d["spelare"][0]["position"], "Målvakt")
+        innehall = kl.messages.sista_kw["messages"][0]["content"]
+        self.assertEqual(innehall[0]["type"], "document")
+
+    def test_okant_format(self):
+        p = Path(tempfile.mkdtemp()) / "trupp.txt"; p.write_text("x")
+        self.assertIsNone(MH.las_trupp_fil(p, logg=lambda *_: None,
+                                           klient=_Klient([])))
+
+
+class TestTolkaTruppCsv(unittest.TestCase):
+    def _skriv(self, text):
+        p = Path(tempfile.mkdtemp()) / "trupp.csv"
+        p.write_text(text, encoding="utf-8")
+        return p
+
+    def test_rubrikrad_mappas(self):
+        p = self._skriv("Nr,Namn,Position\n1,Zecira Musovic,Målvakt\n"
+                        "9,Anna Anvegård,Forward\n")
+        d = MH.tolka_trupp_csv(p, logg=lambda *_: None)
+        self.assertEqual(len(d["spelare"]), 2)
+        self.assertEqual(d["spelare"][0],
+                         {"nr": "1", "namn": "Zecira Musovic",
+                          "position": "Målvakt"})
+
+    def test_semikolon_och_engelska_rubriker(self):
+        p = self._skriv("number;name;pos\n7;Ria Öling;Mittfältare\n")
+        d = MH.tolka_trupp_csv(p, logg=lambda *_: None)
+        self.assertEqual(d["spelare"][0]["namn"], "Ria Öling")
+        self.assertEqual(d["spelare"][0]["position"], "Mittfältare")
+
+    def test_utan_rubrik_antas_kolumnordning(self):
+        p = self._skriv("1,Zecira Musovic,Målvakt\n9,Anna Anvegård,Forward\n")
+        d = MH.tolka_trupp_csv(p, logg=lambda *_: None)
+        self.assertEqual(len(d["spelare"]), 2)
+        self.assertEqual(d["spelare"][1]["nr"], "9")
+
+    def test_tom_fil(self):
+        self.assertIsNone(MH.tolka_trupp_csv(self._skriv(""),
+                                             logg=lambda *_: None))
+
+    def test_saknad_fil(self):
+        self.assertIsNone(MH.tolka_trupp_csv("/finns/inte.csv",
+                                             logg=lambda *_: None))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -103,6 +103,10 @@ def _migrera(conn, fran_version):
           lag_id     TEXT NOT NULL REFERENCES lag(id) ON DELETE CASCADE,
           PRIMARY KEY (tavling_id, lag_id)
         );""")
+    if fran_version < 4:
+        # v4: lagets trupp-källa ("från hemsida" / "CSV" / "bild" / "PDF").
+        if not _har_kolumn(conn, "lag", "trupp_kalla"):
+            conn.execute("ALTER TABLE lag ADD COLUMN trupp_kalla TEXT")
 
 
 def _har_kolumn(conn, tabell, kolumn):

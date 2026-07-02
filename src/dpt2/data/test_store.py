@@ -220,6 +220,50 @@ class TestLagTavling(unittest.TestCase):
         namn = sorted(l["namn"] for l in lag)
         self.assertEqual(namn, ["FC Rosengård", "Malmö FF"])
 
+    def test_merge_lag_trupp(self):
+        lid = store.upsert_lag(self.c, "Malmö FF")
+        n = store.merge_lag_trupp(self.c, lid, [
+            {"nr": "1", "namn": "Zecira Musovic", "position": "Målvakt"},
+            {"nr": "9", "namn": "Anna Anvegård"},
+            {"namn": ""},                                   # tom → hoppas
+        ], kalla="från hemsida")
+        self.assertEqual(n, 2)
+        lag = store.hamta_lag(self.c, lid)
+        self.assertEqual(lag["trupp_kalla"], "från hemsida")
+        trupp = store.lag_trupp(self.c, lid)
+        self.assertEqual(trupp[0]["position"], "Målvakt")
+        # lista_lag exponerar trupp_n
+        rad = next(l for l in store.lista_lag(self.c) if l["id"] == lid)
+        self.assertEqual(rad["trupp_n"], 2)
+
+    def test_merge_lag_trupp_upsert_bevarar_falt(self):
+        lid = store.upsert_lag(self.c, "Malmö FF")
+        store.merge_lag_trupp(self.c, lid, [
+            {"nr": "1", "namn": "Zecira Musovic", "position": "Målvakt"}])
+        # Ny inläsning utan position → befintlig position bevaras, ingen dubblett.
+        n = store.merge_lag_trupp(self.c, lid, [
+            {"nr": "1", "namn": "Zecira Musovic"}], kalla="CSV")
+        self.assertEqual(n, 1)
+        trupp = store.lag_trupp(self.c, lid)
+        self.assertEqual(trupp[0]["position"], "Målvakt")
+        self.assertEqual(store.hamta_lag(self.c, lid)["trupp_kalla"], "CSV")
+
+    def test_merge_lag_trupp_overlever_match_lankar(self):
+        # Spelare inlagd via match — trupp-merge på laget får inte bryta
+        # match_trupp-länken (samma id-regel → upsert, inte delete+insert).
+        mid = store.spara_match(self.c, {
+            "lag_hemma": "Malmö FF", "lag_borta": "X",
+            "spelare": [{"nr": "1", "namn": "Zecira Musovic", "lag": "hemma",
+                         "start": True}]})
+        store.merge_lag_trupp(self.c, "malmo-ff", [
+            {"nr": "1", "namn": "Zecira Musovic", "position": "Målvakt"}])
+        m = store.hamta_match(self.c, mid)
+        self.assertEqual(len(m["spelare"]), 1)
+        self.assertTrue(m["spelare"][0]["start"])
+
+    def test_merge_lag_trupp_okant_lag(self):
+        self.assertIsNone(store.merge_lag_trupp(self.c, "finns-ej", []))
+
     def test_koppla_lag_idempotent(self):
         store.upsert_lag(self.c, "HK Malmö")
         store.upsert_tavling(self.c, "Handbollsligan", sport="handboll")
@@ -253,15 +297,17 @@ class TestLagTavling(unittest.TestCase):
 
 
 class TestMigrering(unittest.TestCase):
-    def test_fresh_db_ar_v3_med_tavling_lag(self):
+    def test_fresh_db_ar_v4_med_trupp_kalla(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 3)
+        self.assertEqual(db.schemaversion(c), 4)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
+        self.assertIn("trupp_kalla",
+                      [r[1] for r in c.execute("PRAGMA table_info(lag)")])
 
-    def test_migrera_v1_till_v3(self):
+    def test_migrera_v1_till_v4(self):
         # v1-läge: urval + register-tabellerna (som alltid funnits). Migreringen
-        # kör hela kedjan v1→v3 (urval_bild + tavling_lag + nya kolumner).
+        # kör hela kedjan v1→v4 (urval_bild + tavling_lag + nya kolumner).
         import sqlite3
         c = sqlite3.connect(":memory:")
         c.execute("PRAGMA user_version=1")
@@ -273,7 +319,9 @@ class TestMigrering(unittest.TestCase):
             "SELECT name FROM sqlite_master WHERE type='table'")]
         self.assertIn("urval_bild", namn)
         self.assertIn("tavling_lag", namn)
-        self.assertIn("kind", [r[1] for r in c.execute("PRAGMA table_info(lag)")])
+        kolumner = [r[1] for r in c.execute("PRAGMA table_info(lag)")]
+        self.assertIn("kind", kolumner)
+        self.assertIn("trupp_kalla", kolumner)
 
     def test_migrera_v2_till_v3(self):
         # Bygg ett v2-läge (lag/tavling utan nya kolumner) och migrera additivt.

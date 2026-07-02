@@ -33,6 +33,23 @@ class TestMatchfalt(unittest.TestCase):
         self.assertEqual(f["lag_hemma"], "A")
         self.assertIsNone(f["startelva"])
 
+    def test_live_mallfalt_vinner_over_matchen(self):
+        # Live-flödet skickar explicit ifyllda fält (halvtidsställning,
+        # 'Nästa match'-motståndare …) — de ska slå matchens lagrade värden.
+        mid = store.spara_match(self.c, {
+            "lag_hemma": "Malmö FF", "lag_borta": "KDFF",
+            "resultat": "6-0", "malskyttar": "Hansson 2",
+            "spelare": [{"nr": "1", "namn": "Musovic", "lag": "hemma",
+                         "start": True}]})
+        f = S._matchfalt(self.c, {
+            "match_id": mid, "stallning": "3-0", "mal_rad": "Berg 12'",
+            "startelva": "Egen elva", "lag_borta": "IFK Norrköping"})
+        self.assertEqual(f["stallning"], "3-0")
+        self.assertEqual(f["mal_rad"], "Berg 12'")
+        self.assertEqual(f["startelva"], "Egen elva")
+        self.assertEqual(f["lag_borta"], "IFK Norrköping")
+        self.assertEqual(f["lag_hemma"], "Malmö FF")     # matchen fyller resten
+
     def test_kor_story_validering(self):
         self.assertFalse(S.kor_story(self.c, {})["ok"])                  # inget moment
         self.assertFalse(S.kor_story(self.c, {"moment": "Avspark"})["ok"])  # inget foto
