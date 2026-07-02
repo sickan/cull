@@ -36,8 +36,20 @@
   }
 
   async function gerLag(l) {
-    const res = await sparaLag(l)
-    if (res?.ok) flash(l.id)
+    // Skicka id för befintliga rader — annars kan ett namnbyte aldrig uttryckas
+    // (namn-slugen pekar då ut en annan post). Nya rader ('nytt-…') saknar id.
+    const arNy = String(l.id).startsWith('nytt-')
+    const res = await sparaLag({ ...l, id: arNy ? null : l.id })
+    if (!res?.ok) return
+    if (res.id && res.id !== l.id) {
+      const gammalt = l.id
+      l.id = res.id
+      if (oppen === gammalt) oppen = res.id
+      if (rosterOppen === gammalt) rosterOppen = res.id
+      if (truppOppen === gammalt) truppOppen = res.id
+      lag = lag
+    }
+    flash(l.id)
   }
   async function gerTavling(t) {
     const res = await sparaTavling(t)

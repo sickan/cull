@@ -66,6 +66,7 @@
         <button type="button" class="rad" class:vald={o.namn === value}
           on:mousedown|preventDefault={() => valj(o)}>
           <span class="etikett">{o.namn}</span>
+          {#if o.detalj}<span class="det">{o.detalj}</span>{/if}
           {#if o.namn === value}<span class="bock">✓</span>{/if}
         </button>
       {/each}
@@ -109,6 +110,8 @@
   .rad:hover { background: var(--div3); }
   .rad.vald { background: var(--acc-soft); font-weight: 600; }
   .etikett { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .det { margin-left: auto; flex: none; font-size: 10.5px; color: var(--t-mut); }
+  .det + .bock { margin-left: 6px; }
   .bock { color: var(--acc); font-size: 12px; flex: none; }
   .skapa { color: var(--acc); font-weight: 600; }
   .tom { padding: 10px 12px; font-size: 12.5px; color: var(--t-mut); }

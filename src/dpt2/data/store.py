@@ -327,11 +327,16 @@ def facit_for_traning(conn):
 
 
 # ── Lag & tävlingar (register) ───────────────────────────────────────────────
-def upsert_lag(conn, namn, *, kind=None, sport=None, gren=None, logga=None,
-               instagram=None, hemsida=None, stall_hemma=None, stall_borta=None,
-               stall_tredje=None, profilfarg=None, klubb=None):
-    """Skapar/uppdaterar ett lag (id = slug av namnet). Tomma fält rör inte
-    befintliga värden. kind = 'team' | 'individ' (lagsport vs utövare).
+def upsert_lag(conn, namn, *, id=None, kind=None, sport=None, gren=None,
+               logga=None, instagram=None, hemsida=None, stall_hemma=None,
+               stall_borta=None, stall_tredje=None, profilfarg=None, klubb=None):
+    """Skapar/uppdaterar ett lag. Tomma fält rör inte befintliga värden.
+    kind = 'team' | 'individ' (lagsport vs utövare).
+
+    id: uttrycklig rad att uppdatera (Lag-editorn skickar den). Utan id slås
+    raden upp på namn-slugen — då kan ett NAMNBYTE aldrig uttryckas, eftersom
+    det nya namnets slug pekar ut en annan (eller ny) post. Med id byts namnet
+    på rätt rad och alla match-/trupp-länkar (som refererar id) följer med.
     Samma namn med OLIKA sport är skilda poster (landslag: "Sverige" finns per
     sport) — id:t får då sport-suffix. gren = 'dam'|'herr'|'mixed' (mixed bara
     team). Returnerar lag-id."""
@@ -341,13 +346,19 @@ def upsert_lag(conn, namn, *, kind=None, sport=None, gren=None, logga=None,
     gren = _enum(gren, GRENAR)
     if gren == "mixed" and kind == "individ":
         gren = None
-    lid = slug_id(namn)
-    fin = conn.execute("SELECT * FROM lag WHERE id=?", (lid,)).fetchone()
-    if fin is not None and sport and fin["sport"] and fin["sport"] != sport:
-        # Namnkrock mellan sporter (Sverige Volleyboll ≠ Sverige Handboll):
-        # den nya posten får sport-suffixat id, originalet behåller sitt.
-        lid = slug_id(f"{namn} {sport}")
+    lid = fin = None
+    if id:
+        fin = conn.execute("SELECT * FROM lag WHERE id=?", (id,)).fetchone()
+        if fin is not None:
+            lid = id
+    if lid is None:
+        lid = slug_id(namn)
         fin = conn.execute("SELECT * FROM lag WHERE id=?", (lid,)).fetchone()
+        if fin is not None and sport and fin["sport"] and fin["sport"] != sport:
+            # Namnkrock mellan sporter (Sverige Volleyboll ≠ Sverige Handboll):
+            # den nya posten får sport-suffixat id, originalet behåller sitt.
+            lid = slug_id(f"{namn} {sport}")
+            fin = conn.execute("SELECT * FROM lag WHERE id=?", (lid,)).fetchone()
     if fin is None:
         conn.execute(
             "INSERT INTO lag(id,namn,kind,sport,gren,hemsida,instagram,logga,"
@@ -649,8 +660,18 @@ def spara_match(conn, match):
     sport = (match.get("sport") or "").strip().lower() or None
     tav_id = upsert_tavling(conn, match.get("liga", ""),
                             sport=sport or "fotboll") if match.get("liga") else None
-    hemma_id = upsert_lag(conn, match.get("lag_hemma", ""))
-    borta_id = upsert_lag(conn, match.get("lag_borta", ""))
+
+    def _lag_ref(id_nyckel, namn_nyckel):
+        # Comboboxens ref (lag-id) vinner över namnet — två lag kan heta lika
+        # (Malmö FF dam/herr) och då pekar namn-slugen alltid på fel/en av dem.
+        lid = (match.get(id_nyckel) or "").strip() or None
+        if lid and conn.execute("SELECT 1 FROM lag WHERE id=?",
+                                (lid,)).fetchone():
+            return lid
+        return upsert_lag(conn, match.get(namn_nyckel, ""))
+
+    hemma_id = _lag_ref("lag_hemma_id", "lag_hemma")
+    borta_id = _lag_ref("lag_borta_id", "lag_borta")
 
     # Tävling äger sina lag: koppla in hemma/borta i den valda tävlingen.
     if tav_id:
@@ -727,7 +748,9 @@ def hamta_match(conn, match_id):
 
     return {
         "id": m["id"], "lag_hemma": _namn(m["lag_hemma_id"]),
-        "lag_borta": _namn(m["lag_borta_id"]), "datum": m["datum"] or "",
+        "lag_borta": _namn(m["lag_borta_id"]),
+        "lag_hemma_id": m["lag_hemma_id"], "lag_borta_id": m["lag_borta_id"],
+        "datum": m["datum"] or "",
         "tid": m["tid"] or "", "arena": m["arena"] or "", "liga": liga,
         "sport": m["sport"] or "", "resultat": m["resultat"] or "",
         "halvtid": m["halvtid"] or "", "malskyttar": m["malskyttar"] or "",

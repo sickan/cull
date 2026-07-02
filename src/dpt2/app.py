@@ -158,7 +158,8 @@ class Api:
 
     def spara_lag(self, lag):
         lid = store.upsert_lag(
-            self.conn, lag.get("namn", ""), kind=lag.get("kind"),
+            self.conn, lag.get("namn", ""), id=lag.get("id"),
+            kind=lag.get("kind"),
             sport=lag.get("sport"), gren=lag.get("gren"),
             logga=lag.get("logga"), instagram=lag.get("instagram"),
             hemsida=lag.get("hemsida"), stall_hemma=lag.get("stall_hemma"),

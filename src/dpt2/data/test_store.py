@@ -246,6 +246,43 @@ class TestLagTavling(unittest.TestCase):
                                gren="mixed")
         self.assertIsNone(store.hamta_lag(self.c, iid)["gren"])
 
+    def test_upsert_lag_med_id_byter_namn_pa_ratt_rad(self):
+        # Stigs bugg: "Malmö FF Herr" → "Malmö FF" via editorn träffade
+        # dam-lagets slug i stället för att byta namn på herr-raden.
+        dam = store.upsert_lag(self.c, "Malmö FF", gren="dam",
+                               instagram="@malmoff_dam")
+        herr = store.upsert_lag(self.c, "Malmö FF Herr", gren="herr")
+        lid = store.upsert_lag(self.c, "Malmö FF", id=herr, gren="herr")
+        self.assertEqual(lid, herr)                             # samma rad
+        self.assertEqual(store.hamta_lag(self.c, herr)["namn"], "Malmö FF")
+        self.assertEqual(store.hamta_lag(self.c, herr)["gren"], "herr")
+        # dam-raden orörd
+        d = store.hamta_lag(self.c, dam)
+        self.assertEqual(d["gren"], "dam")
+        self.assertEqual(d["instagram"], "@malmoff_dam")
+        self.assertEqual(len(store.lista_lag(self.c)), 2)       # ingen dubblett
+
+    def test_upsert_lag_okant_id_faller_tillbaka_till_slug(self):
+        lid = store.upsert_lag(self.c, "Malmö FF", id="finns-ej")
+        self.assertEqual(lid, "malmo-ff")
+
+    def test_spara_match_foredrar_lag_id_fore_namn(self):
+        # Två lag med samma namn — comboboxens ref (id) måste vinna.
+        dam = store.upsert_lag(self.c, "Malmö FF", gren="dam")
+        herr = store.upsert_lag(self.c, "Malmö FF Herr", gren="herr")
+        store.upsert_lag(self.c, "Malmö FF", id=herr, gren="herr")  # namnbyte
+        mid = store.spara_match(self.c, {
+            "lag_hemma": "Malmö FF", "lag_hemma_id": herr,
+            "lag_borta": "AIK", "datum": "2026-08-01",
+            "liga": "Allsvenskan", "sport": "fotboll"})
+        m = store.hamta_match(self.c, mid)
+        self.assertEqual(m["lag_hemma_id"], herr)               # inte dam
+        # utan id: namn-slugen som förr
+        mid2 = store.spara_match(self.c, {
+            "lag_hemma": "Malmö FF", "lag_borta": "AIK",
+            "datum": "2026-08-02", "liga": "X", "sport": "fotboll"})
+        self.assertEqual(store.hamta_match(self.c, mid2)["lag_hemma_id"], dam)
+
     def test_landslag_per_sport_far_egna_poster(self):
         # Sverige Volleyboll ≠ Sverige Handboll — samma namn, olika sport.
         v = store.upsert_lag(self.c, "Sverige", sport="volleyboll")

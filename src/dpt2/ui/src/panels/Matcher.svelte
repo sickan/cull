@@ -38,7 +38,12 @@
 
   $: filtrerade = matcher.filter((m) => sportFilter === 'alla' || m.sport === sportFilter)
   $: grupper = gruppera(filtrerade)
-  $: lagVal = (lagForTavling.length ? lagForTavling : lagAlla).map((l) => ({ id: l.id, namn: l.namn }))
+  const GREN_ETIKETT = { dam: 'Dam', herr: 'Herr', mixed: 'Mixed' }
+  // detalj (gren · sport) skiljer lag med samma namn åt (Malmö FF dam/herr).
+  $: lagVal = (lagForTavling.length ? lagForTavling : lagAlla).map((l) => ({
+    id: l.id, namn: l.namn,
+    detalj: [GREN_ETIKETT[l.gren], SPORT_ETIKETT[l.sport]].filter(Boolean).join(' · '),
+  }))
   $: tavlingVal = tavlingar.map((t) => ({ id: t.id, namn: t.namn }))
   $: hemSpelare = (utkast?.spelare || []).filter((p) => p.lag === 'hemma')
   $: bortaSpelare = (utkast?.spelare || []).filter((p) => p.lag === 'borta')
@@ -109,7 +114,7 @@
   }
 
   function nyMatch() {
-    const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', liga: '' }
+    const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '' }
     matcher = [{ ...tmp, trupp_n: 0 }, ...matcher]
     oppen = tmp.id; utkast = { ...tmp, spelare: [] }; lagForTavling = []
   }
@@ -121,8 +126,11 @@
     await laddaLagForTavling(o.namn)
   }
   const skapaTavling = (namn) => { utkast.liga = namn; lagForTavling = [] }
-  const valjHemma = (o) => { utkast.lag_hemma = o.namn }
-  const valjBorta = (o) => { utkast.lag_borta = o.namn }
+  // Spara REF (lag-id), inte bara namnet — två lag kan heta lika (dam/herr).
+  const valjHemma = (o) => { utkast.lag_hemma = o.namn; utkast.lag_hemma_id = o.id }
+  const valjBorta = (o) => { utkast.lag_borta = o.namn; utkast.lag_borta_id = o.id }
+  const skapaHemma = (namn) => { utkast.lag_hemma = namn; utkast.lag_hemma_id = null }
+  const skapaBorta = (namn) => { utkast.lag_borta = namn; utkast.lag_borta_id = null }
   const arMatch = () => !utkast || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))
 
   let hamtar = false
@@ -267,11 +275,11 @@
                     <div class="rad2">
                       <label>Hemmalag
                         <Combobox options={lagVal} value={utkast.lag_hemma} placeholder="Välj lag…"
-                          on:pick={(e) => valjHemma(e.detail)} on:create={(e) => (utkast.lag_hemma = e.detail)} />
+                          on:pick={(e) => valjHemma(e.detail)} on:create={(e) => skapaHemma(e.detail)} />
                       </label>
                       <label>Bortalag
                         <Combobox options={lagVal} value={utkast.lag_borta} placeholder="Välj lag…"
-                          on:pick={(e) => valjBorta(e.detail)} on:create={(e) => (utkast.lag_borta = e.detail)} />
+                          on:pick={(e) => valjBorta(e.detail)} on:create={(e) => skapaBorta(e.detail)} />
                       </label>
                     </div>
                     <label class="full">Tävling

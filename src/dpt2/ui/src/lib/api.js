@@ -220,7 +220,7 @@ export async function aktiveraSynkFotojobb(utkastId) {
 export async function sparaLag(lag) {
   const api = brygga()
   if (api) return api.spara_lag(lag)
-  return wait({ ok: true, id: lag.id || 'nytt' })
+  return wait({ ok: true, id: lag.id || slug(lag.namn) })
 }
 
 export async function sparaTavling(tavling) {
