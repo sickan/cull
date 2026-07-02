@@ -75,13 +75,24 @@ class Kalender:
 
     def skapa_jobb(self, jobb):
         status, data = self._anrop("POST", "/api/events", body=jobb, auth=True)
-        return {"ok": status in (200, 201), "status": status, "jobb": data}
+        return {"ok": status in (200, 201), "status": status,
+                "jobb": _packa_upp(data)}
 
     def uppdatera_jobb(self, jobb_id, jobb):
         status, data = self._anrop("PUT", f"/api/events/{jobb_id}",
                                    body=jobb, auth=True)
-        return {"ok": status == 200, "status": status, "jobb": data}
+        return {"ok": status == 200, "status": status,
+                "jobb": _packa_upp(data)}
 
     def radera_jobb(self, jobb_id):
         status, _ = self._anrop("DELETE", f"/api/events/{jobb_id}", auth=True)
         return {"ok": status in (200, 204), "status": status}
+
+
+def _packa_upp(data):
+    """Tjänsten svarar `{event: {...}}` på POST/PUT (routes/events.ts) — packa
+    upp så anroparna får själva jobbet under `jobb` (t.ex. `jobb.id`, som
+    spara_fotojobb/satt_match_synk länkar mot matcher)."""
+    if isinstance(data, dict) and isinstance(data.get("event"), dict):
+        return data["event"]
+    return data

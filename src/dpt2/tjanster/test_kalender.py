@@ -37,15 +37,21 @@ class TestKalender(unittest.TestCase):
         self.assertEqual(t.anrop[0]["headers"]["Authorization"], "Bearer hemlig")
 
     def test_skapa_uppdatera_radera(self):
+        # Tjänsten svarar `{event: {...}}` på POST/PUT (routes/events.ts) —
+        # klienten ska packa upp så anroparna får jobbet (och dess id) direkt.
         t = FejkTransport({
-            ("POST", "/api/events"): (201, {"id": "ny", "google_event_id": None}),
-            ("PUT", "/api/events/ny"): (200, {"id": "ny"}),
+            ("POST", "/api/events"): (201, {"event": {"id": "ny", "google_event_id": None}}),
+            ("PUT", "/api/events/ny"): (200, {"event": {"id": "ny"}}),
             ("DELETE", "/api/events/ny"): (204, None),
         })
         k = Kalender(api_key="x", transport=t)
-        self.assertTrue(k.skapa_jobb({"title": "Bröllop"})["ok"])
+        r = k.skapa_jobb({"title": "Bröllop"})
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["jobb"]["id"], "ny")     # uppackat ur {event: …}
         self.assertEqual(t.anrop[0]["body"]["title"], "Bröllop")
-        self.assertTrue(k.uppdatera_jobb("ny", {"title": "B2"})["ok"])
+        r = k.uppdatera_jobb("ny", {"title": "B2"})
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["jobb"]["id"], "ny")
         self.assertTrue(k.radera_jobb("ny")["ok"])
 
     def test_fel_status_ger_tom_lista(self):

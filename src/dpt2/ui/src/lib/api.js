@@ -12,19 +12,19 @@ const MOCK_MATCHER = [
     arena: 'Malmö Idrottsplats', status: 'kommande', resultat: '',
     sport: 'fotboll', lag_hemma: 'FC Rosengård', lag_borta: 'Eskilstuna United',
     liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan',
-    hemfarg: '#8b1f3a', bortafarg: '#1d2a6b', trupp_n: 3,
+    hemfarg: '#8b1f3a', bortafarg: '#1d2a6b', trupp_n: 3, synk_jobb_id: null,
   },
   {
     id: 'a1b2c3d4e5f6', datum: '2026-06-27', tid: '14:00',
     arena: 'Eleda Stadion', status: 'avslutad', resultat: '6-0',
     sport: 'fotboll', lag_hemma: 'Malmö FF', lag_borta: 'Kristianstads DFF',
     liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan',
-    hemfarg: '#8fb7de', bortafarg: '#C0392B', trupp_n: 0,
+    hemfarg: '#8fb7de', bortafarg: '#C0392B', trupp_n: 0, synk_jobb_id: 'fj1',
     galleri: 'https://malmoff.pixieset.com/damallsvenskan-27jun/',
     sida_url: 'https://dalecarliaphoto.se/sport/2026-06-27-malmo-ff-kristianstad',
   },
   {
-    id: 'c0ffee001122', datum: '2026-09-03', tid: '19:00',
+    id: 'c0ffee001122', datum: '2026-09-03', tid: '',   // tid ej fastställd → heldag
     arena: 'Baltiska Hallen', status: 'kommande', resultat: '',
     sport: 'handboll', lag_hemma: 'HK Malmö', lag_borta: 'IK Sävehof',
     liga: 'Handbollsligan', tavling_id: 'handbollsligan',
@@ -112,6 +112,23 @@ export async function sparaMatch(match) {
   const api = brygga()
   if (api) return api.spara_match(match)
   return wait({ ok: true, id: match.id || 'ny' })
+}
+
+export async function raderaMatch(id) {
+  const api = brygga()
+  if (api) return api.radera_match(id)
+  const i = MOCK_MATCHER.findIndex((m) => m.id === id)
+  if (i >= 0) MOCK_MATCHER.splice(i, 1)
+  return wait({ ok: true })
+}
+
+export async function sattMatchSynk(id, pa) {
+  const api = brygga()
+  if (api) return api.satt_match_synk(id, pa)
+  const m = MOCK_MATCHER.find((x) => x.id === id)
+  if (!m) return wait({ ok: false, fel: 'Okänd match.' })
+  m.synk_jobb_id = pa ? 'fj-mock-' + id : null
+  return wait({ ok: true, synk_jobb_id: m.synk_jobb_id })
 }
 
 export async function listaLag() {

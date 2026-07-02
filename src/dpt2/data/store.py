@@ -544,6 +544,13 @@ def matchref_for_fotojobb(conn, fotojobb_ider):
     return {r["fotojobb_id"]: r["match_id"] for r in rader}
 
 
+def fotojobb_for_match(conn, match_id):
+    """Alla fotojobb-id:n (utkast eller tjänstens jobb) kopplade till matchen."""
+    return [r["fotojobb_id"] for r in conn.execute(
+        "SELECT fotojobb_id FROM fotojobb_match WHERE match_id=?",
+        (match_id,)).fetchall()]
+
+
 # ── Tävling ↔ lag (tävling äger sina deltagande lag) ─────────────────────────
 def koppla_lag_till_tavling(conn, tavling_id, lag_id):
     """Registrerar att laget deltar i tävlingen (idempotent)."""
@@ -691,7 +698,10 @@ def lista_matcher(conn):
         "m.tavling_id, h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga, "
         "h.stall_hemma AS hemfarg, b.stall_hemma AS bortafarg, "
         "h.logga AS hemlogga, b.logga AS bortalogga, "
-        "(SELECT COUNT(*) FROM match_trupp mt WHERE mt.match_id=m.id) AS trupp_n "
+        "(SELECT COUNT(*) FROM match_trupp mt WHERE mt.match_id=m.id) AS trupp_n, "
+        "(SELECT fm.fotojobb_id FROM fotojobb_match fm WHERE fm.match_id=m.id "
+        " AND fm.fotojobb_id NOT IN (SELECT id FROM fotojobb_utkast) LIMIT 1)"
+        " AS synk_jobb_id "
         "FROM matchen m LEFT JOIN lag h ON m.lag_hemma_id=h.id "
         "LEFT JOIN lag b ON m.lag_borta_id=b.id "
         "LEFT JOIN tavling t ON m.tavling_id=t.id "

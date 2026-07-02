@@ -315,6 +315,7 @@ class _FakeKalender:
 
     def __init__(self):
         self.skapade = []
+        self.raderade = []
 
     def har_nyckel(self):
         return True
@@ -327,12 +328,14 @@ class _FakeKalender:
 
     def skapa_jobb(self, jobb):
         self.skapade.append(jobb)
-        return {"ok": True, "jobb": {**jobb, "id": "remote1", "google_event_id": "g1"}}
+        return {"ok": True, "jobb": {**jobb, "id": f"remote{len(self.skapade)}",
+                                     "google_event_id": "g1"}}
 
     def uppdatera_jobb(self, jid, jobb):
         return {"ok": True}
 
     def radera_jobb(self, jid):
+        self.raderade.append(jid)
         return {"ok": True}
 
 
@@ -470,6 +473,101 @@ class TestFotojobbUtkastBridge(unittest.TestCase):
     def test_aktivera_synk_okant_utkast(self):
         r = self.api.aktivera_synk_fotojobb("finns-ej")
         self.assertFalse(r["ok"])
+
+
+class TestMatchSynkOchRadering(unittest.TestCase):
+    """Synk-pillen i matchlistan (satt_match_synk) + Ta bort match som städar
+    kalenderjobb — handoff matcher_synk_heldag."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.fake = _FakeKalender()
+        self.api.kalender = self.fake
+        self.mid = self.api.spara_match({
+            "lag_hemma": "Malmö FF", "lag_borta": "FC Rosengård",
+            "datum": "2026-08-15", "tid": "14:00", "arena": "Eleda Stadion",
+            "liga": "OBOS Damallsvenskan", "sport": "fotboll"})["id"]
+
+    def test_synk_pa_skapar_jobb_med_sluttid_per_sport(self):
+        r = self.api.satt_match_synk(self.mid, True)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["synk_jobb_id"], "remote1")
+        jobb = self.fake.skapade[0]
+        self.assertEqual(jobb["title"], "Malmö FF – FC Rosengård")
+        self.assertEqual(jobb["start_at"], "2026-08-15T14:00:00")
+        self.assertEqual(jobb["end_at"], "2026-08-15T16:00:00")   # fotboll 2 tim
+        self.assertFalse(jobb["all_day"])
+        self.assertEqual(jobb["category"], "Sport")
+        self.assertEqual(jobb["location"], "Eleda Stadion")
+        self.assertEqual(self.api.lista_matcher()[0]["synk_jobb_id"], "remote1")
+
+    def test_synk_sluttid_handboll(self):
+        mid = self.api.spara_match({
+            "lag_hemma": "HK Malmö", "lag_borta": "IK Sävehof",
+            "datum": "2026-09-03", "tid": "19:00", "sport": "handboll"})["id"]
+        self.api.satt_match_synk(mid, True)
+        self.assertEqual(self.fake.skapade[0]["end_at"],
+                         "2026-09-03T20:30:00")                   # 1,5 tim
+
+    def test_synk_utan_tid_blir_heldag(self):
+        mid = self.api.spara_match({
+            "lag_hemma": "A", "lag_borta": "B",
+            "datum": "2026-08-20", "tid": "", "sport": "fotboll"})["id"]
+        r = self.api.satt_match_synk(mid, True)
+        self.assertTrue(r["ok"])
+        jobb = self.fake.skapade[0]
+        self.assertTrue(jobb["all_day"])
+        self.assertEqual(jobb["start_at"], "2026-08-20")
+        self.assertEqual(jobb["end_at"], "2026-08-20")
+
+    def test_synk_pa_ar_idempotent(self):
+        r1 = self.api.satt_match_synk(self.mid, True)
+        r2 = self.api.satt_match_synk(self.mid, True)
+        self.assertEqual(len(self.fake.skapade), 1)
+        self.assertEqual(r1["synk_jobb_id"], r2["synk_jobb_id"])
+
+    def test_synk_av_tar_bort_jobb_och_lank(self):
+        self.api.satt_match_synk(self.mid, True)
+        r = self.api.satt_match_synk(self.mid, False)
+        self.assertTrue(r["ok"])
+        self.assertIsNone(r["synk_jobb_id"])
+        self.assertEqual(self.fake.raderade, ["remote1"])
+        self.assertIsNone(self.api.lista_matcher()[0]["synk_jobb_id"])
+
+    def test_synk_kraver_datum(self):
+        mid = self.api.spara_match({"lag_hemma": "A", "lag_borta": "B"})["id"]
+        r = self.api.satt_match_synk(mid, True)
+        self.assertFalse(r["ok"])
+        self.assertIn("datum", r["fel"])
+
+    def test_synk_okand_match(self):
+        self.assertFalse(self.api.satt_match_synk("finns-ej", True)["ok"])
+
+    def test_lankat_utkast_raknas_inte_som_synkat(self):
+        # Ett fotojobb-UTKAST kopplat till matchen ligger inte i Google —
+        # pillen ska visa Ej synkad, och synk på ska skapa ett riktigt jobb.
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
+        store.lanka_fotojobb_match(self.api.conn, uid, self.mid)
+        self.assertIsNone(self.api.lista_matcher()[0]["synk_jobb_id"])
+        r = self.api.satt_match_synk(self.mid, True)
+        self.assertTrue(r["ok"])
+        self.assertEqual(len(self.fake.skapade), 1)
+
+    def test_radera_match_tar_bort_kalenderjobb_och_lankar(self):
+        self.api.satt_match_synk(self.mid, True)
+        r = self.api.radera_match(self.mid)
+        self.assertTrue(r["ok"])
+        self.assertEqual(self.api.lista_matcher(), [])
+        self.assertEqual(self.fake.raderade, ["remote1"])
+        self.assertEqual(
+            store.matchref_for_fotojobb(self.api.conn, ["remote1"]), {})
+
+    def test_radera_match_rensar_aktiv_match(self):
+        self.api.satt_aktiv_match(self.mid)
+        self.api.radera_match(self.mid)
+        self.assertIsNone(self.api.aktiv_match())
 
 
 class TestGallringConfig(unittest.TestCase):

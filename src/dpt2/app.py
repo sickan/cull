@@ -12,6 +12,7 @@ Saknas dist/ faller den tillbaka på Vite-dev-servern (localhost:5173).
 from pathlib import Path
 
 import json
+import re
 
 from dpt2.data import db, store
 from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
@@ -23,6 +24,11 @@ from dpt2.publicering import astro_export as AX
 UI_DIR = Path(__file__).parent / "ui"
 DIST_INDEX = UI_DIR / "dist" / "index.html"
 DEV_URL = "http://localhost:5173"
+
+# Normallängd per sport (minuter) — ger kalenderjobbets sluttid när en match
+# synkas. Match utan fastställd avsparkstid blir heldag i stället.
+MATCH_LANGD_MIN = {"fotboll": 120, "volleyboll": 150, "handboll": 90,
+                   "beachvolley": 90, "innebandy": 120, "tennis": 120}
 
 
 class Api:
@@ -47,8 +53,48 @@ class Api:
         return {"ok": True, "id": mid}
 
     def radera_match(self, id):
+        """Raderar matchen + alla kopplade fotojobb (utkast lokalt, riktiga
+        jobb hos tjänsten → Google Calendar-eventet försvinner med)."""
+        for jid in store.fotojobb_for_match(self.conn, id):
+            self.radera_fotojobb(jid)
         store.radera_match(self.conn, id)
+        if store.hamta_installning(self.conn, "aktiv_match_id") == id:
+            store.satt_installning(self.conn, "aktiv_match_id", "")
         return {"ok": True}
+
+    def satt_match_synk(self, match_id, pa):
+        """Slår på/av matchens Google Calendar-synk (synk-pillen i matchlistan).
+        På = skapar ett fotojobb hos Calendar Sync-tjänsten (kategori Sport,
+        sluttid per sportens normallängd; utan avsparkstid → heldag) och länkar
+        det till matchen. Av = tar bort det länkade jobbet + länken.
+        Returnerar {ok, synk_jobb_id} (None när av) eller {ok:False, fel}."""
+        m = store.hamta_match(self.conn, match_id)
+        if not m:
+            return {"ok": False, "fel": "Okänd match."}
+        lankade = [j for j in store.fotojobb_for_match(self.conn, match_id)
+                   if not store.hamta_fotojobb_utkast(self.conn, j)]
+        if not pa:
+            for jid in lankade:
+                store.lanka_fotojobb_match(self.conn, jid, None)
+                try:
+                    self.kalender.radera_jobb(jid)
+                except Exception as e:
+                    return {"ok": False, "fel": str(e)}
+            return {"ok": True, "synk_jobb_id": None}
+        if lankade:                       # redan synkad — idempotent
+            return {"ok": True, "synk_jobb_id": lankade[0]}
+        if not m.get("datum"):
+            return {"ok": False, "fel": "Sätt matchens datum först."}
+        try:
+            r = self.kalender.skapa_jobb(_match_till_jobbdata(m))
+        except Exception as e:
+            return {"ok": False, "fel": str(e)}
+        if not r.get("ok"):
+            return {"ok": False, "fel": r.get("fel") or "Kunde inte skapa jobbet."}
+        jid = (r.get("jobb") or {}).get("id")
+        if jid:
+            store.lanka_fotojobb_match(self.conn, jid, match_id)
+        return {"ok": True, "synk_jobb_id": jid}
 
     def hamta_trupp(self, match_id):
         """Hämtar truppen (web-sök via Claude), slår ihop med matchens befintliga
@@ -616,6 +662,25 @@ class Api:
     def info(self):
         return {"db": str(self.db_path),
                 "schemaversion": db.schemaversion(self.conn)}
+
+
+def _match_till_jobbdata(m):
+    """Match → jobbdata åt Calendar Sync-tjänsten. Fastställd avsparkstid ger
+    start + sluttid enligt sportens normallängd (MATCH_LANGD_MIN); saknas tid
+    blir jobbet en heldagsaktivitet på matchdagen."""
+    titel = f"{m.get('lag_hemma') or ''} – {m.get('lag_borta') or ''}".strip(" –")
+    tid = m.get("tid") or ""
+    if re.fullmatch(r"\d{1,2}:\d{2}", tid):
+        h, mi = (int(x) for x in tid.split(":"))
+        start = h * 60 + mi
+        slut = (start + MATCH_LANGD_MIN.get(m.get("sport"), 120)) % 1440
+        return {"title": titel, "all_day": False,
+                "start_at": f"{m['datum']}T{h:02d}:{mi:02d}:00",
+                "end_at": f"{m['datum']}T{slut // 60:02d}:{slut % 60:02d}:00",
+                "location": m.get("arena") or "", "category": "Sport"}
+    return {"title": titel, "all_day": True,
+            "start_at": m["datum"], "end_at": m["datum"],
+            "location": m.get("arena") or "", "category": "Sport"}
 
 
 def _utkast_till_jobbdict(u):

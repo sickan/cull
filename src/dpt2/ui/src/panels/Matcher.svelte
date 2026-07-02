@@ -3,7 +3,7 @@
   import {
     listaMatcher, hamtaMatch, sparaMatch, hamtaTrupp, sattAktivMatch,
     lasUttagFil, valjFil, listaTavlingar, listaLag, listaLagForTavling,
-    listaUrval, sparaFotojobb,
+    listaUrval, raderaMatch, sattMatchSynk,
   } from '../lib/api.js'
   import Combobox from '../lib/Combobox.svelte'
 
@@ -18,10 +18,14 @@
   let sportFilter = 'alla'
   let oppen = null
   let utkast = null
-  let iKalender = new Set()
+  let bekraftaId = null
+  let fel = ''
 
   const SPORTER = ['alla', 'fotboll', 'handboll', 'volleyboll', 'beachvolley', 'tennis']
   const SPORT_ETIKETT = { fotboll: 'Fotboll', handboll: 'Handboll', volleyboll: 'Volleyboll', beachvolley: 'Beachvolley', tennis: 'Tennis' }
+  // Normallängd per sport (min) → uträknad sluttid; utan avsparkstid = heldag.
+  // Speglar MATCH_LANGD_MIN i app.py (backend sätter kalenderjobbets sluttid).
+  const MATCH_LANGD = { fotboll: 120, volleyboll: 150, handboll: 90, beachvolley: 90, innebandy: 120, tennis: 120 }
   const TYP_ETIKETT = { liga: 'Liga', turnering: 'Turnering', masterskap: 'Mästerskap' }
   const MK = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
   const SPORT_FARG = '#2F7CB0'
@@ -40,6 +44,21 @@
   $: bortaSpelare = (utkast?.spelare || []).filter((p) => p.lag === 'borta')
 
   const del = (iso) => (iso || '').split('T')[0].split('-').map(Number)
+  const harTid = (t) => /^\d{1,2}:\d{2}$/.test(t || '')
+  const arNy = (x) => typeof x?.id === 'string' && x.id.startsWith('ny-')
+  function plusMin(hhmm, min) {
+    const [h, m] = hhmm.split(':').map(Number)
+    const tot = (((h * 60 + m + min) % 1440) + 1440) % 1440
+    return `${String(Math.floor(tot / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}`
+  }
+  const durEtikett = (min) => `${Math.floor(min / 60)} tim${min % 60 ? ` ${min % 60} min` : ''}`
+  function slutFor(u) {
+    if (!u || !harTid(u.tid)) return { slut: 'Heldag · tid ej fastställd', dur: 'sätts när avsparkstid är klar' }
+    const d = MATCH_LANGD[u.sport] || 120
+    return { slut: `slut ~${plusMin(u.tid, d)}`, dur: durEtikett(d) }
+  }
+  $: slutInfo = slutFor(utkast)
+  $: oppenRad = matcher.find((x) => x.id === oppen)
   function periodText(t) {
     const f = (t.fran || ''), ti = (t.till || '')
     if (/^\d{4}-\d{2}/.test(f) && /^\d{4}-\d{2}/.test(ti)) {
@@ -134,12 +153,23 @@
     if (res?.ok && res.match) utkast = res.match
   }
 
-  async function laggIKalender(u) {
-    const start = u.datum ? `${u.datum}T${u.tid || '00:00'}:00` : ''
-    if (!start) return
-    await sparaFotojobb({ title: `${u.lag_hemma || ''} – ${u.lag_borta || ''}`.trim(),
-      start_at: start, end_at: start, location: u.arena || '', category: 'Sport', all_day: false })
-    iKalender = new Set(iKalender).add(u.id)
+  async function togglaSynk(m) {
+    if (!m || arNy(m)) return
+    fel = ''
+    const r = await sattMatchSynk(m.id, !m.synk_jobb_id)
+    if (!r?.ok) { fel = r?.fel || 'Kunde inte ändra kalendersynken.'; return }
+    matcher = matcher.map((x) => (x.id === m.id ? { ...x, synk_jobb_id: r.synk_jobb_id } : x))
+  }
+
+  async function taBort(m) {
+    bekraftaId = null
+    fel = ''
+    if (!arNy(m)) {
+      const r = await raderaMatch(m.id)
+      if (!r?.ok) { fel = r?.fel || 'Kunde inte ta bort matchen.'; return }
+    }
+    if (oppen === m.id) { oppen = null; utkast = null; lagForTavling = [] }
+    matcher = matcher.filter((x) => x.id !== m.id)
   }
 
   async function spara() {
@@ -172,6 +202,8 @@
     </div>
   </div>
 
+  {#if fel}<p class="fel">{fel}</p>{/if}
+
   {#if laddar}
     <p class="tom">Laddar matcher…</p>
   {:else}
@@ -190,22 +222,45 @@
           <div class="matcher">
             {#each g.matcher as m (m.id)}
               <div class="match">
-                <button class="rad" on:click={() => toggla(m)}>
+                <div class="rad" role="button" tabindex="0" on:click={() => toggla(m)}
+                  on:keydown={(e) => e.key === 'Enter' && toggla(m)}>
                   <div class="datum scd">
                     <div class="d">{del(m.datum)[2] || '–'}</div>
                     <div class="mon">{del(m.datum).length === 3 ? MK[del(m.datum)[1] - 1] : ''}</div>
                   </div>
                   <div class="fixtur">
                     <div class="fx scd">{m.lag_hemma} – {m.lag_borta}</div>
-                    <div class="fmeta">{[SPORT_ETIKETT[m.sport] || '', m.arena, m.tid].filter(Boolean).join(' · ')}</div>
+                    <div class="fmeta">
+                      <span>{[SPORT_ETIKETT[m.sport] || '', m.arena, harTid(m.tid) ? m.tid : 'Heldag'].filter(Boolean).join(' · ')}</span>
+                      {#if !harTid(m.tid)}<span class="heldagstagg">Heldag</span>{/if}
+                    </div>
                   </div>
                   {#if m.status === 'avslutad' && m.resultat}
                     <span class="status res scd">{m.resultat}</span>
                   {:else}
                     <span class="status" class:klar={m.trupp_n > 0}>{m.trupp_n > 0 ? 'Roster klar' : 'Planera'}</span>
                   {/if}
+                  {#if !arNy(m)}
+                    <button class="synkpill" class:pa={!!m.synk_jobb_id} title="Google Calendar-synk"
+                      on:click|stopPropagation={() => togglaSynk(m)}>
+                      <span class="prick"></span>{m.synk_jobb_id ? 'Synkad' : 'Ej synkad'}
+                    </button>
+                  {/if}
+                  <button class="papperskorg" title="Ta bort match"
+                    on:click|stopPropagation={() => (bekraftaId = m.id)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/></svg>
+                  </button>
                   <span class="chev" class:upp={oppen === m.id}>›</span>
-                </button>
+                </div>
+
+                {#if bekraftaId === m.id}
+                  <div class="bekrafta">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#C0453E" stroke-width="1.8"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>
+                    <div class="btxt">Ta bort <b>{m.lag_hemma} – {m.lag_borta}</b>? Kan inte ångras.</div>
+                    <button class="bavbryt" on:click={() => (bekraftaId = null)}>Avbryt</button>
+                    <button class="bta" on:click={() => taBort(m)}>Ta bort</button>
+                  </div>
+                {/if}
 
                 {#if oppen === m.id && utkast}
                   <div class="editor">
@@ -226,6 +281,10 @@
                     <div class="rad3">
                       <input type="date" bind:value={utkast.datum} />
                       <input type="time" bind:value={utkast.tid} />
+                      <div class="slutkol">
+                        <span class="slut">{slutInfo.slut}</span>
+                        <span class="slutdur">{slutInfo.dur}</span>
+                      </div>
                       <input bind:value={utkast.arena} placeholder="Arena" />
                     </div>
 
@@ -259,8 +318,9 @@
                         <div class="gt">Lägg i kalender</div>
                         <div class="gs">Lägg matchen i din Google Calendar så du har koll på uppdraget</div>
                       </div>
-                      <button class="gcalbtn" class:i={iKalender.has(utkast.id)} on:click={() => laggIKalender(utkast)} disabled={arMatch()}>
-                        {iKalender.has(utkast.id) ? 'I kalendern ✓' : 'Lägg i kalender ›'}
+                      <button class="gcalbtn" class:i={!!oppenRad?.synk_jobb_id}
+                        on:click={() => !oppenRad?.synk_jobb_id && togglaSynk(oppenRad)} disabled={arMatch()}>
+                        {oppenRad?.synk_jobb_id ? 'I kalendern ✓' : 'Lägg i kalender ›'}
                       </button>
                     </div>
 
@@ -337,26 +397,53 @@
   .match { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
     box-shadow: var(--skugga); overflow: hidden; }
   .rad { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 14px; border: 0;
-    background: transparent; text-align: left; }
+    background: transparent; text-align: left; cursor: pointer; }
   .rad:hover { background: var(--div3); }
   .datum { width: 50px; flex: none; text-align: center; background: var(--acc-soft); border-radius: 9px; padding: 7px 0; }
   .datum .d { font-size: 23px; font-weight: 700; color: var(--acc); line-height: 1; }
   .datum .mon { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--acc); margin-top: 2px; }
   .fixtur { flex: 1; min-width: 0; }
   .fx { font-size: 17px; font-weight: 700; color: var(--t-head); }
-  .fmeta { font-size: 12px; color: var(--t-mut); margin-top: 2px; }
+  .fmeta { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--t-mut); margin-top: 2px; }
+  .heldagstagg { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--acc); background: var(--acc-soft); padding: 2px 7px; border-radius: 5px; flex: none; }
   .status { font-size: 13px; font-weight: 600; color: var(--t-mut); flex: none; }
   .status.klar { color: var(--ok); }
   .status.res { font-size: 20px; font-weight: 700; color: var(--t-head); }
+  .synkpill { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 5px 11px;
+    border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
+    font-size: 11.5px; font-weight: 600; color: var(--t-mut); }
+  .synkpill .prick { width: 6px; height: 6px; border-radius: 50%; background: var(--t-help); flex: none; }
+  .synkpill.pa { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--div)); }
+  .synkpill.pa .prick { background: var(--ok); }
+  .synkpill:hover { border-color: var(--acc); }
+  .papperskorg { flex: none; width: 30px; height: 30px; display: inline-flex; align-items: center;
+    justify-content: center; border: 1px solid var(--div); border-radius: 7px; background: var(--kort);
+    color: var(--t-mut); }
+  .papperskorg svg { width: 14px; height: 14px; }
+  .papperskorg:hover { color: #C0453E; border-color: #C0453E; }
   .chev { width: 18px; text-align: center; color: var(--t-mut); font-size: 17px; transition: transform 0.15s; flex: none; }
   .chev.upp { transform: rotate(90deg); }
+
+  .bekrafta { border-top: 1px solid var(--div3); padding: 12px 14px; display: flex; align-items: center;
+    gap: 12px; background: rgba(192, 69, 62, 0.06); }
+  .bekrafta svg { width: 17px; height: 17px; flex: none; }
+  .btxt { flex: 1; font-size: 12.5px; color: var(--t-head); }
+  .bavbryt { flex: none; background: var(--kort); border: 1px solid var(--div); border-radius: 7px;
+    padding: 7px 13px; font-size: 12.5px; font-weight: 600; color: var(--t-head); }
+  .bta { flex: none; background: #C0453E; border: 0; border-radius: 7px; padding: 7px 13px;
+    font-size: 12.5px; font-weight: 600; color: #fff; }
+  .fel { color: #C0453E; font-size: 12.5px; margin: 0 2px 10px; }
 
   .editor { border-top: 1px solid var(--div3); padding: 16px 14px; display: flex; flex-direction: column; gap: 12px; }
   .rad2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .rad3 { display: flex; gap: 10px; }
-  .rad3 input:nth-child(1) { width: 150px; flex: none; }
-  .rad3 input:nth-child(2) { width: 104px; flex: none; }
-  .rad3 input:nth-child(3) { flex: 1; min-width: 0; }
+  .rad3 input:nth-of-type(1) { width: 150px; flex: none; }
+  .rad3 input:nth-of-type(2) { width: 104px; flex: none; }
+  .rad3 input:nth-of-type(3) { flex: 1; min-width: 0; }
+  .slutkol { display: flex; flex-direction: column; justify-content: center; flex: none; }
+  .slut { font-size: 12px; color: var(--t-mut); font-variant-numeric: tabular-nums; }
+  .slutdur { font-size: 10px; color: var(--t-help); }
   label { display: flex; flex-direction: column; gap: 5px; font-size: 10px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-caps); }
   label.full { width: 100%; }
