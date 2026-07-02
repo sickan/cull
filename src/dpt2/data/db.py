@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -138,6 +138,17 @@ def _migrera(conn, fran_version):
           fotojobb_id TEXT PRIMARY KEY,
           match_id    TEXT NOT NULL REFERENCES matchen(id) ON DELETE CASCADE
         );""")
+    if fran_version < 8:
+        # v8: gren (dam/herr/mixed) på lag OCH tävling + sport på LAGET —
+        # landslag som "Sverige" är olika poster per sport (Sverige Volleyboll
+        # ≠ Sverige Handboll). Additivt; store normaliserar värdena.
+        for tabell, kol, ddl in (
+            ("lag", "sport", "ALTER TABLE lag ADD COLUMN sport TEXT"),
+            ("lag", "gren", "ALTER TABLE lag ADD COLUMN gren TEXT"),
+            ("tavling", "gren", "ALTER TABLE tavling ADD COLUMN gren TEXT"),
+        ):
+            if not _har_kolumn(conn, tabell, kol):
+                conn.execute(ddl)
 
 
 def _har_kolumn(conn, tabell, kolumn):

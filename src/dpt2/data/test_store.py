@@ -228,6 +228,46 @@ class TestLagTavling(unittest.TestCase):
         tid = store.upsert_lag(self.c, "Malmö FF")
         self.assertEqual(store.hamta_lag(self.c, tid)["kind"], "team")
 
+    def test_lag_sport_och_gren(self):
+        lid = store.upsert_lag(self.c, "Malmö FF", sport="Fotboll", gren="Dam")
+        lag = store.hamta_lag(self.c, lid)
+        self.assertEqual(lag["sport"], "fotboll")   # normaliserat till gemener
+        self.assertEqual(lag["gren"], "dam")
+        # okänt värde ignoreras, befintligt bevaras
+        store.upsert_lag(self.c, "Malmö FF", sport="quidditch", gren="öppen")
+        lag = store.hamta_lag(self.c, lid)
+        self.assertEqual(lag["sport"], "fotboll")
+        self.assertEqual(lag["gren"], "dam")
+
+    def test_gren_mixed_bara_for_team(self):
+        lid = store.upsert_lag(self.c, "Beachduon", kind="team", gren="mixed")
+        self.assertEqual(store.hamta_lag(self.c, lid)["gren"], "mixed")
+        iid = store.upsert_lag(self.c, "Rebecca Peterson", kind="individ",
+                               gren="mixed")
+        self.assertIsNone(store.hamta_lag(self.c, iid)["gren"])
+
+    def test_landslag_per_sport_far_egna_poster(self):
+        # Sverige Volleyboll ≠ Sverige Handboll — samma namn, olika sport.
+        v = store.upsert_lag(self.c, "Sverige", sport="volleyboll")
+        h = store.upsert_lag(self.c, "Sverige", sport="handboll")
+        self.assertNotEqual(v, h)
+        self.assertEqual(store.hamta_lag(self.c, v)["sport"], "volleyboll")
+        self.assertEqual(store.hamta_lag(self.c, h)["sport"], "handboll")
+        # upprepad upsert med samma sport träffar samma post (ingen tredje)
+        self.assertEqual(store.upsert_lag(self.c, "Sverige", sport="handboll"), h)
+        self.assertEqual(
+            len([l for l in store.lista_lag(self.c) if l["namn"] == "Sverige"]), 2)
+        # utan sport-krock ändras inte beteendet: sportlöst namn träffar basposten
+        self.assertEqual(store.upsert_lag(self.c, "Sverige"), v)
+
+    def test_tavling_gren(self):
+        tid = store.upsert_tavling(self.c, "OBOS Damallsvenskan",
+                                   sport="fotboll", gren="Dam")
+        self.assertEqual(store.hamta_tavling(self.c, tid)["gren"], "dam")
+        # utan gren i anropet bevaras den
+        store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll")
+        self.assertEqual(store.hamta_tavling(self.c, tid)["gren"], "dam")
+
     def test_tavling_ager_sina_lag(self):
         # spara_match ska koppla hemma+borta till tävlingen (tavling_lag).
         store.spara_match(self.c, {
@@ -409,9 +449,9 @@ class TestFotojobbUtkast(unittest.TestCase):
 
 
 class TestMigrering(unittest.TestCase):
-    def test_fresh_db_ar_v7_med_fotojobb_utkast(self):
+    def test_fresh_db_ar_v8_med_fotojobb_utkast(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 7)
+        self.assertEqual(db.schemaversion(c), 8)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
         self.assertIn("fotojobb_utkast", db.tabeller(c))
@@ -420,6 +460,31 @@ class TestMigrering(unittest.TestCase):
                       [r[1] for r in c.execute("PRAGMA table_info(lag)")])
         self.assertIn("sida_url",
                       [r[1] for r in c.execute("PRAGMA table_info(matchen)")])
+        lagkol = [r[1] for r in c.execute("PRAGMA table_info(lag)")]
+        self.assertIn("sport", lagkol)
+        self.assertIn("gren", lagkol)
+        self.assertIn("gren",
+                      [r[1] for r in c.execute("PRAGMA table_info(tavling)")])
+
+    def test_migrera_v7_till_v8(self):
+        # v7-läge (lag/tavling utan gren, lag utan sport) → additivt v8.
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA user_version=7")
+        c.execute("CREATE TABLE tavling(id TEXT PRIMARY KEY, namn TEXT)")
+        c.execute("CREATE TABLE lag(id TEXT PRIMARY KEY, namn TEXT)")
+        c.execute("INSERT INTO lag VALUES('malmo-ff','Malmö FF')")
+        db._migrera(c, 7)
+        lagkol = [r[1] for r in c.execute("PRAGMA table_info(lag)")]
+        self.assertIn("sport", lagkol)
+        self.assertIn("gren", lagkol)
+        self.assertIn("gren",
+                      [r[1] for r in c.execute("PRAGMA table_info(tavling)")])
+        # befintlig rad orörd, nya kolumner NULL
+        r = c.execute("SELECT * FROM lag WHERE id='malmo-ff'").fetchone()
+        self.assertEqual(r["namn"], "Malmö FF")
+        self.assertIsNone(r["sport"])
 
     def test_migrera_v1_till_v5(self):
         # v1-läge: urval + register-tabellerna (som alltid funnits). Migreringen

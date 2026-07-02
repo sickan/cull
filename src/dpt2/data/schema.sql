@@ -18,6 +18,7 @@ CREATE TABLE tavling (
   id        TEXT PRIMARY KEY,
   typ       TEXT NOT NULL CHECK (typ IN ('liga','turnering','masterskap')),
   sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','volleyboll','beachvolley','tennis')),
+  gren      TEXT CHECK (gren IN ('dam','herr','mixed')),
   namn      TEXT NOT NULL,
   hemsida   TEXT,                       -- tävlingens webbplats
   fran      TEXT,                       -- ISO-datum (period.från)
@@ -48,6 +49,9 @@ CREATE TABLE lag (
   namn         TEXT NOT NULL,
   kind         TEXT NOT NULL DEFAULT 'team'
                  CHECK (kind IN ('team','individ')),  -- lagsport vs individuell utövare
+  sport        TEXT CHECK (sport IN ('fotboll','handboll','volleyboll','beachvolley','tennis')),
+                                         -- landslag ("Sverige") särskiljs av sport
+  gren         TEXT CHECK (gren IN ('dam','herr','mixed')),  -- mixed bara för team
   hemsida      TEXT,
   instagram    TEXT,
   logga        TEXT,                     -- filsökväg (logga/porträtt)

@@ -159,6 +159,7 @@ class Api:
     def spara_lag(self, lag):
         lid = store.upsert_lag(
             self.conn, lag.get("namn", ""), kind=lag.get("kind"),
+            sport=lag.get("sport"), gren=lag.get("gren"),
             logga=lag.get("logga"), instagram=lag.get("instagram"),
             hemsida=lag.get("hemsida"), stall_hemma=lag.get("stall_hemma"),
             stall_borta=lag.get("stall_borta"),
@@ -170,7 +171,8 @@ class Api:
         tid = store.upsert_tavling(
             self.conn, tavling.get("namn", ""),
             sport=(tavling.get("sport") or "fotboll"),
-            typ=(tavling.get("typ") or "liga"), ort=tavling.get("ort"),
+            typ=(tavling.get("typ") or "liga"), gren=tavling.get("gren"),
+            ort=tavling.get("ort"),
             arena=tavling.get("arena"), hemsida=tavling.get("hemsida"),
             fran=tavling.get("fran"), till=tavling.get("till"),
             kalender=bool(tavling.get("kalender")))

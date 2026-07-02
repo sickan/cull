@@ -51,6 +51,17 @@ def iso_datum(s):
     return s or None
 
 
+# Registrets enum-värden (gemener i DB; UI visar med versal).
+SPORTER = ("fotboll", "handboll", "volleyboll", "beachvolley", "tennis")
+GRENAR = ("dam", "herr", "mixed")
+
+
+def _enum(v, tillatna):
+    """Normaliserar ett enum-värde till gemener; okänt/tomt → None."""
+    v = str(v or "").strip().lower()
+    return v if v in tillatna else None
+
+
 # ── Urval ────────────────────────────────────────────────────────────────────
 def spara_urval(conn, *, kalla, bilder, match_id=None, kamera=None,
                 status="gallrad", skapad=None, id=None):
@@ -316,28 +327,40 @@ def facit_for_traning(conn):
 
 
 # ── Lag & tävlingar (register) ───────────────────────────────────────────────
-def upsert_lag(conn, namn, *, kind=None, logga=None, instagram=None,
-               hemsida=None, stall_hemma=None, stall_borta=None,
+def upsert_lag(conn, namn, *, kind=None, sport=None, gren=None, logga=None,
+               instagram=None, hemsida=None, stall_hemma=None, stall_borta=None,
                stall_tredje=None, profilfarg=None, klubb=None):
     """Skapar/uppdaterar ett lag (id = slug av namnet). Tomma fält rör inte
     befintliga värden. kind = 'team' | 'individ' (lagsport vs utövare).
-    Returnerar lag-id."""
+    Samma namn med OLIKA sport är skilda poster (landslag: "Sverige" finns per
+    sport) — id:t får då sport-suffix. gren = 'dam'|'herr'|'mixed' (mixed bara
+    team). Returnerar lag-id."""
     if not (namn or "").strip():
         return None
+    sport = _enum(sport, SPORTER)
+    gren = _enum(gren, GRENAR)
+    if gren == "mixed" and kind == "individ":
+        gren = None
     lid = slug_id(namn)
     fin = conn.execute("SELECT * FROM lag WHERE id=?", (lid,)).fetchone()
+    if fin is not None and sport and fin["sport"] and fin["sport"] != sport:
+        # Namnkrock mellan sporter (Sverige Volleyboll ≠ Sverige Handboll):
+        # den nya posten får sport-suffixat id, originalet behåller sitt.
+        lid = slug_id(f"{namn} {sport}")
+        fin = conn.execute("SELECT * FROM lag WHERE id=?", (lid,)).fetchone()
     if fin is None:
         conn.execute(
-            "INSERT INTO lag(id,namn,kind,hemsida,instagram,logga,stall_hemma,"
-            "stall_borta,stall_tredje,profilfarg,klubb) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            (lid, namn, kind or "team", hemsida, instagram, logga, stall_hemma,
-             stall_borta, stall_tredje, profilfarg, klubb))
+            "INSERT INTO lag(id,namn,kind,sport,gren,hemsida,instagram,logga,"
+            "stall_hemma,stall_borta,stall_tredje,profilfarg,klubb) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (lid, namn, kind or "team", sport, gren, hemsida, instagram, logga,
+             stall_hemma, stall_borta, stall_tredje, profilfarg, klubb))
     else:
-        ny = {"namn": namn, "kind": kind, "hemsida": hemsida,
-              "instagram": instagram, "logga": logga, "stall_hemma": stall_hemma,
-              "stall_borta": stall_borta, "stall_tredje": stall_tredje,
-              "profilfarg": profilfarg, "klubb": klubb}
+        ny = {"namn": namn, "kind": kind, "sport": sport, "gren": gren,
+              "hemsida": hemsida, "instagram": instagram, "logga": logga,
+              "stall_hemma": stall_hemma, "stall_borta": stall_borta,
+              "stall_tredje": stall_tredje, "profilfarg": profilfarg,
+              "klubb": klubb}
         satt = {k: v for k, v in ny.items() if v not in (None, "")}
         if satt:
             kol = ", ".join(f"{k}=?" for k in satt)
@@ -430,26 +453,30 @@ def radera_spelare(conn, spelare_id):
     conn.commit()
 
 
-def upsert_tavling(conn, namn, *, sport, typ="liga", logga=None, fran=None,
-                   till=None, ort=None, arena=None, hemsida=None,
+def upsert_tavling(conn, namn, *, sport, typ="liga", gren=None, logga=None,
+                   fran=None, till=None, ort=None, arena=None, hemsida=None,
                    kalender=False):
     """Skapar/uppdaterar en tävling (id = slug av namnet). Uppdaterar typ/sport/
-    ort/arena/hemsida/logga/kalender på en befintlig. Returnerar tävlings-id."""
+    ort/arena/hemsida/logga/kalender på en befintlig; gren ('dam'|'herr'|'mixed')
+    bara när den anges. Returnerar tävlings-id."""
     if not (namn or "").strip():
         return None
+    gren = _enum(gren, GRENAR)
     tid = slug_id(namn)
     fin = conn.execute("SELECT 1 FROM tavling WHERE id=?", (tid,)).fetchone()
     if fin is None:
         conn.execute(
-            "INSERT INTO tavling(id,typ,sport,namn,hemsida,fran,till,ort,arena,"
-            "logga,kalender) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            (tid, typ, sport, namn, hemsida, fran, till, ort, arena, logga,
-             1 if kalender else 0))
+            "INSERT INTO tavling(id,typ,sport,gren,namn,hemsida,fran,till,ort,"
+            "arena,logga,kalender) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (tid, typ, sport, gren, namn, hemsida, fran, till, ort, arena,
+             logga, 1 if kalender else 0))
     else:
         conn.execute(
             "UPDATE tavling SET typ=?,sport=?,fran=?,till=?,ort=?,arena=?,"
             "kalender=? WHERE id=?",
             (typ, sport, fran, till, ort, arena, 1 if kalender else 0, tid))
+        if gren:
+            conn.execute("UPDATE tavling SET gren=? WHERE id=?", (gren, tid))
         if hemsida:
             conn.execute("UPDATE tavling SET hemsida=? WHERE id=?", (hemsida, tid))
         if logga:
