@@ -55,9 +55,24 @@
     if (!kort.length) return
     const t = new Date()
     const idag = t.getFullYear() * 10000 + (t.getMonth() + 1) * 100 + t.getDate()
-    const mal = kort.find((c) => +c.getAttribute('data-jobdate') <= idag) || kort[kort.length - 1]
-    const cr = mal.getBoundingClientRect(), br = bodyEl.getBoundingClientRect()
-    bodyEl.scrollTop += (cr.top - br.top) - 14
+    const ix = kort.findIndex((c) => +c.getAttribute('data-jobdate') <= idag)
+    const mal = ix >= 0 ? kort[ix] : kort[kort.length - 1]
+    const br = bodyEl.getBoundingClientRect()
+    const MARG = 14
+    // Pinna dagens/senaste kort flush mot toppen (som förut).
+    let ny = bodyEl.scrollTop + (mal.getBoundingClientRect().top - br.top) - MARG
+
+    // Om kortet FAKTISKT är dagens (inte bara närmast passerade) ligger den
+    // senast passerade aktiviteten oftast direkt under — räkna ut om dess
+    // nederkant får plats i den kvarvarande höjden, och scrolla bara så
+    // långt extra som verkligen krävs (aldrig mer, aldrig mindre).
+    const nasta = ix >= 0 ? kort[ix + 1] : null
+    if (mal.dataset.idag === 'true' && nasta) {
+      const nastaBottom = bodyEl.scrollTop + (nasta.getBoundingClientRect().bottom - br.top)
+      const kravdForNasta = nastaBottom - br.height + MARG
+      if (kravdForNasta > ny) ny = kravdForNasta
+    }
+    bodyEl.scrollTop = ny
   }
   function scrollTopp() { if (bodyEl) bodyEl.scrollTo({ top: 0, behavior: 'smooth' }) }
 
@@ -204,7 +219,7 @@
           {#if layout === 'tidslinje'}
             <div class="tidslinje">
               {#each g.jobb as j (j.id)}
-                <div class="tlrad" data-jobdate={dateKey(j.start_at)}>
+                <div class="tlrad" data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)}>
                   <div class="tltid scd">
                     <div class="tlt">{j.all_day ? '–' : klocka(j.start_at)}</div>
                     <div class="tld">{veckodag(j.start_at)} {del(j.start_at)[2] || ''}</div>
@@ -232,7 +247,7 @@
             <div class="lista">
               {#each g.jobb as j (j.id)}
                 {#if j.all_day}
-                  <div class="rad heldag" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
+                  <div class="rad heldag" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}">
                     <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
                     <span class="rtitel">{j.title}</span>
                     <span class="hlbl">Heldag</span>
@@ -247,7 +262,7 @@
                     <button class="mini" on:click={() => taBort(j)}>Ta bort</button>
                   </div>
                 {:else}
-                  <div class="rad" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
+                  <div class="rad" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}">
                     <div class="datum scd">
                       <div class="d" style="color:{katFarg(j.category)}">{del(j.start_at)[2] || '–'}</div>
                       <div class="wd">{veckodag(j.start_at)}</div>
