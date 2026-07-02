@@ -113,6 +113,15 @@ class TestMatchCRUD(unittest.TestCase):
         borta = next(p for p in m["spelare"] if p["nr"] == "7")
         self.assertEqual(borta["lag"], "borta")
 
+    def test_efter_match_lankar_round_trip(self):
+        m = dict(self.match)
+        m["galleri"] = "https://malmoff.pixieset.com/damallsvenskan-27jun/"
+        m["sida_url"] = "https://dalecarliaphoto.se/sport/2026-06-27-malmo-ff-kristianstad"
+        mid = store.spara_match(self.c, m)
+        sparad = store.hamta_match(self.c, mid)
+        self.assertEqual(sparad["galleri"], m["galleri"])
+        self.assertEqual(sparad["sida_url"], m["sida_url"])
+
     def test_delad_slug_id(self):
         store.spara_match(self.c, self.match)
         self.assertIsNotNone(store.hamta_lag(self.c, "malmo-ff"))   # samma som migrera
@@ -400,14 +409,17 @@ class TestFotojobbUtkast(unittest.TestCase):
 
 
 class TestMigrering(unittest.TestCase):
-    def test_fresh_db_ar_v5_med_fotojobb_utkast(self):
+    def test_fresh_db_ar_v7_med_fotojobb_utkast(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 5)
+        self.assertEqual(db.schemaversion(c), 7)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
         self.assertIn("fotojobb_utkast", db.tabeller(c))
+        self.assertIn("fotojobb_match", db.tabeller(c))
         self.assertIn("trupp_kalla",
                       [r[1] for r in c.execute("PRAGMA table_info(lag)")])
+        self.assertIn("sida_url",
+                      [r[1] for r in c.execute("PRAGMA table_info(matchen)")])
 
     def test_migrera_v1_till_v5(self):
         # v1-läge: urval + register-tabellerna (som alltid funnits). Migreringen

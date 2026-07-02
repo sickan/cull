@@ -13,7 +13,7 @@ class TestApi(unittest.TestCase):
 
     def test_info(self):
         info = self.api.info()
-        self.assertEqual(info["schemaversion"], 5)
+        self.assertEqual(info["schemaversion"], 7)
 
     def test_match_round_trip_genom_bryggan(self):
         res = self.api.spara_match({
@@ -400,6 +400,48 @@ class TestFotojobbUtkastBridge(unittest.TestCase):
         self.assertEqual(self.api.kalender.skapade, [])   # rörde aldrig tjänsten
         jobb = self.api.lista_fotojobb()
         self.assertEqual(jobb[0]["category"], "Sport")
+
+    def test_koppla_utkast_till_match(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
+        mid = store.spara_match(self.api.conn, {"lag_hemma": "A", "lag_borta": "B"})
+        self.api.kalender = _FakeKalender()
+        self.api.spara_fotojobb({"id": uid, "utkast": True, "category": "Sport",
+                                 "match_id": mid})
+        jobb = self.api.lista_fotojobb()
+        self.assertEqual(jobb[0]["match_id"], mid)
+
+    def test_koppla_bort_match_satter_none(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
+        mid = store.spara_match(self.api.conn, {"lag_hemma": "A", "lag_borta": "B"})
+        self.api.kalender = _FakeKalender()
+        self.api.spara_fotojobb({"id": uid, "utkast": True, "match_id": mid})
+        self.api.spara_fotojobb({"id": uid, "utkast": True, "match_id": None})
+        self.assertIsNone(self.api.lista_fotojobb()[0]["match_id"])
+
+    def test_koppla_nytt_riktigt_jobb_till_match_ur_svarets_id(self):
+        mid = store.spara_match(self.api.conn, {"lag_hemma": "A", "lag_borta": "B"})
+        fake = _FakeKalender()
+        self.api.kalender = fake
+        r = self.api.spara_fotojobb({"title": "Match", "start_at": "2026-08-01T10:00",
+                                     "end_at": "2026-08-01T12:00", "category": "Sport",
+                                     "match_id": mid})
+        self.assertTrue(r["ok"])
+        self.assertEqual(store.matchref_for_fotojobb(self.api.conn, ["remote1"]),
+                         {"remote1": mid})
+
+    def test_radera_fotojobb_stadar_matchlank(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
+        mid = store.spara_match(self.api.conn, {"lag_hemma": "A", "lag_borta": "B"})
+        self.api.kalender = _FakeKalender()
+        self.api.spara_fotojobb({"id": uid, "utkast": True, "match_id": mid})
+        self.api.radera_fotojobb(uid)
+        self.assertEqual(store.matchref_for_fotojobb(self.api.conn, [uid]), {})
 
     def test_radera_utkast_via_radera_fotojobb(self):
         self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",

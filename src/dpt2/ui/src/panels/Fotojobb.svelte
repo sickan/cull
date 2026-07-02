@@ -1,10 +1,11 @@
 <script>
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte'
-  import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb } from '../lib/api.js'
+  import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
 
   let jobb = []
+  let matcher = []
   let status = null            // null = okänd (visa ej offline-banner förrän känd)
   let laddar = true
   let layout = 'lista'          // lista | tidslinje
@@ -38,6 +39,7 @@
     } finally {
       laddar = false        // släpp ALLTID laddningsläget, även vid fel/timeout
     }
+    matcher = await listaMatcher().catch(() => [])
     // Synk-status i bakgrunden — blockera inte agendan på hälsokollen (kall Worker).
     kalenderStatus().then((s) => (status = s)).catch(() => {})
     await tick()
@@ -149,7 +151,7 @@
     await laddaOm()
   }
   function nyttJobb() {
-    modal = { title: '', start_at: '', end_at: '', location: '', description: '', category: '', all_day: false }
+    modal = { title: '', start_at: '', end_at: '', location: '', description: '', category: '', all_day: false, match_id: '' }
   }
   // datetime-local kräver 'YYYY-MM-DDTHH:mm' — heldagsjobb lagras som rent datum
   // ('2026-10-24') och skulle annars lämna fältet tomt (placeholder).
@@ -158,7 +160,7 @@
     return !s ? '' : s.includes('T') ? s : s + 'T00:00'
   }
   function andra(j) {
-    modal = { ...j, category: j.category || '',
+    modal = { ...j, category: j.category || '', match_id: j.match_id || '',
       start_at: tillLokal(j.start_at), end_at: tillLokal(j.end_at) }
   }
   async function taBort(j) {
@@ -167,6 +169,7 @@
   }
   async function sparaModal() {
     const d = { ...modal, category: modal.category || null }
+    d.match_id = d.category === 'Sport' ? (d.match_id || null) : null
     if (d.all_day) {          // heldag lagras som rent datum (inklusivt slut)
       d.start_at = (d.start_at || '').slice(0, 10)
       d.end_at = (d.end_at || d.start_at || '').slice(0, 10)
@@ -335,6 +338,16 @@
             {/each}
           </div>
         </div>
+        {#if modal.category === 'Sport'}
+          <label class="full">Koppla till match
+            <select bind:value={modal.match_id}>
+              <option value="">Ingen match</option>
+              {#each matcher as m}
+                <option value={m.id}>{m.lag_hemma} – {m.lag_borta}{m.datum ? ` (${m.datum})` : ''}</option>
+              {/each}
+            </select>
+          </label>
+        {/if}
         <div class="rad2">
           <label class="check" on:click={() => (modal.all_day = !modal.all_day)}>
             <span class="box" class:pa={modal.all_day}>{modal.all_day ? '✓' : ''}</span> Heldag
@@ -459,10 +472,10 @@
   label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--t-caps);
     font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
   input, textarea, .katsel { font-family: inherit; }
-  .dbody input, .dbody textarea { padding: 9px 11px; border: 1px solid var(--div); border-radius: 8px;
+  .dbody input, .dbody textarea, .dbody select { padding: 9px 11px; border: 1px solid var(--div); border-radius: 8px;
     background: var(--panel); color: var(--t-head); font-size: 13px; font-weight: 400;
     text-transform: none; letter-spacing: 0; outline: none; }
-  .dbody input:focus, .dbody textarea:focus { border-color: var(--acc); }
+  .dbody input:focus, .dbody textarea:focus, .dbody select:focus { border-color: var(--acc); }
   .tva { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .katblock { display: flex; flex-direction: column; gap: 6px; }
   .lbl { font-size: 11px; color: var(--t-caps); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }

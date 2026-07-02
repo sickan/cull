@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { startaCull, startaGallring, valjMapp, aktivMatch, listaLag } from '../lib/api.js'
+  import AktivMatchRad from '../lib/AktivMatchRad.svelte'
 
   export let aktivMatchData = null
 
@@ -65,6 +66,7 @@
     <h1 class="scd">Gallra</h1>
     <span class="sub">Verktyg som poängsätter och plockar de bästa bilderna</span>
   </header>
+  <AktivMatchRad on:navigera />
   <p class="intro">Varje verktyg konfigureras och körs för sig — resultatet kopieras till ett nytt urval.</p>
 
   <div class="verktyg">

@@ -2,6 +2,7 @@
   import { onMount, createEventDispatcher } from 'svelte'
   import { aktivMatch, genereraBildsvep, valjMapp, listaLag,
     listaSomeBilder, publiceraTillSoMe, oppnaILightroom, publiceraLiveStory } from '../lib/api.js'
+  import AktivMatchRad from '../lib/AktivMatchRad.svelte'
 
   const dispatch = createEventDispatcher()
   const bytMatch = () => dispatch('navigera', 'matcher')
@@ -215,6 +216,7 @@
     <h1 class="scd">Publicera</h1>
     <span class="sub">Skapa och publicera material för sociala medier och hemsidan</span>
   </header>
+  <AktivMatchRad on:navigera />
 
   <div class="tabs">
     <button class:on={flik === 'live'} on:click={() => (flik = 'live')}>Live</button>

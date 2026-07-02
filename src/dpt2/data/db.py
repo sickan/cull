@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 7
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -123,11 +123,32 @@ def _migrera(conn, fran_version):
           category   TEXT,
           skapad     TEXT NOT NULL
         );""")
+    if fran_version < 6:
+        # v6: publicerad hemsideslänk per match ("Efter match · länkar",
+        # tillsammans med den befintliga galleri/Pixieset-URL:en).
+        if _har_tabell(conn, "matchen") and not _har_kolumn(conn, "matchen", "sida_url"):
+            conn.execute("ALTER TABLE matchen ADD COLUMN sida_url TEXT")
+    if fran_version < 7:
+        # v7: fotojobb → match-koppling ("Koppla till match" när kategori=Sport).
+        # Lokal länktabell — fristående från Calendar Sync-tjänsten, som inte
+        # känner till matcher. fotojobb_id är antingen ett utkasts id
+        # (fotojobb_utkast) eller tjänstens jobb-id, samma textnyckel-rymd.
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS fotojobb_match (
+          fotojobb_id TEXT PRIMARY KEY,
+          match_id    TEXT NOT NULL REFERENCES matchen(id) ON DELETE CASCADE
+        );""")
 
 
 def _har_kolumn(conn, tabell, kolumn):
     return any(r[1] == kolumn
                for r in conn.execute(f"PRAGMA table_info({tabell})"))
+
+
+def _har_tabell(conn, tabell):
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (tabell,)).fetchone() is not None
 
 
 def tabeller(conn):

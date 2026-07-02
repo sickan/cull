@@ -20,6 +20,8 @@ const MOCK_MATCHER = [
     sport: 'fotboll', lag_hemma: 'Malmö FF', lag_borta: 'Kristianstads DFF',
     liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan',
     hemfarg: '#8fb7de', bortafarg: '#C0392B', trupp_n: 0,
+    galleri: 'https://malmoff.pixieset.com/damallsvenskan-27jun/',
+    sida_url: 'https://dalecarliaphoto.se/sport/2026-06-27-malmo-ff-kristianstad',
   },
   {
     id: 'c0ffee001122', datum: '2026-09-03', tid: '19:00',
@@ -65,7 +67,7 @@ const MOCK_TAVLING_LAG = {
 // Fotojobb (Google Calendar via deployade tjänsten). Formen matchar tjänstens
 // jobb-modell (INTEGRATION.md). Muteras lokalt i mock-läge.
 let MOCK_FOTOJOBB = [
-  { id: 'fj1', title: 'Match – Malmö / Kristianstad', start_at: '2026-07-19T14:00:00', end_at: '2026-07-19T16:30:00', all_day: false, location: 'Malmö IP', description: '', category: 'Sport', status: 'confirmed', google_event_id: 'g1', source: 'dpt' },
+  { id: 'fj1', title: 'Match – Malmö / Kristianstad', start_at: '2026-07-19T14:00:00', end_at: '2026-07-19T16:30:00', all_day: false, location: 'Malmö IP', description: '', category: 'Sport', status: 'confirmed', google_event_id: 'g1', source: 'dpt', match_id: 'a1b2c3d4e5f6' },
   { id: 'fj2', title: 'Möte (skapad i Google)', start_at: '2026-07-15T09:00:00', end_at: '2026-07-15T09:30:00', all_day: false, location: '', description: '', category: null, status: 'confirmed', google_event_id: 'g2', source: 'google' },
   { id: 'fj3', title: 'Landskap – soluppgång vid Grenen', start_at: '2026-07-12T04:30:00', end_at: '2026-07-12T06:00:00', all_day: false, location: 'Grenen', description: '', category: 'Landskap', status: 'confirmed', google_event_id: null, source: 'dpt' },
   { id: 'fj4', title: 'Mässa & workshop', start_at: '2026-06-29', end_at: '2026-07-03', all_day: true, location: '', description: '', category: 'Övrigt', status: 'confirmed', google_event_id: 'g4', source: 'dpt' },

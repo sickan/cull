@@ -521,6 +521,29 @@ def radera_fotojobb_utkast_for_tavling(conn, tavling_id):
     conn.commit()
 
 
+# ── Fotojobb ↔ match ("Koppla till match", kategori=Sport) ───────────────────
+def lanka_fotojobb_match(conn, fotojobb_id, match_id):
+    """Kopplar (eller kopplar bort, om match_id är falsy) ett fotojobb till en
+    match. Fristående från Calendar Sync-tjänsten — rör bara lokal koppling."""
+    conn.execute("DELETE FROM fotojobb_match WHERE fotojobb_id=?", (fotojobb_id,))
+    if match_id:
+        conn.execute("INSERT INTO fotojobb_match(fotojobb_id,match_id) VALUES(?,?)",
+                     (fotojobb_id, match_id))
+    conn.commit()
+
+
+def matchref_for_fotojobb(conn, fotojobb_ider):
+    """Batch-uppslag: {fotojobb_id: match_id} för given lista av id:n."""
+    ider = [i for i in fotojobb_ider if i]
+    if not ider:
+        return {}
+    platshallare = ",".join("?" * len(ider))
+    rader = conn.execute(
+        f"SELECT fotojobb_id, match_id FROM fotojobb_match "
+        f"WHERE fotojobb_id IN ({platshallare})", ider).fetchall()
+    return {r["fotojobb_id"]: r["match_id"] for r in rader}
+
+
 # ── Tävling ↔ lag (tävling äger sina deltagande lag) ─────────────────────────
 def koppla_lag_till_tavling(conn, tavling_id, lag_id):
     """Registrerar att laget deltar i tävlingen (idempotent)."""
@@ -568,7 +591,7 @@ def spara_match(conn, match):
     liga→tävling, lagnamn→lag, spelare→match_trupp. Returnerar match-id.
 
     match: {lag_hemma, lag_borta, datum, tid, arena, liga, sport, resultat,
-            halvtid, malskyttar, galleri, omslag, spelare[], id?, status?}
+            halvtid, malskyttar, galleri, sida_url, omslag, spelare[], id?, status?}
     """
     sport = (match.get("sport") or "").strip().lower() or None
     tav_id = upsert_tavling(conn, match.get("liga", ""),
@@ -590,12 +613,13 @@ def spara_match(conn, match):
     conn.execute(
         "INSERT OR REPLACE INTO matchen(id,tavling_id,sport,lag_hemma_id,"
         "lag_borta_id,datum,tid,arena,resultat,halvtid,malskyttar,status,"
-        "galleri,omslag,skapad) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "galleri,sida_url,omslag,skapad) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (mid, tav_id, sport, hemma_id, borta_id, datum,
          match.get("tid") or None, match.get("arena") or None,
          match.get("resultat") or None, match.get("halvtid") or None,
          match.get("malskyttar") or None, status,
-         match.get("galleri") or None, match.get("omslag") or None, skapad))
+         match.get("galleri") or None, match.get("sida_url") or None,
+         match.get("omslag") or None, skapad))
 
     # Spelare → trupp: bygg om länkarna (så borttagna spelare försvinner).
     conn.execute("DELETE FROM match_trupp WHERE match_id=?", (mid,))
@@ -655,6 +679,7 @@ def hamta_match(conn, match_id):
         "sport": m["sport"] or "", "resultat": m["resultat"] or "",
         "halvtid": m["halvtid"] or "", "malskyttar": m["malskyttar"] or "",
         "status": m["status"], "galleri": m["galleri"] or "",
+        "sida_url": m["sida_url"] or "",
         "omslag": m["omslag"] or "", "skapad": m["skapad"], "spelare": spelare,
     }
 

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { listaUrval, levereraUrval, startaNummer, valjMapp } from '../lib/api.js'
+  import AktivMatchRad from '../lib/AktivMatchRad.svelte'
 
   let urval = []
   let mal = null                // urvalet som levereras (senaste gallrade)
@@ -44,6 +45,7 @@
 
 <div class="panel">
   <header><h1 class="scd">Leverera</h1></header>
+  <AktivMatchRad on:navigera />
   <p class="sub">Exportera urvalet med metadata, husstil och tröjnummer.</p>
 
   {#if laddar}

@@ -59,9 +59,9 @@
     {:else if aktiv === 'lag'}
       <Lag />
     {:else if aktiv === 'gallra'}
-      <Gallra {aktivMatchData} />
+      <Gallra {aktivMatchData} on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'leverera'}
-      <Leverera />
+      <Leverera on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'publicera'}
       <Publicera on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'innehall'}

@@ -96,11 +96,21 @@ CREATE TABLE matchen (
   status       TEXT NOT NULL DEFAULT 'kommande'
                  CHECK (status IN ('kommande','pagaende','avslutad')),
   galleri      TEXT,                     -- Pixieset-URL
+  sida_url     TEXT,                     -- publicerad hemsideslänk
   omslag       TEXT,                     -- omslagsbild (filsökväg)
   skapad       TEXT NOT NULL
 );
 CREATE INDEX idx_match_datum   ON matchen(datum);
 CREATE INDEX idx_match_tavling ON matchen(tavling_id);
+
+-- Fotojobb → match ("Koppla till match" när kategori=Sport). Lokal länk,
+-- fristående från Calendar Sync-tjänsten (som inte känner till matcher).
+-- fotojobb_id är antingen ett utkasts id (fotojobb_utkast) eller tjänstens
+-- jobb-id — samma textnyckel-rymd.
+CREATE TABLE fotojobb_match (
+  fotojobb_id TEXT PRIMARY KEY,
+  match_id    TEXT NOT NULL REFERENCES matchen(id) ON DELETE CASCADE
+);
 
 -- Uttagen trupp per match (subset av lagets spelare) + vem som startade.
 CREATE TABLE match_trupp (

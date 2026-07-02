@@ -149,9 +149,10 @@
     ;[matcher, lagAlla] = await Promise.all([listaMatcher(), listaLag()])
     oppen = null; utkast = null; lagForTavling = []
   }
-  function aktivera(m) {
+  async function aktivera(m) {
     if (typeof m.id === 'string' && m.id.startsWith('ny-')) return
-    dispatch('aktiverad', m); sattAktivMatch(m.id)
+    await sattAktivMatch(m.id)      // persistera FÖRE navigering — annars hinner
+    dispatch('aktiverad', m)        // Gallra/Leverera/Publicera fråga aktivMatch() för tidigt
   }
   function aterUppta() { dispatch('navigera', 'gallra') }
 </script>
@@ -261,6 +262,18 @@
                       <button class="gcalbtn" class:i={iKalender.has(utkast.id)} on:click={() => laggIKalender(utkast)} disabled={arMatch()}>
                         {iKalender.has(utkast.id) ? 'I kalendern ✓' : 'Lägg i kalender ›'}
                       </button>
+                    </div>
+
+                    <div class="lankblock">
+                      <span class="caps2">Efter match · länkar</span>
+                      <div class="rad2">
+                        <label>Pixieset-galleri
+                          <input bind:value={utkast.galleri} placeholder="https://…pixieset.com/…" disabled={arMatch()} />
+                        </label>
+                        <label>Publicerad hemsideslänk
+                          <input bind:value={utkast.sida_url} placeholder="https://dalecarliaphoto.se/…" disabled={arMatch()} />
+                        </label>
+                      </div>
                     </div>
 
                     <div class="knappar">
@@ -386,6 +399,8 @@
   .gcalbtn { background: var(--acc); color: #fff; border: 0; border-radius: 7px; padding: 9px 14px; font-size: 13px; font-weight: 600; flex: none; }
   .gcalbtn.i { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
   .gcalbtn:disabled { opacity: 0.5; }
+
+  .lankblock { display: flex; flex-direction: column; gap: 8px; }
 
   .knappar { display: flex; gap: 10px; }
   .prim { padding: 9px 16px; border: 0; border-radius: 7px; background: var(--acc); color: #fff; font-size: 13px; font-weight: 600; }
