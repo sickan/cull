@@ -182,7 +182,29 @@ export async function lasLagTrupp(lagId, kalla, arg = '') {
   const api = brygga()
   if (api) return api.las_lag_trupp(lagId, kalla, arg)
   const etikett = { url: 'från hemsida', csv: 'CSV', bild: 'bild', pdf: 'PDF' }[kalla] || kalla
-  return wait({ ok: true, antal: 22, trupp_kalla: etikett })
+  const roster = Array.from({ length: 5 }, (_, i) => ({
+    id: `mock-${lagId}-${i}`, nr: String(i + 1), namn: `Spelare ${i + 1}`, position: '' }))
+  return wait({ ok: true, antal: roster.length, trupp_kalla: etikett, roster })
+}
+
+export async function hamtaLagTrupp(lagId) {
+  const api = brygga()
+  if (api) return api.hamta_lag_trupp(lagId)
+  return wait(Array.from({ length: 3 }, (_, i) => ({
+    id: `mock-${lagId}-${i}`, nr: String(i + 1), namn: `Spelare ${i + 1}`, position: '' })))
+}
+
+export async function sparaSpelare(lagId, spelare) {
+  const api = brygga()
+  if (api) return api.spara_spelare(lagId, spelare)
+  if (!spelare?.namn?.trim()) return wait({ ok: false, id: null })
+  return wait({ ok: true, id: spelare.id || 'sp_' + Date.now() })
+}
+
+export async function raderaSpelare(spelareId) {
+  const api = brygga()
+  if (api) return api.radera_spelare(spelareId)
+  return wait({ ok: true })
 }
 
 export async function lasUttagFil(matchId, filsokvag, sida, grupp) {

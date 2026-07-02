@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import {
     listaLag, listaTavlingar, sparaLag, sparaTavling, raderaLag, raderaTavling,
-    valjFil, lasLagTrupp,
+    valjFil, lasLagTrupp, hamtaLagTrupp, sparaSpelare, raderaSpelare,
   } from '../lib/api.js'
 
   let lag = []
@@ -75,8 +75,8 @@
 
   // ── Trupp-källväljare (URL / CSV / bild / PDF) ─────────────────────────────
   let truppOppen = null          // lag-id vars källväljare är utfälld
+  let truppLaddar = null         // lag-id som just läses in (spinner-läge)
   let truppUrl = ''              // URL-fältet (förifylls med lagets hemsida)
-  let truppKor = false
   let truppFel = ''
 
   function togglaTrupp(l) {
@@ -97,12 +97,13 @@
       if (!f.ok) return
       arg = f.path
     }
-    truppKor = true; truppFel = ''
+    truppLaddar = l.id; truppFel = ''
     const r = await lasLagTrupp(l.id, kalla, arg)
-    truppKor = false
+    truppLaddar = null
     if (r?.ok) {
-      l.trupp_n = r.antal; l.trupp_kalla = r.trupp_kalla
+      l.trupp_n = r.antal; l.trupp_kalla = r.trupp_kalla; l.roster = r.roster || []
       lag = lag; truppOppen = null
+      rosterOppen = l.id           // öppna direkt för granskning/rättning
       flash(l.id)
     } else {
       truppFel = r?.fel || 'Kunde inte läsa in truppen.'
@@ -112,6 +113,31 @@
   function truppEtikett(l) {
     if (!l.trupp_n) return 'ingen trupp inläst'
     return `${l.trupp_n} spelare i trupp${l.trupp_kalla ? ' · ' + l.trupp_kalla : ''}`
+  }
+
+  // ── Visa & redigera trupp ────────────────────────────────────────────────
+  let rosterOppen = null         // lag-id vars redigerbara trupplista är utfälld
+
+  async function togglaRoster(l) {
+    if (rosterOppen === l.id) { rosterOppen = null; return }
+    if (!l.roster) { l.roster = await hamtaLagTrupp(l.id); lag = lag }
+    rosterOppen = l.id
+  }
+  function laggTillSpelare(l) {
+    l.roster = [...(l.roster || []), { id: null, nr: '', namn: '', position: '' }]
+    l.trupp_n = l.roster.length
+    lag = lag
+  }
+  async function sparaSpelareRad(l, p) {
+    if (!(p.namn || '').trim()) return       // tomma rader sparas inte förrän namngivna
+    const r = await sparaSpelare(l.id, { id: p.id, nr: p.nr, namn: p.namn, position: p.position })
+    if (r?.ok) { p.id = r.id; l.trupp_n = l.roster.length; l.roster = l.roster; lag = lag }
+  }
+  async function taBortSpelareRad(l, p) {
+    l.roster = l.roster.filter((x) => x !== p)
+    l.trupp_n = l.roster.length
+    lag = lag
+    if (p.id) await raderaSpelare(p.id)
   }
 
   async function taBortLag(l) {
@@ -214,21 +240,43 @@
                   {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
                 </div>
                 <div class="trupprad">
-                  <button class="spelarbtn" on:click={() => togglaTrupp(l)}>Läs in spelare…</button>
+                  <button class="spelarbtn" on:click={() => togglaTrupp(l)} disabled={truppLaddar === l.id}>Läs in spelare…</button>
                   <span class="truppinfo">{truppEtikett(l)}</span>
+                  {#if l.trupp_n}<button class="visaredigera" on:click={() => togglaRoster(l)}>Visa &amp; redigera ›</button>{/if}
                 </div>
-                {#if truppOppen === l.id}
+
+                {#if rosterOppen === l.id}
+                  <div class="rosterbox">
+                    <div class="rosterhuvud"><span class="rnr">Nr</span><span class="rnamn">Namn</span><span class="rpos">Pos</span><span class="rx"></span></div>
+                    {#each l.roster || [] as p (p)}
+                      <div class="rosterrad">
+                        <input class="rnr" bind:value={p.nr} on:change={() => sparaSpelareRad(l, p)} />
+                        <input class="rnamn" bind:value={p.namn} on:change={() => sparaSpelareRad(l, p)} />
+                        <input class="rpos" bind:value={p.position} on:change={() => sparaSpelareRad(l, p)} />
+                        <button class="rx" on:click={() => taBortSpelareRad(l, p)}>×</button>
+                      </div>
+                    {/each}
+                    <button class="rosteradd" on:click={() => laggTillSpelare(l)}>+ Lägg till spelare</button>
+                  </div>
+                {/if}
+
+                {#if truppLaddar === l.id}
+                  <div class="truppladdar">
+                    <span class="spin"></span>
+                    <div><div class="tlt">Läser in trupp…</div><div class="tls">Hämtar och tolkar laguppställningen.</div></div>
+                  </div>
+                {:else if truppOppen === l.id}
                   <div class="truppvaljare">
                     <div class="truppcaps">Läs in trupp från</div>
                     <div class="truppurl">
                       <input bind:value={truppUrl} placeholder="Hemsida eller URL till laguppställning…" />
-                      <button class="hamta" on:click={() => lasTrupp(l, 'url')} disabled={truppKor}>{truppKor ? 'Hämtar…' : 'Hämta'}</button>
+                      <button class="hamta" on:click={() => lasTrupp(l, 'url')}>Hämta</button>
                     </div>
                     <div class="avdelare"><span class="linje"></span><span class="eller">eller ladda upp fil</span><span class="linje"></span></div>
                     <div class="filknappar">
-                      <button on:click={() => lasTrupp(l, 'csv')} disabled={truppKor}>CSV</button>
-                      <button on:click={() => lasTrupp(l, 'bild')} disabled={truppKor}>Bild · JPG / PNG / HEIF</button>
-                      <button on:click={() => lasTrupp(l, 'pdf')} disabled={truppKor}>PDF</button>
+                      <button on:click={() => lasTrupp(l, 'csv')}>CSV</button>
+                      <button on:click={() => lasTrupp(l, 'bild')}>Bild · JPG / PNG / HEIF</button>
+                      <button on:click={() => lasTrupp(l, 'pdf')}>PDF</button>
                     </div>
                     {#if truppFel}<div class="truppfel">⚠ {truppFel}</div>
                     {:else}<div class="trupphint">Sidan/filen tolkas och spelarna läggs i lagets trupp.</div>{/if}
@@ -282,11 +330,40 @@
   .kalbtn { flex: none; background: var(--acc); color: #fff; border: 0; border-radius: 7px;
     padding: 8px 13px; font-size: 12.5px; font-weight: 600; }
   .kalbtn.i { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
-  .trupprad { display: flex; align-items: center; gap: 10px; }
+  .trupprad { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .spelarbtn { background: var(--kort); border: 1px solid var(--div); border-radius: 8px;
     padding: 8px 12px; font-size: 12.5px; color: var(--t-mut); font-weight: 500; flex: none; }
-  .spelarbtn:hover { border-color: var(--acc); color: var(--acc); }
+  .spelarbtn:hover:not(:disabled) { border-color: var(--acc); color: var(--acc); }
+  .spelarbtn:disabled { opacity: 0.5; }
   .truppinfo { font-size: 11px; color: var(--t-mut); }
+  .visaredigera { border: 0; background: none; font-size: 11.5px; color: var(--acc);
+    font-weight: 600; padding: 0; flex: none; }
+  .truppladdar { border: 1px solid var(--div3); border-radius: 9px; background: var(--panel);
+    padding: 14px; display: flex; align-items: center; gap: 12px; }
+  .spin { width: 22px; height: 22px; border-radius: 50%; flex: none;
+    border: 3px solid var(--acc-soft); border-top-color: var(--acc); animation: lagspin 0.8s linear infinite; }
+  @keyframes lagspin { to { transform: rotate(360deg); } }
+  .tlt { font-size: 12.5px; font-weight: 600; color: var(--t-head); }
+  .tls { font-size: 11px; color: var(--t-mut); }
+  .rosterbox { margin-left: 0; border: 1px solid var(--div3); border-radius: 9px; background: var(--panel);
+    padding: 11px; display: flex; flex-direction: column; gap: 6px; }
+  .rosterhuvud { display: flex; align-items: center; gap: 8px; padding: 0 2px 2px; font-size: 9.5px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-caps); }
+  .rosterhuvud .rnr { width: 34px; flex: none; }
+  .rosterhuvud .rnamn { flex: 1; }
+  .rosterhuvud .rpos { width: 52px; flex: none; }
+  .rosterhuvud .rx { width: 28px; flex: none; }
+  .rosterrad { display: flex; align-items: center; gap: 8px; }
+  .rosterrad input.rnr { width: 34px; flex: none; text-align: center; padding: 6px 4px; font-size: 12px; background: var(--kort); }
+  .rosterrad input.rnamn { flex: 1; min-width: 0; padding: 6px 9px; font-size: 12.5px; background: var(--kort); }
+  .rosterrad input.rpos { width: 52px; flex: none; text-align: center; padding: 6px 6px; font-size: 12px; background: var(--kort); }
+  .rosterrad button.rx { width: 28px; height: 28px; flex: none; border-radius: 6px; border: 1px solid var(--div);
+    background: var(--kort); color: var(--t-mut); font-size: 15px; line-height: 1; }
+  .rosterrad button.rx:hover { background: var(--rose); border-color: var(--rose); color: #fff; }
+  .rosteradd { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 2px;
+    border: 1.5px dashed var(--div); border-radius: 8px; padding: 8px; color: var(--t-mut);
+    font-size: 12px; background: transparent; }
+  .rosteradd:hover { border-color: var(--acc); color: var(--acc); }
   .truppvaljare { border: 1px solid var(--div3); border-radius: 9px; background: var(--panel);
     padding: 11px; display: flex; flex-direction: column; gap: 9px; }
   .truppcaps { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-caps); }

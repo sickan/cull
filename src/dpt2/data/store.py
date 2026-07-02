@@ -399,6 +399,37 @@ def lag_trupp(conn, lag_id):
         "ORDER BY CAST(nr AS INTEGER), namn", (lag_id,))]
 
 
+def spara_spelare(conn, lag_id, spelare):
+    """Skapar/uppdaterar EN spelare i lagets redigerbara trupp-lista.
+    spelare: {id?, nr, namn, position}. Utan id skapas en ny rad (id-baserad,
+    till skillnad från merge_lag_trupp:s nr/namn-slug — så att redigering av
+    nr/namn i UI:t inte tappar match_trupp-länkar). Tom namn sparas inte.
+    Returnerar spelare-id, eller None om laget är okänt eller namn saknas."""
+    if not hamta_lag(conn, lag_id):
+        return None
+    namn = (spelare.get("namn") or "").strip()
+    if not namn:
+        return None
+    sid = spelare.get("id") or ny_id()
+    nr = (spelare.get("nr") or "").strip() or None
+    position = (spelare.get("position") or "").strip() or None
+    fin = conn.execute("SELECT id FROM spelare WHERE id=?", (sid,)).fetchone()
+    if fin is None:
+        conn.execute(
+            "INSERT INTO spelare(id,lag_id,nr,namn,position) VALUES(?,?,?,?,?)",
+            (sid, lag_id, nr, namn, position))
+    else:
+        conn.execute("UPDATE spelare SET nr=?, namn=?, position=? WHERE id=?",
+                     (nr, namn, position, sid))
+    conn.commit()
+    return sid
+
+
+def radera_spelare(conn, spelare_id):
+    conn.execute("DELETE FROM spelare WHERE id=?", (spelare_id,))
+    conn.commit()
+
+
 def upsert_tavling(conn, namn, *, sport, typ="liga", logga=None, fran=None,
                    till=None, ort=None, arena=None, hemsida=None,
                    kalender=False):

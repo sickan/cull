@@ -201,6 +201,7 @@ class TestApi(unittest.TestCase):
         self.assertTrue(r["ok"])
         self.assertEqual(r["antal"], 2)
         self.assertEqual(r["trupp_kalla"], "CSV")
+        self.assertEqual(len(r["roster"]), 2)                # roster i svaret
         rad = next(l for l in self.api.lista_lag() if l["id"] == "malmo-ff")
         self.assertEqual(rad["trupp_n"], 2)
         self.assertEqual(rad["trupp_kalla"], "CSV")
@@ -212,6 +213,28 @@ class TestApi(unittest.TestCase):
         # tom/oläsbar källa → informativt fel
         self.assertFalse(self.api.las_lag_trupp("malmo-ff", "csv",
                                                 "/finns/inte.csv")["ok"])
+
+    def test_hamta_lag_trupp(self):
+        self.api.spara_lag({"namn": "Malmö FF"})
+        self.api.spara_spelare("malmo-ff", {"nr": "1", "namn": "Ida Ohlsson"})
+        trupp = self.api.hamta_lag_trupp("malmo-ff")
+        self.assertEqual(len(trupp), 1)
+        self.assertEqual(trupp[0]["namn"], "Ida Ohlsson")
+
+    def test_spara_och_radera_spelare(self):
+        self.api.spara_lag({"namn": "Malmö FF"})
+        r = self.api.spara_spelare("malmo-ff", {"nr": "1", "namn": "Ida Ohlsson",
+                                                 "position": "MV"})
+        self.assertTrue(r["ok"])
+        self.assertTrue(r["id"])
+        self.assertEqual(len(self.api.hamta_lag_trupp("malmo-ff")), 1)
+        self.api.radera_spelare(r["id"])
+        self.assertEqual(self.api.hamta_lag_trupp("malmo-ff"), [])
+
+    def test_spara_spelare_validering(self):
+        self.assertFalse(self.api.spara_spelare("finns-ej", {"namn": "X"})["ok"])
+        self.api.spara_lag({"namn": "Malmö FF"})
+        self.assertFalse(self.api.spara_spelare("malmo-ff", {"namn": ""})["ok"])
 
     def test_las_uttag_fil_startelva_och_bank(self):
         import tempfile

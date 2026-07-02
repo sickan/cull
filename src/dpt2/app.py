@@ -140,7 +140,7 @@ class Api:
     def las_lag_trupp(self, lag_id, kalla, arg=""):
         """Läser in LAGETS trupp från en källa och slår in den i registret.
         kalla: 'url' (hemsida, arg=URL) | 'csv' | 'bild' | 'pdf' (arg=filsökväg).
-        Returnerar {ok, antal, trupp_kalla} eller {ok:False, fel}."""
+        Returnerar {ok, antal, trupp_kalla, roster} eller {ok:False, fel}."""
         lag = store.hamta_lag(self.conn, lag_id)
         if not lag:
             return {"ok": False, "fel": "Okänt lag."}
@@ -162,7 +162,21 @@ class Api:
                     "(saknas API-nyckel eller tom källa)."}
         antal = store.merge_lag_trupp(
             self.conn, lag_id, data["spelare"], kalla=etikett)
-        return {"ok": True, "antal": antal, "trupp_kalla": etikett}
+        return {"ok": True, "antal": antal, "trupp_kalla": etikett,
+                "roster": store.lag_trupp(self.conn, lag_id)}
+
+    def hamta_lag_trupp(self, lag_id):
+        """Lagets redigerbara trupp-lista (lazy-hämtning för 'Visa & redigera')."""
+        return store.lag_trupp(self.conn, lag_id)
+
+    def spara_spelare(self, lag_id, spelare):
+        """Skapar/uppdaterar en spelare i lagets trupp (roster-radredigering)."""
+        sid = store.spara_spelare(self.conn, lag_id, spelare or {})
+        return {"ok": bool(sid), "id": sid}
+
+    def radera_spelare(self, spelare_id):
+        store.radera_spelare(self.conn, spelare_id)
+        return {"ok": True}
 
     def radera_tavling(self, id):
         store.radera_tavling(self.conn, id)

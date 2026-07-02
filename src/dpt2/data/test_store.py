@@ -264,6 +264,49 @@ class TestLagTavling(unittest.TestCase):
     def test_merge_lag_trupp_okant_lag(self):
         self.assertIsNone(store.merge_lag_trupp(self.c, "finns-ej", []))
 
+    def test_spara_spelare_skapar_och_uppdaterar(self):
+        lid = store.upsert_lag(self.c, "Malmö FF")
+        sid = store.spara_spelare(self.c, lid, {"nr": "1", "namn": "Ida Ohlsson",
+                                                "position": "MV"})
+        self.assertIsNotNone(sid)
+        trupp = store.lag_trupp(self.c, lid)
+        self.assertEqual(len(trupp), 1)
+        self.assertEqual(trupp[0]["namn"], "Ida Ohlsson")
+        # Uppdatering (id angivet) — samma rad, inte en ny.
+        store.spara_spelare(self.c, lid, {"id": sid, "nr": "7", "namn": "Ida Ohlsson",
+                                          "position": "MV"})
+        trupp = store.lag_trupp(self.c, lid)
+        self.assertEqual(len(trupp), 1)
+        self.assertEqual(trupp[0]["nr"], "7")
+
+    def test_spara_spelare_redigering_rör_inte_matchlank(self):
+        # En spelare tillagd manuellt (id-baserad) och sedan omdöpt ska INTE
+        # tappa sin match_trupp-länk (till skillnad från merge_lag_trupp:s
+        # nr/namn-slug-id, som skulle byta id vid namnändring).
+        mid = store.spara_match(self.c, {
+            "lag_hemma": "Malmö FF", "lag_borta": "X",
+            "spelare": [{"nr": "1", "namn": "Ida Ohlsson", "lag": "hemma", "start": True}]})
+        sid = store.spelare_id("malmo-ff", {"nr": "1", "namn": "Ida Ohlsson"})
+        store.spara_spelare(self.c, "malmo-ff", {"id": sid, "nr": "1",
+                                                  "namn": "Ida Andersson", "position": "MV"})
+        m = store.hamta_match(self.c, mid)
+        self.assertEqual(len(m["spelare"]), 1)
+        self.assertTrue(m["spelare"][0]["start"])
+
+    def test_spara_spelare_tom_namn_sparas_ej(self):
+        lid = store.upsert_lag(self.c, "Malmö FF")
+        self.assertIsNone(store.spara_spelare(self.c, lid, {"nr": "1", "namn": ""}))
+        self.assertEqual(store.lag_trupp(self.c, lid), [])
+
+    def test_spara_spelare_okant_lag(self):
+        self.assertIsNone(store.spara_spelare(self.c, "finns-ej", {"namn": "X"}))
+
+    def test_radera_spelare(self):
+        lid = store.upsert_lag(self.c, "Malmö FF")
+        sid = store.spara_spelare(self.c, lid, {"nr": "1", "namn": "Ida Ohlsson"})
+        store.radera_spelare(self.c, sid)
+        self.assertEqual(store.lag_trupp(self.c, lid), [])
+
     def test_koppla_lag_idempotent(self):
         store.upsert_lag(self.c, "HK Malmö")
         store.upsert_tavling(self.c, "Handbollsligan", sport="handboll")
