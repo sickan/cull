@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:relative;width:100%;">
+  <div style="position:relative;display:flex;align-items:center;">
+    <input value="{{ shownValue }}" onChange="{{ onType }}" onFocus="{{ onFocus }}" onBlur="{{ onBlur }}" onKeyDown="{{ onKey }}" placeholder="{{ placeholder }}" style="{{ inputStyle }}">
+    <span onMouseDown="{{ onCaret }}" style="position:absolute;right:9px;pointer-events:auto;cursor:pointer;color:var(--t-mut);font-size:11px;transform:{{ caretRot }};transition:transform .12s;">▾</span>
+  </div>
+  <sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;background:var(--card,#fff);border:1px solid var(--card-border,rgba(0,0,0,.14));border-radius:9px;box-shadow:0 10px 28px rgba(40,32,16,.22);overflow:hidden;max-height:216px;overflow-y:auto;">
+    <sc-for list="{{ filtered }}" as="o" hint-placeholder-count="4">
+      <div onMouseDown="{{ o.pick }}" style="{{ o.style }}"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ o.label }}</span><sc-if value="{{ o.selected }}" hint-placeholder-val="{{ false }}"><span style="color:var(--accent,#C9871F);font-size:12px;flex:none;">✓</span></sc-if></div>
+    </sc-for>
+    <sc-if value="{{ noMatch }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px;font-size:12.5px;color:var(--t-mut,#888);">Ingen träff på "{{ query }}"</div>
+    </sc-if>
+  </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:260,&quot;height&quot;:260},&quot;options&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string[]&quot;},&quot;value&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;placeholder&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Välj…&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onPick&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(v: string) =&gt; void&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#C9871F&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { open:false, q:null };
+  _close(){ this._t = setTimeout(()=>this.setState({ open:false, q:null }), 130); }
+  renderVals(){
+    const opts = this.props.options || [];
+    const value = this.props.value || '';
+    const q = this.state.q;
+    const typing = q !== null;
+    const flt = typing && q.trim() ? opts.filter(o=> (''+o).toLowerCase().includes(q.trim().toLowerCase())) : opts;
+    const accent = this.props.accent || 'var(--accent,#C9871F)';
+    const pick = (v)=>{ if(this._t) clearTimeout(this._t); if(this.props.onPick) this.props.onPick(v); this.setState({ open:false, q:null }); };
+    return {
+      shownValue: typing ? q : value,
+      placeholder: this.props.placeholder || 'Välj…',
+      open: this.state.open,
+      query: q || '',
+      caretRot: this.state.open ? 'rotate(180deg)' : 'rotate(0deg)',
+      inputStyle: { width:'100%', background:'var(--field,#fbf9f2)', border:'1px solid '+(this.state.open?accent:'var(--field-border,rgba(0,0,0,.18))'), borderRadius:'8px', padding:'8px 26px 8px 10px', fontSize:'13px', color:'var(--t-body,#333)', fontFamily:'inherit', outline:'none' },
+      onType: (e)=>this.setState({ q:e.target.value, open:true }),
+      onFocus: ()=>{ if(this._t) clearTimeout(this._t); this.setState({ open:true }); },
+      onCaret: (e)=>{ e.preventDefault(); if(this._t) clearTimeout(this._t); this.setState(s=>({ open:!s.open, q:null })); },
+      onKey: (e)=>{ if(e.key==='Escape'){ this.setState({ open:false, q:null }); e.target.blur(); } if(e.key==='Enter'){ if(flt.length) pick(flt[0]); } },
+      onBlur: ()=>this._close(),
+      noMatch: this.state.open && flt.length===0,
+      filtered: flt.map(o=>({
+        label:o, selected:o===value, pick:(e)=>{ e.preventDefault(); pick(o); },
+        style:{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', padding:'8px 12px', fontSize:'13px', color: o===value?'var(--t-head,#111)':'var(--t-body,#333)', fontWeight: o===value?600:400, cursor:'pointer', background: o===value?'var(--accent-soft,rgba(201,135,31,.1))':'transparent' }
+      }))
+    };
+  }
+  componentWillUnmount(){ if(this._t) clearTimeout(this._t); }
+}
+</script>
+</body>
+</html>
