@@ -53,6 +53,16 @@ def main(argv=None):
     print("2/3 Hämtar Facebook-sidor …")
     sidor = _get("me/accounts", access_token=lang).get("data", [])
     if not sidor:
+        # Nya appar i dev-läge kan ge tom /me/accounts trots beviljad sida —
+        # läs då sid-id:t ur tokenens granular scopes och hämta sidan direkt.
+        dbg = _get("debug_token", input_token=lang,
+                   access_token=f"{app_id}|{app_secret}")["data"]
+        mal = [t for g in dbg.get("granular_scopes", [])
+               if g.get("scope") == "pages_manage_posts"
+               for t in g.get("target_ids", [])]
+        sidor = [_get(pid, fields="name,access_token", access_token=lang)
+                 for pid in mal]
+    if not sidor:
         raise SystemExit("Inga sidor på kontot — koppla Facebook-sidan till appen "
                          "(Graph API Explorer → behörighet pages_show_list).")
     if len(sidor) > 1:
