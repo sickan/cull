@@ -364,6 +364,29 @@ class TestLagTavling(unittest.TestCase):
         store.radera_spelare(self.c, sid)
         self.assertEqual(store.lag_trupp(self.c, lid), [])
 
+    def test_tavlingar_for_lag_och_koppla_bort(self):
+        lid = store.upsert_lag(self.c, "Malmö FF")
+        t1 = store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll")
+        t2 = store.upsert_tavling(self.c, "Svenska Cupen", sport="fotboll",
+                                  typ="turnering")
+        store.koppla_lag_till_tavling(self.c, t1, lid)
+        store.koppla_lag_till_tavling(self.c, t2, lid)
+        namn = [t["namn"] for t in store.tavlingar_for_lag(self.c, lid)]
+        self.assertEqual(namn, ["OBOS Damallsvenskan", "Svenska Cupen"])
+        store.koppla_bort_lag_fran_tavling(self.c, t1, lid)
+        namn = [t["namn"] for t in store.tavlingar_for_lag(self.c, lid)]
+        self.assertEqual(namn, ["Svenska Cupen"])
+        # idempotent bortkoppling
+        store.koppla_bort_lag_fran_tavling(self.c, t1, lid)
+        self.assertEqual(len(store.tavlingar_for_lag(self.c, lid)), 1)
+
+    def test_lista_lag_har_comps(self):
+        lid = store.upsert_lag(self.c, "Malmö FF")
+        tid = store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll")
+        store.koppla_lag_till_tavling(self.c, tid, lid)
+        l = next(x for x in store.lista_lag(self.c) if x["id"] == lid)
+        self.assertEqual(l["comps"], [tid])
+
     def test_koppla_lag_idempotent(self):
         store.upsert_lag(self.c, "HK Malmö")
         store.upsert_tavling(self.c, "Handbollsligan", sport="handboll")

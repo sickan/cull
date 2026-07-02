@@ -45,16 +45,16 @@ const MOCK_FULL = {
 }
 
 const MOCK_LAG = [
-  { id: 'fc-rosengard', namn: 'FC Rosengård', kind: 'team', instagram: '@fcrosengard', hemsida: 'fcrosengard.se', logga: null, stall_hemma: '#8b1f3a', stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '', klubb: '', trupp_n: 22, trupp_kalla: 'från hemsida' },
-  { id: 'eskilstuna-united', namn: 'Eskilstuna United', kind: 'team', instagram: '@eskilstunaunited', hemsida: 'eskilstunaunited.se', logga: null, stall_hemma: '#1d2a6b', stall_borta: '#ffd200', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 0, trupp_kalla: '' },
-  { id: 'malmo-ff', namn: 'Malmö FF', kind: 'team', instagram: '@malmoff_dam', hemsida: 'malmoff.se', logga: null, stall_hemma: '#8fb7de', stall_borta: '#ffffff', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 20, trupp_kalla: 'CSV' },
-  { id: 'hk-malmo', namn: 'HK Malmö', kind: 'team', instagram: '@hkmhandboll', hemsida: '', logga: null, stall_hemma: '#0a2342', stall_borta: '#e23', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 0, trupp_kalla: '' },
-  { id: 'rebecca-peterson', namn: 'Rebecca Peterson', kind: 'individ', instagram: '@rebeccapeterson', hemsida: '', logga: null, stall_hemma: '', stall_borta: '', stall_tredje: '', profilfarg: '#2F7CB0', klubb: 'Sverige' },
+  { id: 'fc-rosengard', namn: 'FC Rosengård', kind: 'team', sport: 'fotboll', gren: 'dam', instagram: '@fcrosengard', hemsida: 'fcrosengard.se', logga: null, stall_hemma: '#8b1f3a', stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '', klubb: '', trupp_n: 22, trupp_kalla: 'från hemsida', comps: ['obos-damallsvenskan'] },
+  { id: 'eskilstuna-united', namn: 'Eskilstuna United', kind: 'team', sport: 'fotboll', gren: 'dam', instagram: '@eskilstunaunited', hemsida: 'eskilstunaunited.se', logga: null, stall_hemma: '#1d2a6b', stall_borta: '#ffd200', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 0, trupp_kalla: '', comps: ['obos-damallsvenskan'] },
+  { id: 'malmo-ff', namn: 'Malmö FF', kind: 'team', sport: 'fotboll', gren: 'dam', instagram: '@malmoff_dam', hemsida: 'malmoff.se', logga: null, stall_hemma: '#8fb7de', stall_borta: '#ffffff', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 20, trupp_kalla: 'CSV', comps: ['obos-damallsvenskan'] },
+  { id: 'hk-malmo', namn: 'HK Malmö', kind: 'team', sport: 'handboll', gren: 'herr', instagram: '@hkmhandboll', hemsida: '', logga: null, stall_hemma: '#0a2342', stall_borta: '#e23', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 0, trupp_kalla: '', comps: ['handbollsligan'] },
+  { id: 'rebecca-peterson', namn: 'Rebecca Peterson', kind: 'individ', sport: 'tennis', gren: 'dam', instagram: '@rebeccapeterson', hemsida: '', logga: null, stall_hemma: '', stall_borta: '', stall_tredje: '', profilfarg: '#2F7CB0', klubb: 'Sverige', comps: [] },
 ]
 
 const MOCK_TAVLINGAR = [
-  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', fran: '2026-04-01', till: '2026-10-31', ort: 'Sverige', arena: '', hemsida: 'svenskelitfotboll.se', logga: null, kalender: 0 },
-  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', fran: '2026-09-01', till: '2027-04-30', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
+  { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', gren: 'dam', fran: '2026-04-01', till: '2026-10-31', ort: 'Sverige', arena: '', hemsida: 'svenskelitfotboll.se', logga: null, kalender: 0 },
+  { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', gren: 'herr', fran: '2026-09-01', till: '2027-04-30', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
 ]
 
 // Mock: vilka lag som deltar i en tävling (tavling_lag). I appen kommer detta
@@ -153,6 +153,17 @@ export async function listaTavlingar() {
   const api = brygga()
   if (api) return api.lista_tavlingar()
   return wait(structuredClone(MOCK_TAVLINGAR))
+}
+
+export async function kopplaLagTavling(lagId, tavlingId, pa) {
+  const api = brygga()
+  if (api) return api.koppla_lag_tavling(lagId, tavlingId, pa)
+  const ids = MOCK_TAVLING_LAG[tavlingId] || (MOCK_TAVLING_LAG[tavlingId] = [])
+  if (pa && !ids.includes(lagId)) ids.push(lagId)
+  if (!pa) MOCK_TAVLING_LAG[tavlingId] = ids.filter((x) => x !== lagId)
+  const l = MOCK_LAG.find((x) => x.id === lagId)
+  if (l) l.comps = Object.keys(MOCK_TAVLING_LAG).filter((t) => MOCK_TAVLING_LAG[t].includes(lagId))
+  return wait({ ok: true })
 }
 
 // ── Fotojobb / Google Calendar ───────────────────────────────────────────────

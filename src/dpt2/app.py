@@ -182,6 +182,15 @@ class Api:
         store.radera_lag(self.conn, id)
         return {"ok": True}
 
+    def koppla_lag_tavling(self, lag_id, tavling_id, pa=True):
+        """Kopplar (pa=True) eller kopplar bort (pa=False) ett lag från en
+        tävling — chips-UI:t i Lag-editorn. Idempotent åt båda håll."""
+        if pa:
+            store.koppla_lag_till_tavling(self.conn, tavling_id, lag_id)
+        else:
+            store.koppla_bort_lag_fran_tavling(self.conn, tavling_id, lag_id)
+        return {"ok": True}
+
     def las_lag_trupp(self, lag_id, kalla, arg=""):
         """Läser in LAGETS trupp från en källa och slår in den i registret.
         kalla: 'url' (hemsida, arg=URL) | 'csv' | 'bild' | 'pdf' (arg=filsökväg).

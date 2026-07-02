@@ -3,7 +3,7 @@
   import {
     listaLag, listaTavlingar, sparaLag, sparaTavling, raderaLag, raderaTavling,
     valjFil, lasLagTrupp, hamtaLagTrupp, sparaSpelare, raderaSpelare,
-    laggTavlingIKalender, taBortTavlingUrKalender,
+    laggTavlingIKalender, taBortTavlingUrKalender, kopplaLagTavling,
   } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
 
@@ -19,6 +19,8 @@
   }
   const TYPER = ['liga', 'turnering', 'masterskap']
   const TYP_ETIKETT = { liga: 'Liga', turnering: 'Turnering', masterskap: 'Mästerskap' }
+  const GRENAR = ['dam', 'herr', 'mixed']
+  const GREN_ETIKETT = { dam: 'Dam', herr: 'Herr', mixed: 'Mixed' }
 
   onMount(async () => {
     ;[lag, tavlingar] = await Promise.all([listaLag(), listaTavlingar()])
@@ -45,8 +47,46 @@
   function sattKind(l, kind) {
     if (l.kind === kind) return
     l.kind = kind
+    if (kind === 'individ' && l.gren === 'mixed') l.gren = null  // mixed bara team
     lag = lag                     // trigga re-render av villkorsfälten
     gerLag(l)
+  }
+  function sattGren(l, gren) {
+    if (l.gren === gren) return
+    l.gren = gren
+    lag = lag
+    gerLag(l)
+  }
+
+  // ── Kompakt lista + utfälld editor ("Ändra" / "Stäng") ────────────────────
+  let oppen = null               // lag-id vars editor är utfälld
+
+  function metaRad(l) {
+    return [
+      SPORT_ETIKETT[l.sport], GREN_ETIKETT[l.gren],
+      l.kind === 'individ' ? 'Individ' : 'Lag',
+      l.trupp_n ? `${l.trupp_n} spelare` : null,
+    ].filter(Boolean).join(' · ')
+  }
+  function tavlingNamn(tid) {
+    return tavlingar.find((t) => t.id === tid)?.namn || tid
+  }
+  function kopplingsText(l) {
+    const namn = (l.comps || []).map(tavlingNamn)
+    return namn.length ? namn.join(' · ') : ''
+  }
+
+  // ── Tävlingskoppling (chips, many-to-many via tavling_lag) ────────────────
+  async function kopplaTill(l, tavlingId) {
+    if (!tavlingId || (l.comps || []).includes(tavlingId)) return
+    l.comps = [...(l.comps || []), tavlingId]
+    lag = lag
+    await kopplaLagTavling(l.id, tavlingId, true)
+  }
+  async function kopplaBort(l, tavlingId) {
+    l.comps = (l.comps || []).filter((x) => x !== tavlingId)
+    lag = lag
+    await kopplaLagTavling(l.id, tavlingId, false)
   }
 
   async function valjLoggaLag(l) {
@@ -60,13 +100,17 @@
   const bildUrl = (p) => (p ? (/^https?:|^file:/.test(p) ? p : 'file://' + p) : '')
 
   function nyttLag() {
-    lag = [...lag, { id: 'nytt-' + Date.now(), namn: '', kind: 'team', instagram: '',
-      hemsida: '', logga: null, stall_hemma: '#2f7cb0', stall_borta: '#ffffff',
-      stall_tredje: '#16181c', profilfarg: '#2f7cb0', klubb: '' }]
+    const id = 'nytt-' + Date.now()
+    lag = [...lag, { id, namn: '', kind: 'team', sport: 'fotboll', gren: 'dam',
+      instagram: '', hemsida: '', logga: null, stall_hemma: '#2f7cb0',
+      stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '#2f7cb0',
+      klubb: '', comps: [] }]
+    oppen = id
   }
   function nyTavling() {
     tavlingar = [...tavlingar, { id: 'ny-' + Date.now(), namn: '', typ: 'liga',
-      sport: 'fotboll', fran: '', till: '', ort: '', arena: '', hemsida: '', logga: null, kalender: 0 }]
+      sport: 'fotboll', gren: 'dam', fran: '', till: '', ort: '', arena: '',
+      hemsida: '', logga: null, kalender: 0 }]
   }
 
   // Tävling → fotojobb-utkast (Okategoriserat, ej synkat). Aktiveras/kategoriseras
@@ -182,12 +226,16 @@
             </button>
             <div class="falt">
               <input class="namn-in scd" bind:value={t.namn} on:change={() => gerTavling(t)} placeholder="Tävlingens namn" />
-              <div class="dubbel">
+              <div class="trippel">
                 <select bind:value={t.typ} on:change={() => gerTavling(t)}>
                   {#each TYPER as ty}<option value={ty}>{TYP_ETIKETT[ty]}</option>{/each}
                 </select>
                 <select bind:value={t.sport} on:change={() => gerTavling(t)}>
                   {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
+                </select>
+                <select bind:value={t.gren} on:change={() => gerTavling(t)}>
+                  <option value={null}>Gren…</option>
+                  {#each GRENAR as g}<option value={g}>{GREN_ETIKETT[g]}</option>{/each}
                 </select>
               </div>
               <div class="dubbel">
@@ -224,22 +272,47 @@
       <div class="caps">Lag &amp; utövare</div>
       <div class="lista">
         {#each lag as l (l.id)}
-          <div class="kort">
+          <div class="kort" class:utfalld={oppen === l.id}>
             <button class="logo scd" class:rund={l.kind === 'individ'} on:click={() => valjLoggaLag(l)} title="Välj logga/porträtt">
               {#if l.logga}<img src={bildUrl(l.logga)} alt="" />{:else}{initial(l.namn)}{/if}
             </button>
+            {#if oppen !== l.id}
+              <div class="kompakt">
+                <div class="knamn scd">
+                  {#if l.stall_hemma || l.profilfarg}<span class="prick" style="background:{l.kind === 'individ' ? l.profilfarg : l.stall_hemma}"></span>{/if}
+                  {l.namn || 'Namnlöst lag'}
+                </div>
+                <div class="kmeta">{metaRad(l) || 'Ofullständig post'}</div>
+                {#if kopplingsText(l)}<div class="kmeta koppl">{kopplingsText(l)}</div>{/if}
+              </div>
+              <button class="andra" on:click={() => (oppen = l.id)}>Ändra</button>
+            {:else}
             <div class="falt">
               <div class="rad1">
-                <input class="namn-in scd" bind:value={l.namn} on:change={() => gerLag(l)}
-                  placeholder={l.kind === 'individ' ? 'Namn' : 'Lagnamn'} />
                 <div class="seg">
                   <button class:on={l.kind !== 'individ'} on:click={() => sattKind(l, 'team')}>Lag</button>
                   <button class:on={l.kind === 'individ'} on:click={() => sattKind(l, 'individ')}>Individ</button>
                 </div>
+                <input class="namn-in scd" bind:value={l.namn} on:change={() => gerLag(l)}
+                  placeholder={l.kind === 'individ' ? 'Namn' : 'Lagnamn'} />
+                <div class="seg">
+                  {#each GRENAR as g}
+                    {#if g !== 'mixed' || l.kind !== 'individ'}
+                      <button class:on={l.gren === g} on:click={() => sattGren(l, g)}>{GREN_ETIKETT[g]}</button>
+                    {/if}
+                  {/each}
+                </div>
               </div>
+              <label class="sportrad">
+                <span class="lbl">Sport</span>
+                <select bind:value={l.sport} on:change={() => gerLag(l)}>
+                  <option value={null}>Välj sport…</option>
+                  {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
+                </select>
+              </label>
               <div class="dubbel">
-                <input bind:value={l.instagram} on:change={() => gerLag(l)} placeholder="@instagram" />
                 <input bind:value={l.hemsida} on:change={() => gerLag(l)} placeholder="Hemsida" />
+                <input bind:value={l.instagram} on:change={() => gerLag(l)} placeholder="@instagram" />
               </div>
 
               {#if l.kind === 'individ'}
@@ -304,7 +377,30 @@
                   </div>
                 {/if}
               {/if}
+
+              <div class="kopplbox">
+                <div class="truppcaps">Kopplad till liga / tävling / mästerskap</div>
+                <div class="chips">
+                  {#each l.comps || [] as tid (tid)}
+                    <span class="chip">{tavlingNamn(tid)}
+                      <button class="chipx" title="Koppla bort" on:click={() => kopplaBort(l, tid)}>×</button>
+                    </span>
+                  {/each}
+                  {#if (tavlingar.filter((t) => !(l.comps || []).includes(t.id))).length}
+                    <select class="chipny" value="" on:change={(e) => { kopplaTill(l, e.target.value); e.target.value = '' }}>
+                      <option value="" disabled>+ Koppla till…</option>
+                      {#each tavlingar.filter((t) => !(l.comps || []).includes(t.id)) as t (t.id)}
+                        <option value={t.id}>{t.namn}</option>
+                      {/each}
+                    </select>
+                  {:else if !(l.comps || []).length}
+                    <span class="kmeta">Inga tävlingar i registret ännu.</span>
+                  {/if}
+                </div>
+              </div>
+              <button class="stang" on:click={() => (oppen = null)}>Stäng</button>
             </div>
+            {/if}
             <button class="x" class:armerad={$armerad === `lag-${l.id}`}
               title={$armerad === `lag-${l.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
               on:click={taBortKlick(`lag-${l.id}`, () => taBortLag(l))}>{$armerad === `lag-${l.id}` ? 'Ta bort?' : '×'}</button>
@@ -343,6 +439,42 @@
   .rad1 { display: flex; gap: 8px; align-items: center; }
   .rad1 .namn-in { flex: 1; min-width: 0; }
   .dubbel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .trippel { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* Kompakt rad (ihopfälld post): namn + "sport · gren · typ · N spelare" + koppling */
+  .kompakt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;
+    padding-top: 2px; }
+  .knamn { font-size: 15px; font-weight: 700; color: var(--t-head); display: flex;
+    align-items: center; gap: 7px; }
+  .prick { width: 9px; height: 9px; border-radius: 50%; flex: none;
+    border: 1px solid var(--div); }
+  .kmeta { font-size: 12px; color: var(--t-mut); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .kmeta.koppl { color: var(--t-help); font-size: 11.5px; }
+  .andra { flex: none; align-self: center; border: 1px solid var(--div); border-radius: 7px;
+    background: var(--kort); color: var(--acc); font-size: 12.5px; font-weight: 600;
+    padding: 7px 14px; }
+  .andra:hover { border-color: var(--acc); }
+  .stang { align-self: flex-start; border: 1px solid var(--div); border-radius: 7px;
+    background: var(--kort); color: var(--t-mut); font-size: 12.5px; font-weight: 600;
+    padding: 7px 14px; margin-top: 2px; }
+  .stang:hover { border-color: var(--acc); color: var(--acc); }
+
+  /* Tävlingskoppling: chips (many-to-many, borttagbara) */
+  .kopplbox { border: 1px solid var(--div3); border-radius: 9px; background: var(--panel);
+    padding: 11px; display: flex; flex-direction: column; gap: 8px; }
+  .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; background: var(--acc-soft);
+    color: var(--acc); border-radius: 999px; padding: 4px 6px 4px 11px; font-size: 12px;
+    font-weight: 600; }
+  .chipx { border: 0; background: transparent; color: inherit; font-size: 13px;
+    line-height: 1; width: 17px; height: 17px; border-radius: 50%; padding: 0; }
+  .chipx:hover { background: var(--acc); color: var(--kort); }
+  .chipny { border: 1.5px dashed var(--div); border-radius: 999px; background: transparent;
+    color: var(--t-mut); font-size: 12px; padding: 4px 9px; max-width: 150px; }
+  .chipny:hover { border-color: var(--acc); color: var(--acc); }
+  .sportrad { display: flex; align-items: center; gap: 10px; }
+  .sportrad select { flex: 1; min-width: 0; }
   .datumf { display: flex; flex-direction: column; gap: 4px; }
   .datumf input { width: 100%; box-sizing: border-box; }
   .kalfot { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 10px 12px;

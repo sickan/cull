@@ -376,9 +376,14 @@ def hamta_lag(conn, lag_id):
 
 
 def lista_lag(conn):
-    return [dict(r) for r in conn.execute(
+    rader = [dict(r) for r in conn.execute(
         "SELECT lag.*, (SELECT COUNT(*) FROM spelare s WHERE s.lag_id=lag.id) "
         "AS trupp_n FROM lag ORDER BY namn")]
+    for l in rader:
+        l["comps"] = [r[0] for r in conn.execute(
+            "SELECT tavling_id FROM tavling_lag WHERE lag_id=? "
+            "ORDER BY tavling_id", (l["id"],))]
+    return rader
 
 
 def merge_lag_trupp(conn, lag_id, spelare, *, kalla=None):
@@ -594,6 +599,20 @@ def lista_lag_for_tavling(conn, tavling_id):
     return [dict(r) for r in conn.execute(
         "SELECT l.* FROM lag l JOIN tavling_lag tl ON tl.lag_id=l.id "
         "WHERE tl.tavling_id=? ORDER BY l.namn", (tavling_id,))]
+
+
+def tavlingar_for_lag(conn, lag_id):
+    """Tävlingarna ett lag är kopplat till (chips i Lag-editorn)."""
+    return [dict(r) for r in conn.execute(
+        "SELECT t.* FROM tavling t JOIN tavling_lag tl ON tl.tavling_id=t.id "
+        "WHERE tl.lag_id=? ORDER BY t.namn", (lag_id,))]
+
+
+def koppla_bort_lag_fran_tavling(conn, tavling_id, lag_id):
+    """Tar bort en lag↔tävling-koppling (chips-×). Idempotent."""
+    conn.execute("DELETE FROM tavling_lag WHERE tavling_id=? AND lag_id=?",
+                 (tavling_id, lag_id))
+    conn.commit()
 
 
 def radera_lag(conn, lag_id):
