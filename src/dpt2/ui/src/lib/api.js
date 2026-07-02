@@ -433,8 +433,10 @@ let MOCK_INNEHALL = [
 
 function mockMd(data) {
   const fm = ['---', `typ: ${data.typ || 'match'}`, `titel: "${data.titel || ''}"`]
-  if (data.datum) fm.push(`datum: ${data.datum}`)
-  if (data.resultat) fm.push(`resultat: "${data.resultat}"`)
+  for (const k of ['kategori', 'kund', 'datum', 'plats', 'tema', 'period',
+    'ingress', 'liga', 'arena', 'resultat', 'halvtid', 'galleri']) {
+    if (data[k]) fm.push(`${k}: "${data[k]}"`)
+  }
   if (data.hero) fm.push(`hero: ${data.hero}`)
   if (data.pixieset) fm.push(`pixieset: ${data.pixieset}`)
   const mal = (typeof data.malskyttar === 'string'
@@ -444,7 +446,11 @@ function mockMd(data) {
   fm.push('---', '')
   const figs = (data.figurer || []).filter((f) => f.bild)
     .map((f) => `![${f.alt || ''}](${f.bild})` + (f.bildtext ? `\n*${f.bildtext}*` : ''))
-  return fm.join('\n') + '\n' + [data.body || '', figs.join('\n\n')].filter(Boolean).join('\n\n') + '\n'
+  const platser = (data.platser || []).filter((p) => (p.plats || '').trim())
+    .map((p) => `- **${p.plats}** — ${p.tips || ''}`)
+  const platsMd = platser.length ? '## Platser & tips\n\n' + platser.join('\n') : ''
+  return fm.join('\n') + '\n'
+    + [data.body || '', figs.join('\n\n'), platsMd].filter(Boolean).join('\n\n') + '\n'
 }
 
 const slug = (t) => (t || 'innehall').toLowerCase()

@@ -3,14 +3,18 @@
   import { forhandsgranskaInnehall, exporteraInnehall, listaMatcher, genereraBildsvep, valjMapp } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
 
+  // Fyra färgkodade typer (DATAMODELL.md). Porträtt är en Event-kategori,
+  // inte en egen typ. match = "Sport" utåt; sajtens collection heter matcher.
   const CTYPER = [
-    { id: 'match', namn: 'Matcher', soon: false },
-    { id: 'landskap', namn: 'Landskap', soon: true },
-    { id: 'portratt', namn: 'Porträtt', soon: true },
-    { id: 'blogg', namn: 'Blogg', soon: true },
+    { id: 'blogg', namn: 'Blog', farg: '#7A8794', sub: 'journal & resor', mapp: 'blogg' },
+    { id: 'match', namn: 'Sport', farg: '#2F7CB0', sub: 'från match', mapp: 'matcher' },
+    { id: 'landskap', namn: 'Landskap', farg: '#C9871F', sub: 'bildserier', mapp: 'landskap' },
+    { id: 'event', namn: 'Event', farg: '#C9657F', sub: 'porträtt, bröllop…', mapp: 'event' },
   ]
   const STATUSAR = ['kommande', 'pagaende', 'avslutad']
   const STATUS_ETI = { kommande: 'Kommande', pagaende: 'Pågående', avslutad: 'Avslutad' }
+  const EVENT_KAT = ['Porträtt', 'Bröllop', 'Student', 'Företag', 'Mode', 'Övrigt']
+  const TEMAN = ['Hav', 'Sol', 'Rosé']
 
   let ctyp = 'match'
   let matcher = []
@@ -18,10 +22,20 @@
   let auto = true
   let cms = { status: 'kommande', hem: '', borta: '', resultat: '', halvtid: '',
     datum: '', serie: '', arena: '', galleri: '', malskyttar: '', svep: '', figurer: [] }
+  let cmsEvent = { kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '',
+    galleri: '', ingress: '', figurer: [] }
+  let cmsLandskap = { titel: '', tema: 'Hav', plats: '', period: '', ingress: '', figurer: [] }
+  let cmsBlogg = { kategori: '', titel: '', datum: '', ingress: '', body: '',
+    platser: [], figurer: [] }
   let md = ''
-  let exportDir = ''
+  let exportDirs = { match: '', event: '', landskap: '', blogg: '' }
   let sparad = false
   let genKor = false
+
+  $: akt = ctyp === 'match' ? cms
+    : ctyp === 'event' ? cmsEvent
+    : ctyp === 'landskap' ? cmsLandskap : cmsBlogg
+  $: typinfo = CTYPER.find((t) => t.id === ctyp)
 
   onMount(async () => {
     matcher = await listaMatcher()
@@ -54,16 +68,31 @@
   }
   $: if (auto) cms.status = harledStatus(cms.datum, '', cms.resultat)
 
-  async function forhandsgranska() {
-    const data = { typ: 'match', titel: `${cms.hem} – ${cms.borta}`, status: cms.status,
-      datum: cms.datum, resultat: cms.resultat, malskyttar: cms.malskyttar,
+  function bytTyp(id) {
+    ctyp = id
+    forhandsgranska()
+  }
+
+  function data() {
+    if (ctyp === 'match') return { typ: 'match', titel: `${cms.hem} – ${cms.borta}`,
+      status: cms.status, datum: cms.datum, resultat: cms.resultat, halvtid: cms.halvtid,
+      liga: cms.serie, arena: cms.arena, malskyttar: cms.malskyttar,
       pixieset: cms.galleri, body: cms.svep, figurer: cms.figurer }
-    const r = await forhandsgranskaInnehall(data)
+    if (ctyp === 'event') return { typ: 'event', ...cmsEvent }
+    if (ctyp === 'landskap') return { typ: 'landskap', ...cmsLandskap }
+    return { typ: 'blogg', ...cmsBlogg }
+  }
+
+  async function forhandsgranska() {
+    const r = await forhandsgranskaInnehall(data())
     md = r?.md || ''
   }
 
-  function laggBild() { cms.figurer = [...cms.figurer, { bild: '', alt: '', bildtext: '' }] }
-  function taBild(i) { cms.figurer = cms.figurer.filter((_, j) => j !== i) }
+  function pinga() { cms = cms; cmsEvent = cmsEvent; cmsLandskap = cmsLandskap; cmsBlogg = cmsBlogg }
+  function laggBild() { akt.figurer = [...akt.figurer, { bild: '', alt: '', bildtext: '' }]; pinga() }
+  function taBild(i) { akt.figurer = akt.figurer.filter((_, j) => j !== i); pinga(); forhandsgranska() }
+  function laggPlats() { cmsBlogg.platser = [...cmsBlogg.platser, { plats: '', tips: '' }] }
+  function taPlats(i) { cmsBlogg.platser = cmsBlogg.platser.filter((_, j) => j !== i); forhandsgranska() }
 
   async function genereraSvep() {
     genKor = true
@@ -73,11 +102,11 @@
     if (r?.ok) { cms.svep = r.bildsvep; forhandsgranska() }
   }
   async function spara() {
-    if (!exportDir) { const r = await valjMapp('Välj content/matcher-katalog'); if (r.ok) exportDir = r.path; else return }
-    const data = { typ: 'match', titel: `${cms.hem} – ${cms.borta}`, status: cms.status,
-      datum: cms.datum, resultat: cms.resultat, malskyttar: cms.malskyttar, pixieset: cms.galleri,
-      body: cms.svep, figurer: cms.figurer }
-    const r = await exporteraInnehall(data, exportDir)
+    if (!exportDirs[ctyp]) {
+      const r = await valjMapp(`Välj content/${typinfo.mapp}-katalog`)
+      if (r.ok) exportDirs[ctyp] = r.path; else return
+    }
+    const r = await exporteraInnehall(data(), exportDirs[ctyp])
     sparad = !!r?.ok
     if (sparad) setTimeout(() => (sparad = false), 2600)
   }
@@ -89,48 +118,117 @@
     <span class="sub">Skapa innehåll till hemsidan — frontmatter och bilder blir en färdig .md-fil</span>
   </header>
 
-  <div class="ctabs">
+  <div class="typkort">
     {#each CTYPER as ct}
-      <button class:on={ctyp === ct.id} disabled={ct.soon} on:click={() => (ctyp = ct.id)}>
-        {ct.namn}{#if ct.soon}<span class="soon">snart</span>{/if}
+      <button class="tkort" class:on={ctyp === ct.id}
+        style="--tf:{ct.farg}" on:click={() => bytTyp(ct.id)}>
+        <span class="tik">
+          {#if ct.id === 'blogg'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          {:else if ct.id === 'match'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/></svg>
+          {:else if ct.id === 'landskap'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-8 4 6 3-4 6 6"/><circle cx="17.5" cy="7.5" r="1.8"/></svg>
+          {:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg>{/if}
+        </span>
+        <span class="tnamn scd">{ct.namn}</span>
+        <span class="tsub">{ct.sub}</span>
       </button>
     {/each}
   </div>
 
-  <div class="kort">
-    <div class="caps">Publicera till hemsidan</div>
-    <div class="grid2">
-      <div class="f"><label>Match / event</label>
-        <select value={pick} on:change={valjMatch}>
-          {#each matcher as m}<option value={m.id}>{m.lag_hemma} – {m.lag_borta}{m.datum ? ' · ' + m.datum : ''}</option>{/each}
-        </select>
-      </div>
-      <div class="f">
-        <div class="statushuvud"><label>Status på hemsidan</label><button class="autochip" class:on={auto} on:click={() => (auto = !auto)}>Auto</button></div>
-        <div class="seg">
-          {#each STATUSAR as s}<button class:on={cms.status === s} on:click={() => { if (!auto) cms.status = s }} disabled={auto}>{STATUS_ETI[s]}</button>{/each}
+  {#if ctyp === 'match'}
+    <div class="kort">
+      <div class="caps">Publicera till hemsidan</div>
+      <div class="grid2">
+        <div class="f"><label>Match / event</label>
+          <select value={pick} on:change={valjMatch}>
+            {#each matcher as m}<option value={m.id}>{m.lag_hemma} – {m.lag_borta}{m.datum ? ' · ' + m.datum : ''}</option>{/each}
+          </select>
         </div>
-        <div class="hint">Härleds från datum & tid · Avslutad sätts när du skapar Resultat-story</div>
+        <div class="f">
+          <div class="statushuvud"><label>Status på hemsidan</label><button class="autochip" class:on={auto} on:click={() => (auto = !auto)}>Auto</button></div>
+          <div class="seg">
+            {#each STATUSAR as s}<button class:on={cms.status === s} on:click={() => { if (!auto) cms.status = s }} disabled={auto}>{STATUS_ETI[s]}</button>{/each}
+          </div>
+          <div class="hint">Härleds från datum & tid · Avslutad sätts när du skapar Resultat-story</div>
+        </div>
       </div>
+
+      <div class="grid2 mt">
+        <div class="f"><label>Hemmalag</label><input bind:value={cms.hem} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Bortalag</label><input bind:value={cms.borta} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Resultat</label><input bind:value={cms.resultat} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Halvtid</label><input bind:value={cms.halvtid} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Datum</label><input bind:value={cms.datum} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Serie</label><input bind:value={cms.serie} on:change={forhandsgranska} /></div>
+      </div>
+      <div class="f mt"><label>Arena</label><input bind:value={cms.arena} on:change={forhandsgranska} /></div>
+      <div class="f mt"><label>Galleri-URL (Pixieset)</label><input class="mono" bind:value={cms.galleri} on:change={forhandsgranska} /></div>
+      <div class="f mt"><label>Målskyttar</label><input bind:value={cms.malskyttar} on:change={forhandsgranska} /></div>
+    </div>
+  {:else if ctyp === 'event'}
+    <div class="kort">
+      <div class="caps">Fotouppdrag — ej match-relaterat</div>
+      <div class="grid2">
+        <div class="f"><label>Titel</label><input bind:value={cmsEvent.titel} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Kategori</label>
+          <select bind:value={cmsEvent.kategori} on:change={forhandsgranska}>
+            {#each EVENT_KAT as k}<option value={k}>{k}</option>{/each}
+          </select>
+        </div>
+        <div class="f"><label>Kund</label><input bind:value={cmsEvent.kund} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Datum</label><input type="date" bind:value={cmsEvent.datum} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Plats</label><input bind:value={cmsEvent.plats} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Galleri-URL (Pixieset)</label><input class="mono" bind:value={cmsEvent.galleri} on:change={forhandsgranska} /></div>
+      </div>
+      <div class="f mt"><label>Ingress</label><textarea rows="3" bind:value={cmsEvent.ingress} on:change={forhandsgranska}></textarea></div>
+    </div>
+  {:else if ctyp === 'landskap'}
+    <div class="kort">
+      <div class="caps">Bildserie</div>
+      <div class="grid2">
+        <div class="f"><label>Titel</label><input bind:value={cmsLandskap.titel} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Tema (Skagen)</label>
+          <div class="seg">
+            {#each TEMAN as t}<button class:on={cmsLandskap.tema === t} on:click={() => { cmsLandskap.tema = t; forhandsgranska() }}>{t}</button>{/each}
+          </div>
+        </div>
+        <div class="f"><label>Plats</label><input bind:value={cmsLandskap.plats} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Period</label><input bind:value={cmsLandskap.period} on:change={forhandsgranska} placeholder="t.ex. sep–okt 2026" /></div>
+      </div>
+      <div class="f mt"><label>Ingress</label><textarea rows="3" bind:value={cmsLandskap.ingress} on:change={forhandsgranska}></textarea></div>
+    </div>
+  {:else}
+    <div class="kort">
+      <div class="caps">Journal / reseberättelse</div>
+      <div class="grid2">
+        <div class="f"><label>Titel</label><input bind:value={cmsBlogg.titel} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Kategori</label><input bind:value={cmsBlogg.kategori} on:change={forhandsgranska} placeholder="t.ex. Resor" /></div>
+        <div class="f"><label>Datum</label><input type="date" bind:value={cmsBlogg.datum} on:change={forhandsgranska} /></div>
+      </div>
+      <div class="f mt"><label>Ingress</label><textarea rows="2" bind:value={cmsBlogg.ingress} on:change={forhandsgranska}></textarea></div>
+      <div class="f mt"><label>Brödtext (markdown)</label><textarea rows="6" bind:value={cmsBlogg.body} on:change={forhandsgranska}></textarea></div>
     </div>
 
-    <div class="grid2 mt">
-      <div class="f"><label>Hemmalag</label><input bind:value={cms.hem} on:change={forhandsgranska} /></div>
-      <div class="f"><label>Bortalag</label><input bind:value={cms.borta} on:change={forhandsgranska} /></div>
-      <div class="f"><label>Resultat</label><input bind:value={cms.resultat} on:change={forhandsgranska} /></div>
-      <div class="f"><label>Halvtid</label><input bind:value={cms.halvtid} /></div>
-      <div class="f"><label>Datum</label><input bind:value={cms.datum} on:change={forhandsgranska} /></div>
-      <div class="f"><label>Serie</label><input bind:value={cms.serie} /></div>
+    <div class="kort">
+      <div class="caps">Platser &amp; tips</div>
+      <div class="figurer">
+        {#each cmsBlogg.platser as p, i}
+          <div class="platsrad">
+            <input class="pl" bind:value={p.plats} on:change={forhandsgranska} placeholder="Plats" />
+            <input class="pt" bind:value={p.tips} on:change={forhandsgranska} placeholder="Tips" />
+            <button class="figx" class:armerad={$armerad === `plats-${i}`}
+              title={$armerad === `plats-${i}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+              on:click={taBortKlick(`plats-${i}`, () => taPlats(i))}>{$armerad === `plats-${i}` ? 'Ta bort?' : '×'}</button>
+          </div>
+        {/each}
+        <button class="figadd" on:click={laggPlats}>+ Lägg till plats</button>
+      </div>
     </div>
-    <div class="f mt"><label>Arena</label><input bind:value={cms.arena} /></div>
-    <div class="f mt"><label>Galleri-URL (Pixieset)</label><input class="mono" bind:value={cms.galleri} on:change={forhandsgranska} /></div>
-    <div class="f mt"><label>Målskyttar</label><input bind:value={cms.malskyttar} on:change={forhandsgranska} /></div>
-  </div>
+  {/if}
 
   <div class="kort">
     <div class="caps">Bilder · höjdpunkter</div>
     <div class="figurer">
-      {#each cms.figurer as b, i}
+      {#each akt.figurer as b, i}
         <div class="figrad">
           <div class="figbild"><span>figur {i + 1}</span></div>
           <div class="figin">
@@ -146,21 +244,23 @@
     </div>
   </div>
 
-  <div class="kort svepkort">
-    <span class="svepik"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20l1-4 11-11 3 3-11 11z"/><path d="M14 6l3 3"/></svg></span>
-    <div class="sveptxt"><div class="svt">Instagram Bildsvepet</div><div class="svs">Genereras från matchinfo</div></div>
-    <button class="prim" on:click={genereraSvep} disabled={genKor}>{genKor ? 'Genererar…' : 'Generera'}</button>
-  </div>
-  <div class="kort nogap">
-    <textarea bind:value={cms.svep} on:change={forhandsgranska} rows="4" placeholder="Klicka Generera så skriver bildsvep.py en bildtext från matchinfo — redigerbar."></textarea>
-  </div>
+  {#if ctyp === 'match'}
+    <div class="kort svepkort">
+      <span class="svepik"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20l1-4 11-11 3 3-11 11z"/><path d="M14 6l3 3"/></svg></span>
+      <div class="sveptxt"><div class="svt">Instagram Bildsvepet</div><div class="svs">Genereras från matchinfo</div></div>
+      <button class="prim" on:click={genereraSvep} disabled={genKor}>{genKor ? 'Genererar…' : 'Generera'}</button>
+    </div>
+    <div class="kort nogap">
+      <textarea bind:value={cms.svep} on:change={forhandsgranska} rows="4" placeholder="Klicka Generera så skriver bildsvep.py en bildtext från matchinfo — redigerbar."></textarea>
+    </div>
+  {/if}
 
   <div class="kort">
     <div class="mdhuvud"><span class="caps">Markdown · förhandsvisning</span></div>
     <pre>{md}</pre>
     <div class="mdfot">
       <button class="prim" on:click={spara}>Spara .md-fil</button>
-      {#if sparad}<span class="ok">✓ Sparad till content/matcher/</span>{/if}
+      {#if sparad}<span class="ok">✓ Sparad till content/{typinfo.mapp}/</span>{/if}
     </div>
   </div>
 </div>
@@ -171,12 +271,20 @@
   h1 { margin: 0; font-size: 25px; font-weight: 700; color: var(--t-head); }
   .sub { font-size: 13px; color: var(--t-mut); }
 
-  .ctabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
-  .ctabs button { padding: 8px 15px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
-    color: var(--t-mut); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
-  .ctabs button.on { background: var(--acc); border-color: var(--acc); color: #fff; }
-  .ctabs button:disabled { opacity: 0.6; }
-  .soon { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.8; }
+  /* Fyra färgkodade typkort (Blog · Sport · Landskap · Event) */
+  .typkort { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+  .tkort { display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    padding: 12px 14px; border: 1px solid var(--div); border-radius: 12px;
+    background: var(--kort); box-shadow: var(--skugga); text-align: left; }
+  .tkort .tik { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; color: var(--tf); background: color-mix(in srgb, var(--tf) 14%, transparent); }
+  .tkort .tik svg { width: 17px; height: 17px; }
+  .tkort .tnamn { font-size: 14.5px; font-weight: 700; color: var(--t-head); }
+  .tkort .tsub { font-size: 10.5px; color: var(--t-mut); }
+  .tkort.on { background: var(--tf); border-color: var(--tf); }
+  .tkort.on .tik { background: rgba(255,255,255,.18); color: #fff; }
+  .tkort.on .tnamn, .tkort.on .tsub { color: #fff; }
+  .tkort:hover:not(.on) { border-color: var(--tf); }
 
   .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r); box-shadow: var(--skugga); padding: 16px; margin-top: 14px; }
   .kort.nogap { margin-top: -8px; }
@@ -211,6 +319,10 @@
   .figx.armerad { width: auto; padding: 0 10px; background: #C0453E; border-color: #C0453E; color: #fff; font-size: 11.5px; font-weight: 600; }
   .figadd { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px dashed var(--div); border-radius: 10px; padding: 11px; color: var(--t-mut); font-size: 13px; font-weight: 500; background: transparent; }
   .figadd:hover { border-color: var(--acc); color: var(--acc); }
+
+  .platsrad { display: flex; gap: 8px; align-items: center; }
+  .platsrad .pl { width: 38%; flex: none; background: var(--kort); font-size: 12.5px; padding: 7px 9px; }
+  .platsrad .pt { flex: 1; min-width: 0; background: var(--kort); font-size: 12.5px; padding: 7px 9px; }
 
   .svepkort { display: flex; align-items: center; gap: 14px; }
   .svepik { width: 38px; height: 38px; border-radius: 10px; background: var(--acc-soft); color: var(--acc); display: flex; align-items: center; justify-content: center; flex: none; }

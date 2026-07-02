@@ -189,6 +189,47 @@ class TestApi(unittest.TestCase):
     def test_innehall_export_utan_katalog(self):
         self.assertFalse(self.api.exportera_innehall({"titel": "X"}, "")["ok"])
 
+    def test_innehall_md_event(self):
+        r = self.api.forhandsgranska_innehall({
+            "typ": "event", "titel": "Bröllop i Tällberg", "kategori": "Bröllop",
+            "kund": "Anna & Erik", "datum": "2026-08-15", "plats": "Tällberg",
+            "galleri": "https://galleri.dalecarliaphoto.se/x",
+            "ingress": "En dag vid Siljan."})
+        self.assertEqual(r["slug"], "brollop-i-tallberg")
+        self.assertIn("typ: event", r["md"])
+        self.assertIn("kategori: Bröllop", r["md"])
+        self.assertIn('kund: "Anna & Erik"', r["md"])     # & citeras
+        self.assertIn("plats: Tällberg", r["md"])
+        self.assertIn("ingress:", r["md"])
+        self.assertNotIn("liga", r["md"])                 # inga matchfält
+
+    def test_innehall_md_landskap(self):
+        r = self.api.forhandsgranska_innehall({
+            "typ": "landskap", "titel": "Höst vid Siljan", "tema": "Sol",
+            "plats": "Rättvik", "period": "sep–okt 2026",
+            "ingress": "Bildserie."})
+        self.assertEqual(r["slug"], "host-vid-siljan")
+        self.assertIn("tema: Sol", r["md"])
+        self.assertIn("period: sep–okt 2026", r["md"])
+
+    def test_innehall_md_blogg_med_platser(self):
+        r = self.api.forhandsgranska_innehall({
+            "typ": "blogg", "titel": "Vandring i Grövelsjön",
+            "kategori": "Resor", "datum": "2026-09-01",
+            "ingress": "Tre dagar på fjället.", "body": "Dag ett…",
+            "platser": [{"plats": "Grövelsjöns fjällstation", "tips": "boka tidigt"},
+                        {"plats": "", "tips": "ignoreras"}]})
+        self.assertEqual(r["slug"], "2026-09-01-vandring-i-grovelsjon")  # datum-prefix
+        self.assertIn("## Platser & tips", r["md"])
+        self.assertIn("- **Grövelsjöns fjällstation** — boka tidigt", r["md"])
+        self.assertNotIn("ignoreras", r["md"])
+
+    def test_innehall_md_match_har_halvtid(self):
+        r = self.api.forhandsgranska_innehall({
+            "typ": "match", "titel": "A – B", "resultat": "6-0",
+            "halvtid": "3-0"})
+        self.assertIn("halvtid: 3-0", r["md"])
+
 
     def test_modell_bibliotek_och_vaxling(self):
         a = store.spara_modell(self.api.conn, typ="din_smak",

@@ -728,27 +728,76 @@ def _utkast_till_jobbdict(u):
 
 def _innehall_md(data):
     """CMS-fält (UI-form) → (frontmatter-dict, body, slug, komplett .md).
-    malskyttar kan vara kommaseparerad sträng; figurer = lista {bild,alt,bildtext}
-    läggs sist i brödtexten."""
-    malskyttar = data.get("malskyttar")
-    if isinstance(malskyttar, str):
-        malskyttar = [m.strip() for m in malskyttar.split(",") if m.strip()]
-    fm = {
-        "typ": data.get("typ", "match"),
-        "titel": data.get("titel", ""),
-        "datum": data.get("datum") or None,
-        "liga": data.get("liga") or None,
-        "arena": data.get("arena") or None,
-        "resultat": data.get("resultat") or None,
-        "status": data.get("status") or None,
-        "hero": data.get("hero") or None,
-        "heroPosition": data.get("heroPosition") or None,
-        "pixieset": data.get("pixieset") or None,
-        "malskyttar": malskyttar or None,
-    }
+    Typmedveten enligt DATAMODELL.md: match (befintligt sajt-kontrakt, rörs ej),
+    event (kategori/kund/plats/galleri/ingress), landskap (tema/plats/period/
+    ingress), blogg (kategori/ingress + "Platser & tips"-block, datum-prefixad
+    slug). figurer = lista {bild,alt,bildtext} läggs sist i brödtexten."""
+    typ = data.get("typ", "match")
+    titel = data.get("titel", "")
+    slug = AX.slugga(titel)
+    if typ == "event":
+        fm = {
+            "typ": "event",
+            "kategori": data.get("kategori") or None,   # Porträtt/Bröllop/…
+            "titel": titel,
+            "kund": data.get("kund") or None,
+            "datum": data.get("datum") or None,
+            "plats": data.get("plats") or None,
+            "galleri": data.get("galleri") or None,
+            "ingress": data.get("ingress") or None,
+            "status": data.get("status") or None,
+        }
+    elif typ == "landskap":
+        fm = {
+            "typ": "landskap",
+            "titel": titel,
+            "tema": data.get("tema") or None,           # Sol/Hav/Rosé
+            "plats": data.get("plats") or None,
+            "period": data.get("period") or None,
+            "ingress": data.get("ingress") or None,
+        }
+    elif typ == "blogg":
+        fm = {
+            "typ": "blogg",
+            "kategori": data.get("kategori") or None,
+            "titel": titel,
+            "datum": data.get("datum") or None,
+            "ingress": data.get("ingress") or None,
+        }
+        if data.get("datum"):
+            slug = f"{data['datum']}-{slug}"            # blogg/{datum}-{slug}.md
+    else:
+        malskyttar = data.get("malskyttar")
+        if isinstance(malskyttar, str):
+            malskyttar = [m.strip() for m in malskyttar.split(",") if m.strip()]
+        fm = {
+            "typ": typ,
+            "titel": titel,
+            "datum": data.get("datum") or None,
+            "liga": data.get("liga") or None,
+            "arena": data.get("arena") or None,
+            "resultat": data.get("resultat") or None,
+            "halvtid": data.get("halvtid") or None,
+            "status": data.get("status") or None,
+            "hero": data.get("hero") or None,
+            "heroPosition": data.get("heroPosition") or None,
+            "pixieset": data.get("pixieset") or None,
+            "malskyttar": malskyttar or None,
+        }
     figur_md = AX.figurer_markdown(data.get("figurer"))
-    body = "\n\n".join(p for p in ((data.get("body") or "").rstrip(), figur_md) if p)
-    return fm, body, AX.slugga(data.get("titel", "")), AX.render_md(fm, body)
+    delar = [(data.get("body") or "").rstrip(), figur_md]
+    if typ == "blogg":
+        delar.append(_platser_md(data.get("platser")))
+    body = "\n\n".join(p for p in delar if p)
+    return fm, body, slug, AX.render_md(fm, body)
+
+
+def _platser_md(platser):
+    """Bloggens "Platser & tips"-lista → markdown-sektion. Tomma rader hoppas."""
+    rader = [f"- **{p.get('plats', '').strip()}** — {p.get('tips', '').strip()}"
+             .rstrip(" —")
+             for p in (platser or []) if (p.get("plats") or "").strip()]
+    return "## Platser & tips\n\n" + "\n".join(rader) if rader else ""
 
 
 def _gallring_av_config(config):
