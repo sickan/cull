@@ -48,7 +48,7 @@
   }
 
   async function valjLoggaLag(l) {
-    const f = await valjFil('Välj logga/porträtt (bild)', ['*.png', '*.jpg', '*.jpeg', '*.webp'])
+    const f = await valjFil('Välj logga/porträtt (bild)', ['Bilder (*.png;*.jpg;*.jpeg;*.webp)'])
     if (f.ok) { l.logga = f.path; lag = lag; gerLag(l) }
   }
   async function valjLoggaTavling(t) {
@@ -91,10 +91,10 @@
     if (kalla === 'url') {
       arg = (truppUrl || '').trim()
     } else {
-      const filter = { csv: ['*.csv'], bild: ['*.jpg', '*.jpeg', '*.png', '*.heic', '*.heif'],
-        pdf: ['*.pdf'] }[kalla]
+      const filter = { csv: ['CSV (*.csv)'], bild: ['Bilder (*.jpg;*.jpeg;*.png;*.heic;*.heif)'],
+        pdf: ['PDF (*.pdf)'] }[kalla]
       const f = await valjFil('Välj spelarlista', filter)
-      if (!f.ok) return
+      if (!f.ok) { if (f?.fel) truppFel = f.fel; return }
       arg = f.path
     }
     truppLaddar = l.id; truppFel = ''

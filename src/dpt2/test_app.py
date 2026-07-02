@@ -279,6 +279,23 @@ class TestApi(unittest.TestCase):
         self.assertFalse(self.api.valj_mapp()["ok"])
         self.assertFalse(self.api.valj_fil("Välj", ["XMP (*.xmp)"])["ok"])
 
+    def test_ui_filter_ar_giltiga_pywebview_filetypes(self):
+        # Regression: pywebview validerar file_types mot 'Beskrivning (*.ext)' —
+        # råa mönster som '*.csv' kastar ValueError inuti create_file_dialog,
+        # vilket _dialog sväljer tyst ({ok:False}) så knappen ser ut att inte
+        # göra något. Utan fönster (som ovan) körs aldrig valideringen, så den
+        # bugen missas där — testa parse_file_type direkt mot filtren UI:t
+        # skickar (Lag.svelte: logga/trupp-källor).
+        from webview.util import parse_file_type
+        ui_filter = [
+            "Bilder (*.png;*.jpg;*.jpeg;*.webp)",
+            "CSV (*.csv)",
+            "Bilder (*.jpg;*.jpeg;*.png;*.heic;*.heif)",
+            "PDF (*.pdf)",
+        ]
+        for f in ui_filter:
+            parse_file_type(f)
+
 
     def test_logg_kor_demo_buffrar_och_rensar(self):
         res = self.api.kor_demo_jobb(3)
