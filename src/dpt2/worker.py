@@ -155,6 +155,13 @@ def jobb_publicera(args):
             _emit(event("fel", text="Skarp publicering saknar Meta-token "
                         "(META_ACCESS_TOKEN). Kör med stub=True eller dry-run."))
             return
+        if not args.get("stub"):
+            # Graph hämtar bilder via publik URL → ladda upp till bild-hosten först.
+            from dpt2.tjanster import bildhosting
+            upp = bildhosting.ladda_upp(config.get("bilder") or [], logg=_logg())
+            if not upp.get("ok"):
+                _emit(event("fel", text=f"Bilduppladdning: {upp.get('fel')}"))
+                return
     r = publicera_korning.kor_publicering(
         _db(args), config, poster=poster, dry_run=dry_run,
         logg=_logg(), progress=progress)

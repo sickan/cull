@@ -15,7 +15,8 @@ import json
 
 from dpt2.data import db, store
 from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
-                           publicera_korning, publicera_some, meta_api)
+                           publicera_korning, publicera_some, meta_api,
+                           bildhosting)
 from dpt2.tjanster.kalender import Kalender
 from dpt2.publicering import astro_export as AX
 
@@ -267,6 +268,7 @@ class Api:
 
     def publicera_till_some(self, config):
         """Skarp publicering. Kräver Meta-token (annars informativt fel — state 8).
+        Laddar först upp bilderna till bild-hosten (Graph hämtar via publik URL).
         Returnerar {ok, resultat, sparade, varningar} eller {ok:False, fel}."""
         config = config or {}
         poster = meta_api.fran_env(logg=self._logg.append)
@@ -274,6 +276,10 @@ class Api:
             return {"ok": False, "fel": "Skarp publicering saknar Meta-token — "
                     "sätt META_ACCESS_TOKEN, IG_USER_ID, FB_PAGE_ID och DPT_BILD_BAS_URL "
                     "i miljön. Testkör (dry-run) fungerar utan token."}
+        upp = bildhosting.ladda_upp(config.get("bilder") or [],
+                                    logg=self._logg.append)
+        if not upp.get("ok"):
+            return {"ok": False, "fel": f"Bilduppladdning: {upp.get('fel')}"}
         config.setdefault("match_id", store.hamta_installning(self.conn, "aktiv_match_id"))
         return publicera_korning.kor_publicering(
             self.conn, config, poster=poster, dry_run=False, logg=self._logg.append)
