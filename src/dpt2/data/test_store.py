@@ -28,6 +28,15 @@ class TestUrval(unittest.TestCase):
         store.ersatt_urval_bilder(self.c, uid, [("s1", 1, 0.91)])
         self.assertEqual(store.behall_stems(self.c, uid), ["s1"])
 
+    def test_toppbilder_poang_fallande(self):
+        uid = store.spara_urval(self.c, kalla="x", bilder=0)
+        store.ersatt_urval_bilder(self.c, uid, [
+            ("s1", 1, 0.50), ("s2", 1, 0.95), ("s3", 0, 0.99), ("s4", 1, 0.70)])
+        self.assertEqual(store.urval_toppbilder(self.c, uid, 2), ["s2", "s4"])
+        self.assertEqual(store.urval_toppbilder(self.c, uid),    # ratade (s3) utesluts
+                         ["s2", "s4", "s1"])
+        self.assertEqual(store.urval_toppbilder(self.c, "finns-ej"), [])
+
     def test_status_livscykel(self):
         uid = store.spara_urval(self.c, kalla="x", bilder=10)
         store.satt_urval_status(self.c, uid, "levererad")

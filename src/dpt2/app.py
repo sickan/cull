@@ -383,6 +383,18 @@ class Api:
         return next((u for u in alla if u["status"] == "gallrad"),
                     alla[0] if alla else None)
 
+    def urval_hojdpunkter(self, n=6):
+        """Höjdpunkter till Innehåll/Sport ur det aktiva urvalet: upp till n
+        topp-rankade filer (poäng fallande). filer kan vara tom om urvalet
+        saknar per-bild-gallring — UI:t fyller då blocken utan provenienstagg."""
+        u = self.aktivt_urval()
+        if not u:
+            return {"ok": False, "fel": "Inget aktivt urval — gallra en match först."}
+        namn = (f"{u['lag_hemma']} – {u['lag_borta']}" if u.get("lag_hemma")
+                else (u.get("kalla") or "").rstrip("/").rsplit("/", 1)[-1])
+        return {"ok": True, "urval": u, "namn": namn,
+                "filer": store.urval_toppbilder(self.conn, u["id"], n)}
+
     # ── Gallra (skapar urval + cull_jobb; motorn körs i ML-miljö) ────────────
     def starta_cull(self, config):
         from dpt2.motorer.gallring import Gallring
@@ -729,13 +741,18 @@ def _utkast_till_jobbdict(u):
 
 def _innehall_md(data):
     """CMS-fält (UI-form) → (frontmatter-dict, body, slug, komplett .md).
-    Typmedveten enligt DATAMODELL.md: match (befintligt sajt-kontrakt, rörs ej),
-    event (kategori/kund/plats/galleri/ingress), landskap (tema/plats/period/
-    ingress), blogg (kategori/ingress + "Platser & tips"-block, datum-prefixad
-    slug). figurer = lista {bild,alt,bildtext} läggs sist i brödtexten."""
+    Typmedveten enligt DATAMODELL.md + Innehåll-synk-handoffen: match
+    (befintligt sajt-kontrakt, rörs ej), event (kategori/kund/plats/galleri/
+    ingress), landskap (plats/period/ingress), blogg (kategori/ingress +
+    "Platser & tips"-block, datum-prefixad slug). Temat härleds ur typen på
+    webben (Sport=Hav, Landskap=Sol, Event=Rosé, Blog ärver) — ingen typ
+    skriver `tema:`. figurer läggs sist i brödtexten med härledda referenser
+    /bilder/{slug}/{n}.jpg (explicit `bild` vinner); Landskap & Event är
+    bild-only (alt/bildtext strippas)."""
     typ = data.get("typ", "match")
     titel = data.get("titel", "")
     slug = AX.slugga(titel)
+    bildslug = slug                                     # bildkatalog utan datum-prefix
     if typ == "event":
         fm = {
             "typ": "event",
@@ -752,7 +769,6 @@ def _innehall_md(data):
         fm = {
             "typ": "landskap",
             "titel": titel,
-            "tema": data.get("tema") or None,           # Sol/Hav/Rosé
             "plats": data.get("plats") or None,
             "period": data.get("period") or None,
             "ingress": data.get("ingress") or None,
@@ -785,7 +801,12 @@ def _innehall_md(data):
             "pixieset": data.get("pixieset") or None,
             "malskyttar": malskyttar or None,
         }
-    figur_md = AX.figurer_markdown(data.get("figurer"))
+    gal_text = typ not in ("landskap", "event")         # bild-only annars
+    figurer = [{"bild": f.get("bild") or f"/bilder/{bildslug}/{i}.jpg",
+                "alt": (f.get("alt") or "") if gal_text else "",
+                "bildtext": (f.get("bildtext") or "") if gal_text else ""}
+               for i, f in enumerate(data.get("figurer") or [], 1)]
+    figur_md = AX.figurer_markdown(figurer)
     delar = [(data.get("body") or "").rstrip(), figur_md]
     if typ == "blogg":
         delar.append(_platser_md(data.get("platser")))

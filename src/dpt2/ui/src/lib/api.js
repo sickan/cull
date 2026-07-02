@@ -366,6 +366,17 @@ export async function aktivtUrval() {
   return wait(u ? structuredClone(u) : null)
 }
 
+export async function urvalHojdpunkter(n = 6) {
+  const api = brygga()
+  if (api) return api.urval_hojdpunkter(n)
+  const u = await aktivtUrval()
+  if (!u) return wait({ ok: false, fel: 'Inget aktivt urval — gallra en match först.' })
+  const namn = u.lag_hemma ? `${u.lag_hemma} – ${u.lag_borta}` : (u.kalla || '').split('/').pop()
+  const antal = Math.min(u.bilder || n, n)
+  return wait({ ok: true, urval: structuredClone(u), namn,
+    filer: Array.from({ length: antal }, (_, i) => `DSC_0${417 + i}`) })
+}
+
 export async function startaCull(config) {
   const api = brygga()
   if (api) return api.starta_cull(config)
@@ -440,7 +451,7 @@ let MOCK_INNEHALL = [
 
 function mockMd(data) {
   const fm = ['---', `typ: ${data.typ || 'match'}`, `titel: "${data.titel || ''}"`]
-  for (const k of ['kategori', 'kund', 'datum', 'plats', 'tema', 'period',
+  for (const k of ['kategori', 'kund', 'datum', 'plats', 'period',
     'ingress', 'liga', 'arena', 'resultat', 'halvtid', 'galleri']) {
     if (data[k]) fm.push(`${k}: "${data[k]}"`)
   }
@@ -451,8 +462,15 @@ function mockMd(data) {
     : data.malskyttar) || []
   if (mal.length) { fm.push('malskyttar:'); mal.forEach((m) => fm.push(`  - ${m}`)) }
   fm.push('---', '')
-  const figs = (data.figurer || []).filter((f) => f.bild)
-    .map((f) => `![${f.alt || ''}](${f.bild})` + (f.bildtext ? `\n*${f.bildtext}*` : ''))
+  // Speglar _innehall_md: härledda /bilder/{slug}/{n}.jpg-referenser;
+  // Landskap & Event är bild-only (ingen alt/bildtext).
+  const galText = !(data.typ === 'landskap' || data.typ === 'event')
+  const figs = (data.figurer || []).map((f, i) => {
+    const ref = f.bild || `/bilder/${slug(data.titel)}/${i + 1}.jpg`
+    return galText
+      ? `![${f.alt || ''}](${ref})` + (f.bildtext ? `\n*${f.bildtext}*` : '')
+      : `![](${ref})`
+  })
   const platser = (data.platser || []).filter((p) => (p.plats || '').trim())
     .map((p) => `- **${p.plats}** — ${p.tips || ''}`)
   const platsMd = platser.length ? '## Platser & tips\n\n' + platser.join('\n') : ''
@@ -463,6 +481,9 @@ function mockMd(data) {
 const slug = (t) => (t || 'innehall').toLowerCase()
   .replace(/å|ä/g, 'a').replace(/ö/g, 'o').replace(/&/g, 'och')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'innehall'
+
+// Exporterad för UI:t (Innehålls /bilder/{slug}/{n}.jpg-referenser).
+export const slugga = slug
 
 export async function listaInnehall(typ = null) {
   const api = brygga()

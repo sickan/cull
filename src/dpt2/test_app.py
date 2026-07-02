@@ -92,6 +92,28 @@ class TestApi(unittest.TestCase):
         self.api.conn.execute("DELETE FROM urval WHERE id=?", (u1,))
         self.assertEqual(self.api.aktivt_urval()["id"], u2)
 
+    def test_urval_hojdpunkter(self):
+        # Utan aktivt urval → ok: False.
+        self.assertFalse(self.api.urval_hojdpunkter()["ok"])
+        uid = store.spara_urval(self.api.conn, kalla="/Volumes/NIKON/DCIM/277Z8",
+                                bilder=0)
+        store.ersatt_urval_bilder(self.api.conn, uid, [
+            ("DSC_0417", 1, 0.91), ("DSC_0301", 0, 0.30), ("DSC_0502", 1, 0.95),
+            ("DSC_0610", 1, 0.40)])
+        self.api.satt_aktivt_urval(uid)
+        r = self.api.urval_hojdpunkter(2)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["filer"], ["DSC_0502", "DSC_0417"])   # poäng fallande
+        self.assertEqual(r["namn"], "277Z8")                     # kalla-fallback
+        # Match-kopplat urval → "Hemma – Borta" som namn.
+        mid = self.api.spara_match({"lag_hemma": "Malmö FF",
+                                    "lag_borta": "KDFF", "datum": "2026-01-01"})["id"]
+        uid2 = store.spara_urval(self.api.conn, kalla="/x", bilder=5, match_id=mid)
+        self.api.satt_aktivt_urval(uid2)
+        r2 = self.api.urval_hojdpunkter()
+        self.assertEqual(r2["namn"], "Malmö FF – KDFF")
+        self.assertEqual(r2["filer"], [])   # ingen per-bild-gallring ännu
+
     def test_starta_cull_skapar_urval_och_jobb(self):
         mid = self.api.spara_match({"lag_hemma": "A", "lag_borta": "B",
                                     "datum": "2026-01-01"})["id"]
@@ -204,13 +226,42 @@ class TestApi(unittest.TestCase):
         self.assertNotIn("liga", r["md"])                 # inga matchfält
 
     def test_innehall_md_landskap(self):
+        # Temat härleds ur typen (Landskap = Sol) — `tema:` skrivs aldrig.
         r = self.api.forhandsgranska_innehall({
             "typ": "landskap", "titel": "Höst vid Siljan", "tema": "Sol",
             "plats": "Rättvik", "period": "sep–okt 2026",
             "ingress": "Bildserie."})
         self.assertEqual(r["slug"], "host-vid-siljan")
-        self.assertIn("tema: Sol", r["md"])
+        self.assertNotIn("tema", r["md"])
         self.assertIn("period: sep–okt 2026", r["md"])
+
+    def test_innehall_galleri_harledda_referenser(self):
+        # Utan explicit bild härleds /bilder/{slug}/{n}.jpg; Sport har alt+bildtext.
+        r = self.api.forhandsgranska_innehall({
+            "typ": "match", "titel": "A – B", "body": "Referat.",
+            "figurer": [{"bild": "", "alt": "jubel", "bildtext": "Segern"},
+                        {"bild": "", "alt": "nick", "bildtext": ""}]})
+        self.assertIn("![jubel](/bilder/a-b/1.jpg)", r["md"])
+        self.assertIn("*Segern*", r["md"])
+        self.assertIn("![nick](/bilder/a-b/2.jpg)", r["md"])
+
+    def test_innehall_galleri_bild_only_landskap_event(self):
+        # Landskap & Event: endast bild — alt/bildtext strippas.
+        for typ in ("landskap", "event"):
+            r = self.api.forhandsgranska_innehall({
+                "typ": typ, "titel": "Serie X",
+                "figurer": [{"bild": "", "alt": "ignoreras", "bildtext": "bort"}]})
+            self.assertIn("![](/bilder/serie-x/1.jpg)", r["md"])
+            self.assertNotIn("ignoreras", r["md"])
+            self.assertNotIn("bort", r["md"])
+
+    def test_innehall_blogg_bildkatalog_utan_datumprefix(self):
+        # Bloggens .md-fil är datum-prefixad men bildkatalogen är titelns slug.
+        r = self.api.forhandsgranska_innehall({
+            "typ": "blogg", "titel": "Vandring", "datum": "2026-09-01",
+            "figurer": [{"bild": "", "alt": "fjäll", "bildtext": ""}]})
+        self.assertEqual(r["slug"], "2026-09-01-vandring")
+        self.assertIn("![fjäll](/bilder/vandring/1.jpg)", r["md"])
 
     def test_innehall_md_blogg_med_platser(self):
         r = self.api.forhandsgranska_innehall({

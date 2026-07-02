@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { forhandsgranskaInnehall, exporteraInnehall, listaMatcher, genereraBildsvep, valjMapp } from '../lib/api.js'
+  import { forhandsgranskaInnehall, exporteraInnehall, listaMatcher, genereraBildsvep, valjMapp, urvalHojdpunkter, slugga } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
 
   // Fyra färgkodade typer (DATAMODELL.md). Porträtt är en Event-kategori,
@@ -14,7 +14,6 @@
   const STATUSAR = ['kommande', 'pagaende', 'avslutad']
   const STATUS_ETI = { kommande: 'Kommande', pagaende: 'Pågående', avslutad: 'Avslutad' }
   const EVENT_KAT = ['Porträtt', 'Bröllop', 'Student', 'Företag', 'Mode', 'Övrigt']
-  const TEMAN = ['Hav', 'Sol', 'Rosé']
 
   let ctyp = 'match'
   let matcher = []
@@ -24,18 +23,27 @@
     datum: '', serie: '', arena: '', galleri: '', malskyttar: '', svep: '', figurer: [] }
   let cmsEvent = { kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '',
     galleri: '', ingress: '', figurer: [] }
-  let cmsLandskap = { titel: '', tema: 'Hav', plats: '', period: '', ingress: '', figurer: [] }
+  let cmsLandskap = { titel: '', plats: '', period: '', ingress: '', figurer: [] }
   let cmsBlogg = { kategori: '', titel: '', datum: '', ingress: '', body: '',
     platser: [], figurer: [] }
   let md = ''
   let exportDirs = { match: '', event: '', landskap: '', blogg: '' }
   let sparad = false
   let genKor = false
+  let hlKalla = ''       // källetikett för hämtade höjdpunkter (urval/match)
+  let hlFlash = false
 
   $: akt = ctyp === 'match' ? cms
     : ctyp === 'event' ? cmsEvent
     : ctyp === 'landskap' ? cmsLandskap : cmsBlogg
   $: typinfo = CTYPER.find((t) => t.id === ctyp)
+  // Landskap & Event = bild-only-galleri (härledd /bilder/{slug}/{n}.jpg-ref,
+  // ingen alt/bildtext) — speglar _innehall_md. Bildkatalogen = titelns slug
+  // utan bloggens datum-prefix.
+  $: galText = ctyp !== 'landskap' && ctyp !== 'event'
+  $: aktSlug = slugga(ctyp === 'match' ? `${cms.hem} – ${cms.borta}` : akt.titel)
+  $: hlAntal = ctyp === 'match' ? cms.figurer.filter((f) => f.src).length : 0
+  $: hlVisaKalla = ctyp === 'match' && !!hlKalla && hlAntal > 0
 
   onMount(async () => {
     matcher = await listaMatcher()
@@ -89,10 +97,25 @@
   }
 
   function pinga() { cms = cms; cmsEvent = cmsEvent; cmsLandskap = cmsLandskap; cmsBlogg = cmsBlogg }
-  function laggBild() { akt.figurer = [...akt.figurer, { bild: '', alt: '', bildtext: '' }]; pinga() }
+  function laggBild() { akt.figurer = [...akt.figurer, { bild: '', alt: '', bildtext: '', src: '' }]; pinga(); forhandsgranska() }
   function taBild(i) { akt.figurer = akt.figurer.filter((_, j) => j !== i); pinga(); forhandsgranska() }
   function laggPlats() { cmsBlogg.platser = [...cmsBlogg.platser, { plats: '', tips: '' }] }
   function taPlats(i) { cmsBlogg.platser = cmsBlogg.platser.filter((_, j) => j !== i); forhandsgranska() }
+
+  // Sport: fyll höjdpunktsgalleriet från det aktiva Publicera-urvalet (topp-
+  // rankade filer). Utan urval → fallback på aktiva matchen som källetikett.
+  async function hamtaHojdpunkter() {
+    const r = await urvalHojdpunkter(6)
+    const filer = (r?.ok && r.filer) || []
+    const antal = Math.min(filer.length || (r?.ok && r.urval?.bilder) || 6, 6)
+    hlKalla = (r?.ok && r.namn) || `${cms.hem} – ${cms.borta}`.replace(/\s+/g, ' ').trim()
+    const matchinfo = `${cms.hem} ${cms.resultat} ${cms.borta}`.replace(/\s+/g, ' ').trim()
+    cms.figurer = Array.from({ length: antal }, (_, i) => ({
+      bild: '', alt: `${matchinfo} — höjdpunkt ${i + 1}`, bildtext: '', src: filer[i] || '' }))
+    hlFlash = true
+    setTimeout(() => (hlFlash = false), 2200)
+    forhandsgranska()
+  }
 
   async function genereraSvep() {
     genKor = true
@@ -186,9 +209,10 @@
       <div class="caps">Bildserie</div>
       <div class="grid2">
         <div class="f"><label>Titel</label><input bind:value={cmsLandskap.titel} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Tema (Skagen)</label>
-          <div class="seg">
-            {#each TEMAN as t}<button class:on={cmsLandskap.tema === t} on:click={() => { cmsLandskap.tema = t; forhandsgranska() }}>{t}</button>{/each}
+        <div class="f"><label>Tema</label>
+          <div class="temalast" title="Temat härleds ur innehållstypen — Landskap är alltid Sol">
+            <span class="temaprick"></span><span class="temanamn">Sol</span>
+            <span class="temainfo">· låst för Landskap</span>
           </div>
         </div>
         <div class="f"><label>Plats</label><input bind:value={cmsLandskap.plats} on:change={forhandsgranska} /></div>
@@ -226,14 +250,34 @@
   {/if}
 
   <div class="kort">
-    <div class="caps">Bilder · höjdpunkter</div>
+    <div class="galhuvud">
+      <span class="caps nomarg">{ctyp === 'match' ? 'Bilder · höjdpunkter' : 'Galleri'}</span>
+      {#if ctyp === 'match'}
+        <div class="galknappar">
+          {#if hlFlash}<span class="hlok">✓ {hlAntal} hämtade</span>{/if}
+          <button class="hamta" on:click={hamtaHojdpunkter}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5v5h5M20 19v-5h-5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></svg>
+            Hämta från Publicera-urvalet
+          </button>
+        </div>
+      {/if}
+    </div>
+    {#if hlVisaKalla}
+      <div class="hlkalla"><span class="hlprick"></span>{hlAntal} höjdpunkt{hlAntal === 1 ? '' : 'er'} hämtade från {hlKalla}</div>
+    {/if}
     <div class="figurer">
       {#each akt.figurer as b, i}
         <div class="figrad">
           <div class="figbild"><span>figur {i + 1}</span></div>
           <div class="figin">
-            <input bind:value={b.alt} placeholder="Alt-text (tillgänglighet)" />
-            <input bind:value={b.bildtext} on:change={forhandsgranska} placeholder="Bildtext" />
+            {#if galText}
+              {#if b.src}<div class="figsrc">från urval · {b.src}</div>{/if}
+              <input bind:value={b.alt} on:change={forhandsgranska} placeholder="Alt-text (tillgänglighet)" />
+              <input bind:value={b.bildtext} on:change={forhandsgranska} placeholder="Bildtext" />
+            {:else}
+              <div class="figref">/bilder/{aktSlug}/{i + 1}.jpg</div>
+              <div class="fighint">Bild {i + 1} · endast bild, ingen bildtext</div>
+            {/if}
           </div>
           <button class="figx" class:armerad={$armerad === `fig-${i}`}
             title={$armerad === `fig-${i}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
@@ -308,13 +352,35 @@
   .seg button:disabled { cursor: default; }
   .hint { font-size: 10.5px; color: var(--t-help); margin-top: 5px; line-height: 1.45; }
 
+  /* Låst tema-indikator (temat härleds ur typen; Landskap = Sol) */
+  .temalast { display: inline-flex; align-items: center; gap: 9px; background: var(--panel);
+    border: 1px solid var(--div); border-radius: 8px; padding: 8px 12px; align-self: flex-start; }
+  .temaprick { width: 9px; height: 9px; border-radius: 50%; background: #C9871F; flex: none; }
+  .temanamn { font-size: 12.5px; font-weight: 600; color: var(--t-head); }
+  .temainfo { font-size: 11px; color: var(--t-mut); }
+
+  /* Galleri-rubrik med Sport-hämtknappen */
+  .galhuvud { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .caps.nomarg { margin-bottom: 0; }
+  .galknappar { display: flex; align-items: center; gap: 10px; }
+  .hlok { font-size: 11.5px; color: var(--ok); font-weight: 600; }
+  .hamta { display: inline-flex; align-items: center; gap: 6px; background: var(--acc-soft);
+    color: var(--acc); border: 1px solid var(--acc-border); border-radius: 7px; padding: 6px 12px;
+    font-size: 12px; font-weight: 600; }
+  .hamta svg { width: 13px; height: 13px; }
+  .hlkalla { font-size: 11px; color: var(--t-mut); margin: -4px 0 10px; display: flex; align-items: center; gap: 6px; }
+  .hlprick { width: 6px; height: 6px; border-radius: 50%; background: var(--acc); flex: none; }
+
   .figurer { display: flex; flex-direction: column; gap: 10px; }
   .figrad { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--div3); border-radius: 10px; padding: 10px; background: var(--panel); }
   .figbild { width: 92px; height: 69px; flex: none; border-radius: 6px; display: flex; align-items: center; justify-content: center;
     background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 8px, var(--kort) 8px, var(--kort) 16px); }
   .figbild span { font-family: var(--mono, ui-monospace, monospace); font-size: 10px; color: var(--t-mut); }
-  .figin { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .figin { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
   .figin input { background: var(--kort); font-size: 12.5px; padding: 7px 9px; }
+  .figsrc { font-family: var(--mono, ui-monospace, monospace); font-size: 10.5px; color: var(--t-help); }
+  .figref { font-family: var(--mono, ui-monospace, monospace); font-size: 11.5px; color: var(--t-head); }
+  .fighint { font-size: 11px; color: var(--t-help); }
   .figx { flex: none; width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--div); background: var(--kort); color: var(--t-mut); font-size: 16px; }
   .figx.armerad { width: auto; padding: 0 10px; background: #C0453E; border-color: #C0453E; color: #fff; font-size: 11.5px; font-weight: 600; }
   .figadd { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px dashed var(--div); border-radius: 10px; padding: 11px; color: var(--t-mut); font-size: 13px; font-weight: 500; background: transparent; }

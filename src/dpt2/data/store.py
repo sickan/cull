@@ -102,6 +102,15 @@ def behall_stems(conn, urval_id):
         "SELECT stem FROM urval_bild WHERE urval_id=? AND behall=1", (urval_id,))]
 
 
+def urval_toppbilder(conn, urval_id, n=6):
+    """Topp-rankade behållna bilder (stems, poäng fallande) ur ett urval —
+    grunden för Innehålls "Hämta från Publicera-urvalet". Tom lista om
+    urvalet inte gallrats per bild ännu."""
+    return [r[0] for r in conn.execute(
+        "SELECT stem FROM urval_bild WHERE urval_id=? AND behall=1 "
+        "ORDER BY poang DESC, stem LIMIT ?", (urval_id, int(n)))]
+
+
 def satt_urval_status(conn, urval_id, status):
     """gallrad → levererad → publicerad."""
     if status not in ("gallrad", "levererad", "publicerad"):
