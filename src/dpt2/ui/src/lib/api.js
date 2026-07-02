@@ -71,6 +71,11 @@ let MOCK_FOTOJOBB = [
   { id: 'fj2', title: 'Möte (skapad i Google)', start_at: '2026-07-15T09:00:00', end_at: '2026-07-15T09:30:00', all_day: false, location: '', description: '', category: null, status: 'confirmed', google_event_id: 'g2', source: 'google' },
   { id: 'fj3', title: 'Landskap – soluppgång vid Grenen', start_at: '2026-07-12T04:30:00', end_at: '2026-07-12T06:00:00', all_day: false, location: 'Grenen', description: '', category: 'Landskap', status: 'confirmed', google_event_id: null, source: 'dpt' },
   { id: 'fj4', title: 'Mässa & workshop', start_at: '2026-06-29', end_at: '2026-07-03', all_day: true, location: '', description: '', category: 'Övrigt', status: 'confirmed', google_event_id: 'g4', source: 'dpt' },
+  // Passerade jobb — så scroll-till-idag-beteendet (kommande ovanför, dimmade
+  // passerade under) syns direkt i mock-läge.
+  { id: 'fj5', title: 'Match – Malmö FF / Kristianstad', start_at: '2026-06-27T14:00:00', end_at: '2026-06-27T16:00:00', all_day: false, location: 'Eleda Stadion', description: '', category: 'Sport', status: 'confirmed', google_event_id: 'g5', source: 'dpt', match_id: 'a1b2c3d4e5f6' },
+  { id: 'fj6', title: 'Landskap – midsommarkväll vid Siljan', start_at: '2026-06-20T20:00:00', end_at: '2026-06-20T22:30:00', all_day: false, location: 'Rättvik', description: '', category: 'Landskap', status: 'confirmed', google_event_id: 'g6', source: 'dpt' },
+  { id: 'fj7', title: 'Event – studentbal', start_at: '2026-06-13T17:00:00', end_at: '2026-06-13T21:00:00', all_day: false, location: 'Leksand', description: '', category: 'Event', status: 'confirmed', google_event_id: 'g7', source: 'dpt' },
 ]
 
 // Lokala fotojobb-utkast (tävling → "Lägg i Google Calendar", väntar på

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { forhandsgranskaInnehall, exporteraInnehall, listaMatcher, genereraBildsvep, valjMapp } from '../lib/api.js'
+  import { armerad, taBortKlick } from '../lib/bekrafta.js'
 
   const CTYPER = [
     { id: 'match', namn: 'Matcher', soon: false },
@@ -136,7 +137,9 @@
             <input bind:value={b.alt} placeholder="Alt-text (tillgänglighet)" />
             <input bind:value={b.bildtext} on:change={forhandsgranska} placeholder="Bildtext" />
           </div>
-          <button class="figx" on:click={() => taBild(i)}>×</button>
+          <button class="figx" class:armerad={$armerad === `fig-${i}`}
+            title={$armerad === `fig-${i}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+            on:click={taBortKlick(`fig-${i}`, () => taBild(i))}>{$armerad === `fig-${i}` ? 'Ta bort?' : '×'}</button>
         </div>
       {/each}
       <button class="figadd" on:click={laggBild}>+ Lägg till bild</button>
@@ -205,6 +208,7 @@
   .figin { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
   .figin input { background: var(--kort); font-size: 12.5px; padding: 7px 9px; }
   .figx { flex: none; width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--div); background: var(--kort); color: var(--t-mut); font-size: 16px; }
+  .figx.armerad { width: auto; padding: 0 10px; background: #C0453E; border-color: #C0453E; color: #fff; font-size: 11.5px; font-weight: 600; }
   .figadd { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px dashed var(--div); border-radius: 10px; padding: 11px; color: var(--t-mut); font-size: 13px; font-weight: 500; background: transparent; }
   .figadd:hover { border-color: var(--acc); color: var(--acc); }
 

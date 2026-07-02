@@ -5,6 +5,7 @@
     valjFil, lasLagTrupp, hamtaLagTrupp, sparaSpelare, raderaSpelare,
     laggTavlingIKalender, taBortTavlingUrKalender,
   } from '../lib/api.js'
+  import { armerad, taBortKlick } from '../lib/bekrafta.js'
 
   let lag = []
   let tavlingar = []
@@ -210,7 +211,9 @@
               {#if kalFelId === t.id}<div class="kalfel">⚠ {kalFelMsg}</div>{/if}
             </div>
             {#if sparad === t.id}<span class="flash">✓</span>{/if}
-            <button class="x" on:click={() => taBortTavling(t)} title="Ta bort">×</button>
+            <button class="x" class:armerad={$armerad === `tavling-${t.id}`}
+              title={$armerad === `tavling-${t.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+              on:click={taBortKlick(`tavling-${t.id}`, () => taBortTavling(t))}>{$armerad === `tavling-${t.id}` ? 'Ta bort?' : '×'}</button>
           </div>
         {/each}
       </div>
@@ -264,12 +267,14 @@
                 {#if rosterOppen === l.id}
                   <div class="rosterbox">
                     <div class="rosterhuvud"><span class="rnr">Nr</span><span class="rnamn">Namn</span><span class="rpos">Pos</span><span class="rx"></span></div>
-                    {#each l.roster || [] as p (p)}
+                    {#each l.roster || [] as p, pi (p)}
                       <div class="rosterrad">
                         <input class="rnr" bind:value={p.nr} on:change={() => sparaSpelareRad(l, p)} />
                         <input class="rnamn" bind:value={p.namn} on:change={() => sparaSpelareRad(l, p)} />
                         <input class="rpos" bind:value={p.position} on:change={() => sparaSpelareRad(l, p)} />
-                        <button class="rx" on:click={() => taBortSpelareRad(l, p)}>×</button>
+                        <button class="rx" class:armerad={$armerad === `sp-${l.id}-${pi}`}
+                          title={$armerad === `sp-${l.id}-${pi}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                          on:click={taBortKlick(`sp-${l.id}-${pi}`, () => taBortSpelareRad(l, p))}>{$armerad === `sp-${l.id}-${pi}` ? 'Ta bort?' : '×'}</button>
                       </div>
                     {/each}
                     <button class="rosteradd" on:click={() => laggTillSpelare(l)}>+ Lägg till spelare</button>
@@ -300,7 +305,9 @@
                 {/if}
               {/if}
             </div>
-            <button class="x" on:click={() => taBortLag(l)} title="Ta bort">×</button>
+            <button class="x" class:armerad={$armerad === `lag-${l.id}`}
+              title={$armerad === `lag-${l.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+              on:click={taBortKlick(`lag-${l.id}`, () => taBortLag(l))}>{$armerad === `lag-${l.id}` ? 'Ta bort?' : '×'}</button>
           </div>
         {/each}
       </div>
@@ -378,6 +385,8 @@
   .rosterrad button.rx { width: 28px; height: 28px; flex: none; border-radius: 6px; border: 1px solid var(--div);
     background: var(--kort); color: var(--t-mut); font-size: 15px; line-height: 1; }
   .rosterrad button.rx:hover { background: var(--rose); border-color: var(--rose); color: #fff; }
+  .rosterrad button.rx.armerad { width: auto; padding: 0 10px; background: #C0453E; border-color: #C0453E;
+    color: #fff; font-size: 11.5px; font-weight: 600; }
   .rosteradd { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 2px;
     border: 1.5px dashed var(--div); border-radius: 8px; padding: 8px; color: var(--t-mut);
     font-size: 12px; background: transparent; }
@@ -422,6 +431,9 @@
     border-radius: 7px; background: var(--kort); color: var(--t-mut); font-size: 16px;
     line-height: 1; align-self: flex-start; }
   .x:hover { background: var(--rose); border-color: var(--rose); color: #fff; }
+  /* Beväpnad tvåstegsknapp: × expanderar till rött "Ta bort?", andra klicket raderar. */
+  .x.armerad { width: auto; padding: 0 10px; height: 26px; background: #C0453E; border-color: #C0453E;
+    color: #fff; font-size: 11.5px; font-weight: 600; }
 
   .ny { margin-top: 10px; padding: 11px; width: 100%; border: 1.5px dashed var(--div);
     border-radius: var(--r); background: transparent; color: var(--t-mut);

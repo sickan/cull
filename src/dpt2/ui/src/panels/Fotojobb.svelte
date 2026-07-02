@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte'
   import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher } from '../lib/api.js'
+  import { armerad, taBortKlick } from '../lib/bekrafta.js'
 
   const dispatch = createEventDispatcher()
 
@@ -58,23 +59,14 @@
     const t = new Date()
     const idag = t.getFullYear() * 10000 + (t.getMonth() + 1) * 100 + t.getDate()
     const ix = kort.findIndex((c) => +c.getAttribute('data-jobdate') <= idag)
-    const mal = ix >= 0 ? kort[ix] : kort[kort.length - 1]
+    const malIx = ix < 0 ? kort.length - 1 : ix
+    // Ankra en post OVANFÖR dagens/närmaste (listan är fallande sorterad):
+    // minst en kommande post syns ovanför och de dimmade passerade under —
+    // kontext åt båda håll i stället för att dagens rad klistras i toppen.
+    // Headern ligger utanför scroll-ytan, så ingen sticky-kompensation behövs.
+    const mal = kort[Math.max(0, malIx - 1)]
     const br = bodyEl.getBoundingClientRect()
-    const MARG = 14
-    // Pinna dagens/senaste kort flush mot toppen (som förut).
-    let ny = bodyEl.scrollTop + (mal.getBoundingClientRect().top - br.top) - MARG
-
-    // Om kortet FAKTISKT är dagens (inte bara närmast passerade) ligger den
-    // senast passerade aktiviteten oftast direkt under — räkna ut om dess
-    // nederkant får plats i den kvarvarande höjden, och scrolla bara så
-    // långt extra som verkligen krävs (aldrig mer, aldrig mindre).
-    const nasta = ix >= 0 ? kort[ix + 1] : null
-    if (mal.dataset.idag === 'true' && nasta) {
-      const nastaBottom = bodyEl.scrollTop + (nasta.getBoundingClientRect().bottom - br.top)
-      const kravdForNasta = nastaBottom - br.height + MARG
-      if (kravdForNasta > ny) ny = kravdForNasta
-    }
-    bodyEl.scrollTop = ny
+    bodyEl.scrollTop += mal.getBoundingClientRect().top - br.top - 14
   }
   function scrollTopp() { if (bodyEl) bodyEl.scrollTo({ top: 0, behavior: 'smooth' }) }
 
@@ -253,7 +245,9 @@
                       <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
                       {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
                       <button class="mini" on:click={() => andra(j)}>Ändra</button>
-                      <button class="mini kryss" on:click={() => taBort(j)}>×</button>
+                      <button class="mini kryss" class:armerad={$armerad === `fj-${j.id}`}
+                        title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                        on:click={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Ta bort?' : '×'}</button>
                     </div>
                   </div>
                 </div>
@@ -276,7 +270,9 @@
                     <span class="spacer"></span>
                     {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
                     <button class="mini" on:click={() => andra(j)}>Ändra</button>
-                    <button class="mini" on:click={() => taBort(j)}>Ta bort</button>
+                    <button class="mini" class:armerad={$armerad === `fj-${j.id}`}
+                      title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                      on:click={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
                     {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                   </div>
                 {:else}
@@ -300,7 +296,9 @@
                     <div class="rknapp">
                       {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
                       <button class="mini" on:click={() => andra(j)}>Ändra</button>
-                      <button class="mini" on:click={() => taBort(j)}>Ta bort</button>
+                      <button class="mini" class:armerad={$armerad === `fj-${j.id}`}
+                        title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                        on:click={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
                     </div>
                   </div>
                 {/if}
@@ -427,6 +425,9 @@
   .mini { border: 1px solid var(--div); background: var(--kort); border-radius: 7px; padding: 6px 12px;
     font-size: 12.5px; color: var(--t-mut); }
   .mini:hover { border-color: var(--acc); color: var(--acc); }
+  /* Beväpnad tvåstegsknapp: rött varningsläge, andra klicket raderar. */
+  .mini.armerad, .mini.armerad:hover { background: #C0453E; border-color: #C0453E; color: #fff; font-weight: 600; }
+  .mini.kryss.armerad { width: auto; padding: 6px 10px; font-size: 11.5px; }
 
   .rad.heldag { padding: 11px 16px; flex-wrap: wrap; }
   .hrange { font-size: 12px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; flex: none; }
