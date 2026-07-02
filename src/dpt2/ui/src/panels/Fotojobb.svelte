@@ -68,6 +68,15 @@
     const s = dateKey(j.start_at), e = dateKey(j.end_at) || s
     return s && idag >= s && idag <= e
   }
+  // Passerad post (dimmas): heldag räknas passerad först när SLUTdatumet är
+  // förbi (ett flerdagarsuppdrag är inte förbi bara för att det börjat);
+  // tidssatta poster räknas passerade så fort startdagen är förbi.
+  function arForfluten(j) {
+    const t = new Date()
+    const idag = t.getFullYear() * 10000 + (t.getMonth() + 1) * 100 + t.getDate()
+    const s = dateKey(j.start_at), e = dateKey(j.end_at) || s
+    return j.all_day ? e < idag : s < idag
+  }
 
   const katFarg = (c) => (c ? KAT_FARG[c] || NULLKAT : NULLKAT)
   const del = (iso) => (iso || '').split('T')[0].split('-').map(Number)
@@ -202,7 +211,7 @@
                   </div>
                   <div class="tlspar" style="border-left-color:{katFarg(j.category)}">
                     <span class="tldot" style="background:{katFarg(j.category)}"></span>
-                    <div class="tlkort">
+                    <div class="tlkort" class:forfluten={arForfluten(j)}>
                       <div class="tlinfo">
                         <div class="rtitel stor">{j.title}</div>
                         <div class="when">{j.all_day ? 'Heldag · ' + heldagText(j) : ''}{j.location ? (j.all_day ? ' · ' : '') + j.location : ''}</div>
@@ -223,7 +232,7 @@
             <div class="lista">
               {#each g.jobb as j (j.id)}
                 {#if j.all_day}
-                  <div class="rad heldag" class:idag={arIdag(j)} data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
+                  <div class="rad heldag" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
                     <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
                     <span class="rtitel">{j.title}</span>
                     <span class="hlbl">Heldag</span>
@@ -238,7 +247,7 @@
                     <button class="mini" on:click={() => taBort(j)}>Ta bort</button>
                   </div>
                 {:else}
-                  <div class="rad" class:idag={arIdag(j)} data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
+                  <div class="rad" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} style="border-left-color:{katFarg(j.category)}">
                     <div class="datum scd">
                       <div class="d" style="color:{katFarg(j.category)}">{del(j.start_at)[2] || '–'}</div>
                       <div class="wd">{veckodag(j.start_at)}</div>
@@ -340,6 +349,7 @@
     letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px;
     background: var(--acc); color: #fff; vertical-align: middle; }
   .rad.idag { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-soft), var(--skugga); }
+  .rad.forfluten, .tlkort.forfluten { opacity: 0.5; }
   .chips { display: flex; gap: 7px; flex-wrap: wrap; }
   .chip { padding: 5px 13px; border: 1px solid var(--div); border-radius: 999px;
     background: var(--kort); color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
