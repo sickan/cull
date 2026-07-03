@@ -17,6 +17,7 @@
   let projekt = []
   let laddar = true
   let sportFilter = 'alla'
+  let matchGroupBy = 'datum'
   let oppen = null
   let utkast = null
   let bekraftaId = null
@@ -29,6 +30,7 @@
   const MATCH_LANGD = { fotboll: 120, volleyboll: 150, handboll: 90, beachvolley: 90, innebandy: 120, tennis: 120 }
   const TYP_ETIKETT = { liga: 'Liga', turnering: 'Turnering', masterskap: 'Mästerskap' }
   const MK = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+  const MANAD = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December']
   const SPORT_FARG = '#2F7CB0'
 
   onMount(async () => {
@@ -38,7 +40,7 @@
   })
 
   $: filtrerade = matcher.filter((m) => sportFilter === 'alla' || m.sport === sportFilter)
-  $: grupper = gruppera(filtrerade)
+  $: grupper = matchGroupBy === 'liga' ? grupperaLiga(filtrerade) : grupperaDatum(filtrerade)
   const GREN_ETIKETT = { dam: 'Dam', herr: 'Herr', mixed: 'Mixed' }
   // detalj (gren · sport) skiljer lag med samma namn åt (Malmö FF dam/herr).
   $: lagVal = (lagForTavling.length ? lagForTavling : lagAlla).map((l) => ({
@@ -89,7 +91,7 @@
     return l ? (l.stall_hemma || l.profilfarg) : ''
   }
 
-  function gruppera(lista) {
+  function grupperaLiga(lista) {
     const m = new Map()
     for (const x of lista) {
       const k = x.tavling_id || x.liga || 'ovrigt'
@@ -98,9 +100,24 @@
     }
     return [...m.values()].map((g) => {
       const t = tavlingar.find((tv) => tv.id === g.key || tv.namn === g.namn) || {}
-      return { ...g, badge: initialer(g.namn), typ: TYP_ETIKETT[t.typ] || 'Liga',
+      return { ...g, rich: true, badge: initialer(g.namn), typ: TYP_ETIKETT[t.typ] || 'Liga',
         meta: [SPORT_ETIKETT[t.sport] || '', periodText(t), t.ort].filter(Boolean).join(' · ') }
     })
+  }
+
+  // Matcher utan datum sorteras sist (nyckel '9999-99-99' vinner aldrig jämförelsen).
+  function grupperaDatum(lista) {
+    const nyckel = (x) => (x.datum && x.datum.length === 10) ? x.datum : '9999-99-99'
+    const sorted = [...lista].sort((a, b) => (nyckel(a) < nyckel(b) ? -1 : nyckel(a) > nyckel(b) ? 1 : 0))
+    const m = new Map()
+    for (const x of sorted) {
+      const d = del(x.datum)
+      const key = d.length === 3 ? `${d[0]}-${d[1]}` : 'zzz'
+      const namn = d.length === 3 ? `${MANAD[d[1] - 1]} ${d[0]}` : 'Utan datum'
+      if (!m.has(key)) m.set(key, { key, namn, matcher: [] })
+      m.get(key).matcher.push(x)
+    }
+    return [...m.values()].map((g) => ({ ...g, rich: false }))
   }
 
   async function toggla(m) {
@@ -203,7 +220,16 @@
   </header>
 
   <div class="filterrad">
-    <div class="caps">Kommande</div>
+    <div class="filterleft">
+      <div class="caps">Kommande</div>
+      <div class="grupptoggle">
+        <span class="grupplbl">Gruppera</span>
+        <div class="seg">
+          <button class:on={matchGroupBy === 'datum'} on:click={() => (matchGroupBy = 'datum')}>Datum</button>
+          <button class:on={matchGroupBy === 'liga'} on:click={() => (matchGroupBy = 'liga')}>Liga/Tävling</button>
+        </div>
+      </div>
+    </div>
     <div class="chips">
       {#each SPORTER as s}
         <button class="chip" class:on={sportFilter === s} on:click={() => (sportFilter = s)}>{s === 'alla' ? 'Alla' : SPORT_ETIKETT[s]}</button>
@@ -219,14 +245,18 @@
     <div class="grupper">
       {#each grupper as g (g.key)}
         <div class="grupp">
-          <div class="ghuvud">
-            <span class="glogo scd" style="background:{SPORT_FARG}">{g.badge}</span>
-            <div class="gtxt">
-              <div class="gnamn">{g.namn}</div>
-              <div class="gmeta">{g.meta}</div>
+          {#if g.rich}
+            <div class="ghuvud">
+              <span class="glogo scd" style="background:{SPORT_FARG}">{g.badge}</span>
+              <div class="gtxt">
+                <div class="gnamn">{g.namn}</div>
+                <div class="gmeta">{g.meta}</div>
+              </div>
+              <span class="gtyp">{g.typ}</span>
             </div>
-            <span class="gtyp">{g.typ}</span>
-          </div>
+          {:else}
+            <div class="manad scd">{g.namn}</div>
+          {/if}
 
           <div class="matcher">
             {#each g.matcher as m (m.id)}
@@ -388,13 +418,22 @@
   .tom { color: var(--t-help); font-size: 13px; }
 
   .filterrad { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 20px 2px 12px; }
+  .filterleft { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .caps { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--t-caps); }
+  .grupptoggle { display: flex; align-items: center; gap: 7px; }
+  .grupplbl { font-size: 11px; color: var(--t-help); }
+  .seg { display: flex; background: var(--div3); border-radius: 9px; padding: 3px; gap: 3px; }
+  .seg button { padding: 7px 14px; border: 0; border-radius: 7px; background: transparent;
+    color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
+  .seg button.on { background: var(--kort); color: var(--t-head); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
   .chip { padding: 5px 13px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
     color: var(--t-mut); font-size: 12.5px; }
   .chip.on { background: var(--acc); border-color: var(--acc); color: #fff; font-weight: 600; }
 
   .grupper { display: flex; flex-direction: column; gap: 20px; }
+  .manad { font-weight: 700; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--t-mut); margin-bottom: 10px; }
   .ghuvud { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .glogo { width: 34px; height: 34px; border-radius: 8px; color: #fff; display: flex; align-items: center;
     justify-content: center; flex: none; font-size: 12px; font-weight: 700; }
