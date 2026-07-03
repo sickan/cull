@@ -184,16 +184,25 @@ class TestApi(unittest.TestCase):
 
 
     def test_forhandsgranska_story_genom_bryggan(self):
+        # VIKTIGT: forhandsgranska_story skriver till story_korning sin FASTA
+        # sökväg — samma fil som appens riktiga Publicera→Live-förhandsvisning
+        # använder. Patcha den till en tempfil så testet aldrig klobbar Stigs
+        # faktiska förhandsvisning (hände 2026-07-03 — detta test var boven).
         import tempfile
         from pathlib import Path
         from PIL import Image
+        from dpt2.tjanster import story_korning
+        verklig_path = story_korning.FORHANDSVISNING_PATH
+        self.addCleanup(setattr, story_korning, "FORHANDSVISNING_PATH", verklig_path)
         with tempfile.TemporaryDirectory() as d:
+            story_korning.FORHANDSVISNING_PATH = Path(d) / "forhandsvisning-test.jpg"
             foto = f"{d}/kalla.jpg"
             Image.new("RGB", (400, 300), (80, 120, 160)).save(foto, "JPEG")
             res = self.api.forhandsgranska_story({
                 "moment": "Avspark", "foto": foto, "tema": "Sol",
                 "ut_mapp": f"{d}/aldrig-anvand"})
             self.assertTrue(res["ok"])
+            self.assertNotEqual(Path(res["path"]), verklig_path)   # aldrig skarpa filen
             self.assertTrue(Path(res["path"]).exists())
             self.assertFalse(Path(f"{d}/aldrig-anvand").exists())
 

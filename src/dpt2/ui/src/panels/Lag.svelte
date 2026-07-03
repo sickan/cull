@@ -445,7 +445,7 @@
     cursor: pointer; padding: 0; }
   .logo.rund { border-radius: 50%; }
   .logo:hover { outline: 2px solid var(--acc); outline-offset: 1px; }
-  .logo img { width: 100%; height: 100%; object-fit: cover; }
+  .logo img { width: 100%; height: 100%; object-fit: contain; }
 
   .falt { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .rad1 { display: flex; gap: 8px; align-items: center; }

@@ -510,7 +510,7 @@
   .lhuvud { display: flex; align-items: center; gap: 9px; }
   .lbricka { width: 30px; height: 30px; border-radius: 50%; flex: none; display: inline-flex; align-items: center;
     justify-content: center; font-family: var(--font-c); font-size: 11px; font-weight: 700; overflow: hidden; }
-  .lbricka img { width: 100%; height: 100%; object-fit: cover; }
+  .lbricka img { width: 100%; height: 100%; object-fit: contain; }
   .lnamn-wrap { min-width: 0; }
   .lnamn { font-size: 12.5px; font-weight: 600; color: var(--t-head); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lsub { font-size: 10.5px; color: var(--t-mut); }

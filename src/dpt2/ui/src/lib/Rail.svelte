@@ -1,7 +1,10 @@
 <script>
   import { createEventDispatcher } from 'svelte'
+  import logoHast from './assets/logo-hast.png'
   export let aktiv = 'matcher'
   const dispatch = createEventDispatcher()
+  // __BUILD_NR__ injiceras av vite.config.js (git rev-list --count HEAD vid bygget).
+  const buildNr = typeof __BUILD_NR__ !== 'undefined' ? __BUILD_NR__ : '?'
 
   const grupper = [
     { rubrik: 'Planera', poster: [
@@ -25,10 +28,8 @@
 
 <nav>
   <div class="brand">
-    <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-      <path d="M4 19c1.5-6 5-9 9-9 1.8 0 3 .6 3 .6l2-2.2M18 5.5l1.2 2.4M11 10.5c-.5 2 .2 4.5 2 6.5" />
-    </svg>
-    <div class="ord scd">Dalecarlia Photo<span>Photo Tools · v2.1.0</span></div>
+    <img class="mark" src={logoHast} alt="" />
+    <div class="ord scd">Dalecarlia Photo<span>Photo Tools · v3.0 · Build {buildNr}</span></div>
   </div>
   {#each grupper as g}
     <div class="rubrik">{g.rubrik}</div>
@@ -48,7 +49,7 @@
     padding: 14px 12px 24px;
   }
   .brand { display: flex; align-items: center; gap: 9px; padding: 6px 8px 4px; }
-  .mark { width: 26px; height: 26px; flex: none; color: var(--acc); }
+  .mark { width: 26px; height: 26px; flex: none; object-fit: contain; }
   .ord { font-weight: 700; font-size: 15px; color: var(--t-head); line-height: 1.05;
     display: flex; flex-direction: column; }
   .ord span { font-family: var(--font); font-weight: 600; font-size: 9px;

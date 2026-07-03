@@ -295,10 +295,12 @@ def _botten_scrim(canvas_w, frame_h):
 # Hörnmask (för Skagen Hav-logga och liga-logga)
 # ---------------------------------------------------------------------------
 
-def _hornmask(w, h, horn="vl"):
+def _hornmask(w, h, horn="vl", inre=0.18, yttre=0.72):
     """
     Radial gradient-mask från hörnet.
-    CSS: radial-gradient(150% 150% at <hörn>, transparent 18%, #000 72%)
+    CSS-referens: radial-gradient(150% 150% at <hörn>, transparent 18%, #000 72%)
+    inre/yttre: var övergången från osynlig till fullt synlig sker (andel av
+    1.5×w/1.5×h-radien). Lägre inre = synlig närmare själva hörnet.
     """
     import numpy as np
     Image, *_ = _pil()
@@ -306,12 +308,16 @@ def _hornmask(w, h, horn="vl"):
     cx, cy = (0, 0) if horn == "vl" else (w, 0)
     rx, ry = 1.5 * w, 1.5 * h
     d = np.sqrt(((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2)
-    alpha = np.clip((d - 0.18) / (0.72 - 0.18), 0.0, 1.0)
+    alpha = np.clip((d - inre) / (yttre - inre), 0.0, 1.0)
     return Image.fromarray((alpha * 255).astype("uint8"), "L")
 
 
 def _tema_logga_lager(canvas_w, canvas_h, tema):
-    """Skagen Hav-logga uppe till vänster, hörnmaskad, 50 % opacity."""
+    """Skagen Hav-logga uppe till vänster, hörnmaskad.
+
+    80 % max-opacitet (höjt från 50 % 2026-07-03 — för svag mot ljusa/röriga
+    foton, i praktiken osynlig) + tightare hörnmask (närmare full synlighet,
+    inte bara en tunn skymt långt ute i hörnet)."""
     import numpy as np
     Image, *_ = _pil()
     p = _hitta_tema_logga(tema)
@@ -322,10 +328,10 @@ def _tema_logga_lager(canvas_w, canvas_h, tema):
         h_logo = 200
         w_logo = max(1, int(logo.width * h_logo / logo.height))
         logo   = logo.resize((w_logo, h_logo), Image.LANCZOS)
-        mask   = _hornmask(w_logo, h_logo, "vl")
+        mask   = _hornmask(w_logo, h_logo, "vl", inre=0.05, yttre=0.5)
         logo_a = __import__("numpy").asarray(logo.getchannel("A"), dtype=np.float32)
         mask_a = __import__("numpy").asarray(mask, dtype=np.float32)
-        ny_a   = (logo_a * mask_a / 255.0 * 0.5).astype("uint8")
+        ny_a   = (logo_a * mask_a / 255.0 * 0.8).astype("uint8")
         logo.putalpha(Image.fromarray(ny_a, "L"))
         lager  = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
         lager.alpha_composite(logo, (0, 0))

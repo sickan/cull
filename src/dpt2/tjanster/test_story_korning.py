@@ -84,8 +84,22 @@ class TestMatchfalt(unittest.TestCase):
 
 
 class TestForhandsgranska(unittest.TestCase):
+    """VIKTIGT: forhandsgranska() skriver till en FAST sökväg
+    (story_korning.FORHANDSVISNING_PATH) — samma fil som appens riktiga
+    Publicera→Live-förhandsvisning använder. Om testerna kör mot den skarpa
+    sökvägen klobbar de Stigs faktiska förhandsvisning varje testkörning
+    (hände 2026-07-03: appens preview byttes tyst ut mot testdata). Patcha
+    DÄRFÖR alltid modulattributet till en tempfil i setUp/tearDown — aldrig
+    den riktiga."""
     def setUp(self):
         self.c = db.oppna(":memory:")
+        import tempfile
+        from pathlib import Path
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self._verklig_path = S.FORHANDSVISNING_PATH
+        S.FORHANDSVISNING_PATH = Path(self._tmpdir.name) / "forhandsvisning-test.jpg"
+        self.addCleanup(setattr, S, "FORHANDSVISNING_PATH", self._verklig_path)
 
     def test_validering_speglar_kor_story(self):
         self.assertFalse(S.forhandsgranska(self.c, {})["ok"])
@@ -104,6 +118,7 @@ class TestForhandsgranska(unittest.TestCase):
                 "ut_mapp": str(otillatet)})
             self.assertTrue(r["ok"])
             self.assertEqual(r["path"], str(S.FORHANDSVISNING_PATH))
+            self.assertNotEqual(S.FORHANDSVISNING_PATH, self._verklig_path)  # aldrig skarpa filen
             self.assertTrue(S.FORHANDSVISNING_PATH.exists())
             self.assertFalse(otillatet.exists())          # ut_mapp ignoreras helt
 

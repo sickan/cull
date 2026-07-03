@@ -718,7 +718,7 @@
     border-radius: 10px; background: var(--panel); padding: 10px 13px; margin-bottom: 16px; }
   .brickor { display: flex; align-items: center; flex: none; }
   .bricka { width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-c); font-size: 11px; font-weight: 700; border: 2px solid var(--kort); overflow: hidden; }
-  .bricka img { width: 100%; height: 100%; object-fit: cover; }
+  .bricka img { width: 100%; height: 100%; object-fit: contain; }
   .bricka.away { margin-left: -8px; }
   .mrinfo { flex: 1; min-width: 0; }
   .mrfix { font-size: 13px; font-weight: 600; color: var(--t-head); }

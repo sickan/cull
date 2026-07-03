@@ -65,7 +65,7 @@
   .ambrickor { display: flex; align-items: center; flex: none; }
   .ambricka { width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
     font-family: var(--font-c); font-size: 12px; font-weight: 700; border: 2px solid var(--kort); overflow: hidden; }
-  .ambricka img { width: 100%; height: 100%; object-fit: cover; }
+  .ambricka img { width: 100%; height: 100%; object-fit: contain; }
   .ambricka.away { margin-left: -10px; }
   .aminfo { flex: 1; min-width: 0; }
   .amkick { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-mut); }
