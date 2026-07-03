@@ -175,6 +175,29 @@ CREATE TABLE some_material (
 );
 CREATE INDEX idx_some_match ON some_material(match_id);
 
+-- ── Sparade material + utkast (Publicera-panelens "Sparade material") ────────
+-- Skilt från some_material ovan: det är en logg över FAKTISKT publicerade
+-- poster, det här är arbetsytan (utkast + publicerat) man öppnar/redigerar/
+-- fortsätter på. match_namn denormaliseras vid skrivning (matchen kan bytas
+-- ut/tas bort utan att gamla material tappar sin etikett).
+
+CREATE TABLE publicera_material (
+  id         TEXT PRIMARY KEY,
+  kind       TEXT NOT NULL CHECK (kind IN ('live','some')),
+  match_id   TEXT REFERENCES matchen(id) ON DELETE SET NULL,
+  match_namn TEXT,
+  status     TEXT NOT NULL CHECK (status IN ('utkast','publicerad')),
+  moment     TEXT,                       -- live: mall-moment
+  tema       TEXT,                       -- live: Hav/Sol/Rosé
+  dropbox    TEXT,                       -- live: käll-mapp (steg 2)
+  foto       TEXT,                       -- live: vald bildfil (steg 2)
+  channels   TEXT,                       -- some: json-lista ['story','ig','fb']
+  caption    TEXT,                       -- some: bildtext
+  banor      TEXT,                       -- some: json {story:{mapp,bilder},ig:{...},fb:{...}}
+  uppdaterad TEXT NOT NULL
+);
+CREATE INDEX idx_pubmat_uppdaterad ON publicera_material(uppdaterad DESC);
+
 -- ── Modell (träning) ─────────────────────────────────────────────────────────
 
 CREATE TABLE modell (

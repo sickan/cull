@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -148,6 +148,37 @@ def _migrera(conn, fran_version):
             ("tavling", "gren", "ALTER TABLE tavling ADD COLUMN gren TEXT"),
         ):
             if not _har_kolumn(conn, tabell, kol):
+                conn.execute(ddl)
+    if fran_version < 9:
+        # v9: Publicera-panelens "Sparade material" — utkast + publicerat
+        # arbetsyta (skilt från some_material, som bara loggar faktiskt
+        # utgångna poster).
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS publicera_material (
+          id         TEXT PRIMARY KEY,
+          kind       TEXT NOT NULL CHECK (kind IN ('live','some')),
+          match_id   TEXT REFERENCES matchen(id) ON DELETE SET NULL,
+          match_namn TEXT,
+          status     TEXT NOT NULL CHECK (status IN ('utkast','publicerad')),
+          moment     TEXT,
+          tema       TEXT,
+          channels   TEXT,
+          caption    TEXT,
+          uppdaterad TEXT NOT NULL
+        );""")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pubmat_uppdaterad "
+            "ON publicera_material(uppdaterad DESC);")
+    if fran_version < 10:
+        # v10: spara vald bild med utkastet — utan den var "Fortsätt" på ett
+        # sparat material meningslös (bytte moment/tema men förhandsvisningen
+        # förblev tom eftersom bildvalet aldrig persisterades).
+        for kol, ddl in (
+            ("dropbox", "ALTER TABLE publicera_material ADD COLUMN dropbox TEXT"),
+            ("foto", "ALTER TABLE publicera_material ADD COLUMN foto TEXT"),
+            ("banor", "ALTER TABLE publicera_material ADD COLUMN banor TEXT"),
+        ):
+            if not _har_kolumn(conn, "publicera_material", kol):
                 conn.execute(ddl)
 
 

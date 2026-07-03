@@ -13,7 +13,7 @@ class TestApi(unittest.TestCase):
 
     def test_info(self):
         info = self.api.info()
-        self.assertEqual(info["schemaversion"], 8)
+        self.assertEqual(info["schemaversion"], 10)
 
     def test_match_round_trip_genom_bryggan(self):
         res = self.api.spara_match({
@@ -182,6 +182,42 @@ class TestApi(unittest.TestCase):
         res = self.api.generera_bildsvep("Malmö FF–Växjö DFF 3–0", "fotboll")
         self.assertFalse(res["ok"])           # ingen nyckel → snäll fallback
 
+
+    def test_forhandsgranska_story_genom_bryggan(self):
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as d:
+            foto = f"{d}/kalla.jpg"
+            Image.new("RGB", (400, 300), (80, 120, 160)).save(foto, "JPEG")
+            res = self.api.forhandsgranska_story({
+                "moment": "Avspark", "foto": foto, "tema": "Sol",
+                "ut_mapp": f"{d}/aldrig-anvand"})
+            self.assertTrue(res["ok"])
+            self.assertTrue(Path(res["path"]).exists())
+            self.assertFalse(Path(f"{d}/aldrig-anvand").exists())
+
+    def test_material_spara_lista_radera_genom_bryggan(self):
+        res = self.api.spara_material({
+            "kind": "live", "status": "utkast", "moment": "Avspark", "tema": "Hav",
+            "dropbox": "~/Dropbox/DPT/Live/test", "foto": "~/Dropbox/DPT/Live/test/bild_03.jpg"})
+        self.assertTrue(res["ok"])
+        mid = res["id"]
+
+        lst = self.api.lista_material()
+        self.assertEqual(len(lst), 1)
+        self.assertEqual(lst[0]["status"], "utkast")
+        self.assertEqual(lst[0]["foto"], "~/Dropbox/DPT/Live/test/bild_03.jpg")
+
+        # samma id → uppdaterar i stället för att skapa en ny rad
+        self.api.spara_material({"id": mid, "kind": "live", "status": "publicerad",
+                                 "moment": "Avspark", "tema": "Hav"})
+        lst = self.api.lista_material()
+        self.assertEqual(len(lst), 1)
+        self.assertEqual(lst[0]["status"], "publicerad")
+
+        self.api.radera_material(mid)
+        self.assertEqual(self.api.lista_material(), [])
 
     def test_innehall_spara_forhandsgranska_lista(self):
         data = {"typ": "match", "titel": "Malmö FF – KDFF", "resultat": "6-0",

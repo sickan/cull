@@ -17,7 +17,7 @@ import re
 from dpt2.data import db, store
 from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
                            publicera_korning, publicera_some, meta_api,
-                           bildhosting)
+                           bildhosting, story_korning)
 from dpt2.tjanster.kalender import Kalender
 from dpt2.publicering import astro_export as AX
 
@@ -491,6 +491,15 @@ class Api:
                                else (r.get("fel") or "Kunde inte rendera story."))}
 
     # ── Publicera → Live (snabb story vid planen) ────────────────────────────
+    def forhandsgranska_story(self, config):
+        """Renderar en RIKTIG förhandsvisning (samma Horisont-mall som skarp
+        story) till en fast tempfil — körs synkront (inte via workern) så den
+        hinner med vid varje fältändring. Rör aldrig Dropbox-mappen.
+        Returnerar {ok, path} eller {ok:False, fel}."""
+        config = dict(config or {})
+        config.setdefault("match_id", store.hamta_installning(self.conn, "aktiv_match_id"))
+        return story_korning.forhandsgranska(self.conn, config)
+
     def oppna_i_lightroom(self, sokvag=""):
         """Startar Lightroom (Classic om den finns), med mappen/filerna som
         argument så importen pekar rätt. Returnerar {ok} eller {ok:False, fel}."""
@@ -588,6 +597,25 @@ class Api:
         config.setdefault("match_id", store.hamta_installning(self.conn, "aktiv_match_id"))
         return publicera_korning.kor_publicering(
             self.conn, config, poster=poster, dry_run=False, logg=self._logg.append)
+
+    # ── Sparade material + utkast (Publicera-panelen) ────────────────────────
+    def lista_material(self):
+        return store.lista_publicera_material(self.conn)
+
+    def spara_material(self, data):
+        data = data or {}
+        mid = store.spara_publicera_material(
+            self.conn, kind=data.get("kind"), status=data.get("status"),
+            match_id=data.get("match_id"), match_namn=data.get("match_namn"),
+            moment=data.get("moment"), tema=data.get("tema"),
+            dropbox=data.get("dropbox"), foto=data.get("foto"),
+            channels=data.get("channels"), caption=data.get("caption"),
+            banor=data.get("banor"), id=data.get("id"))
+        return {"ok": True, "id": mid}
+
+    def radera_material(self, id):
+        store.radera_publicera_material(self.conn, id)
+        return {"ok": True}
 
     # ── Innehåll (CMS → Astro-export) ────────────────────────────────────────
     def lista_innehall(self, typ=None):

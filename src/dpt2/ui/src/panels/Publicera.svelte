@@ -1,9 +1,10 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte'
   import { aktivMatch, genereraBildsvep, valjMapp, listaLag,
-    listaSomeBilder, publiceraTillSoMe, oppnaILightroom, publiceraLiveStory } from '../lib/api.js'
+    listaSomeBilder, publiceraTillSoMe, oppnaILightroom, publiceraLiveStory,
+    forhandsgranskaStory, listaMaterial, sparaMaterial, raderaMaterial } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
-  import { grenFarg, grenEtikett } from '../lib/gren.js'
+  import { grenFarg } from '../lib/gren.js'
 
   const dispatch = createEventDispatcher()
   const bytMatch = () => dispatch('navigera', 'matcher')
@@ -52,6 +53,7 @@
   // Gren-markör i previewn: bara när en bild är vald + aktiva matchens gren är känd.
   // Samexisterar med tema-kickern — tema = innehållstyp, gren = kön/klass.
   $: ovGren = liveVald !== null ? (match?.hem_gren || '') : ''
+  $: ovGrenStil = ovGren ? `border-color:${grenFarg(ovGren)};box-shadow:0 0 0 3px ${_rgba(grenFarg(ovGren), 0.16)}` : ''
   // 9:16-förhandsvisning: kicker = mall, stor text = mallens nyckelfält.
   $: fixtur = match ? `${match.lag_hemma} – ${match.lag_borta}` : 'Hemma – Borta'
   $: ov = {
@@ -99,12 +101,40 @@
     if (moment === 'Nästa match') { c.lag_borta = cfg.motstandare; c.next_when = cfg.nextdatum }
     return c
   }
+  // Riktig förhandsvisning — samma Horisont-mall PIL renderar vid publicering,
+  // inte bara CSS-approximationen. Debounce:ad (fältändringar/bildval) så vi
+  // inte renderar på varje tangenttryck.
+  let previewPath = ''
+  let previewTick = 0
+  let previewLoading = false
+  let previewFel = ''
+  let previewTimer = null
+  function schedulePreview() {
+    // Rör INTE previewPath här — senaste renderingen ska stå kvar (med en
+    // "Renderar…"-badge ovanpå) tills nästa är klar, i stället för att blinka
+    // tillbaka till CSS-skissen vid varje fältändring.
+    if (previewTimer) clearTimeout(previewTimer)
+    previewTimer = setTimeout(genereraForhandsvisning, 500)
+  }
+  async function genereraForhandsvisning() {
+    if (liveVald === null) { previewPath = ''; previewFel = ''; return }
+    previewLoading = true
+    const r = await forhandsgranskaStory(storyConfig())
+    previewLoading = false
+    if (r?.ok) { previewPath = r.path; previewTick += 1; previewFel = '' }
+    else previewFel = r?.fel || 'Kunde inte rendera förhandsvisningen.'
+  }
+  $: if (flik === 'live') { liveVald; moment; tema; cfg; schedulePreview() }
+
   async function publiceraStory() {
     livePub = { kor: true, klar: false, publicerad: false, fel: '', url: '' }
     const r = await publiceraLiveStory(storyConfig())
     livePub = { kor: false, klar: !!r?.ok, publicerad: !!r?.publicerad,
       fel: r?.fel || (r?.ok ? '' : 'Fel vid publicering.'), url: r?.url || '' }
-    if (r?.ok && r?.publicerad) setTimeout(() => (livePub = { ...livePub, klar: false }), 4200)
+    if (r?.ok && r?.publicerad) {
+      await upsertMaterial(_liveMat('publicerad'))
+      setTimeout(() => (livePub = { ...livePub, klar: false }), 4200)
+    }
   }
 
   // ── SoMe · Målbanor: ett paket, eget bildset per kanal ──────────────────────
@@ -197,12 +227,110 @@
       }
     }
     someLage = fel === 0 ? 'done' : (fel === korningar.length ? 'fel' : 'delfel')
+    if (fel === 0) await upsertMaterial(_someMat('publicerad'))
   }
   const someReset = () => { someLage = 'idle'; someResultat = []; someFel = '' }
 
+  // ── Sparade material + utkast ────────────────────────────────────────────
+  const CHLABEL = { story: 'IG Story', ig: 'IG-inlägg', fb: 'Facebook' }
+  let materials = []
+  let editMatId = null
+  let matFilter = 'alla'
+  let liveDraftFlash = false
+  let someDraftFlash = false
+
+  async function laddaMaterial() { materials = await listaMaterial() }
+  // dropbox/foto och banor sparas med utkastet — annars återställer "Fortsätt"
+  // bara moment/tema/caption och förhandsvisningen står tom (bildvalet borta).
+  const _liveMat = (status) => ({ kind: 'live', status, match_id: match?.id || null,
+    match_namn: fixtur, moment, tema, dropbox: liveDropbox,
+    foto: liveVald !== null ? liveBilder[liveVald] : null })
+  const _someMat = (status) => ({ kind: 'some', status, match_id: match?.id || null,
+    match_namn: fixtur, channels: Object.keys(banor).filter((k) => banor[k].pa), caption: someCaption,
+    banor: { story: { mapp: banor.story.mapp, bilder: banor.story.bilder },
+      ig: { mapp: banor.ig.mapp, bilder: banor.ig.bilder },
+      fb: { mapp: banor.fb.mapp, bilder: banor.fb.bilder } } })
+  async function upsertMaterial(data) {
+    const r = await sparaMaterial({ ...data, id: editMatId || undefined })
+    if (r?.ok) editMatId = r.id
+    await laddaMaterial()
+  }
+  async function saveLiveDraft() {
+    await upsertMaterial(_liveMat('utkast'))
+    liveDraftFlash = true
+    setTimeout(() => (liveDraftFlash = false), 1800)
+  }
+  async function saveSomeDraft() {
+    await upsertMaterial(_someMat('utkast'))
+    someDraftFlash = true
+    setTimeout(() => (someDraftFlash = false), 1800)
+  }
+  async function openMaterial(id) {
+    const m = materials.find((x) => x.id === id)
+    if (!m) return
+    editMatId = id
+    if (m.kind === 'live') {
+      flik = 'live'
+      if (m.moment) moment = m.moment
+      if (m.tema) tema = m.tema
+      liveVald = null
+      if (m.dropbox) {
+        liveDropbox = m.dropbox
+        await uppdateraDropbox()
+        const i = m.foto ? liveBilder.indexOf(m.foto) : -1
+        liveVald = i >= 0 ? i : null
+      }
+    } else {
+      flik = 'some'
+      someCaption = m.caption != null ? m.caption : someCaption
+      const ch = m.channels || []
+      const b = m.banor || {}
+      banor = { story: { pa: ch.includes('story'), mapp: b.story?.mapp || '', bilder: b.story?.bilder || [] },
+        ig: { pa: ch.includes('ig'), mapp: b.ig?.mapp || '', bilder: b.ig?.bilder || [] },
+        fb: { pa: ch.includes('fb'), mapp: b.fb?.mapp || '', bilder: b.fb?.bilder || [] } }
+    }
+  }
+  async function deleteMaterial(id) {
+    await raderaMaterial(id)
+    if (editMatId === id) editMatId = null
+    await laddaMaterial()
+  }
+  const setMatFilter = (v) => (matFilter = v)
+  const newMaterial = () => (editMatId = null)
+
+  $: matMatches = [...new Set(materials.map((m) => m.match_namn).filter(Boolean))]
+  $: matFiltered = materials.filter((m) => matFilter === 'alla' ? true
+    : matFilter === 'utkast' ? m.status === 'utkast'
+    : matFilter === 'publicerad' ? m.status === 'publicerad'
+    : m.match_namn === matFilter)
+  $: materialsV = matFiltered.map((m) => ({
+    id: m.id, isLive: m.kind === 'live',
+    title: m.kind === 'live' ? `${m.moment || 'Story'}-story` : 'SoMe-paket',
+    sub: m.match_namn || '—',
+    meta: m.kind === 'live' ? `Live · tema ${m.tema || '—'}`
+      : ((m.channels || []).map((c) => CHLABEL[c] || c).join(' · ') || 'inga kanaler'),
+    when: (m.uppdaterad || '').replace('T', ' ').slice(0, 16),
+    status: m.status, openLabel: m.status === 'utkast' ? 'Fortsätt ›' : 'Öppna ›' }))
+  $: matFilterChips = [['alla', 'Alla'], ['utkast', 'Utkast'], ['publicerad', 'Publicerade'],
+    ...matMatches.map((mm) => [mm, mm.length > 24 ? mm.slice(0, 22) + '…' : mm])]
+  $: materialsEmpty = materialsV.length === 0
+  $: draftCount = materials.filter((m) => m.status === 'utkast').length
+  $: matEditing = editMatId != null
+  $: matEdit = matEditing ? materials.find((m) => m.id === editMatId) : null
+  $: matEditLabel = matEdit ? (matEdit.kind === 'live' ? `${matEdit.moment || 'Story'}-story` : 'SoMe-paket') : ''
+
   onMount(async () => {
-    ;[match, lagAlla] = await Promise.all([aktivMatch(), listaLag()])
-    laddar = false
+    // Om bryggan hakar upp sig (eller kastar) ska panelen ändå lämna
+    // "Laddar…" — annars sitter den fast tills man navigerar bort och
+    // tillbaka (remount = ny chans). try/finally garanterar det.
+    try {
+      ;[match, lagAlla] = await Promise.all([aktivMatch(), listaLag()])
+    } catch (e) {
+      console.error('Publicera: kunde inte läsa aktiv match/lag', e)
+    } finally {
+      laddar = false
+    }
+    laddaMaterial()
   })
 
   function initialer(namn) { return (namn || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 3).toUpperCase() }
@@ -213,6 +341,8 @@
   }
   const brickStil = (f) => `background:${f || '#c9bfa8'};color:${_lum(f || '#c9bfa8') > 0.62 ? 'rgba(35,32,26,.85)' : '#fff'}`
   function fargForLag(namn) { const l = lagAlla.find((x) => x.namn === namn); return l ? (l.stall_hemma || l.profilfarg) : '' }
+  function loggaForLag(namn) { return lagAlla.find((x) => x.namn === namn)?.logga || '' }
+  function _rgba(hex, a) { const n = parseInt((hex || '').replace('#', ''), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})` }
 </script>
 
 <div class="panel">
@@ -305,31 +435,35 @@
 
           <div class="kol2">
             <div class="caps mitt">Förhandsvisning</div>
-            <div class="ovbox" class:harbild={liveVald !== null}>
+            <div class="ovbox" class:harbild={liveVald !== null} class:ovgrenram={!!ovGren && !previewPath} style={previewPath ? '' : ovGrenStil}>
               {#if liveVald !== null}
-                {#if !brutna[liveBilder[liveVald]]}
-                  <img class="ovfoto" src={bildUrl(liveBilder[liveVald])} alt="" on:error={() => (brutna = { ...brutna, [liveBilder[liveVald]]: true })} />
+                {#if previewPath}
+                  <img class="ovfoto" src="file://{previewPath}?v={previewTick}" alt="" />
+                {:else}
+                  {#if !brutna[liveBilder[liveVald]]}
+                    <img class="ovfoto" src={bildUrl(liveBilder[liveVald])} alt="" on:error={() => (brutna = { ...brutna, [liveBilder[liveVald]]: true })} />
+                  {/if}
+                  <div class="ovscrim">
+                    <span class="ovkick" style="background:{TEMAFARG[tema]}">{moment}</span>
+                    <div class="ovbig scd">{ov.big}</div>
+                    {#if ov.small}<div class="ovsmall">{ov.small}</div>{/if}
+                  </div>
                 {/if}
-                {#if ovGren}
-                  <span class="ovribba" style="background:{grenFarg(ovGren)}"></span>
-                  <span class="ovgren scd">{grenEtikett(ovGren)}</span>
-                {/if}
-                <div class="ovscrim">
-                  <span class="ovkick" style="background:{TEMAFARG[tema]}">{moment}</span>
-                  <div class="ovbig scd">{ov.big}</div>
-                  {#if ov.small}<div class="ovsmall">{ov.small}</div>{/if}
-                </div>
+                {#if previewLoading}<div class="ovladdar">Renderar…</div>{/if}
               {:else}
                 <div class="ovtom">Välj en bild i steg 2</div>
               {/if}
             </div>
             {#if liveVald !== null}<div class="ovnamn">{bildNamn(liveBilder[liveVald])}</div>{/if}
+            {#if previewFel}<div class="ovfel">⚠ {previewFel}</div>{/if}
           </div>
         </div>
 
         <div class="korrad">
           <span class="hint fl1">Publiceras som IG Story via SoMe API · filen sparas till Dropbox</span>
+          {#if liveDraftFlash}<span class="ok">✓ Sparat</span>{/if}
           {#if livePub.klar && livePub.publicerad}<span class="ok">✓ Publicerad &amp; sparad{#if livePub.url}&nbsp;<a class="oppna" href={livePub.url} target="_blank" rel="noreferrer">öppna ›</a>{/if}</span>{/if}
+          <button class="sek" on:click={saveLiveDraft} disabled={liveVald === null}>Spara utkast</button>
           <button class="prim" on:click={publiceraStory} disabled={livePub.kor || liveVald === null}>{livePub.kor ? 'Publicerar…' : 'Publicera story ›'}</button>
         </div>
         {#if livePub.fel}<div class="felbox">⚠ {livePub.fel}</div>{/if}
@@ -345,7 +479,10 @@
 
         <div class="matchrad">
           {#if match}
-            <span class="brickor"><span class="bricka" style={brickStil(fargForLag(match.lag_hemma))}>{initialer(match.lag_hemma)}</span><span class="bricka away" style={brickStil(fargForLag(match.lag_borta))}>{initialer(match.lag_borta)}</span></span>
+            <span class="brickor">
+              <span class="bricka" style={brickStil(fargForLag(match.lag_hemma))}>{#if loggaForLag(match.lag_hemma)}<img src={bildUrl(loggaForLag(match.lag_hemma))} alt="" />{:else}{initialer(match.lag_hemma)}{/if}</span>
+              <span class="bricka away" style={brickStil(fargForLag(match.lag_borta))}>{#if loggaForLag(match.lag_borta)}<img src={bildUrl(loggaForLag(match.lag_borta))} alt="" />{:else}{initialer(match.lag_borta)}{/if}</span>
+            </span>
             <div class="mrinfo"><div class="mrfix">{match.lag_hemma} – {match.lag_borta}</div><div class="mrsub">Sport · knyter match, moment &amp; tema till paketet</div></div>
           {:else}
             <div class="mrinfo"><div class="mrfix">Inget innehåll knutet</div><div class="mrsub">Paketet fungerar för Sport, Landskap och Event — matchkontext skickas med när den finns</div></div>
@@ -432,11 +569,60 @@
         {/if}
 
         <div class="korrad">
+          {#if someDraftFlash}<span class="ok">✓ Sparat</span>{/if}
           <button class="prim" on:click={somePublicera} disabled={!someHarBilder || someLage === 'progress'}>Publicera skarpt · {someRunCount} poster</button>
           <button class="sek" on:click={someTestkor} disabled={!someHarBilder}>Testkör</button>
+          <button class="sek" on:click={saveSomeDraft}>Spara utkast</button>
           <span class="summa">{someHarBilder ? someRunCount + ' poster' : 'Välj bilder i minst en kanal'}</span>
         </div>
       </div>
+    </div>
+  {/if}
+
+  {#if !laddar}
+    <div class="matsek">
+      <div class="mathuvud">
+        <div class="matrubrik"><span class="caps">Sparade material</span>
+          <span class="hint">{materials.length} totalt · {draftCount} utkast</span></div>
+        {#if matEditing}
+          <div class="matbanner">
+            <span>Redigerar: {matEditLabel}</span>
+            <button class="nyknapp" on:click={newMaterial}>Nytt ＋</button>
+          </div>
+        {/if}
+      </div>
+      <div class="matchips">
+        {#each matFilterChips as [id, label]}
+          <button class="seg-b" class:on={matFilter === id} on:click={() => setMatFilter(id)}>{label}</button>
+        {/each}
+      </div>
+      {#if materialsEmpty}
+        <div class="mattom">Inga material här — spara ett utkast eller publicera för att se det.</div>
+      {:else}
+        <div class="matlista">
+          {#each materialsV as mt (mt.id)}
+            <div class="matrad">
+              <span class="maticon" class:live={mt.isLive}>
+                {#if mt.isLive}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="12" cy="10" r="3"/><path d="M8 21v-1M16 21v-1"/></svg>
+                {:else}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4M12 2v13"/></svg>
+                {/if}
+              </span>
+              <div class="mattxt">
+                <div class="matrad1"><span class="matnamn">{mt.title}</span>
+                  <span class="matstatus" class:pa={mt.status === 'publicerad'}>{mt.status === 'utkast' ? 'Utkast' : 'Publicerad'}</span></div>
+                <div class="matsub">{mt.sub} · {mt.meta}</div>
+              </div>
+              <span class="mattid mono">{mt.when}</span>
+              <button class="sek" on:click={() => openMaterial(mt.id)}>{mt.openLabel}</button>
+              <button class="papperskorg" title="Ta bort" on:click={() => deleteMaterial(mt.id)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>
+              </button>
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -515,22 +701,24 @@
     border: 1px solid var(--div); display: flex; flex-direction: column; justify-content: flex-end;
     background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 10px, var(--panel) 10px, var(--panel) 20px); }
   .ovbox.harbild { background: linear-gradient(160deg, #5a6b7a, #2c3742); }
+  .ovbox.ovgrenram { border-width: 2.5px; }
   .ovfoto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .ovribba { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; z-index: 2; }
-  .ovgren { position: absolute; top: 9px; left: 12px; z-index: 2; font-size: 8.5px; font-weight: 700;
-    letter-spacing: 0.14em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
   .ovscrim { position: relative; padding: 14px 12px; background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0)); }
   .ovkick { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #fff; padding: 2px 7px; border-radius: 4px; margin-bottom: 7px; }
   .ovbig { font-size: 20px; font-weight: 700; color: #fff; line-height: 1.05; overflow-wrap: break-word; }
   .ovsmall { font-size: 10px; color: rgba(255,255,255,.85); margin-top: 4px; line-height: 1.35; white-space: pre-line; }
   .ovtom { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; text-align: center; font-size: 11px; color: var(--t-mut); }
   .ovnamn { font-size: 10px; color: var(--t-help); text-align: center; margin-top: 6px; font-family: var(--mono, monospace); }
+  .ovladdar { position: absolute; top: 8px; right: 8px; z-index: 3; background: rgba(0,0,0,.6); color: #fff;
+    font-size: 9.5px; font-weight: 600; padding: 3px 8px; border-radius: 999px; }
+  .ovfel { font-size: 10.5px; color: var(--varn); text-align: center; margin-top: 6px; max-width: 150px; }
 
   /* SoMe · Målbanor */
   .matchrad { display: flex; align-items: center; gap: 11px; border: 1px solid var(--div3);
     border-radius: 10px; background: var(--panel); padding: 10px 13px; margin-bottom: 16px; }
   .brickor { display: flex; align-items: center; flex: none; }
-  .bricka { width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-c); font-size: 11px; font-weight: 700; border: 2px solid var(--kort); }
+  .bricka { width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-c); font-size: 11px; font-weight: 700; border: 2px solid var(--kort); overflow: hidden; }
+  .bricka img { width: 100%; height: 100%; object-fit: cover; }
   .bricka.away { margin-left: -8px; }
   .mrinfo { flex: 1; min-width: 0; }
   .mrfix { font-size: 13px; font-weight: 600; color: var(--t-head); }
@@ -590,4 +778,29 @@
   .felbox { margin-top: 14px; border: 1px solid var(--div3); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; color: var(--varn); background: color-mix(in srgb, var(--varn) 8%, transparent); }
   .korrad { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--div3); }
   .summa { margin-left: auto; font-size: 11.5px; color: var(--t-help); }
+
+  /* Sparade material */
+  .matsek { margin-top: 28px; }
+  .mathuvud { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .matrubrik { display: flex; align-items: baseline; gap: 10px; }
+  .matrubrik .caps { margin: 0; }
+  .matbanner { display: flex; align-items: center; gap: 9px; background: var(--acc-soft); border-radius: 999px; padding: 4px 6px 4px 13px; font-size: 11.5px; font-weight: 600; color: var(--acc); }
+  .nyknapp { background: var(--kort); border: 1px solid var(--div); border-radius: 999px; padding: 4px 11px; font-size: 11.5px; font-weight: 600; color: var(--t-body); }
+  .matchips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .matchips .seg-b { border-radius: 999px; padding: 5px 12px; }
+  .mattom { border: 1px dashed var(--div); border-radius: 11px; padding: 22px; text-align: center; font-size: 12.5px; color: var(--t-mut); background: var(--panel); }
+  .matlista { display: flex; flex-direction: column; gap: 9px; }
+  .matrad { display: flex; align-items: center; gap: 13px; background: var(--kort); border: 1px solid var(--div); border-radius: 12px; box-shadow: var(--skugga); padding: 12px 14px; }
+  .maticon { width: 34px; height: 34px; border-radius: 9px; flex: none; display: flex; align-items: center; justify-content: center; background: rgba(47,124,176,.14); color: #2F7CB0; }
+  .maticon.live { background: var(--acc-soft); color: var(--acc); }
+  .mattxt { flex: 1; min-width: 0; }
+  .matrad1 { display: flex; align-items: center; gap: 8px; }
+  .matnamn { font-size: 13.5px; font-weight: 600; color: var(--t-head); }
+  .matstatus { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; flex: none; color: var(--varn); background: color-mix(in srgb, var(--varn) 13%, transparent); }
+  .matstatus.pa { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
+  .matsub { font-size: 11.5px; color: var(--t-mut); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mattid { font-size: 10.5px; color: var(--t-help); flex: none; }
+  .papperskorg { flex: none; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--t-mut); }
+  .papperskorg svg { width: 15px; height: 15px; }
+  .papperskorg:hover { color: #C0453E; }
 </style>

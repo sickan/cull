@@ -625,6 +625,16 @@ export async function publiceraLiveStory(config) {
     publicerad: true, url: 'https://exempel/story/1' })
 }
 
+// Riktig förhandsvisning (samma Horisont-mall, renderad server-side) — i mock
+// finns ingen PIL-motor, så vi "förhandsvisar" bara den valda källbilden själv.
+export async function forhandsgranskaStory(config) {
+  const api = brygga()
+  if (api) return api.forhandsgranska_story(config)
+  if (!config?.moment) return wait({ ok: false, fel: 'Välj ett moment.' })
+  if (!config?.foto) return wait({ ok: false, fel: 'Välj en bild i steg 2.' })
+  return wait({ ok: true, path: config.foto })
+}
+
 // ── Publicera till SoMe ──────────────────────────────────────────────────────
 function _strippaFb(text) {
   return (text || '').replace(/[#@][\wåäöÅÄÖ]+/g, '').replace(/[ \t]{2,}/g, ' ')
@@ -665,6 +675,37 @@ export async function publiceraTillSoMe(config) {
   if (!plan.ok) return wait(plan)
   return wait({ ok: true, sparade: plan.poster.length, varningar: plan.varningar,
     resultat: plan.poster.map((p, i) => ({ ...p, status: 'postad', url: `https://exempel/post/${i + 1}` })) })
+}
+
+// Sparade material + utkast (Publicera-panelens arbetsyta). Muteras lokalt i mock.
+let MOCK_MATERIAL = []
+let _matSeq = 0
+
+export async function listaMaterial() {
+  const api = brygga()
+  if (api) return api.lista_material()
+  return wait(structuredClone(MOCK_MATERIAL))
+}
+
+export async function sparaMaterial(data) {
+  const api = brygga()
+  if (api) return api.spara_material(data)
+  const idx = data.id ? MOCK_MATERIAL.findIndex((m) => m.id === data.id) : -1
+  const uppdaterad = new Date().toISOString()
+  if (idx >= 0) {
+    MOCK_MATERIAL[idx] = { ...MOCK_MATERIAL[idx], ...data, uppdaterad }
+    return wait({ ok: true, id: MOCK_MATERIAL[idx].id })
+  }
+  const id = data.id || `mat_${++_matSeq}`
+  MOCK_MATERIAL = [{ ...data, id, uppdaterad }, ...MOCK_MATERIAL]
+  return wait({ ok: true, id })
+}
+
+export async function raderaMaterial(id) {
+  const api = brygga()
+  if (api) return api.radera_material(id)
+  MOCK_MATERIAL = MOCK_MATERIAL.filter((m) => m.id !== id)
+  return wait({ ok: true })
 }
 
 // pywebview injicerar window.pywebview.api ASYNKRONT. VIKTIGT: api-OBJEKTET dyker

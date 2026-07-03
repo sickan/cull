@@ -526,13 +526,18 @@ class TestFotojobbUtkast(unittest.TestCase):
 
 
 class TestMigrering(unittest.TestCase):
-    def test_fresh_db_ar_v8_med_fotojobb_utkast(self):
+    def test_fresh_db_ar_v10_med_fotojobb_utkast(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 8)
+        self.assertEqual(db.schemaversion(c), 10)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
         self.assertIn("fotojobb_utkast", db.tabeller(c))
         self.assertIn("fotojobb_match", db.tabeller(c))
+        self.assertIn("publicera_material", db.tabeller(c))
+        pubmatkol = [r[1] for r in c.execute("PRAGMA table_info(publicera_material)")]
+        self.assertIn("dropbox", pubmatkol)
+        self.assertIn("foto", pubmatkol)
+        self.assertIn("banor", pubmatkol)
         self.assertIn("trupp_kalla",
                       [r[1] for r in c.execute("PRAGMA table_info(lag)")])
         self.assertIn("sida_url",
@@ -601,6 +606,107 @@ class TestMigrering(unittest.TestCase):
         # befintliga rader får default-kind via COALESCE-läsning (kolumnen är NULL
         # för gamla rader men NOT NULL-defaulten gäller nya inserts)
         self.assertEqual(c.execute("SELECT namn FROM lag WHERE id='x'").fetchone()[0], "X")
+
+    def test_migrera_v8_till_v9(self):
+        # v8-läge (utan publicera_material) → additivt v9.
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA user_version=8")
+        c.execute("CREATE TABLE matchen(id TEXT PRIMARY KEY)")
+        db._migrera(c, 8)
+        self.assertIn("publicera_material", [r[0] for r in c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")])
+
+    def test_migrera_v9_till_v10(self):
+        # v9-läge (publicera_material utan dropbox/foto/banor) → additivt v10.
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA user_version=9")
+        c.execute("CREATE TABLE matchen(id TEXT PRIMARY KEY)")
+        c.execute("""CREATE TABLE publicera_material (
+            id TEXT PRIMARY KEY, kind TEXT NOT NULL, match_id TEXT, match_namn TEXT,
+            status TEXT NOT NULL, moment TEXT, tema TEXT, channels TEXT, caption TEXT,
+            uppdaterad TEXT NOT NULL)""")
+        c.execute("INSERT INTO publicera_material(id,kind,status,uppdaterad) "
+                  "VALUES('m1','live','utkast','2026-07-03T00:00:00')")
+        db._migrera(c, 9)
+        kol = [r[1] for r in c.execute("PRAGMA table_info(publicera_material)")]
+        self.assertIn("dropbox", kol)
+        self.assertIn("foto", kol)
+        self.assertIn("banor", kol)
+        # befintlig rad orörd
+        self.assertEqual(c.execute(
+            "SELECT kind FROM publicera_material WHERE id='m1'").fetchone()[0], "live")
+
+
+class TestPubliceraMaterial(unittest.TestCase):
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.mid = store.spara_match(self.c, {"lag_hemma": "A", "lag_borta": "B"})
+
+    def test_skapa_uppdatera_via_id(self):
+        mat_id = store.spara_publicera_material(
+            self.c, kind="live", status="utkast", match_id=self.mid,
+            match_namn="A – B", moment="Avspark", tema="Hav")
+        rader = store.lista_publicera_material(self.c)
+        self.assertEqual(len(rader), 1)
+        self.assertEqual(rader[0]["status"], "utkast")
+
+        store.spara_publicera_material(
+            self.c, id=mat_id, kind="live", status="publicerad", match_id=self.mid,
+            match_namn="A – B", moment="Avspark", tema="Hav")
+        rader = store.lista_publicera_material(self.c)
+        self.assertEqual(len(rader), 1)                     # samma rad, inte en ny
+        self.assertEqual(rader[0]["status"], "publicerad")
+
+    def test_channels_json_round_trip(self):
+        store.spara_publicera_material(
+            self.c, kind="some", status="utkast", channels=["story", "ig"],
+            caption="Text med #tagg")
+        d = store.lista_publicera_material(self.c)[0]
+        self.assertEqual(d["channels"], ["story", "ig"])
+        self.assertEqual(d["caption"], "Text med #tagg")
+
+    def test_live_dropbox_foto_round_trip(self):
+        # Reproducerar buggen: utan dropbox/foto kan "Fortsätt" inte återställa
+        # förhandsvisningen (bara moment/tema), eftersom bildvalet gick förlorat.
+        store.spara_publicera_material(
+            self.c, kind="live", status="utkast", moment="Resultat", tema="Hav",
+            dropbox="~/Dropbox/DPT/Live/test", foto="~/Dropbox/DPT/Live/test/bild_03.jpg")
+        d = store.lista_publicera_material(self.c)[0]
+        self.assertEqual(d["dropbox"], "~/Dropbox/DPT/Live/test")
+        self.assertEqual(d["foto"], "~/Dropbox/DPT/Live/test/bild_03.jpg")
+
+    def test_some_banor_json_round_trip(self):
+        banor = {"story": {"mapp": "/bilder/a", "bilder": ["1.jpg", "2.jpg"]},
+                 "ig": {"mapp": "/bilder/a", "bilder": ["1.jpg"]},
+                 "fb": {"mapp": "", "bilder": []}}
+        store.spara_publicera_material(
+            self.c, kind="some", status="utkast", channels=["story", "ig"], banor=banor)
+        d = store.lista_publicera_material(self.c)[0]
+        self.assertEqual(d["banor"], banor)
+
+    def test_banor_null_utan_data(self):
+        store.spara_publicera_material(self.c, kind="live", status="utkast")
+        d = store.lista_publicera_material(self.c)[0]
+        self.assertIsNone(d["banor"])
+        self.assertIsNone(d["dropbox"])
+        self.assertIsNone(d["foto"])
+
+    def test_nyast_forst(self):
+        store.spara_publicera_material(self.c, kind="live", status="utkast",
+                                       uppdaterad="2026-06-30T10:00:00")
+        store.spara_publicera_material(self.c, kind="some", status="utkast",
+                                       uppdaterad="2026-06-30T11:00:00")
+        rader = store.lista_publicera_material(self.c)
+        self.assertEqual(rader[0]["kind"], "some")
+
+    def test_radera(self):
+        mat_id = store.spara_publicera_material(self.c, kind="live", status="utkast")
+        store.radera_publicera_material(self.c, mat_id)
+        self.assertEqual(store.lista_publicera_material(self.c), [])
 
 
 class TestSomeMaterial(unittest.TestCase):

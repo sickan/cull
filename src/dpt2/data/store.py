@@ -833,3 +833,45 @@ def lista_some_material(conn, match_id):
     return [dict(r) for r in conn.execute(
         "SELECT * FROM some_material WHERE match_id=? ORDER BY skapad DESC",
         (match_id,))]
+
+
+# ── Sparade material + utkast (Publicera-panelens arbetsyta) ──────────────────
+def spara_publicera_material(conn, *, kind, status, match_id=None, match_namn=None,
+                             moment=None, tema=None, dropbox=None, foto=None,
+                             channels=None, caption=None, banor=None,
+                             id=None, uppdaterad=None):
+    """Skapar (eller ersätter, om id anges) ett sparat material — utkast eller
+    publicerat. channels/banor = lagras som json. dropbox/foto = live-flödets
+    vald käll-mapp/bildfil (steg 2) — utan dem kan "Fortsätt" inte återställa
+    förhandsvisningen. banor = some-flödets {story:{mapp,bilder},ig:{...},fb:{...}}.
+    Returnerar material-id."""
+    mid = id or ny_id()
+    conn.execute(
+        "INSERT OR REPLACE INTO publicera_material"
+        "(id,kind,match_id,match_namn,status,moment,tema,dropbox,foto,channels,"
+        "caption,banor,uppdaterad) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (mid, kind, match_id, match_namn, status, moment, tema, dropbox, foto,
+         json.dumps(channels, ensure_ascii=False) if channels is not None else None,
+         caption,
+         json.dumps(banor, ensure_ascii=False) if banor is not None else None,
+         uppdaterad or _nu()))
+    conn.commit()
+    return mid
+
+
+def _publicera_material_dict(r):
+    d = dict(r)
+    d["channels"] = json.loads(d["channels"]) if d.get("channels") else []
+    d["banor"] = json.loads(d["banor"]) if d.get("banor") else None
+    return d
+
+
+def lista_publicera_material(conn):
+    """Alla sparade material, senast uppdaterade först."""
+    return [_publicera_material_dict(r) for r in conn.execute(
+        "SELECT * FROM publicera_material ORDER BY uppdaterad DESC")]
+
+
+def radera_publicera_material(conn, material_id):
+    conn.execute("DELETE FROM publicera_material WHERE id=?", (material_id,))
+    conn.commit()

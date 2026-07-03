@@ -28,6 +28,11 @@ def _matchfalt(conn, config):
         namn = [sp.get("namn") for sp in m["spelare"]
                 if sp.get("start") and sp.get("lag") == "hemma" and sp.get("namn")]
         startelva = "\n".join(namn) if namn else None
+
+    def _logga(lag_id):
+        lag = store.hamta_lag(conn, lag_id) if lag_id else None
+        return (lag or {}).get("logga") or None
+
     return {
         "lag_hemma": m.get("lag_hemma") or config.get("lag_hemma", ""),
         "lag_borta": config.get("lag_borta") or m.get("lag_borta", ""),
@@ -36,12 +41,20 @@ def _matchfalt(conn, config):
         "stallning": config.get("stallning") or m.get("resultat", ""),
         "mal_rad": config.get("mal_rad") or m.get("malskyttar", ""),
         "startelva": config.get("startelva") or startelva,
+        "gren": m.get("hem_gren") or config.get("gren", ""),
+        # Loggor som fotografen laddat upp under Lag & tävlingar (lag.logga i
+        # databasen) — INTE samma sak som story_overlay.hitta_logga()s gamla
+        # filsystemkonvention (~/.config/dpt/loggor/<namn>.png), som bara är
+        # en fallback om databasen saknar en logga för laget.
+        "hem_logga": _logga(m.get("lag_hemma_id")),
+        "borta_logga": _logga(m.get("lag_borta_id")),
     }
 
 
-def kor_story(conn, config, *, env=None, logg=print):
-    """Renderar en story ur config {foto, moment, tema, format, match_id?}.
-    Returnerar {ok, path, moment} eller {ok:False, fel}."""
+def _rendera(conn, config, *, ut_path=None, ut_mapp=None, env=None):
+    """Gemensam renderingskärna för kor_story/forhandsgranska. Validerar
+    foto+moment, härleder matchfält, kör story_overlay.skapa_story.
+    Returnerar {ok, path} eller {ok:False, fel}."""
     config = config or {}
     if not config.get("moment"):
         return {"ok": False, "fel": "Välj ett moment."}
@@ -50,16 +63,42 @@ def kor_story(conn, config, *, env=None, logg=print):
         return {"ok": False, "fel": "Ange ett källfoto som finns."}
 
     f = _matchfalt(conn, config)
-    ut_mapp = os.path.expanduser(config.get("ut_mapp") or "~/.config/dpt2/stories")
-    logg(f"Renderar story '{config['moment']}' ({config.get('tema', 'Hav')}, "
-         f"{config.get('format', '9x16')})…")
     ut = story_overlay.skapa_story(
         foto, config["moment"], f["lag_hemma"], f["lag_borta"],
         liga=f["liga"], stallning=f["stallning"], mal_rad=f["mal_rad"],
         arena=f["arena"], startelva=f["startelva"],
         avspark_tid=config.get("avspark_tid", ""),
         next_when=config.get("next_when", ""),
-        tema=config.get("tema", "Hav"), format=config.get("format", "9x16"),
-        ut_mapp=ut_mapp, env=env or _env())
-    logg(f"✓ Story renderad: {ut}")
-    return {"ok": True, "path": str(ut), "moment": config["moment"]}
+        tema=config.get("tema", "Hav"), gren=f["gren"],
+        hem_logga=f["hem_logga"], borta_logga=f["borta_logga"],
+        format=config.get("format", "9x16"),
+        ut_path=ut_path, ut_mapp=ut_mapp, env=env or _env())
+    return {"ok": True, "path": str(ut)}
+
+
+def kor_story(conn, config, *, env=None, logg=print):
+    """Renderar en story ur config {foto, moment, tema, format, match_id?} till
+    Dropbox-mappen (`config['ut_mapp']`, annars `~/.config/dpt2/stories`).
+    Returnerar {ok, path, moment} eller {ok:False, fel}."""
+    config = config or {}
+    ut_mapp = os.path.expanduser(config.get("ut_mapp") or "~/.config/dpt2/stories")
+    logg(f"Renderar story '{config.get('moment')}' ({config.get('tema', 'Hav')}, "
+         f"{config.get('format', '9x16')})…")
+    r = _rendera(conn, config, ut_mapp=ut_mapp, env=env)
+    if r["ok"]:
+        logg(f"✓ Story renderad: {r['path']}")
+        r["moment"] = config["moment"]
+    return r
+
+
+# Fast fil (skrivs över varje gång) — snabb förhandsvisning, ALDRIG i Dropbox-
+# mappen, rör aldrig skarpt renderade stories.
+FORHANDSVISNING_PATH = Path.home() / ".config" / "dpt2" / "forhandsvisning.jpg"
+
+
+def forhandsgranska(conn, config, *, env=None):
+    """Renderar SAMMA mall som kor_story men till en fast tempfil, för
+    Publicera→Live-panelens 'riktiga' förhandsvisning. Returnerar {ok, path}
+    eller {ok:False, fel}."""
+    FORHANDSVISNING_PATH.parent.mkdir(parents=True, exist_ok=True)
+    return _rendera(conn, config, ut_path=FORHANDSVISNING_PATH, env=env)

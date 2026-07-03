@@ -27,14 +27,16 @@
   }
   const brickStil = (f) => `background:${f || '#c9bfa8'};color:${_lum(f || '#c9bfa8') > 0.62 ? 'rgba(35,32,26,.85)' : '#fff'}`
   function fargForLag(namn) { const l = lagAlla.find((x) => x.namn === namn); return l ? (l.stall_hemma || l.profilfarg) : '' }
+  function loggaForLag(namn) { return lagAlla.find((x) => x.namn === namn)?.logga || '' }
+  const bildUrl = (p) => (/^(https?|file):/.test(p) ? p : 'file://' + p)
 </script>
 
 {#if !laddar}
   <div class="amrad" class:tom={!match}>
     {#if match}
       <span class="ambrickor">
-        <span class="ambricka" style={brickStil(fargForLag(match.lag_hemma))}>{initialer(match.lag_hemma)}</span>
-        <span class="ambricka away" style={brickStil(fargForLag(match.lag_borta))}>{initialer(match.lag_borta)}</span>
+        <span class="ambricka" style={brickStil(fargForLag(match.lag_hemma))}>{#if loggaForLag(match.lag_hemma)}<img src={bildUrl(loggaForLag(match.lag_hemma))} alt="" />{:else}{initialer(match.lag_hemma)}{/if}</span>
+        <span class="ambricka away" style={brickStil(fargForLag(match.lag_borta))}>{#if loggaForLag(match.lag_borta)}<img src={bildUrl(loggaForLag(match.lag_borta))} alt="" />{:else}{initialer(match.lag_borta)}{/if}</span>
       </span>
       <div class="aminfo">
         <div class="amkick">Aktiv match</div>
@@ -62,7 +64,8 @@
   .amrad.tom { border-left-color: var(--div); }
   .ambrickor { display: flex; align-items: center; flex: none; }
   .ambricka { width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-    font-family: var(--font-c); font-size: 12px; font-weight: 700; border: 2px solid var(--kort); }
+    font-family: var(--font-c); font-size: 12px; font-weight: 700; border: 2px solid var(--kort); overflow: hidden; }
+  .ambricka img { width: 100%; height: 100%; object-fit: cover; }
   .ambricka.away { margin-left: -10px; }
   .aminfo { flex: 1; min-width: 0; }
   .amkick { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-mut); }

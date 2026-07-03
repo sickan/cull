@@ -90,6 +90,8 @@
     const l = lagAlla.find((x) => x.namn === namn)
     return l ? (l.stall_hemma || l.profilfarg) : ''
   }
+  function loggaForLag(namn) { return lagAlla.find((x) => x.namn === namn)?.logga || '' }
+  const bildUrl = (p) => (/^(https?|file):/.test(p) ? p : 'file://' + p)
 
   function grupperaLiga(lista) {
     const m = new Map()
@@ -335,7 +337,7 @@
                         {@const nStart = kol.lista.filter((p) => p.start).length}
                         <div class="lbox">
                           <div class="lhuvud">
-                            <span class="lbricka" style={brickStil(fargForLag(kol.namn))}>{initialer(kol.namn)}</span>
+                            <span class="lbricka" style={brickStil(fargForLag(kol.namn))}>{#if loggaForLag(kol.namn)}<img src={bildUrl(loggaForLag(kol.namn))} alt="" />{:else}{initialer(kol.namn)}{/if}</span>
                             <div class="lnamn-wrap">
                               <div class="lnamn scd">{kol.namn || (kol.sida === 'hemma' ? 'Hemmalag' : 'Bortalag')}</div>
                               <div class="lsub">{kol.sida === 'hemma' ? 'Hemma' : 'Borta'} · {truppNot(kol.namn)}</div>
@@ -507,7 +509,8 @@
   .lbox { border: 1px solid var(--div3); border-radius: 10px; background: var(--panel); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   .lhuvud { display: flex; align-items: center; gap: 9px; }
   .lbricka { width: 30px; height: 30px; border-radius: 50%; flex: none; display: inline-flex; align-items: center;
-    justify-content: center; font-family: var(--font-c); font-size: 11px; font-weight: 700; }
+    justify-content: center; font-family: var(--font-c); font-size: 11px; font-weight: 700; overflow: hidden; }
+  .lbricka img { width: 100%; height: 100%; object-fit: cover; }
   .lnamn-wrap { min-width: 0; }
   .lnamn { font-size: 12.5px; font-weight: 600; color: var(--t-head); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lsub { font-size: 10.5px; color: var(--t-mut); }

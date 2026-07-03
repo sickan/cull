@@ -151,7 +151,9 @@ def normera_lag(namn):
 
 
 def hitta_logga(lag_namn):
-    """Slår upp ~/.config/dpt/loggor/<normaliserat>.(png|jpg)."""
+    """Slår upp ~/.config/dpt/loggor/<normaliserat>.(png|jpg) — den GAMLA
+    filsystemkonventionen, kvar som fallback när laget saknar en logga i
+    databasen (lag.logga, satt via Lag & tävlingar)."""
     if not lag_namn:
         return None
     norm = normera_lag(lag_namn)
@@ -160,6 +162,17 @@ def hitta_logga(lag_namn):
         if p.exists():
             return p
     return None
+
+
+def _valj_logga(lag_namn, db_logga=None):
+    """DB-loggan (lag.logga, laddas upp under Lag & tävlingar) vinner om den
+    finns och pekar på en fil som faktiskt existerar — annars fallback till
+    den gamla filsystemkonventionen (hitta_logga)."""
+    if db_logga:
+        p = Path(db_logga).expanduser()
+        if p.exists():
+            return p
+    return hitta_logga(lag_namn)
 
 
 def _hitta_tema_logga(tema):
@@ -321,28 +334,74 @@ def _tema_logga_lager(canvas_w, canvas_h, tema):
         return None
 
 
-def _liga_logga_lager(canvas_w, canvas_h, liga):
-    """Liga-logga uppe till höger, hörnmaskad, 10 % opacity."""
-    import numpy as np
+def _competition_text_lager(canvas_w, canvas_h, competition):
+    """Tävlings-/liga-/mästerskapsnamnet, spärrad text uppe till höger — ersätter
+    den tidigare liga-loggan (watermark). CSS-referens: top:52px; right:60px;
+    max-width:560px; text-align:right; font:600 27px Saira; letter-spacing:.24em;
+    color:rgba(255,255,255,.66); text-shadow:0 1px 4px rgba(0,0,0,.55)."""
+    if not competition:
+        return None
+    from PIL import ImageFilter
+    Image, ImageDraw, *_ = _pil()
+    text    = competition.upper()
+    storlek = 27
+    max_w   = 560
+    right   = 60
+    top     = 52
+
+    tmp = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
+    d0  = ImageDraw.Draw(tmp)
+    tracking = round(0.24 * storlek)
+    bredd    = _spärrad_bredd(d0, text, _saira(600, storlek), tracking)
+    while bredd > max_w and storlek > 14:
+        storlek -= 1
+        tracking = round(0.24 * storlek)
+        bredd    = _spärrad_bredd(d0, text, _saira(600, storlek), tracking)
+    fnt = _saira(600, storlek)
+    h   = _text_h(d0, text, fnt)
+
+    pad   = 6
+    t_img = Image.new("RGBA", (int(bredd) + pad * 2, h + pad * 2 + 4), (0, 0, 0, 0))
+    t_d   = ImageDraw.Draw(t_img)
+
+    # Skugga: 0 1px 4px rgba(0,0,0,.55)
+    sh_img = Image.new("RGBA", t_img.size, (0, 0, 0, 0))
+    sh_d   = ImageDraw.Draw(sh_img)
+    _spärrad_text(sh_d, (pad, pad + 1), text, fnt, (0, 0, 0, 140), tracking)
+    sh_img = sh_img.filter(ImageFilter.GaussianBlur(4))
+    t_img.alpha_composite(sh_img)
+
+    # Text: vit, 66 % opacity → alpha 168
+    _spärrad_text(t_d, (pad, pad), text, fnt, (255, 255, 255, 168), tracking)
+
+    lager = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+    x = canvas_w - right - pad - int(bredd)
+    y = top - pad
+    lager.alpha_composite(t_img, (x, y))
+    return lager
+
+
+# Gren-kant — samma färgspråk som gren-markören på matchkort/matchlista i appen.
+_GREN_FARG = {
+    "dam": (142, 90, 134, 255),
+    "herr": (62, 124, 135, 255),
+    "mixed": (110, 135, 87, 255),
+}
+
+
+def _gren_kant_lager(canvas_w, canvas_h, gren):
+    """Solid färgremsa längst till vänster (18px @ 1080-bred canvas, full höjd)
+    som kodar gren (dam/herr/mixed). Ingen etikett — färgen är hela signalen.
+    Okänd/tom gren → ingen remsa."""
+    farg = _GREN_FARG.get((gren or "").strip().lower())
+    if not farg:
+        return None
     Image, *_ = _pil()
-    p = hitta_logga(liga)
-    if not p:
-        return None
-    try:
-        logo   = Image.open(p).convert("RGBA")
-        # contain i 300×240
-        logo.thumbnail((300, 240), Image.LANCZOS)
-        w_logo, h_logo = logo.size
-        mask   = _hornmask(w_logo, h_logo, "vh")
-        logo_a = __import__("numpy").asarray(logo.getchannel("A"), dtype=np.float32)
-        mask_a = __import__("numpy").asarray(mask, dtype=np.float32)
-        ny_a   = (logo_a * mask_a / 255.0 * 0.1).astype("uint8")
-        logo.putalpha(Image.fromarray(ny_a, "L"))
-        lager  = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
-        lager.alpha_composite(logo, (canvas_w - w_logo, 0))
-        return lager
-    except Exception:
-        return None
+    bredd = round(canvas_w * 18 / CANVAS_W)
+    lager = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+    strip = Image.new("RGBA", (bredd, canvas_h), farg)
+    lager.alpha_composite(strip, (0, 0))
+    return lager
 
 
 # ---------------------------------------------------------------------------
@@ -742,7 +801,7 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                 liga="", stallning="", mal_rad="",
                 avspark_tid="", arena="", next_when="",
                 startelva=None,
-                tema="Hav",
+                tema="Hav", gren="", hem_logga=None, borta_logga=None,
                 ut_path=None, ut_mapp=None,
                 format="9x16", env=None):
     """
@@ -751,6 +810,11 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     moment: "avspark"|"halvtid"|"paus"|"resultat"|"slutresultat"
             |"startelva"|"malgorare"|"nasta_match" (eller svenska varianter)
     tema:   "Hav"|"Sol"|"Rosé"
+    gren:   "dam"|"herr"|"mixed" (eller tomt) — färgad kant längst till vänster,
+            samma källa som gren-markören på matchkort/matchlista i appen.
+    hem_logga/borta_logga: sökväg till lagets uppladdade logga (lag.logga i
+        databasen). Saknas den → fallback till hitta_logga()s gamla
+        filsystemkonvention, sist ett vitt monogram-badge.
     format: "9x16" (1080×1920) | "4x5" (1080×1350)
     stallning: "1-0" (paus/resultat/malgorare)
     mal_rad: "Larsson 23', Berg 67'" (resultat/malgorare)
@@ -795,11 +859,11 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     if lager:
         canvas.alpha_composite(lager)
 
-    # 4. Liga-logga (uppe höger, valfri)
-    if liga:
-        lager = _liga_logga_lager(W, H, liga)
-        if lager:
-            canvas.alpha_composite(lager)
+    # 4. Tävlingsnamn, text uppe höger (ersätter tidigare liga-logga/watermark)
+    competition = liga or "Damallsvenskan"
+    lager = _competition_text_lager(W, H, competition)
+    if lager:
+        canvas.alpha_composite(lager)
 
     # 5. Botten-scrim
     scrim_h = int(H * 0.68)
@@ -813,7 +877,6 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     isScorers  = state == "Målgörare"
 
     # Härled visade texter (speglar renderVals() i HTML-referensen)
-    competition = liga or "Damallsvenskan"
     venue_up    = arena.upper() if arena else ""
     big_word    = "AVSPARK" if state == "Avspark" else "NÄSTA\nMATCH"
     if state == "Nästa match":
@@ -837,8 +900,8 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     mono_b = (lag_borta[:3] if lag_borta else "BORT").upper()
 
     if isPreview:
-        bricka_h, pad_h = _bricka_med_skugga(hitta_logga(lag_hemma), 84, mono_h)
-        bricka_b, pad_b = _bricka_med_skugga(hitta_logga(lag_borta), 84, mono_b)
+        bricka_h, pad_h = _bricka_med_skugga(_valj_logga(lag_hemma, hem_logga), 84, mono_h)
+        bricka_b, pad_b = _bricka_med_skugga(_valj_logga(lag_borta, borta_logga), 84, mono_b)
         # Crop bort skugg-padding för att använda ren bricka vid placering
         bricka_h_ren = bricka_h.crop((pad_h, pad_h, pad_h + 84, pad_h + 84))
         bricka_b_ren = bricka_b.crop((pad_b, pad_b, pad_b + 84, pad_b + 84))
@@ -848,8 +911,8 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                         competition, big_word, sub_line)
 
     elif isScore:
-        bricka_h, pad_h = _bricka_med_skugga(hitta_logga(lag_hemma), 128, mono_h)
-        bricka_b, pad_b = _bricka_med_skugga(hitta_logga(lag_borta), 128, mono_b)
+        bricka_h, pad_h = _bricka_med_skugga(_valj_logga(lag_hemma, hem_logga), 128, mono_h)
+        bricka_b, pad_b = _bricka_med_skugga(_valj_logga(lag_borta, borta_logga), 128, mono_b)
         bricka_h_ren = bricka_h.crop((pad_h, pad_h, pad_h + 128, pad_h + 128))
         bricka_b_ren = bricka_b.crop((pad_b, pad_b, pad_b + 128, pad_b + 128))
         _render_score(canvas, accent,
@@ -869,6 +932,11 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
 
     # 7. Vertikal URL-text
     canvas.alpha_composite(_url_text_lager(W, H))
+
+    # 8. Gren-kant (vänster, full höjd) — sist/överst, ovanpå allt annat.
+    lager = _gren_kant_lager(W, H, gren)
+    if lager:
+        canvas.alpha_composite(lager)
 
     # Exportera JPEG
     result = canvas.convert("RGB")

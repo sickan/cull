@@ -28,10 +28,36 @@ class TestMatchfalt(unittest.TestCase):
         self.assertNotIn("Borta", f["startelva"])       # bara hemma-start
         self.assertNotIn("Reserv", f["startelva"])       # bara start=True
 
+    def test_gren_ur_matchen_med_config_fallback(self):
+        # gren-kanten härleds ur hemmalagets gren (matchlogik._gren, samma
+        # källa som gren-markören på matchkort/matchlista i appen).
+        mid = store.spara_match(self.c, {"lag_hemma": "Malmö FF", "lag_borta": "KDFF"})
+        store.upsert_lag(self.c, "Malmö FF", gren="dam")
+        f = S._matchfalt(self.c, {"match_id": mid})
+        self.assertEqual(f["gren"], "dam")
+        # utan matchat match_id → config som fallback (Live-flödets fritext-läge)
+        f2 = S._matchfalt(self.c, {"lag_hemma": "A", "gren": "herr"})
+        self.assertEqual(f2["gren"], "herr")
+
     def test_config_fallback_utan_match(self):
         f = S._matchfalt(self.c, {"lag_hemma": "A", "lag_borta": "B"})
         self.assertEqual(f["lag_hemma"], "A")
         self.assertIsNone(f["startelva"])
+        self.assertEqual(f["gren"], "")
+
+    def test_loggor_ur_lagens_databaspost(self):
+        # lag.logga (uppladdad under Lag & tävlingar) ska följa med matchfälten
+        # — INTE story_overlay.hitta_logga()s gamla filsystemkonvention.
+        mid = store.spara_match(self.c, {"lag_hemma": "Malmö FF", "lag_borta": "KDFF"})
+        store.upsert_lag(self.c, "Malmö FF", logga="/loggor/mff.png")
+        f = S._matchfalt(self.c, {"match_id": mid})
+        self.assertEqual(f["hem_logga"], "/loggor/mff.png")
+        self.assertIsNone(f["borta_logga"])              # KDFF fick ingen logga
+
+    def test_loggor_none_utan_match(self):
+        f = S._matchfalt(self.c, {"lag_hemma": "A", "lag_borta": "B"})
+        self.assertIsNone(f["hem_logga"])
+        self.assertIsNone(f["borta_logga"])
 
     def test_live_mallfalt_vinner_over_matchen(self):
         # Live-flödet skickar explicit ifyllda fält (halvtidsställning,
@@ -55,6 +81,60 @@ class TestMatchfalt(unittest.TestCase):
         self.assertFalse(S.kor_story(self.c, {"moment": "Avspark"})["ok"])  # inget foto
         self.assertFalse(S.kor_story(
             self.c, {"moment": "Avspark", "foto": "/finns/inte.jpg"})["ok"])
+
+
+class TestForhandsgranska(unittest.TestCase):
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+
+    def test_validering_speglar_kor_story(self):
+        self.assertFalse(S.forhandsgranska(self.c, {})["ok"])
+        self.assertFalse(S.forhandsgranska(self.c, {"moment": "Avspark"})["ok"])
+
+    def test_renderar_till_fast_fil_ej_dropbox(self):
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as d:
+            foto = f"{d}/kalla.jpg"
+            Image.new("RGB", (400, 300), (80, 120, 160)).save(foto, "JPEG")
+            otillatet = Path(d) / "ska-aldrig-anvandas"
+            r = S.forhandsgranska(self.c, {
+                "moment": "Avspark", "foto": foto, "tema": "Sol",
+                "ut_mapp": str(otillatet)})
+            self.assertTrue(r["ok"])
+            self.assertEqual(r["path"], str(S.FORHANDSVISNING_PATH))
+            self.assertTrue(S.FORHANDSVISNING_PATH.exists())
+            self.assertFalse(otillatet.exists())          # ut_mapp ignoreras helt
+
+    def test_lagets_uppladdade_logga_anvands_i_renderingen(self):
+        # Reproducerar buggen: en logga sparad på laget (Lag & tävlingar) ska
+        # synas i den riktiga renderingen, inte bara det vita monogram-badget.
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as d:
+            foto = f"{d}/kalla.jpg"
+            Image.new("RGB", (400, 300), (80, 120, 160)).save(foto, "JPEG")
+            logga = f"{d}/mff.png"
+            Image.new("RGBA", (200, 200), (255, 0, 0, 255)).save(logga, "PNG")
+
+            mid = store.spara_match(self.c, {"lag_hemma": "Malmö FF", "lag_borta": "KDFF",
+                                             "resultat": "6-0"})
+            store.upsert_lag(self.c, "Malmö FF", logga=logga)
+
+            # Utan logga (monogram-badge) som referens.
+            r_utan = S.forhandsgranska(self.c, {
+                "moment": "Resultat", "foto": foto, "lag_hemma": "X", "lag_borta": "Y"})
+            utan_bytes = Path(r_utan["path"]).read_bytes()
+
+            # Med matchens riktiga lag (Malmö FF har en logga i databasen).
+            r_med = S.forhandsgranska(self.c, {
+                "moment": "Resultat", "foto": foto, "match_id": mid})
+            self.assertTrue(r_med["ok"])
+            med_bytes = Path(r_med["path"]).read_bytes()
+
+            self.assertNotEqual(utan_bytes, med_bytes)   # loggan syns → annan pixeldata
 
 
 if __name__ == "__main__":
