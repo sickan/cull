@@ -870,8 +870,22 @@ def index_url():
     return DIST_INDEX.as_uri() if DIST_INDEX.exists() else DEV_URL
 
 
+def _satt_dockikon():
+    """Appen körs som en vanlig python-process (AppleScript-lanseraren avslutar
+    sig själv direkt efter att ha startat oss i bakgrunden) → Dock visar annars
+    Pythons standardikon i stället för häst-loggan. Sätts programmatiskt här."""
+    try:
+        from AppKit import NSApplication, NSImage
+        ikon = UI_DIR / "src" / "lib" / "assets" / "logo-hast.png"
+        bild = NSImage.alloc().initByReferencingFile_(str(ikon))
+        NSApplication.sharedApplication().setApplicationIconImage_(bild)
+    except Exception:
+        pass
+
+
 def main(db_path=None):
     import webview
+    _satt_dockikon()
     api = Api(db_path)
     webview.create_window(
         "Dalecarlia Photo Tools", url=index_url(), js_api=api,
