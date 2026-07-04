@@ -109,19 +109,21 @@
     return f || ti || ''
   }
 
-  // ── Kompakt lista + redigering i höger-drawer ─────────────────────────────
-  let teamOpen = null            // lag-id vars drawer är öppen
-  let compOpen = null            // tävling-id vars drawer är öppen
-  $: teamOpenObj = teamOpen != null ? lag.find((l) => l.id === teamOpen) : null
-  $: compOpenObj = compOpen != null ? tavlingar.find((t) => t.id === compOpen) : null
-  $: teamArNy = teamOpenObj && String(teamOpenObj.id).startsWith('nytt-')
-  $: compArNy = compOpenObj && String(compOpenObj.id).startsWith('ny-')
+  // ── Kompakt lista + redigering i utfälld rad (matcher-stil) ────────────────
+  let teamOpen = null            // lag-id vars rad är utfälld
+  let compOpen = null            // tävling-id vars rad är utfälld
 
-  function apnaLag(l) { teamOpen = l.id; compOpen = null }
-  function apnaTavling(t) { compOpen = t.id; teamOpen = null }
-  function stangDrawer() { teamOpen = null; compOpen = null }
+  function apnaLag(l) {
+    if (teamOpen === l.id) { teamOpen = null; return }
+    teamOpen = l.id; compOpen = null
+  }
+  function apnaTavling(t) {
+    if (compOpen === t.id) { compOpen = null; return }
+    compOpen = t.id; teamOpen = null
+  }
+  function stangRad() { teamOpen = null; compOpen = null }
   function onKeydown(e) {
-    if (e.key === 'Escape' && (teamOpen != null || compOpen != null)) stangDrawer()
+    if (e.key === 'Escape' && (teamOpen != null || compOpen != null)) stangRad()
   }
 
   function metaRad(l) {
@@ -308,22 +310,142 @@
       {:else}
         <div class="lista">
           {#each lagFiltrerat as l (l.id)}
-            <div class="krad">
-              <button class="logoslot" on:click={() => valjLoggaLag(l)} title="Välj logga/porträtt">
-                <Lagbricka namn={l.namn} farg={(l.kind === 'individ' ? l.profilfarg : l.stall_hemma) || '#8A8172'} logga={l.logga} storlek={28} />
-              </button>
-              <div class="ktxt2">
-                <div class="rad1b">
-                  <span class="namn2 scd">{l.namn || 'Namnlöst lag'}</span>
-                  {#if l.gren}<span class="grenlbl2 scd" style="color:{grenFarg(l.gren)}">{GREN_ETIKETT[l.gren]}</span>{/if}
+            <div class="kkort">
+              <div class="krad">
+                <button class="logoslot" on:click={() => valjLoggaLag(l)} title="Välj logga/porträtt">
+                  <Lagbricka namn={l.namn} farg={(l.kind === 'individ' ? l.profilfarg : l.stall_hemma) || '#8A8172'} logga={l.logga} storlek={28} />
+                </button>
+                <div class="ktxt2">
+                  <div class="rad1b">
+                    <span class="namn2 scd">{l.namn || 'Namnlöst lag'}</span>
+                    {#if l.gren}<span class="grenlbl2 scd" style="color:{grenFarg(l.gren)}">{GREN_ETIKETT[l.gren]}</span>{/if}
+                  </div>
+                  <div class="kmeta2">{[metaRad(l) || 'Ofullständig post', kopplingsText(l)].filter(Boolean).join(' · ')}</div>
                 </div>
-                <div class="kmeta2">{[metaRad(l) || 'Ofullständig post', kopplingsText(l)].filter(Boolean).join(' · ')}</div>
+                {#if sparad === l.id}<span class="flash">✓</span>{/if}
+                <button class="andra2" on:click={() => apnaLag(l)}>{teamOpen === l.id ? 'Stäng' : 'Ändra'}</button>
+                <button class="x" class:armerad={$armerad === `lag-${l.id}`}
+                  title={$armerad === `lag-${l.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                  on:click={taBortKlick(`lag-${l.id}`, () => taBortLag(l))}>{$armerad === `lag-${l.id}` ? 'Ta bort?' : '×'}</button>
               </div>
-              {#if sparad === l.id}<span class="flash">✓</span>{/if}
-              <button class="andra2" on:click={() => apnaLag(l)}>Ändra</button>
-              <button class="x" class:armerad={$armerad === `lag-${l.id}`}
-                title={$armerad === `lag-${l.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                on:click={taBortKlick(`lag-${l.id}`, () => taBortLag(l))}>{$armerad === `lag-${l.id}` ? 'Ta bort?' : '×'}</button>
+
+              {#if teamOpen === l.id}
+                <div class="inlineform">
+                  <div class="falt">
+                    <div class="rad1">
+                      <div class="seg">
+                        <button class:on={l.kind !== 'individ'} on:click={() => sattKind(l, 'team')}>Lag</button>
+                        <button class:on={l.kind === 'individ'} on:click={() => sattKind(l, 'individ')}>Individ</button>
+                      </div>
+                      <input class="namn-in scd" bind:value={l.namn} on:change={() => gerLag(l)}
+                        placeholder={l.kind === 'individ' ? 'Namn' : 'Lagnamn'} />
+                      <div class="seg">
+                        {#each GRENAR as g}
+                          {#if g !== 'mixed' || l.kind !== 'individ'}
+                            <button class:on={l.gren === g} on:click={() => sattGren(l, g)}>{GREN_ETIKETT[g]}</button>
+                          {/if}
+                        {/each}
+                      </div>
+                    </div>
+                    <label class="sportrad">
+                      <span class="lbl">Sport</span>
+                      <select bind:value={l.sport} on:change={() => gerLag(l)}>
+                        <option value={null}>Välj sport…</option>
+                        {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
+                      </select>
+                    </label>
+                    <div class="dubbel">
+                      <input bind:value={l.hemsida} on:change={() => gerLag(l)} placeholder="Hemsida" />
+                      <input bind:value={l.instagram} on:change={() => gerLag(l)} placeholder="@instagram" />
+                    </div>
+
+                    {#if l.kind === 'individ'}
+                      <div class="stall">
+                        <span class="lbl">Profil</span>
+                        <input type="color" bind:value={l.profilfarg} on:change={() => gerLag(l)} title="Profilfärg" />
+                        <input class="klubb" bind:value={l.klubb} on:change={() => gerLag(l)} placeholder="Klubb / land" />
+                        {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
+                      </div>
+                    {:else}
+                      <div class="stall">
+                        <span class="lbl">Ställ</span>
+                        <input type="color" bind:value={l.stall_hemma} on:change={() => gerLag(l)} title="Hemma" />
+                        <input type="color" bind:value={l.stall_borta} on:change={() => gerLag(l)} title="Borta" />
+                        <input type="color" bind:value={l.stall_tredje} on:change={() => gerLag(l)} title="Tredje" />
+                        <span class="lbl mut">hemma · borta · tredje</span>
+                        {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
+                      </div>
+                      <div class="trupprad">
+                        <button class="spelarbtn" on:click={() => togglaTrupp(l)} disabled={truppLaddar === l.id}>Läs in spelare…</button>
+                        <span class="truppinfo">{truppEtikett(l)}</span>
+                        {#if l.trupp_n}<button class="visaredigera" on:click={() => togglaRoster(l)}>Visa &amp; redigera ›</button>{/if}
+                      </div>
+
+                      {#if rosterOppen === l.id}
+                        <div class="rosterbox">
+                          <div class="rosterhuvud"><span class="rnr">Nr</span><span class="rnamn">Namn</span><span class="rpos">Pos</span><span class="rx"></span></div>
+                          {#each l.roster || [] as p, pi (p)}
+                            <div class="rosterrad">
+                              <input class="rnr" bind:value={p.nr} on:change={() => sparaSpelareRad(l, p)} />
+                              <input class="rnamn" bind:value={p.namn} on:change={() => sparaSpelareRad(l, p)} />
+                              <input class="rpos" bind:value={p.position} on:change={() => sparaSpelareRad(l, p)} />
+                              <button class="rx" class:armerad={$armerad === `sp-${l.id}-${pi}`}
+                                title={$armerad === `sp-${l.id}-${pi}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                                on:click={taBortKlick(`sp-${l.id}-${pi}`, () => taBortSpelareRad(l, p))}>{$armerad === `sp-${l.id}-${pi}` ? 'Ta bort?' : '×'}</button>
+                            </div>
+                          {/each}
+                          <button class="rosteradd" on:click={() => laggTillSpelare(l)}>+ Lägg till spelare</button>
+                        </div>
+                      {/if}
+
+                      {#if truppLaddar === l.id}
+                        <div class="truppladdar">
+                          <span class="spin"></span>
+                          <div><div class="tlt">Läser in trupp…</div><div class="tls">Hämtar och tolkar laguppställningen.</div></div>
+                        </div>
+                      {:else if truppOppen === l.id}
+                        <div class="truppvaljare">
+                          <div class="truppcaps">Läs in trupp från</div>
+                          <div class="truppurl">
+                            <input bind:value={truppUrl} placeholder="Hemsida eller URL till laguppställning…" />
+                            <button class="hamta" on:click={() => lasTrupp(l, 'url')}>Hämta</button>
+                          </div>
+                          <div class="avdelare"><span class="linje"></span><span class="eller">eller ladda upp fil</span><span class="linje"></span></div>
+                          <div class="filknappar">
+                            <button on:click={() => lasTrupp(l, 'csv')}>CSV</button>
+                            <button on:click={() => lasTrupp(l, 'bild')}>Bild · JPG / PNG / HEIF</button>
+                            <button on:click={() => lasTrupp(l, 'pdf')}>PDF</button>
+                          </div>
+                          {#if truppFel}<div class="truppfel">⚠ {truppFel}</div>
+                          {:else}<div class="trupphint">Sidan/filen tolkas och spelarna läggs i lagets trupp.</div>{/if}
+                        </div>
+                      {/if}
+                    {/if}
+
+                    <div class="kopplbox">
+                      <div class="truppcaps">Kopplad till liga / tävling / mästerskap</div>
+                      <div class="chips">
+                        {#each l.comps || [] as tid (tid)}
+                          <span class="chip">{tavlingNamn(tid)}
+                            <button class="chipx" title="Koppla bort" on:click={() => kopplaBort(l, tid)}>×</button>
+                          </span>
+                        {/each}
+                        {#if (tavlingar.filter((t) => !(l.comps || []).includes(t.id))).length}
+                          <select class="chipny" value="" on:change={(e) => { kopplaTill(l, e.target.value); e.target.value = '' }}>
+                            <option value="" disabled>+ Koppla till…</option>
+                            {#each tavlingar.filter((t) => !(l.comps || []).includes(t.id)) as t (t.id)}
+                              <option value={t.id}>{t.namn}</option>
+                            {/each}
+                          </select>
+                        {:else if !(l.comps || []).length}
+                          <span class="kmeta">Inga tävlingar i registret ännu.</span>
+                        {/if}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="formfot"><button class="klart" on:click={stangRad}>Klart</button></div>
+              {/if}
             </div>
           {/each}
         </div>
@@ -335,23 +457,66 @@
       {:else}
         <div class="lista">
           {#each tavlingar as t (t.id)}
-            <div class="krad">
-              <button class="logoslot" on:click={() => valjLoggaTavling(t)} title="Välj logga">
-                <Lagbricka namn={t.namn} farg={'#8A8172'} logga={t.logga} storlek={28} />
-              </button>
-              <div class="ktxt2">
-                <div class="rad1b">
-                  <span class="namn2 scd">{t.namn || 'Namnlös tävling'}</span>
-                  {#if t.gren}<span class="grenlbl2 scd" style="color:{grenFarg(t.gren)}">{GREN_ETIKETT[t.gren]}</span>{/if}
+            <div class="kkort">
+              <div class="krad">
+                <button class="logoslot" on:click={() => valjLoggaTavling(t)} title="Välj logga">
+                  <Lagbricka namn={t.namn} farg={'#8A8172'} logga={t.logga} storlek={28} />
+                </button>
+                <div class="ktxt2">
+                  <div class="rad1b">
+                    <span class="namn2 scd">{t.namn || 'Namnlös tävling'}</span>
+                    {#if t.gren}<span class="grenlbl2 scd" style="color:{grenFarg(t.gren)}">{GREN_ETIKETT[t.gren]}</span>{/if}
+                  </div>
+                  <div class="kmeta2">{[TYP_ETIKETT[t.typ], SPORT_ETIKETT[t.sport], periodText(t), t.ort].filter(Boolean).join(' · ')}</div>
                 </div>
-                <div class="kmeta2">{[TYP_ETIKETT[t.typ], SPORT_ETIKETT[t.sport], periodText(t), t.ort].filter(Boolean).join(' · ')}</div>
+                {#if t.kalender}<span class="ikalendern">I kalendern</span>{/if}
+                {#if sparad === t.id}<span class="flash">✓</span>{/if}
+                <button class="andra2" on:click={() => apnaTavling(t)}>{compOpen === t.id ? 'Stäng' : 'Ändra'}</button>
+                <button class="x" class:armerad={$armerad === `tavling-${t.id}`}
+                  title={$armerad === `tavling-${t.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                  on:click={taBortKlick(`tavling-${t.id}`, () => taBortTavling(t))}>{$armerad === `tavling-${t.id}` ? 'Ta bort?' : '×'}</button>
               </div>
-              {#if t.kalender}<span class="ikalendern">I kalendern</span>{/if}
-              {#if sparad === t.id}<span class="flash">✓</span>{/if}
-              <button class="andra2" on:click={() => apnaTavling(t)}>Ändra ›</button>
-              <button class="x" class:armerad={$armerad === `tavling-${t.id}`}
-                title={$armerad === `tavling-${t.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                on:click={taBortKlick(`tavling-${t.id}`, () => taBortTavling(t))}>{$armerad === `tavling-${t.id}` ? 'Ta bort?' : '×'}</button>
+
+              {#if compOpen === t.id}
+                <div class="inlineform">
+                  <div class="falt">
+                    <input class="namn-in scd" bind:value={t.namn} on:change={() => gerTavling(t)} placeholder="Tävlingens namn" />
+                    <div class="trippel">
+                      <select bind:value={t.typ} on:change={() => gerTavling(t)}>
+                        {#each TYPER as ty}<option value={ty}>{TYP_ETIKETT[ty]}</option>{/each}
+                      </select>
+                      <select bind:value={t.sport} on:change={() => gerTavling(t)}>
+                        {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
+                      </select>
+                      <select bind:value={t.gren} on:change={() => gerTavling(t)}>
+                        <option value={null}>Gren…</option>
+                        {#each GRENAR as g}<option value={g}>{GREN_ETIKETT[g]}</option>{/each}
+                      </select>
+                    </div>
+                    <div class="dubbel">
+                      <label class="datumf"><span class="lbl">Start</span><input type="date" bind:value={t.fran} on:change={() => gerTavling(t)} /></label>
+                      <label class="datumf"><span class="lbl">Slut</span><input type="date" bind:value={t.till} on:change={() => gerTavling(t)} /></label>
+                    </div>
+                    <div class="dubbel">
+                      <input bind:value={t.ort} on:change={() => gerTavling(t)} placeholder="Ort" />
+                      <input bind:value={t.arena} on:change={() => gerTavling(t)} placeholder="Arena" />
+                    </div>
+                    <input bind:value={t.hemsida} on:change={() => gerTavling(t)} placeholder="Hemsida" />
+                    {#if sparad === t.id}<span class="flash">✓ sparat</span>{/if}
+                    <div class="kalfot">
+                      <span class="kalik">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg>
+                      </span>
+                      <span class="kaltxt">Läggs som ett Okategoriserat utkast i Fotojobb — du kategoriserar och aktiverar synk dit</span>
+                      <button class="kalbtn" class:i={t.kalender} on:click={() => vaxlaTavlingKalender(t)}>
+                        {t.kalender ? 'Utkast i Fotojobb ✓' : 'Lägg i Google Calendar ›'}
+                      </button>
+                    </div>
+                    {#if kalFelId === t.id}<div class="kalfel">⚠ {kalFelMsg}</div>{/if}
+                  </div>
+                </div>
+                <div class="formfot"><button class="klart" on:click={stangRad}>Klart</button></div>
+              {/if}
             </div>
           {/each}
         </div>
@@ -360,178 +525,6 @@
     {/if}
   {/if}
 </div>
-
-{#if teamOpenObj || compOpenObj}
-  <div class="overlay" on:click={stangDrawer}></div>
-  <div class="drawer">
-    <div class="drhuvud">
-      <h2 class="scd">
-        {#if teamOpenObj}{teamArNy ? 'Nytt lag / utövare' : `Ändra: ${teamOpenObj.namn || 'Namnlöst lag'}`}
-        {:else}{compArNy ? 'Ny tävling' : `Ändra: ${compOpenObj.namn || 'Namnlös tävling'}`}{/if}
-      </h2>
-      <button class="drx" on:click={stangDrawer} title="Stäng (Esc)">✕</button>
-    </div>
-    <div class="drbody">
-      {#if teamOpenObj}
-        {#each [teamOpenObj] as l (l.id)}
-        <div class="falt">
-          <div class="rad1">
-            <div class="seg">
-              <button class:on={l.kind !== 'individ'} on:click={() => sattKind(l, 'team')}>Lag</button>
-              <button class:on={l.kind === 'individ'} on:click={() => sattKind(l, 'individ')}>Individ</button>
-            </div>
-            <input class="namn-in scd" bind:value={l.namn} on:change={() => gerLag(l)}
-              placeholder={l.kind === 'individ' ? 'Namn' : 'Lagnamn'} />
-            <div class="seg">
-              {#each GRENAR as g}
-                {#if g !== 'mixed' || l.kind !== 'individ'}
-                  <button class:on={l.gren === g} on:click={() => sattGren(l, g)}>{GREN_ETIKETT[g]}</button>
-                {/if}
-              {/each}
-            </div>
-          </div>
-          <label class="sportrad">
-            <span class="lbl">Sport</span>
-            <select bind:value={l.sport} on:change={() => gerLag(l)}>
-              <option value={null}>Välj sport…</option>
-              {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
-            </select>
-          </label>
-          <div class="dubbel">
-            <input bind:value={l.hemsida} on:change={() => gerLag(l)} placeholder="Hemsida" />
-            <input bind:value={l.instagram} on:change={() => gerLag(l)} placeholder="@instagram" />
-          </div>
-
-          {#if l.kind === 'individ'}
-            <div class="stall">
-              <span class="lbl">Profil</span>
-              <input type="color" bind:value={l.profilfarg} on:change={() => gerLag(l)} title="Profilfärg" />
-              <input class="klubb" bind:value={l.klubb} on:change={() => gerLag(l)} placeholder="Klubb / land" />
-              {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
-            </div>
-          {:else}
-            <div class="stall">
-              <span class="lbl">Ställ</span>
-              <input type="color" bind:value={l.stall_hemma} on:change={() => gerLag(l)} title="Hemma" />
-              <input type="color" bind:value={l.stall_borta} on:change={() => gerLag(l)} title="Borta" />
-              <input type="color" bind:value={l.stall_tredje} on:change={() => gerLag(l)} title="Tredje" />
-              <span class="lbl mut">hemma · borta · tredje</span>
-              {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
-            </div>
-            <div class="trupprad">
-              <button class="spelarbtn" on:click={() => togglaTrupp(l)} disabled={truppLaddar === l.id}>Läs in spelare…</button>
-              <span class="truppinfo">{truppEtikett(l)}</span>
-              {#if l.trupp_n}<button class="visaredigera" on:click={() => togglaRoster(l)}>Visa &amp; redigera ›</button>{/if}
-            </div>
-
-            {#if rosterOppen === l.id}
-              <div class="rosterbox">
-                <div class="rosterhuvud"><span class="rnr">Nr</span><span class="rnamn">Namn</span><span class="rpos">Pos</span><span class="rx"></span></div>
-                {#each l.roster || [] as p, pi (p)}
-                  <div class="rosterrad">
-                    <input class="rnr" bind:value={p.nr} on:change={() => sparaSpelareRad(l, p)} />
-                    <input class="rnamn" bind:value={p.namn} on:change={() => sparaSpelareRad(l, p)} />
-                    <input class="rpos" bind:value={p.position} on:change={() => sparaSpelareRad(l, p)} />
-                    <button class="rx" class:armerad={$armerad === `sp-${l.id}-${pi}`}
-                      title={$armerad === `sp-${l.id}-${pi}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                      on:click={taBortKlick(`sp-${l.id}-${pi}`, () => taBortSpelareRad(l, p))}>{$armerad === `sp-${l.id}-${pi}` ? 'Ta bort?' : '×'}</button>
-                  </div>
-                {/each}
-                <button class="rosteradd" on:click={() => laggTillSpelare(l)}>+ Lägg till spelare</button>
-              </div>
-            {/if}
-
-            {#if truppLaddar === l.id}
-              <div class="truppladdar">
-                <span class="spin"></span>
-                <div><div class="tlt">Läser in trupp…</div><div class="tls">Hämtar och tolkar laguppställningen.</div></div>
-              </div>
-            {:else if truppOppen === l.id}
-              <div class="truppvaljare">
-                <div class="truppcaps">Läs in trupp från</div>
-                <div class="truppurl">
-                  <input bind:value={truppUrl} placeholder="Hemsida eller URL till laguppställning…" />
-                  <button class="hamta" on:click={() => lasTrupp(l, 'url')}>Hämta</button>
-                </div>
-                <div class="avdelare"><span class="linje"></span><span class="eller">eller ladda upp fil</span><span class="linje"></span></div>
-                <div class="filknappar">
-                  <button on:click={() => lasTrupp(l, 'csv')}>CSV</button>
-                  <button on:click={() => lasTrupp(l, 'bild')}>Bild · JPG / PNG / HEIF</button>
-                  <button on:click={() => lasTrupp(l, 'pdf')}>PDF</button>
-                </div>
-                {#if truppFel}<div class="truppfel">⚠ {truppFel}</div>
-                {:else}<div class="trupphint">Sidan/filen tolkas och spelarna läggs i lagets trupp.</div>{/if}
-              </div>
-            {/if}
-          {/if}
-
-          <div class="kopplbox">
-            <div class="truppcaps">Kopplad till liga / tävling / mästerskap</div>
-            <div class="chips">
-              {#each l.comps || [] as tid (tid)}
-                <span class="chip">{tavlingNamn(tid)}
-                  <button class="chipx" title="Koppla bort" on:click={() => kopplaBort(l, tid)}>×</button>
-                </span>
-              {/each}
-              {#if (tavlingar.filter((t) => !(l.comps || []).includes(t.id))).length}
-                <select class="chipny" value="" on:change={(e) => { kopplaTill(l, e.target.value); e.target.value = '' }}>
-                  <option value="" disabled>+ Koppla till…</option>
-                  {#each tavlingar.filter((t) => !(l.comps || []).includes(t.id)) as t (t.id)}
-                    <option value={t.id}>{t.namn}</option>
-                  {/each}
-                </select>
-              {:else if !(l.comps || []).length}
-                <span class="kmeta">Inga tävlingar i registret ännu.</span>
-              {/if}
-            </div>
-          </div>
-        </div>
-        {/each}
-      {:else if compOpenObj}
-        {#each [compOpenObj] as t (t.id)}
-        <div class="falt">
-          <input class="namn-in scd" bind:value={t.namn} on:change={() => gerTavling(t)} placeholder="Tävlingens namn" />
-          <div class="trippel">
-            <select bind:value={t.typ} on:change={() => gerTavling(t)}>
-              {#each TYPER as ty}<option value={ty}>{TYP_ETIKETT[ty]}</option>{/each}
-            </select>
-            <select bind:value={t.sport} on:change={() => gerTavling(t)}>
-              {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
-            </select>
-            <select bind:value={t.gren} on:change={() => gerTavling(t)}>
-              <option value={null}>Gren…</option>
-              {#each GRENAR as g}<option value={g}>{GREN_ETIKETT[g]}</option>{/each}
-            </select>
-          </div>
-          <div class="dubbel">
-            <label class="datumf"><span class="lbl">Start</span><input type="date" bind:value={t.fran} on:change={() => gerTavling(t)} /></label>
-            <label class="datumf"><span class="lbl">Slut</span><input type="date" bind:value={t.till} on:change={() => gerTavling(t)} /></label>
-          </div>
-          <div class="dubbel">
-            <input bind:value={t.ort} on:change={() => gerTavling(t)} placeholder="Ort" />
-            <input bind:value={t.arena} on:change={() => gerTavling(t)} placeholder="Arena" />
-          </div>
-          <input bind:value={t.hemsida} on:change={() => gerTavling(t)} placeholder="Hemsida" />
-          {#if sparad === t.id}<span class="flash">✓ sparat</span>{/if}
-          <div class="kalfot">
-            <span class="kalik">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg>
-            </span>
-            <span class="kaltxt">Läggs som ett Okategoriserat utkast i Fotojobb — du kategoriserar och aktiverar synk dit</span>
-            <button class="kalbtn" class:i={t.kalender} on:click={() => vaxlaTavlingKalender(t)}>
-              {t.kalender ? 'Utkast i Fotojobb ✓' : 'Lägg i Google Calendar ›'}
-            </button>
-          </div>
-          {#if kalFelId === t.id}<div class="kalfel">⚠ {kalFelMsg}</div>{/if}
-        </div>
-        {/each}
-      {/if}
-    </div>
-    <div class="drfot">
-      <button class="klart" on:click={stangDrawer}>Klart</button>
-    </div>
-  </div>
-{/if}
 
 <style>
   .panel { padding: 22px 26px 48px; max-width: 900px; }
@@ -559,10 +552,11 @@
   .kmeta { font-size: 12px; color: var(--t-mut); }
   .lista { display: flex; flex-direction: column; gap: 8px; }
 
+  /* Kortskal (rad + ev. utfälld redigering) — matcher-stil */
+  .kkort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
+    box-shadow: var(--skugga); overflow: hidden; }
   /* Kompakt rad (~40 px) */
-  .krad { display: flex; align-items: center; gap: 12px; background: var(--kort);
-    border: 1px solid var(--div); border-radius: var(--r); padding: 8px 12px;
-    box-shadow: var(--skugga); }
+  .krad { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
   .logoslot { border: 0; background: transparent; padding: 0; border-radius: 50%; flex: none; cursor: pointer; }
   .logoslot:hover { outline: 2px solid var(--acc); outline-offset: 1px; }
   .ktxt2 { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -696,21 +690,9 @@
     font-size: 13px; font-weight: 600; }
   .ny:hover { border-color: var(--acc); color: var(--acc); }
 
-  /* Drawer (redigering från höger) */
-  .overlay { position: fixed; inset: 0; background: rgba(28, 24, 16, 0.32);
-    backdrop-filter: blur(4px); z-index: 40; }
-  .drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 370px; max-width: 92vw;
-    background: var(--kort); border-left: 1px solid var(--div); box-shadow: -8px 0 28px rgba(0, 0, 0, 0.18);
-    z-index: 41; display: flex; flex-direction: column; animation: drin 0.18s ease; }
-  @keyframes drin { from { transform: translateX(24px); opacity: 0.4; } to { transform: translateX(0); opacity: 1; } }
-  .drhuvud { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 16px 18px; border-bottom: 1px solid var(--div3); flex: none; }
-  .drhuvud h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--t-head); }
-  .drx { width: 28px; height: 28px; border: 1px solid var(--div); border-radius: 7px;
-    background: var(--kort); color: var(--t-mut); font-size: 14px; flex: none; }
-  .drx:hover { background: var(--rose); border-color: var(--rose); color: #fff; }
-  .drbody { flex: 1; overflow-y: auto; padding: 16px 18px; }
-  .drfot { padding: 12px 18px; border-top: 1px solid var(--div3); flex: none; }
+  /* Utfälld redigering — inline i radens kort (matcher-stil) */
+  .inlineform { border-top: 1px solid var(--div3); padding: 16px 14px; }
+  .formfot { padding: 12px 14px; border-top: 1px solid var(--div3); }
   .klart { width: 100%; padding: 10px; border: 0; border-radius: 8px; background: var(--acc);
     color: #fff; font-size: 13.5px; font-weight: 600; }
   .klart:hover { filter: brightness(1.05); }

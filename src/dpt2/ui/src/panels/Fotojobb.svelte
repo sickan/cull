@@ -1,12 +1,14 @@
 <script>
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte'
-  import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher } from '../lib/api.js'
+  import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher, listaLag } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
+  import { grenFarg } from '../lib/gren.js'
 
   const dispatch = createEventDispatcher()
 
   let jobb = []
   let matcher = []
+  let lagAlla = []
   let status = null            // null = okänd (visa ej offline-banner förrän känd)
   let laddar = true
   let layout = 'lista'          // lista | tidslinje
@@ -15,7 +17,10 @@
   let now = new Date()          // live-klocka
   let klockIv
 
-  let modal = null              // redigeringsutkast eller null
+  let modal = null              // redigeringsutkast för "＋ Nytt fotojobb" eller null
+  let jobEditId = null          // id på fotojobbet vars redigeringskort är utfällt
+  let redigerar = null          // redigeringsutkast för jobEditId (seedas vid öppning)
+  const GREN_ETIKETT = { dam: 'Dam', herr: 'Herr', mixed: 'Mixed' }
 
   const MAN = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli',
     'Augusti', 'September', 'Oktober', 'November', 'December']
@@ -33,14 +38,20 @@
   onMount(async () => {
     klockIv = setInterval(() => (now = new Date()), 30000)
     try {
-      const j = await listaFotojobb()
+      // Matcher/lag laddas TILLSAMMANS med jobben (inte efter) — grenForJobb()
+      // läser dem i en {@const}, och Svelte upptäcker inte det beroendet om de
+      // sätts i ett separat steg efter att listan redan renderats en gång.
+      const [j, m, l] = await Promise.all([
+        listaFotojobb().catch(() => []),
+        listaMatcher().catch(() => []),
+        listaLag().catch(() => []),
+      ])
       jobb = Array.isArray(j) ? j : []
-    } catch (_) {
-      jobb = []
+      matcher = m
+      lagAlla = l
     } finally {
       laddar = false        // släpp ALLTID laddningsläget, även vid fel/timeout
     }
-    matcher = await listaMatcher().catch(() => [])
     // Synk-status i bakgrunden — blockera inte agendan på hälsokollen (kall Worker).
     kalenderStatus().then((s) => (status = s)).catch(() => {})
     await tick()
@@ -151,9 +162,45 @@
     const s = (v || '').slice(0, 16)
     return !s ? '' : s.includes('T') ? s : s + 'T00:00'
   }
-  function andra(j) {
-    modal = { ...j, category: j.category || '', match_id: j.match_id || '',
+  // Redigering flyttad in i listan (utfällt kort) — modalen är kvar bara för "＋ Nytt fotojobb".
+  function oppnaRedigering(j) {
+    if (jobEditId === j.id) { stangRedigering(); return }     // klick igen stänger, nytt "Ändra" flyttar kortet
+    redigerar = { ...j, category: j.category || '', match_id: j.match_id || '',
       start_at: tillLokal(j.start_at), end_at: tillLokal(j.end_at) }
+    jobEditId = j.id
+  }
+  function stangRedigering() { jobEditId = null; redigerar = null }
+  async function sparaRedigering() {
+    const d = { ...redigerar, category: redigerar.category || null }
+    d.match_id = d.category === 'Sport' ? (d.match_id || null) : null
+    if (d.all_day) {          // heldag lagras som rent datum (inklusivt slut)
+      d.start_at = (d.start_at || '').slice(0, 10)
+      d.end_at = (d.end_at || d.start_at || '').slice(0, 10)
+    }
+    await sparaFotojobb(d)
+    stangRedigering()
+    await laddaOm()
+  }
+  function onKeydown(e) {
+    if (e.key !== 'Escape') return
+    if (jobEditId != null) stangRedigering()
+    else if (modal) modal = null
+  }
+
+  // Gren-markör (DAM/HERR/MIXED) för match-kopplade fotojobb, framför titeln.
+  // Riktig matchreferens (match_id → matchens hem_gren) i första hand;
+  // titel-parsning ("Match – <hemma> / <borta>" → lag i registret) som fallback.
+  function grenForJobb(j) {
+    if (j.match_id) {
+      const m = matcher.find((x) => x.id === j.match_id)
+      if (m?.hem_gren) return m.hem_gren
+    }
+    const mm = /^Match\s*[–-]\s*(.+?)\s*\/\s*(.+)$/.exec(j.title || '')
+    if (!mm) return null
+    const hemma = mm[1].trim()
+    const lag = lagAlla.find((l) => l.namn === hemma)
+      || lagAlla.find((l) => l.namn.startsWith(hemma) || hemma.startsWith(l.namn))
+    return lag?.gren || null
   }
   async function taBort(j) {
     await raderaFotojobb(j.id)
@@ -171,6 +218,8 @@
     await laddaOm()
   }
 </script>
+
+<svelte:window on:keydown={onKeydown} />
 
 <div class="panel">
   <div class="topp">
@@ -225,6 +274,7 @@
           {#if layout === 'tidslinje'}
             <div class="tidslinje">
               {#each g.jobb as j (j.id)}
+                {@const gren = grenForJobb(j)}
                 <div class="tlrad" data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)}>
                   <div class="tltid scd">
                     <div class="tlt">{j.all_day ? '–' : klocka(j.start_at)}</div>
@@ -234,7 +284,7 @@
                     <span class="tldot" style="background:{katFarg(j.category)}"></span>
                     <div class="tlkort" class:forfluten={arForfluten(j)}>
                       <div class="tlinfo">
-                        <div class="rtitel stor">{j.title}</div>
+                        <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}</div>
                         <div class="when">{j.all_day ? 'Heldag · ' + heldagText(j) : ''}{j.location ? (j.all_day ? ' · ' : '') + j.location : ''}</div>
                         {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                       </div>
@@ -244,11 +294,35 @@
                       </select>
                       <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
                       {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                      <button class="mini" on:click={() => andra(j)}>Ändra</button>
+                      <button class="mini" on:click={() => oppnaRedigering(j)}>Ändra</button>
                       <button class="mini kryss" class:armerad={$armerad === `fj-${j.id}`}
                         title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
                         on:click={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Ta bort?' : '×'}</button>
                     </div>
+                    {#if jobEditId === j.id && redigerar}
+                      <div class="redigerakort">
+                        <label class="full">Titel<input bind:value={redigerar.title} placeholder="Titel" /></label>
+                        <div class="tva">
+                          <label>Start<input type="datetime-local" bind:value={redigerar.start_at} /></label>
+                          <label>Slut<input type="datetime-local" bind:value={redigerar.end_at} /></label>
+                        </div>
+                        <label class="full">Plats<input bind:value={redigerar.location} placeholder="t.ex. Rättvik" /></label>
+                        <div class="katblock">
+                          <span class="lbl">Kategori</span>
+                          <div class="katseg">
+                            {#each KATEGORIER as k}
+                              <button class:on={redigerar.category === k}
+                                style={redigerar.category === k ? `background:${katFarg(k)};border-color:transparent;color:#fff` : ''}
+                                on:click={() => (redigerar.category = redigerar.category === k ? '' : k)}>{k}</button>
+                            {/each}
+                          </div>
+                        </div>
+                        <div class="rkfoot">
+                          <button class="prim" on:click={sparaRedigering} disabled={!redigerar.title || !redigerar.start_at}>Spara ändringar</button>
+                          <button class="sek" on:click={stangRedigering}>Avbryt</button>
+                        </div>
+                      </div>
+                    {/if}
                   </div>
                 </div>
               {/each}
@@ -256,9 +330,11 @@
           {:else}
             <div class="lista">
               {#each g.jobb as j (j.id)}
+                {@const gren = grenForJobb(j)}
                 {#if j.all_day}
                   <div class="rad heldag" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}">
                     <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
+                    {#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}
                     <span class="rtitel">{j.title}</span>
                     <span class="hlbl">Heldag</span>
                     {#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}
@@ -269,7 +345,7 @@
                     </select>
                     <span class="spacer"></span>
                     {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                    <button class="mini" on:click={() => andra(j)}>Ändra</button>
+                    <button class="mini" on:click={() => oppnaRedigering(j)}>Ändra</button>
                     <button class="mini" class:armerad={$armerad === `fj-${j.id}`}
                       title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
                       on:click={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
@@ -282,7 +358,7 @@
                       <div class="wd">{veckodag(j.start_at)}</div>
                     </div>
                     <div class="mitt">
-                      <div class="rtitel stor">{j.title}{#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}</div>
+                      <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}{#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}</div>
                       <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
                       <div class="undermeta">
                         <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
@@ -295,10 +371,37 @@
                     </div>
                     <div class="rknapp">
                       {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                      <button class="mini" on:click={() => andra(j)}>Ändra</button>
+                      <button class="mini" on:click={() => oppnaRedigering(j)}>Ändra</button>
                       <button class="mini" class:armerad={$armerad === `fj-${j.id}`}
                         title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
                         on:click={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
+                    </div>
+                  </div>
+                {/if}
+                {#if jobEditId === j.id && redigerar}
+                  <div class="redigerakort">
+                    <label class="full">Titel<input bind:value={redigerar.title} placeholder="Titel" /></label>
+                    <div class="tva">
+                      <label>Start<input type="datetime-local" bind:value={redigerar.start_at} /></label>
+                      <label>Slut<input type="datetime-local" bind:value={redigerar.end_at} /></label>
+                    </div>
+                    <label class="full">Plats<input bind:value={redigerar.location} placeholder="t.ex. Rättvik" /></label>
+                    <div class="katblock">
+                      <span class="lbl">Kategori</span>
+                      <div class="katseg">
+                        {#each KATEGORIER as k}
+                          <button class:on={redigerar.category === k}
+                            style={redigerar.category === k ? `background:${katFarg(k)};border-color:transparent;color:#fff` : ''}
+                            on:click={() => (redigerar.category = redigerar.category === k ? '' : k)}>{k}</button>
+                        {/each}
+                      </div>
+                    </div>
+                    <label class="check" on:click={() => (redigerar.all_day = !redigerar.all_day)}>
+                      <span class="box" class:pa={redigerar.all_day}>{redigerar.all_day ? '✓' : ''}</span> Heldag
+                    </label>
+                    <div class="rkfoot">
+                      <button class="prim" on:click={sparaRedigering} disabled={!redigerar.title || !redigerar.start_at}>Spara ändringar</button>
+                      <button class="sek" on:click={stangRedigering}>Avbryt</button>
                     </div>
                   </div>
                 {/if}
@@ -477,6 +580,17 @@
     background: var(--panel); color: var(--t-head); font-size: 13px; font-weight: 400;
     text-transform: none; letter-spacing: 0; outline: none; }
   .dbody input:focus, .dbody textarea:focus, .dbody select:focus { border-color: var(--acc); }
+
+  /* Redigeringskort — utfällt direkt under raden (Fotojobb: Lista + Tidslinje) */
+  .redigerakort { display: flex; flex-direction: column; gap: 10px; margin-top: 10px;
+    border: 1.5px solid var(--acc-border); border-radius: 10px; padding: 12px; background: var(--kort); }
+  .redigerakort input { padding: 9px 11px; border: 1px solid var(--div); border-radius: 8px;
+    background: var(--panel); color: var(--t-head); font-size: 13px; font-weight: 400;
+    text-transform: none; letter-spacing: 0; outline: none; }
+  .redigerakort input:focus { border-color: var(--acc); }
+  .rkfoot { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+  .grenlbl3 { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-right: 8px; }
+
   .tva { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .katblock { display: flex; flex-direction: column; gap: 6px; }
   .lbl { font-size: 11px; color: var(--t-caps); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
