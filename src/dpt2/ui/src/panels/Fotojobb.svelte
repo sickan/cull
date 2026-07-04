@@ -282,22 +282,23 @@
                   </div>
                   <div class="tlspar" style="border-left-color:{katFarg(j.category)}">
                     <span class="tldot" style="background:{katFarg(j.category)}"></span>
-                    <div class="tlkort" class:forfluten={arForfluten(j)}>
+                    <div class="tlkort" role="button" tabindex="0" class:forfluten={arForfluten(j)}
+                      on:click={() => oppnaRedigering(j)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j)}>
                       <div class="tlinfo">
                         <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}</div>
                         <div class="when">{j.all_day ? 'Heldag · ' + heldagText(j) : ''}{j.location ? (j.all_day ? ' · ' : '') + j.location : ''}</div>
                         {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                       </div>
-                      <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
+                      <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
                         <option value="">Okategoriserat</option>
                         {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
                       </select>
                       <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
-                      {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                      <button class="mini" on:click={() => oppnaRedigering(j)}>Ändra</button>
+                      {#if j.utkast}<button class="mini synkbtn" on:click|stopPropagation={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
+                      <button class="mini" on:click|stopPropagation={() => oppnaRedigering(j)}>Ändra</button>
                       <button class="mini kryss" class:armerad={$armerad === `fj-${j.id}`}
                         title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                        on:click={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Ta bort?' : '×'}</button>
+                        on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Ta bort?' : '×'}</button>
                     </div>
                     {#if jobEditId === j.id && redigerar}
                       <div class="redigerakort">
@@ -332,27 +333,29 @@
               {#each g.jobb as j (j.id)}
                 {@const gren = grenForJobb(j)}
                 {#if j.all_day}
-                  <div class="rad heldag" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}">
+                  <div class="rad heldag" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
+                    on:click={() => oppnaRedigering(j)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j)}>
                     <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
                     {#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}
                     <span class="rtitel">{j.title}</span>
                     <span class="hlbl">Heldag</span>
                     {#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}
                     <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
-                    <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
+                    <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
                       <option value="">Okategoriserat</option>
                       {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
                     </select>
                     <span class="spacer"></span>
-                    {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                    <button class="mini" on:click={() => oppnaRedigering(j)}>Ändra</button>
+                    {#if j.utkast}<button class="mini synkbtn" on:click|stopPropagation={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
+                    <button class="mini" on:click|stopPropagation={() => oppnaRedigering(j)}>Ändra</button>
                     <button class="mini" class:armerad={$armerad === `fj-${j.id}`}
                       title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                      on:click={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
+                      on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
                     {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                   </div>
                 {:else}
-                  <div class="rad" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}">
+                  <div class="rad" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
+                    on:click={() => oppnaRedigering(j)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j)}>
                     <div class="datum scd">
                       <div class="d" style="color:{katFarg(j.category)}">{del(j.start_at)[2] || '–'}</div>
                       <div class="wd">{veckodag(j.start_at)}</div>
@@ -362,7 +365,7 @@
                       <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
                       <div class="undermeta">
                         <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
-                        <select class="katsel" value={j.category || ''} on:change={(e) => bytKategori(j, e.target.value)}>
+                        <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
                           <option value="">Okategoriserat</option>
                           {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
                         </select>
@@ -370,11 +373,11 @@
                       </div>
                     </div>
                     <div class="rknapp">
-                      {#if j.utkast}<button class="mini synkbtn" on:click={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                      <button class="mini" on:click={() => oppnaRedigering(j)}>Ändra</button>
+                      {#if j.utkast}<button class="mini synkbtn" on:click|stopPropagation={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
+                      <button class="mini" on:click|stopPropagation={() => oppnaRedigering(j)}>Ändra</button>
                       <button class="mini" class:armerad={$armerad === `fj-${j.id}`}
                         title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                        on:click={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
+                        on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
                     </div>
                   </div>
                 {/if}
@@ -515,7 +518,8 @@
   .lista { display: flex; flex-direction: column; gap: 10px; }
   .rad { display: flex; align-items: center; gap: 16px; background: var(--kort);
     border: 1px solid var(--div); border-left: 3px solid var(--acc); border-radius: var(--r);
-    padding: 12px 16px; box-shadow: var(--skugga); }
+    padding: 12px 16px; box-shadow: var(--skugga); cursor: pointer; }
+  .rad:hover { background: var(--div3); }
   .datum { width: 44px; flex: none; text-align: center; }
   .datum .d { font-size: 24px; font-weight: 700; line-height: 1; }
   .datum .wd { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-mut); margin-top: 3px; }
@@ -558,7 +562,8 @@
   .tldot { position: absolute; left: -6px; top: 20px; width: 10px; height: 10px; border-radius: 50%;
     border: 2px solid var(--kort); }
   .tlkort { background: var(--kort); border: 1px solid var(--div); border-radius: 10px; box-shadow: var(--skugga);
-    padding: 11px 13px; display: flex; align-items: center; gap: 11px; }
+    padding: 11px 13px; display: flex; align-items: center; gap: 11px; cursor: pointer; }
+  .tlkort:hover { background: var(--div3); }
   .tlinfo { flex: 1; min-width: 0; }
   .mini.kryss { width: 28px; padding: 6px 0; text-align: center; font-size: 15px; line-height: 1; }
 

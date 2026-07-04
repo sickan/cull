@@ -310,23 +310,24 @@
       {:else}
         <div class="lista">
           {#each lagFiltrerat as l (l.id)}
-            <div class="kkort">
-              <div class="krad">
-                <button class="logoslot" on:click={() => valjLoggaLag(l)} title="Välj logga/porträtt">
+            <div class="kkort" style={l.gren ? `border-left:3px solid ${grenFarg(l.gren)}` : ''}>
+              <div class="krad" role="button" tabindex="0" on:click={() => apnaLag(l)}
+                on:keydown={(e) => e.key === 'Enter' && apnaLag(l)}>
+                <button class="logoslot" on:click|stopPropagation={() => valjLoggaLag(l)} title="Välj logga/porträtt">
                   <Lagbricka namn={l.namn} farg={(l.kind === 'individ' ? l.profilfarg : l.stall_hemma) || '#8A8172'} logga={l.logga} storlek={28} />
                 </button>
                 <div class="ktxt2">
                   <div class="rad1b">
-                    <span class="namn2 scd">{l.namn || 'Namnlöst lag'}</span>
                     {#if l.gren}<span class="grenlbl2 scd" style="color:{grenFarg(l.gren)}">{GREN_ETIKETT[l.gren]}</span>{/if}
+                    <span class="namn2 scd">{l.namn || 'Namnlöst lag'}</span>
                   </div>
                   <div class="kmeta2">{[metaRad(l) || 'Ofullständig post', kopplingsText(l)].filter(Boolean).join(' · ')}</div>
                 </div>
                 {#if sparad === l.id}<span class="flash">✓</span>{/if}
-                <button class="andra2" on:click={() => apnaLag(l)}>{teamOpen === l.id ? 'Stäng' : 'Ändra'}</button>
+                <button class="andra2" on:click|stopPropagation={() => apnaLag(l)}>{teamOpen === l.id ? 'Stäng' : 'Ändra'}</button>
                 <button class="x" class:armerad={$armerad === `lag-${l.id}`}
                   title={$armerad === `lag-${l.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                  on:click={taBortKlick(`lag-${l.id}`, () => taBortLag(l))}>{$armerad === `lag-${l.id}` ? 'Ta bort?' : '×'}</button>
+                  on:click|stopPropagation={taBortKlick(`lag-${l.id}`, () => taBortLag(l))}>{$armerad === `lag-${l.id}` ? 'Ta bort?' : '×'}</button>
               </div>
 
               {#if teamOpen === l.id}
@@ -457,24 +458,25 @@
       {:else}
         <div class="lista">
           {#each tavlingar as t (t.id)}
-            <div class="kkort">
-              <div class="krad">
-                <button class="logoslot" on:click={() => valjLoggaTavling(t)} title="Välj logga">
+            <div class="kkort" style={t.gren ? `border-left:3px solid ${grenFarg(t.gren)}` : ''}>
+              <div class="krad" role="button" tabindex="0" on:click={() => apnaTavling(t)}
+                on:keydown={(e) => e.key === 'Enter' && apnaTavling(t)}>
+                <button class="logoslot" on:click|stopPropagation={() => valjLoggaTavling(t)} title="Välj logga">
                   <Lagbricka namn={t.namn} farg={'#8A8172'} logga={t.logga} storlek={28} />
                 </button>
                 <div class="ktxt2">
                   <div class="rad1b">
-                    <span class="namn2 scd">{t.namn || 'Namnlös tävling'}</span>
                     {#if t.gren}<span class="grenlbl2 scd" style="color:{grenFarg(t.gren)}">{GREN_ETIKETT[t.gren]}</span>{/if}
+                    <span class="namn2 scd">{t.namn || 'Namnlös tävling'}</span>
                   </div>
                   <div class="kmeta2">{[TYP_ETIKETT[t.typ], SPORT_ETIKETT[t.sport], periodText(t), t.ort].filter(Boolean).join(' · ')}</div>
                 </div>
                 {#if t.kalender}<span class="ikalendern">I kalendern</span>{/if}
                 {#if sparad === t.id}<span class="flash">✓</span>{/if}
-                <button class="andra2" on:click={() => apnaTavling(t)}>{compOpen === t.id ? 'Stäng' : 'Ändra'}</button>
+                <button class="andra2" on:click|stopPropagation={() => apnaTavling(t)}>{compOpen === t.id ? 'Stäng' : 'Ändra ›'}</button>
                 <button class="x" class:armerad={$armerad === `tavling-${t.id}`}
                   title={$armerad === `tavling-${t.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                  on:click={taBortKlick(`tavling-${t.id}`, () => taBortTavling(t))}>{$armerad === `tavling-${t.id}` ? 'Ta bort?' : '×'}</button>
+                  on:click|stopPropagation={taBortKlick(`tavling-${t.id}`, () => taBortTavling(t))}>{$armerad === `tavling-${t.id}` ? 'Ta bort?' : '×'}</button>
               </div>
 
               {#if compOpen === t.id}
@@ -556,7 +558,8 @@
   .kkort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
     box-shadow: var(--skugga); overflow: hidden; }
   /* Kompakt rad (~40 px) */
-  .krad { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+  .krad { display: flex; align-items: center; gap: 12px; padding: 8px 12px; cursor: pointer; }
+  .krad:hover { background: var(--div3); }
   .logoslot { border: 0; background: transparent; padding: 0; border-radius: 50%; flex: none; cursor: pointer; }
   .logoslot:hover { outline: 2px solid var(--acc); outline-offset: 1px; }
   .ktxt2 { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
