@@ -37,6 +37,37 @@ const MOCK_MATCHER = [
     liga: 'Nordea Open', tavling_id: null, hem_gren: '',   // individ utan gren → "ej satt"
     hemfarg: '#2F7CB0', bortafarg: '', trupp_n: 0,
   },
+  // Säsongsarkiv-demo (matcher.svelte grupperar per kalenderår ur datum — riktig
+  // säsongspartitionering + lazy-load per år är backend-arbete som är utanför
+  // det här passet, se HANDOFF.md).
+  {
+    id: 'arkiv2025-01', datum: '2025-10-18', tid: '15:00',
+    arena: 'Eleda Stadion', status: 'avslutad', resultat: '2-1',
+    sport: 'fotboll', lag_hemma: 'Malmö FF', lag_borta: 'FC Rosengård',
+    liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan', hem_gren: 'dam',
+    hemfarg: '#8fb7de', bortafarg: '#8b1f3a', trupp_n: 0,
+  },
+  {
+    id: 'arkiv2025-02', datum: '2025-08-02', tid: '16:00',
+    arena: '3Arena', status: 'avslutad', resultat: '0-3',
+    sport: 'fotboll', lag_hemma: 'Hammarby IF', lag_borta: 'Malmö FF',
+    liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan', hem_gren: 'dam',
+    hemfarg: '#1E824C', bortafarg: '#8fb7de', trupp_n: 0,
+  },
+  {
+    id: 'arkiv2025-03', datum: '2025-06-14', tid: '13:00',
+    arena: 'Kristianstads IP', status: 'avslutad', resultat: '1-1',
+    sport: 'fotboll', lag_hemma: 'Kristianstads DFF', lag_borta: 'FC Rosengård',
+    liga: 'OBOS Damallsvenskan', tavling_id: 'obos-damallsvenskan', hem_gren: 'dam',
+    hemfarg: '#C0392B', bortafarg: '#8b1f3a', trupp_n: 0,
+  },
+  {
+    id: 'arkiv2024-01', datum: '2024-09-21', tid: '14:00',
+    arena: 'Baltiska Hallen', status: 'avslutad', resultat: '28-24',
+    sport: 'handboll', lag_hemma: 'HK Malmö', lag_borta: 'IK Sävehof',
+    liga: 'Handbollsligan', tavling_id: 'handbollsligan', hem_gren: 'herr',
+    hemfarg: '#0a2342', bortafarg: '#1E824C', trupp_n: 0,
+  },
 ]
 
 const MOCK_FULL = {
@@ -678,8 +709,37 @@ export async function publiceraTillSoMe(config) {
 }
 
 // Sparade material + utkast (Publicera-panelens arbetsyta). Muteras lokalt i mock.
-let MOCK_MATERIAL = []
-let _matSeq = 0
+// Två seedade rader så "Delvis publicerad" + historik-tidslinjen syns direkt i
+// mock-läge (utan pywebview-bryggan): en publicerad med flerfaldig historik,
+// en delvis med en trasig kanal att öva "Försök igen" på.
+let MOCK_MATERIAL = [
+  {
+    id: 'mat_seed_1', kind: 'some', status: 'publicerad',
+    match_id: 'a1b2c3d4e5f6', match_namn: 'Malmö FF – Kristianstads DFF',
+    channels: ['story', 'ig'], caption: 'Fullt hus på Eleda! 6–0 till damerna 💛 #malmoff',
+    banor: { story: { mapp: '/bilder/resultat', bilder: ['bild_01.jpg', 'bild_02.jpg'] },
+      ig: { mapp: '/bilder/resultat', bilder: ['bild_01.jpg'] }, fb: { mapp: '', bilder: [] } },
+    ch_results: { story: 'ok', ig: 'ok' },
+    uppdaterad: '2026-06-27T16:03:00',
+    history: [
+      { when: '2026-06-27T16:03:00', status: 'publicerad', note: '' },
+      { when: '2026-06-27T15:58:00', status: 'delvis', note: 'Facebook föll' },
+      { when: '2026-06-27T15:41:00', status: 'publicerad', note: '' },
+    ],
+  },
+  {
+    id: 'mat_seed_2', kind: 'some', status: 'delvis',
+    match_id: 'a1b2c3d4e5f6', match_namn: 'Malmö FF – Kristianstads DFF',
+    channels: ['story', 'ig', 'fb'], caption: 'Halvtidsställning 3–0 👏 #malmoff',
+    banor: { story: { mapp: '/bilder/halvtid', bilder: ['h_01.jpg'] },
+      ig: { mapp: '/bilder/halvtid', bilder: ['h_01.jpg'] },
+      fb: { mapp: '/bilder/halvtid', bilder: ['h_01.jpg'] } },
+    ch_results: { story: 'ok', ig: 'ok', fb: 'fail' },
+    uppdaterad: '2026-06-27T15:41:00',
+    history: [{ when: '2026-06-27T15:41:00', status: 'delvis', note: 'Facebook föll' }],
+  },
+]
+let _matSeq = 2
 
 export async function listaMaterial() {
   const api = brygga()
@@ -692,12 +752,17 @@ export async function sparaMaterial(data) {
   if (api) return api.spara_material(data)
   const idx = data.id ? MOCK_MATERIAL.findIndex((m) => m.id === data.id) : -1
   const uppdaterad = new Date().toISOString()
+  const nyPost = { when: uppdaterad, status: data.status, note: data.historik_note || '' }
+  const loggaHistorik = data.status === 'publicerad' || data.status === 'delvis'
   if (idx >= 0) {
-    MOCK_MATERIAL[idx] = { ...MOCK_MATERIAL[idx], ...data, uppdaterad }
+    const forra = MOCK_MATERIAL[idx]
+    const history = loggaHistorik ? [nyPost, ...(forra.history || [])] : (forra.history || [])
+    MOCK_MATERIAL[idx] = { ...forra, ...data, uppdaterad, history }
     return wait({ ok: true, id: MOCK_MATERIAL[idx].id })
   }
   const id = data.id || `mat_${++_matSeq}`
-  MOCK_MATERIAL = [{ ...data, id, uppdaterad }, ...MOCK_MATERIAL]
+  const history = loggaHistorik ? [nyPost] : []
+  MOCK_MATERIAL = [{ ...data, id, uppdaterad, history }, ...MOCK_MATERIAL]
   return wait({ ok: true, id })
 }
 
@@ -706,6 +771,26 @@ export async function raderaMaterial(id) {
   if (api) return api.radera_material(id)
   MOCK_MATERIAL = MOCK_MATERIAL.filter((m) => m.id !== id)
   return wait({ ok: true })
+}
+
+// "Försök igen" — kör om ENDAST felkanalerna för ett delvis publicerat
+// SoMe-paket. Mocken lyckas alltid (demo av "vid full framgång"-flödet);
+// riktig backend kan fortsatt gå i väggen (token saknas, nätverksfel …).
+export async function forsokIgenMaterial(id) {
+  const api = brygga()
+  if (api) return api.forsok_igen_material(id)
+  const idx = MOCK_MATERIAL.findIndex((m) => m.id === id)
+  if (idx < 0) return wait({ ok: false, fel: 'Materialet hittades inte.' })
+  const m = MOCK_MATERIAL[idx]
+  if (m.kind !== 'some') return wait({ ok: false, fel: 'Försök igen gäller bara SoMe-paket.' })
+  const felkanaler = Object.keys(m.ch_results || {}).filter((k) => m.ch_results[k] !== 'ok')
+  if (!felkanaler.length) return wait({ ok: false, fel: 'Inga felkanaler att försöka igen.' })
+  const ch_results = { ...m.ch_results }
+  felkanaler.forEach((k) => { ch_results[k] = 'ok' })
+  const uppdaterad = new Date().toISOString()
+  const history = [{ when: uppdaterad, status: 'publicerad', note: '' }, ...(m.history || [])]
+  MOCK_MATERIAL[idx] = { ...m, ch_results, status: 'publicerad', uppdaterad, history }
+  return wait({ ok: true, material: structuredClone(MOCK_MATERIAL[idx]) })
 }
 
 // pywebview injicerar window.pywebview.api ASYNKRONT. VIKTIGT: api-OBJEKTET dyker

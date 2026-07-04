@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -180,6 +180,51 @@ def _migrera(conn, fran_version):
         ):
             if not _har_kolumn(conn, "publicera_material", kol):
                 conn.execute(ddl)
+    if fran_version < 11:
+        # v11: "Delvis publicerad" (per-kanal-resultat) + publiceringshistorik.
+        # status-CHECK måste utökas med 'delvis' — SQLite tillåter inte att en
+        # CHECK ändras på en befintlig tabell, så den skrivs om (leaf-tabell,
+        # inget refererar till publicera_material via FK).
+        if not _har_kolumn(conn, "publicera_material", "ch_results"):
+            conn.executescript("""
+            CREATE TABLE publicera_material_ny (
+              id         TEXT PRIMARY KEY,
+              kind       TEXT NOT NULL CHECK (kind IN ('live','some')),
+              match_id   TEXT REFERENCES matchen(id) ON DELETE SET NULL,
+              match_namn TEXT,
+              status     TEXT NOT NULL CHECK (status IN ('utkast','publicerad','delvis')),
+              moment     TEXT,
+              tema       TEXT,
+              dropbox    TEXT,
+              foto       TEXT,
+              channels   TEXT,
+              caption    TEXT,
+              banor      TEXT,
+              ch_results TEXT,
+              uppdaterad TEXT NOT NULL
+            );
+            INSERT INTO publicera_material_ny
+              (id,kind,match_id,match_namn,status,moment,tema,dropbox,foto,
+               channels,caption,banor,uppdaterad)
+              SELECT id,kind,match_id,match_namn,status,moment,tema,dropbox,foto,
+                     channels,caption,banor,uppdaterad
+              FROM publicera_material;
+            DROP TABLE publicera_material;
+            ALTER TABLE publicera_material_ny RENAME TO publicera_material;
+            CREATE INDEX IF NOT EXISTS idx_pubmat_uppdaterad
+              ON publicera_material(uppdaterad DESC);
+            """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS publicera_material_historik (
+          id          TEXT PRIMARY KEY,
+          material_id TEXT NOT NULL REFERENCES publicera_material(id) ON DELETE CASCADE,
+          tid         TEXT NOT NULL,
+          status      TEXT NOT NULL CHECK (status IN ('publicerad','delvis')),
+          note        TEXT
+        );""")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pubmathist_material "
+            "ON publicera_material_historik(material_id, tid DESC);")
 
 
 def _har_kolumn(conn, tabell, kolumn):

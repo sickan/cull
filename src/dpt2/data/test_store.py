@@ -526,18 +526,20 @@ class TestFotojobbUtkast(unittest.TestCase):
 
 
 class TestMigrering(unittest.TestCase):
-    def test_fresh_db_ar_v10_med_fotojobb_utkast(self):
+    def test_fresh_db_ar_v11_med_fotojobb_utkast(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 10)
+        self.assertEqual(db.schemaversion(c), 11)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
         self.assertIn("fotojobb_utkast", db.tabeller(c))
         self.assertIn("fotojobb_match", db.tabeller(c))
         self.assertIn("publicera_material", db.tabeller(c))
+        self.assertIn("publicera_material_historik", db.tabeller(c))
         pubmatkol = [r[1] for r in c.execute("PRAGMA table_info(publicera_material)")]
         self.assertIn("dropbox", pubmatkol)
         self.assertIn("foto", pubmatkol)
         self.assertIn("banor", pubmatkol)
+        self.assertIn("ch_results", pubmatkol)
         self.assertIn("trupp_kalla",
                       [r[1] for r in c.execute("PRAGMA table_info(lag)")])
         self.assertIn("sida_url",
@@ -640,6 +642,33 @@ class TestMigrering(unittest.TestCase):
         self.assertEqual(c.execute(
             "SELECT kind FROM publicera_material WHERE id='m1'").fetchone()[0], "live")
 
+    def test_migrera_v10_till_v11(self):
+        # v10-läge (publicera_material utan ch_results, status-CHECK saknar
+        # 'delvis') → tabellen skrivs om + publicera_material_historik skapas.
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA user_version=10")
+        c.execute("CREATE TABLE matchen(id TEXT PRIMARY KEY)")
+        c.execute("""CREATE TABLE publicera_material (
+            id TEXT PRIMARY KEY, kind TEXT NOT NULL, match_id TEXT, match_namn TEXT,
+            status TEXT NOT NULL CHECK (status IN ('utkast','publicerad')), moment TEXT,
+            tema TEXT, dropbox TEXT, foto TEXT, channels TEXT, caption TEXT, banor TEXT,
+            uppdaterad TEXT NOT NULL)""")
+        c.execute("INSERT INTO publicera_material(id,kind,status,uppdaterad) "
+                  "VALUES('m1','some','publicerad','2026-07-03T00:00:00')")
+        db._migrera(c, 10)
+        kol = [r[1] for r in c.execute("PRAGMA table_info(publicera_material)")]
+        self.assertIn("ch_results", kol)
+        self.assertIn("publicera_material_historik", [r[0] for r in c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")])
+        # befintlig rad orörd, och det nya statuset accepteras nu
+        self.assertEqual(c.execute(
+            "SELECT kind FROM publicera_material WHERE id='m1'").fetchone()[0], "some")
+        c.execute("UPDATE publicera_material SET status='delvis' WHERE id='m1'")
+        self.assertEqual(c.execute(
+            "SELECT status FROM publicera_material WHERE id='m1'").fetchone()[0], "delvis")
+
 
 class TestPubliceraMaterial(unittest.TestCase):
     def setUp(self):
@@ -702,6 +731,47 @@ class TestPubliceraMaterial(unittest.TestCase):
                                        uppdaterad="2026-06-30T11:00:00")
         rader = store.lista_publicera_material(self.c)
         self.assertEqual(rader[0]["kind"], "some")
+
+    def test_ch_results_json_round_trip(self):
+        store.spara_publicera_material(
+            self.c, kind="some", status="delvis", channels=["story", "fb"],
+            ch_results={"story": "ok", "fb": "fail"})
+        d = store.lista_publicera_material(self.c)[0]
+        self.assertEqual(d["ch_results"], {"story": "ok", "fb": "fail"})
+
+    def test_ch_results_tomt_utan_data(self):
+        store.spara_publicera_material(self.c, kind="live", status="utkast")
+        d = store.lista_publicera_material(self.c)[0]
+        self.assertEqual(d["ch_results"], {})
+
+    def test_delvis_status_tillaten(self):
+        store.spara_publicera_material(self.c, kind="some", status="delvis")
+        d = store.lista_publicera_material(self.c)[0]
+        self.assertEqual(d["status"], "delvis")
+
+    def test_utkast_loggar_ingen_historik(self):
+        store.spara_publicera_material(self.c, kind="some", status="utkast")
+        d = store.lista_publicera_material(self.c)[0]
+        self.assertEqual(d["history"], [])
+
+    def test_publicerad_och_delvis_loggar_historik(self):
+        mid = store.spara_publicera_material(
+            self.c, kind="some", status="delvis", historik_note="Facebook föll")
+        store.spara_publicera_material(
+            self.c, id=mid, kind="some", status="publicerad", historik_note="")
+        d = store.lista_publicera_material(self.c)[0]
+        self.assertEqual(len(d["history"]), 2)
+        # nyast först
+        self.assertEqual(d["history"][0]["status"], "publicerad")
+        self.assertEqual(d["history"][1]["status"], "delvis")
+        self.assertEqual(d["history"][1]["note"], "Facebook föll")
+
+    def test_radera_material_tar_bort_historik(self):
+        mid = store.spara_publicera_material(self.c, kind="some", status="publicerad")
+        store.radera_publicera_material(self.c, mid)
+        rader = self.c.execute(
+            "SELECT * FROM publicera_material_historik WHERE material_id=?", (mid,)).fetchall()
+        self.assertEqual(rader, [])
 
     def test_radera(self):
         mat_id = store.spara_publicera_material(self.c, kind="live", status="utkast")

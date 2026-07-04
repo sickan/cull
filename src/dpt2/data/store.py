@@ -839,36 +839,76 @@ def lista_some_material(conn, match_id):
 def spara_publicera_material(conn, *, kind, status, match_id=None, match_namn=None,
                              moment=None, tema=None, dropbox=None, foto=None,
                              channels=None, caption=None, banor=None,
+                             ch_results=None, historik_note=None,
                              id=None, uppdaterad=None):
     """Skapar (eller ersätter, om id anges) ett sparat material — utkast eller
-    publicerat. channels/banor = lagras som json. dropbox/foto = live-flödets
-    vald käll-mapp/bildfil (steg 2) — utan dem kan "Fortsätt" inte återställa
-    förhandsvisningen. banor = some-flödets {story:{mapp,bilder},ig:{...},fb:{...}}.
-    Returnerar material-id."""
+    publicerat. channels/banor/ch_results = lagras som json. dropbox/foto =
+    live-flödets vald käll-mapp/bildfil (steg 2) — utan dem kan "Fortsätt" inte
+    återställa förhandsvisningen. banor = some-flödets
+    {story:{mapp,bilder},ig:{...},fb:{...}}. ch_results = senaste per-kanal-
+    utfallet {story:'ok'|'fail',...} — driver delvis-läget & "Försök igen".
+
+    status 'publicerad'/'delvis' loggar ALLTID en ny historikpost (ett faktiskt
+    publiceringsförsök) — 'utkast' loggar aldrig någon. Returnerar material-id."""
+    # UPSERT (inte INSERT OR REPLACE): den senare gör en implicit DELETE+INSERT
+    # vid konflikt, vilket via ON DELETE CASCADE raderar radens historikposter
+    # på varje uppdatering — UPSERT rör den befintliga raden på plats.
     mid = id or ny_id()
     conn.execute(
-        "INSERT OR REPLACE INTO publicera_material"
+        "INSERT INTO publicera_material"
         "(id,kind,match_id,match_namn,status,moment,tema,dropbox,foto,channels,"
-        "caption,banor,uppdaterad) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "caption,banor,ch_results,uppdaterad) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, match_id=excluded.match_id, "
+        "match_namn=excluded.match_namn, status=excluded.status, moment=excluded.moment, "
+        "tema=excluded.tema, dropbox=excluded.dropbox, foto=excluded.foto, "
+        "channels=excluded.channels, caption=excluded.caption, banor=excluded.banor, "
+        "ch_results=excluded.ch_results, uppdaterad=excluded.uppdaterad",
         (mid, kind, match_id, match_namn, status, moment, tema, dropbox, foto,
          json.dumps(channels, ensure_ascii=False) if channels is not None else None,
          caption,
          json.dumps(banor, ensure_ascii=False) if banor is not None else None,
+         json.dumps(ch_results, ensure_ascii=False) if ch_results is not None else None,
          uppdaterad or _nu()))
+    if status in ("publicerad", "delvis"):
+        lagg_material_historik(conn, mid, status, note=historik_note or "")
     conn.commit()
     return mid
 
 
-def _publicera_material_dict(r):
+def lagg_material_historik(conn, material_id, status, note="", tid=None):
+    """Loggar ETT publiceringsförsök (aldrig utkast) i tidslinjen — visas som
+    "N publiceringar ▾" i Sparade material när ett material har >1 post."""
+    conn.execute(
+        "INSERT INTO publicera_material_historik(id,material_id,tid,status,note) "
+        "VALUES(?,?,?,?,?)",
+        (ny_id(), material_id, tid or _nu(), status, note or ""))
+
+
+def _historik_dict(r):
+    return {"when": r["tid"], "status": r["status"], "note": r["note"] or ""}
+
+
+def lista_material_historik(conn, material_id):
+    """Ett materials publiceringar, nyast först. rowid som fallsback-sortering
+    — flera försök inom samma sekund har annars identisk `tid` (bara sekund-
+    upplösning) och skulle annars komma i obestämd ordning."""
+    return [_historik_dict(r) for r in conn.execute(
+        "SELECT * FROM publicera_material_historik "
+        "WHERE material_id=? ORDER BY tid DESC, rowid DESC", (material_id,))]
+
+
+def _publicera_material_dict(conn, r):
     d = dict(r)
     d["channels"] = json.loads(d["channels"]) if d.get("channels") else []
     d["banor"] = json.loads(d["banor"]) if d.get("banor") else None
+    d["ch_results"] = json.loads(d["ch_results"]) if d.get("ch_results") else {}
+    d["history"] = lista_material_historik(conn, d["id"])
     return d
 
 
 def lista_publicera_material(conn):
-    """Alla sparade material, senast uppdaterade först."""
-    return [_publicera_material_dict(r) for r in conn.execute(
+    """Alla sparade material (inkl. publiceringshistorik), senast uppdaterade först."""
+    return [_publicera_material_dict(conn, r) for r in conn.execute(
         "SELECT * FROM publicera_material ORDER BY uppdaterad DESC")]
 
 

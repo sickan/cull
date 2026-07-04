@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte'
   import logoHast from './assets/logo-hast.png'
   export let aktiv = 'matcher'
+  export let delvis = false        // minst ett material är "Delvis publicerad"
   const dispatch = createEventDispatcher()
   // __BUILD_NR__ injiceras av vite.config.js (git rev-list --count HEAD vid bygget).
   const buildNr = typeof __BUILD_NR__ !== 'undefined' ? __BUILD_NR__ : '?'
@@ -35,7 +36,9 @@
     <div class="rubrik">{g.rubrik}</div>
     {#each g.poster as p}
       <button class="post" class:aktiv={aktiv === p.id} on:click={() => dispatch('valj', p.id)}>
-        {#if p.nr}<span class="nr">{p.nr}</span>{/if}
+        {#if p.nr}
+          <span class="nr">{p.nr}{#if p.id === 'publicera' && delvis}<span class="dot" title="Delvis publicerat material väntar"></span>{/if}</span>
+        {/if}
         <span>{p.namn}</span>
       </button>
     {/each}
@@ -70,7 +73,11 @@
     width: 18px; height: 18px; flex: none; border-radius: 5px;
     background: var(--div3); color: var(--t-mut);
     display: inline-flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700;
+    font-size: 11px; font-weight: 700; position: relative;
   }
   .post.aktiv .nr { background: var(--acc); color: var(--kort); }
+  .dot {
+    position: absolute; top: -3px; right: -3px; width: 9px; height: 9px;
+    border-radius: 50%; background: #B0483A; box-shadow: 0 0 0 2px var(--panel);
+  }
 </style>

@@ -186,7 +186,7 @@ CREATE TABLE publicera_material (
   kind       TEXT NOT NULL CHECK (kind IN ('live','some')),
   match_id   TEXT REFERENCES matchen(id) ON DELETE SET NULL,
   match_namn TEXT,
-  status     TEXT NOT NULL CHECK (status IN ('utkast','publicerad')),
+  status     TEXT NOT NULL CHECK (status IN ('utkast','publicerad','delvis')),
   moment     TEXT,                       -- live: mall-moment
   tema       TEXT,                       -- live: Hav/Sol/Rosé
   dropbox    TEXT,                       -- live: käll-mapp (steg 2)
@@ -194,9 +194,22 @@ CREATE TABLE publicera_material (
   channels   TEXT,                       -- some: json-lista ['story','ig','fb']
   caption    TEXT,                       -- some: bildtext
   banor      TEXT,                       -- some: json {story:{mapp,bilder},ig:{...},fb:{...}}
+  ch_results TEXT,                       -- some: json {story:'ok'|'fail',ig:...,fb:...} — driver delvis-läget & retry
   uppdaterad TEXT NOT NULL
 );
 CREATE INDEX idx_pubmat_uppdaterad ON publicera_material(uppdaterad DESC);
+
+-- Publiceringshistorik — en rad per FAKTISKT publiceringsförsök (utkast loggas
+-- aldrig). "Redigerar"-läget uppdaterar fälten på materialet men lägger alltid
+-- till en ny historikpost här när man publicerar om.
+CREATE TABLE publicera_material_historik (
+  id          TEXT PRIMARY KEY,
+  material_id TEXT NOT NULL REFERENCES publicera_material(id) ON DELETE CASCADE,
+  tid         TEXT NOT NULL,
+  status      TEXT NOT NULL CHECK (status IN ('publicerad','delvis')),
+  note        TEXT
+);
+CREATE INDEX idx_pubmathist_material ON publicera_material_historik(material_id, tid DESC);
 
 -- ── Modell (träning) ─────────────────────────────────────────────────────────
 

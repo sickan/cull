@@ -6,6 +6,7 @@
     listaUrval, raderaMatch, sattMatchSynk,
   } from '../lib/api.js'
   import Combobox from '../lib/Combobox.svelte'
+  import Lagbricka from '../lib/Lagbricka.svelte'
   import { grenFarg, grenEtikett } from '../lib/gren.js'
 
   const dispatch = createEventDispatcher()
@@ -22,6 +23,9 @@
   let utkast = null
   let bekraftaId = null
   let fel = ''
+  let matchSearch = ''
+  let matchSeasonSel = null      // null = aktiv säsong (se aktivAr nedan)
+  let matchShowN = 12
 
   const SPORTER = ['alla', 'fotboll', 'handboll', 'volleyboll', 'beachvolley', 'tennis']
   const SPORT_ETIKETT = { fotboll: 'Fotboll', handboll: 'Handboll', volleyboll: 'Volleyboll', beachvolley: 'Beachvolley', tennis: 'Tennis' }
@@ -39,8 +43,35 @@
     laddar = false
   })
 
-  $: filtrerade = matcher.filter((m) => sportFilter === 'alla' || m.sport === sportFilter)
-  $: grupper = matchGroupBy === 'liga' ? grupperaLiga(filtrerade) : grupperaDatum(filtrerade)
+  // ── Sök, säsongsarkiv (demo: kalenderår ur datum) & paginering ────────────
+  // Riktig säsongspartitionering + lazy-load per år är backend-arbete utanför
+  // det här passet (se HANDOFF.md "Medvetet utanför / kvar") — här bucketas
+  // matcherna client-side per kalenderår tills dess.
+  const NU_AR = String(new Date().getFullYear())
+  const norm = (s) => (s || '').toLowerCase()
+  const matchesSok = (m, q) => !q || [m.lag_hemma, m.lag_borta, m.liga, m.arena].some((v) => norm(v).includes(q))
+
+  $: sportFiltrerade = matcher.filter((m) => sportFilter === 'alla' || m.sport === sportFilter)
+  $: matchArAlla = [...new Set(matcher.map((m) => (m.datum || '').slice(0, 4)).filter(Boolean))]
+  $: aktivAr = matchArAlla.includes(NU_AR) ? NU_AR : ([...matchArAlla].sort().at(-1) || NU_AR)
+  $: arkivAr = matchArAlla.filter((a) => a !== aktivAr).sort((a, b) => (a < b ? 1 : -1))
+  $: aktivSasongCount = sportFiltrerade.filter((m) => (m.datum || '').slice(0, 4) === aktivAr).length
+  $: sasong = matchSeasonSel || aktivAr
+  $: iAktivSasong = sasong === aktivAr
+
+  $: matchSearchQ = norm(matchSearch)
+  $: sasongFiltrerade = sportFiltrerade
+    .filter((m) => (m.datum || '').slice(0, 4) === sasong)
+    .filter((m) => matchesSok(m, matchSearchQ))
+
+  $: { matchSearch; matchSeasonSel; matchShowN = 12 }   // nollställ vid sök/säsongsbyte
+
+  $: datumSorterade = sortDatum(sasongFiltrerade)
+  $: datumSynliga = datumSorterade.slice(0, matchShowN)
+  $: grupper = matchGroupBy === 'liga' ? grupperaLiga(sasongFiltrerade) : grupperaDatum(datumSynliga)
+
+  $: arkivLista = iAktivSasong ? [] : [...sasongFiltrerade].sort((a, b) => (a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : 0))
+
   const GREN_ETIKETT = { dam: 'Dam', herr: 'Herr', mixed: 'Mixed' }
   // detalj (gren · sport) skiljer lag med samma namn åt (Malmö FF dam/herr).
   $: lagVal = (lagForTavling.length ? lagForTavling : lagAlla).map((l) => ({
@@ -79,13 +110,6 @@
   function initialer(namn) {
     return (namn || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
   }
-  function _lum(hex) {
-    const h = (hex || '').replace('#', '')
-    if (h.length < 3) return 1
-    const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16)
-    return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
-  }
-  const brickStil = (f) => `background:${f || '#c9bfa8'};color:${_lum(f || '#c9bfa8') > 0.62 ? 'rgba(35,32,26,.85)' : '#fff'}`
   function fargForLag(namn) {
     const l = lagAlla.find((x) => x.namn === namn)
     return l ? (l.stall_hemma || l.profilfarg) : ''
@@ -108,11 +132,13 @@
   }
 
   // Matcher utan datum sorteras sist (nyckel '9999-99-99' vinner aldrig jämförelsen).
-  function grupperaDatum(lista) {
+  function sortDatum(lista) {
     const nyckel = (x) => (x.datum && x.datum.length === 10) ? x.datum : '9999-99-99'
-    const sorted = [...lista].sort((a, b) => (nyckel(a) < nyckel(b) ? -1 : nyckel(a) > nyckel(b) ? 1 : 0))
+    return [...lista].sort((a, b) => (nyckel(a) < nyckel(b) ? -1 : nyckel(a) > nyckel(b) ? 1 : 0))
+  }
+  function grupperaDatum(lista) {
     const m = new Map()
-    for (const x of sorted) {
+    for (const x of lista) {
       const d = del(x.datum)
       const key = d.length === 3 ? `${d[0]}-${d[1]}` : 'zzz'
       const namn = d.length === 3 ? `${MANAD[d[1] - 1]} ${d[0]}` : 'Utan datum'
@@ -239,10 +265,61 @@
     </div>
   </div>
 
+  <div class="toolrad">
+    <div class="sokbox">
+      <svg class="sokik" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input bind:value={matchSearch} placeholder="Sök lag, liga eller arena…" />
+    </div>
+    <div class="sasongchips">
+      <button class="sasong" class:on={iAktivSasong} on:click={() => (matchSeasonSel = null)}>{aktivAr} · {aktivSasongCount}</button>
+      {#each arkivAr as ar (ar)}
+        <button class="sasong arkiv" class:on={sasong === ar} on:click={() => (matchSeasonSel = ar)}>{ar}</button>
+      {/each}
+    </div>
+  </div>
+
   {#if fel}<p class="fel">{fel}</p>{/if}
 
   {#if laddar}
     <p class="tom">Laddar matcher…</p>
+  {:else if !iAktivSasong}
+    <div class="arkivhuvud scd">Arkiv · säsong {sasong} · {arkivLista.length} matcher</div>
+    {#if !arkivLista.length}
+      <p class="tom">Inga matcher hittades i den här säsongen.</p>
+    {:else}
+      <div class="arkivlista">
+        {#each arkivLista as m (m.id)}
+          <div class="arkivrad" style="border-left:3px {m.hem_gren ? 'solid' : 'dashed'} {grenFarg(m.hem_gren)}">
+            <div class="adatum scd">
+              <span class="ad">{del(m.datum)[2] || '–'}</span>
+              <span class="amon">{del(m.datum).length === 3 ? MK[del(m.datum)[1] - 1] : ''}</span>
+            </div>
+            <div class="afixtur">
+              <div class="afx scd">{m.lag_hemma} – {m.lag_borta}
+                {#if m.hem_gren}<span class="grenlbl scd" style="color:{grenFarg(m.hem_gren)}">{grenEtikett(m.hem_gren)}</span>{/if}
+              </div>
+              <div class="ameta">{[m.liga, m.arena, m.resultat ? `slutresultat ${m.resultat}` : ''].filter(Boolean).join(' · ')}</div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    {#if projekt.length}
+      <div class="caps proj">Tidigare projekt</div>
+      <div class="projgrid">
+        {#each projekt as pr (pr.id)}
+          <button class="projkort" on:click={aterUppta}>
+            <div class="projbild"><span>{(pr.skapad || '').split(' ')[0]}</span></div>
+            <div class="projtxt">
+              <div class="projnamn">{pr.lag_hemma ? `${pr.lag_hemma} – ${pr.lag_borta}` : (pr.kalla || 'Urval').split('/').pop()}</div>
+              <div class="projsub">{[pr.kamera, pr.bilder ? pr.bilder + ' bilder' : '', pr.status].filter(Boolean).join(' · ')}</div>
+              <div class="projater">Återuppta ›</div>
+            </div>
+          </button>
+        {/each}
+      </div>
+    {/if}
   {:else}
     <div class="grupper">
       {#each grupper as g (g.key)}
@@ -337,7 +414,7 @@
                         {@const nStart = kol.lista.filter((p) => p.start).length}
                         <div class="lbox">
                           <div class="lhuvud">
-                            <span class="lbricka" style={brickStil(fargForLag(kol.namn))}>{#if loggaForLag(kol.namn)}<img src={bildUrl(loggaForLag(kol.namn))} alt="" />{:else}{initialer(kol.namn)}{/if}</span>
+                            <Lagbricka namn={kol.namn} farg={fargForLag(kol.namn)} logga={loggaForLag(kol.namn)} storlek={30} />
                             <div class="lnamn-wrap">
                               <div class="lnamn scd">{kol.namn || (kol.sida === 'hemma' ? 'Hemmalag' : 'Bortalag')}</div>
                               <div class="lsub">{kol.sida === 'hemma' ? 'Hemma' : 'Borta'} · {truppNot(kol.namn)}</div>
@@ -391,6 +468,13 @@
         </div>
       {/each}
 
+      {#if matchGroupBy === 'datum' && datumSorterade.length > matchShowN}
+        <div class="pagineringsrad">
+          <button class="visafler" on:click={() => (matchShowN += 12)}>Visa 12 till ›</button>
+          <span class="visarinfo">visar {datumSynliga.length} av {datumSorterade.length}</span>
+        </div>
+      {/if}
+
       <button class="ny" on:click={nyMatch}>+ Ny match</button>
     </div>
 
@@ -433,6 +517,39 @@
     color: var(--t-mut); font-size: 12.5px; }
   .chip.on { background: var(--acc); border-color: var(--acc); color: #fff; font-weight: 600; }
 
+  /* Verktygsrad: sök + säsongsarkiv */
+  .toolrad { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 2px 16px; }
+  .sokbox { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--div); border-radius: 999px; background: var(--kort); padding: 8px 14px; }
+  .sokik { width: 15px; height: 15px; color: var(--t-help); flex: none; }
+  .sokbox input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 0;
+    font-size: 13px; color: var(--t-head); outline: none; }
+  .sasongchips { display: flex; gap: 6px; flex: none; }
+  .sasong { padding: 7px 14px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
+    color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
+  .sasong.on { background: var(--acc-soft); border-color: var(--acc-border); color: var(--acc); }
+  .sasong.arkiv.on { background: var(--div3); border-color: var(--div); color: var(--t-head); }
+
+  /* Arkivvy: platt, icke-expanderbar lista */
+  .arkivhuvud { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--t-mut); margin: 4px 2px 12px; }
+  .arkivlista { display: flex; flex-direction: column; gap: 8px; }
+  .arkivrad { display: flex; align-items: center; gap: 14px; background: var(--kort); border: 1px solid var(--div);
+    border-radius: var(--r); box-shadow: var(--skugga); padding: 8px 12px; }
+  .adatum { width: 36px; flex: none; text-align: center; }
+  .adatum .ad { font-size: 17px; font-weight: 700; color: var(--t-head); line-height: 1; display: block; }
+  .adatum .amon { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-help); }
+  .afixtur { flex: 1; min-width: 0; }
+  .afx { font-size: 14.5px; font-weight: 700; color: var(--t-head); display: flex; align-items: center; gap: 7px; }
+  .ameta { font-size: 11.5px; color: var(--t-mut); margin-top: 1px; }
+
+  /* Paginering (Datum-vyn) */
+  .pagineringsrad { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 4px; }
+  .visafler { padding: 8px 16px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
+    color: var(--t-head); font-size: 12.5px; font-weight: 600; }
+  .visafler:hover { border-color: var(--acc); color: var(--acc); }
+  .visarinfo { font-size: 11px; color: var(--t-help); }
+
   .grupper { display: flex; flex-direction: column; gap: 20px; }
   .manad { font-weight: 700; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--t-mut); margin-bottom: 10px; }
@@ -448,14 +565,14 @@
   .matcher { display: flex; flex-direction: column; gap: 10px; }
   .match { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
     box-shadow: var(--skugga); overflow: hidden; }
-  .rad { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 14px; border: 0;
+  .rad { display: flex; align-items: center; gap: 14px; width: 100%; padding: 8px 12px; border: 0;
     background: transparent; text-align: left; cursor: pointer; }
   .rad:hover { background: var(--div3); }
-  .datum { width: 50px; flex: none; text-align: center; background: var(--acc-soft); border-radius: 9px; padding: 7px 0; }
-  .datum .d { font-size: 23px; font-weight: 700; color: var(--acc); line-height: 1; }
-  .datum .mon { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--acc); margin-top: 2px; }
+  .datum { width: 36px; flex: none; text-align: center; }
+  .datum .d { font-size: 17px; font-weight: 700; color: var(--acc); line-height: 1; }
+  .datum .mon { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--acc); margin-top: 1px; }
   .fixtur { flex: 1; min-width: 0; }
-  .fx { font-size: 17px; font-weight: 700; color: var(--t-head); }
+  .fx { font-size: 14.5px; font-weight: 700; color: var(--t-head); }
   .fmeta { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--t-mut); margin-top: 2px; }
   .grenlbl { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; flex: none; }
   .heldagstagg { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
@@ -508,9 +625,6 @@
   .lagbox2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .lbox { border: 1px solid var(--div3); border-radius: 10px; background: var(--panel); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   .lhuvud { display: flex; align-items: center; gap: 9px; }
-  .lbricka { width: 30px; height: 30px; border-radius: 50%; flex: none; display: inline-flex; align-items: center;
-    justify-content: center; font-family: var(--font-c); font-size: 11px; font-weight: 700; overflow: hidden; }
-  .lbricka img { width: 100%; height: 100%; object-fit: contain; }
   .lnamn-wrap { min-width: 0; }
   .lnamn { font-size: 12.5px; font-weight: 600; color: var(--t-head); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lsub { font-size: 10.5px; color: var(--t-mut); }

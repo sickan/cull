@@ -2,8 +2,10 @@
   import { onMount, createEventDispatcher } from 'svelte'
   import { aktivMatch, genereraBildsvep, valjMapp, listaLag,
     listaSomeBilder, publiceraTillSoMe, oppnaILightroom, publiceraLiveStory,
-    forhandsgranskaStory, listaMaterial, sparaMaterial, raderaMaterial } from '../lib/api.js'
+    forhandsgranskaStory, listaMaterial, sparaMaterial, raderaMaterial,
+    forsokIgenMaterial } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
+  import Lagbricka from '../lib/Lagbricka.svelte'
   import { grenFarg } from '../lib/gren.js'
 
   const dispatch = createEventDispatcher()
@@ -213,9 +215,11 @@
       { nyckel: 'fb', mal: { story: false, ig_inlagg: false, fb: true } },
     ].filter((k) => banor[k.nyckel].pa && banor[k.nyckel].bilder.length)
     let fel = 0
+    const chResults = {}
     for (const k of korningar) {
       const r = await publiceraTillSoMe({ bilder: banor[k.nyckel].bilder,
         caption: someCaption, mal: k.mal, match_id: match?.id })
+      chResults[k.nyckel] = r?.ok ? 'ok' : 'fail'
       if (r?.ok) {
         someResultat = [...someResultat, ...(r.resultat || [])]
       } else {
@@ -227,7 +231,12 @@
       }
     }
     someLage = fel === 0 ? 'done' : (fel === korningar.length ? 'fel' : 'delfel')
-    if (fel === 0) await upsertMaterial(_someMat('publicerad'))
+    // Sparas ALLTID (inte bara vid full framgång) — en delvis publicering ska
+    // synas i Sparade material med rätt kanalresultat och gå att försöka igen.
+    const status = fel === 0 ? 'publicerad' : 'delvis'
+    const felKanaler = korningar.filter((k) => chResults[k.nyckel] !== 'ok').map((k) => CHLABEL[k.nyckel])
+    const historik_note = fel === 0 ? '' : `${felKanaler.join(', ')} föll`
+    await upsertMaterial({ ..._someMat(status), ch_results: chResults, historik_note })
   }
   const someReset = () => { someLage = 'idle'; someResultat = []; someFel = '' }
 
@@ -238,8 +247,32 @@
   let matFilter = 'alla'
   let liveDraftFlash = false
   let someDraftFlash = false
+  let retryingId = null
+  let retryFlashId = null
+  let historyOpen = {}
+  const toggleHistory = (id) => (historyOpen = { ...historyOpen, [id]: !historyOpen[id] })
 
-  async function laddaMaterial() { materials = await listaMaterial() }
+  const MK = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+  function prettyWhen(iso) {
+    const [datum, tid] = (iso || '').replace(' ', 'T').split('T')
+    const [y, m, d] = (datum || '').split('-').map(Number)
+    if (!d) return iso || ''
+    return `${d} ${MK[m - 1]} ${(tid || '').slice(0, 5)}`
+  }
+
+  async function retryMaterial(id) {
+    if (retryingId) return
+    retryingId = id
+    const r = await forsokIgenMaterial(id)
+    retryingId = null
+    if (r?.ok && r.material?.status === 'publicerad') {
+      retryFlashId = id
+      setTimeout(() => (retryFlashId = retryFlashId === id ? null : retryFlashId), 2600)
+    }
+    await laddaMaterial()
+  }
+
+  async function laddaMaterial() { materials = await listaMaterial(); dispatch('materialAndrat') }
   // dropbox/foto och banor sparas med utkastet — annars återställer "Fortsätt"
   // bara moment/tema/caption och förhandsvisningen står tom (bildvalet borta).
   const _liveMat = (status) => ({ kind: 'live', status, match_id: match?.id || null,
@@ -302,6 +335,7 @@
   $: matFiltered = materials.filter((m) => matFilter === 'alla' ? true
     : matFilter === 'utkast' ? m.status === 'utkast'
     : matFilter === 'publicerad' ? m.status === 'publicerad'
+    : matFilter === 'delvis' ? m.status === 'delvis'
     : m.match_namn === matFilter)
   $: materialsV = matFiltered.map((m) => ({
     id: m.id, isLive: m.kind === 'live',
@@ -309,12 +343,15 @@
     sub: m.match_namn || '—',
     meta: m.kind === 'live' ? `Live · tema ${m.tema || '—'}`
       : ((m.channels || []).map((c) => CHLABEL[c] || c).join(' · ') || 'inga kanaler'),
-    when: (m.uppdaterad || '').replace('T', ' ').slice(0, 16),
-    status: m.status, openLabel: m.status === 'utkast' ? 'Fortsätt ›' : 'Öppna ›' }))
-  $: matFilterChips = [['alla', 'Alla'], ['utkast', 'Utkast'], ['publicerad', 'Publicerade'],
+    when: prettyWhen(m.uppdaterad),
+    status: m.status, openLabel: m.status === 'utkast' ? 'Fortsätt ›' : 'Öppna ›',
+    channels: m.channels || [], chResults: m.ch_results || {},
+    history: (m.history || []).map((h) => ({ ...h, when: prettyWhen(h.when) })) }))
+  $: matFilterChips = [['alla', 'Alla'], ['utkast', 'Utkast'], ['publicerad', 'Publicerade'], ['delvis', 'Delvis'],
     ...matMatches.map((mm) => [mm, mm.length > 24 ? mm.slice(0, 22) + '…' : mm])]
   $: materialsEmpty = materialsV.length === 0
   $: draftCount = materials.filter((m) => m.status === 'utkast').length
+  $: delvisCount = materials.filter((m) => m.status === 'delvis').length
   $: matEditing = editMatId != null
   $: matEdit = matEditing ? materials.find((m) => m.id === editMatId) : null
   $: matEditLabel = matEdit ? (matEdit.kind === 'live' ? `${matEdit.moment || 'Story'}-story` : 'SoMe-paket') : ''
@@ -333,13 +370,6 @@
     laddaMaterial()
   })
 
-  function initialer(namn) { return (namn || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 3).toUpperCase() }
-  function _lum(hex) {
-    const h = (hex || '').replace('#', ''); if (h.length < 3) return 1
-    const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16)
-    return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
-  }
-  const brickStil = (f) => `background:${f || '#c9bfa8'};color:${_lum(f || '#c9bfa8') > 0.62 ? 'rgba(35,32,26,.85)' : '#fff'}`
   function fargForLag(namn) { const l = lagAlla.find((x) => x.namn === namn); return l ? (l.stall_hemma || l.profilfarg) : '' }
   function loggaForLag(namn) { return lagAlla.find((x) => x.namn === namn)?.logga || '' }
   function _rgba(hex, a) { const n = parseInt((hex || '').replace('#', ''), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})` }
@@ -480,8 +510,8 @@
         <div class="matchrad">
           {#if match}
             <span class="brickor">
-              <span class="bricka" style={brickStil(fargForLag(match.lag_hemma))}>{#if loggaForLag(match.lag_hemma)}<img src={bildUrl(loggaForLag(match.lag_hemma))} alt="" />{:else}{initialer(match.lag_hemma)}{/if}</span>
-              <span class="bricka away" style={brickStil(fargForLag(match.lag_borta))}>{#if loggaForLag(match.lag_borta)}<img src={bildUrl(loggaForLag(match.lag_borta))} alt="" />{:else}{initialer(match.lag_borta)}{/if}</span>
+              <Lagbricka namn={match.lag_hemma} farg={fargForLag(match.lag_hemma)} logga={loggaForLag(match.lag_hemma)} storlek={30} />
+              <span class="away"><Lagbricka namn={match.lag_borta} farg={fargForLag(match.lag_borta)} logga={loggaForLag(match.lag_borta)} storlek={30} /></span>
             </span>
             <div class="mrinfo"><div class="mrfix">{match.lag_hemma} – {match.lag_borta}</div><div class="mrsub">Sport · knyter match, moment &amp; tema till paketet</div></div>
           {:else}
@@ -583,7 +613,7 @@
     <div class="matsek">
       <div class="mathuvud">
         <div class="matrubrik"><span class="caps">Sparade material</span>
-          <span class="hint">{materials.length} totalt · {draftCount} utkast</span></div>
+          <span class="hint">{materials.length} totalt · {draftCount} utkast{delvisCount ? ` · ${delvisCount} delvis` : ''}</span></div>
         {#if matEditing}
           <div class="matbanner">
             <span>Redigerar: {matEditLabel}</span>
@@ -611,8 +641,49 @@
               </span>
               <div class="mattxt">
                 <div class="matrad1"><span class="matnamn">{mt.title}</span>
-                  <span class="matstatus" class:pa={mt.status === 'publicerad'}>{mt.status === 'utkast' ? 'Utkast' : 'Publicerad'}</span></div>
+                  <span class="matstatus" class:pa={mt.status === 'publicerad'} class:delvis={mt.status === 'delvis'}>
+                    {mt.status === 'utkast' ? 'Utkast' : mt.status === 'delvis' ? 'Delvis publicerad' : 'Publicerad'}
+                  </span>
+                  {#if mt.history.length > 1}
+                    <button class="histchip" on:click={() => toggleHistory(mt.id)}>
+                      {mt.history.length} publiceringar {historyOpen[mt.id] ? '▴' : '▾'}
+                    </button>
+                  {/if}
+                </div>
                 <div class="matsub">{mt.sub} · {mt.meta}</div>
+
+                {#if mt.status === 'delvis'}
+                  <div class="chrad">
+                    {#each mt.channels as c (c)}
+                      <span class="chchip" class:ok={mt.chResults[c] === 'ok'}
+                        class:run={retryingId === mt.id && mt.chResults[c] !== 'ok'}>
+                        {CHLABEL[c] || c} {retryingId === mt.id && mt.chResults[c] !== 'ok' ? '↻' : (mt.chResults[c] === 'ok' ? '✓' : '✗')}
+                      </span>
+                    {/each}
+                    <button class="retrybtn" disabled={retryingId === mt.id} on:click={() => retryMaterial(mt.id)}>
+                      {retryingId === mt.id ? 'Publicerar…'
+                        : `Försök igen — ${mt.channels.filter((c) => mt.chResults[c] !== 'ok').map((c) => CHLABEL[c] || c).join(', ')} ›`}
+                    </button>
+                  </div>
+                {:else if retryFlashId === mt.id}
+                  <div class="retryflash">✓ Alla kanaler publicerade</div>
+                {/if}
+
+                {#if historyOpen[mt.id] && mt.history.length > 1}
+                  <div class="histline">
+                    {#each mt.history as h, i (h.when + i)}
+                      <div class="histrad">
+                        <span class="histtid mono">{h.when}</span>
+                        <span class="histtag" class:pa={h.status === 'publicerad'} class:delvis={h.status === 'delvis'}>
+                          {h.status === 'publicerad' ? 'Publicerad' : 'Delvis'}
+                        </span>
+                        {#if i === 0 ? (h.note || 'senaste') : h.note}
+                          <span class="histnote">{i === 0 ? (h.note || 'senaste') : h.note}</span>
+                        {/if}
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
               </div>
               <span class="mattid mono">{mt.when}</span>
               <button class="sek" on:click={() => openMaterial(mt.id)}>{mt.openLabel}</button>
@@ -717,9 +788,7 @@
   .matchrad { display: flex; align-items: center; gap: 11px; border: 1px solid var(--div3);
     border-radius: 10px; background: var(--panel); padding: 10px 13px; margin-bottom: 16px; }
   .brickor { display: flex; align-items: center; flex: none; }
-  .bricka { width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-c); font-size: 11px; font-weight: 700; border: 2px solid var(--kort); overflow: hidden; }
-  .bricka img { width: 100%; height: 100%; object-fit: contain; }
-  .bricka.away { margin-left: -8px; }
+  .brickor .away { margin-left: -8px; display: flex; border-radius: 50%; box-shadow: 0 0 0 2px var(--kort); }
   .mrinfo { flex: 1; min-width: 0; }
   .mrfix { font-size: 13px; font-weight: 600; color: var(--t-head); }
   .mrsub { font-size: 11px; color: var(--t-mut); }
@@ -790,17 +859,42 @@
   .matchips .seg-b { border-radius: 999px; padding: 5px 12px; }
   .mattom { border: 1px dashed var(--div); border-radius: 11px; padding: 22px; text-align: center; font-size: 12.5px; color: var(--t-mut); background: var(--panel); }
   .matlista { display: flex; flex-direction: column; gap: 9px; }
-  .matrad { display: flex; align-items: center; gap: 13px; background: var(--kort); border: 1px solid var(--div); border-radius: 12px; box-shadow: var(--skugga); padding: 12px 14px; }
+  .matrad { display: flex; align-items: flex-start; gap: 13px; background: var(--kort); border: 1px solid var(--div); border-radius: 12px; box-shadow: var(--skugga); padding: 12px 14px; }
   .maticon { width: 34px; height: 34px; border-radius: 9px; flex: none; display: flex; align-items: center; justify-content: center; background: rgba(47,124,176,.14); color: #2F7CB0; }
   .maticon.live { background: var(--acc-soft); color: var(--acc); }
   .mattxt { flex: 1; min-width: 0; }
-  .matrad1 { display: flex; align-items: center; gap: 8px; }
+  .matrad1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .matnamn { font-size: 13.5px; font-weight: 600; color: var(--t-head); }
   .matstatus { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; flex: none; color: var(--varn); background: color-mix(in srgb, var(--varn) 13%, transparent); }
   .matstatus.pa { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
+  .matstatus.delvis { color: #B0483A; background: rgba(176,72,58,.12); }
+  .histchip { border: 0; background: var(--acc-soft); color: var(--acc); font-size: 10.5px; font-weight: 700;
+    padding: 3px 9px; border-radius: 999px; flex: none; }
   .matsub { font-size: 11.5px; color: var(--t-mut); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mattid { font-size: 10.5px; color: var(--t-help); flex: none; }
+  .mattid { font-size: 10.5px; color: var(--t-help); flex: none; margin-top: 2px; }
   .papperskorg { flex: none; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--t-mut); }
   .papperskorg svg { width: 15px; height: 15px; }
   .papperskorg:hover { color: #C0453E; }
+
+  /* Delvis publicerad: kanalchips + försök-igen */
+  .chrad { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+  .chchip { font-size: 10.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+    color: var(--rose); background: color-mix(in srgb, var(--rose) 12%, transparent); }
+  .chchip.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+  .chchip.run { color: var(--varn); background: color-mix(in srgb, var(--varn) 13%, transparent); }
+  .retrybtn { border: 1px solid #B0483A; background: transparent; color: #B0483A; border-radius: 999px;
+    padding: 4px 12px; font-size: 11px; font-weight: 600; }
+  .retrybtn:hover:not(:disabled) { background: rgba(176,72,58,.1); }
+  .retrybtn:disabled { opacity: 0.6; }
+  .retryflash { margin-top: 8px; font-size: 11.5px; font-weight: 600; color: var(--ok); }
+
+  /* Historik-tidslinje */
+  .histline { margin-top: 9px; padding-left: 10px; border-left: 2px solid var(--div3);
+    display: flex; flex-direction: column; gap: 6px; }
+  .histrad { display: flex; align-items: center; gap: 9px; font-size: 11px; }
+  .histtid { color: var(--t-help); flex: none; }
+  .histtag { font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 5px; flex: none; color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
+  .histtag.delvis { color: #B0483A; background: rgba(176,72,58,.12); }
+  .histnote { color: var(--t-mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

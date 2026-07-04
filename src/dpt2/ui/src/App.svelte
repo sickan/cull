@@ -11,7 +11,7 @@
   import Trana from './panels/Trana.svelte'
   import Logg from './panels/Logg.svelte'
   import Installningar from './panels/Installningar.svelte'
-  import { erMock, aktivMatch, aktivtUrval } from './lib/api.js'
+  import { erMock, aktivMatch, aktivtUrval, listaMaterial } from './lib/api.js'
 
   const ARMOCK = erMock()
 
@@ -20,10 +20,16 @@
   let aktivMatchData = null
   let aktivM = null            // global aktiv match (topp-widget)
   let aktivU = null            // globalt aktivt urval (topp-widget)
+  let harDelvis = false        // minst ett material är "Delvis publicerad" (nav-punkt)
 
   onMount(async () => {
     ;[aktivM, aktivU] = await Promise.all([aktivMatch(), aktivtUrval()])
+    await uppdateraDelvis()
   })
+  async function uppdateraDelvis() {
+    const mat = await listaMaterial()
+    harDelvis = mat.some((m) => m.status === 'delvis')
+  }
 
   async function uppdateraUrval() { aktivU = await aktivtUrval() }
   const urvalEtikett = (u) => !u ? ''
@@ -37,7 +43,7 @@
 </script>
 
 <div class="app">
-  <Rail {aktiv} on:valj={(e) => (aktiv = e.detail)} />
+  <Rail {aktiv} delvis={harDelvis} on:valj={(e) => (aktiv = e.detail)} />
 
   <main>
     <div class="topbar">
@@ -76,7 +82,7 @@
     {:else if aktiv === 'leverera'}
       <Leverera on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
     {:else if aktiv === 'publicera'}
-      <Publicera on:navigera={(e) => (aktiv = e.detail)} />
+      <Publicera on:navigera={(e) => (aktiv = e.detail)} on:materialAndrat={uppdateraDelvis} />
     {:else if aktiv === 'innehall'}
       <Innehall />
     {:else if aktiv === 'trana'}

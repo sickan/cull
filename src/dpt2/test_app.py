@@ -13,7 +13,7 @@ class TestApi(unittest.TestCase):
 
     def test_info(self):
         info = self.api.info()
-        self.assertEqual(info["schemaversion"], 10)
+        self.assertEqual(info["schemaversion"], 11)
 
     def test_match_round_trip_genom_bryggan(self):
         res = self.api.spara_match({
@@ -227,6 +227,23 @@ class TestApi(unittest.TestCase):
 
         self.api.radera_material(mid)
         self.assertEqual(self.api.lista_material(), [])
+
+    def test_forsok_igen_material_okant_id(self):
+        r = self.api.forsok_igen_material("finns-inte")
+        self.assertFalse(r["ok"])
+
+    def test_forsok_igen_material_fel_pa_live_material(self):
+        res = self.api.spara_material({"kind": "live", "status": "utkast", "moment": "Avspark"})
+        r = self.api.forsok_igen_material(res["id"])
+        self.assertFalse(r["ok"])
+
+    def test_forsok_igen_material_inga_felkanaler(self):
+        res = self.api.spara_material({
+            "kind": "some", "status": "publicerad", "channels": ["story"],
+            "ch_results": {"story": "ok"}})
+        r = self.api.forsok_igen_material(res["id"])
+        self.assertFalse(r["ok"])
+        self.assertIn("felkanaler", r["fel"])
 
     def test_innehall_spara_forhandsgranska_lista(self):
         data = {"typ": "match", "titel": "Malmö FF – KDFF", "resultat": "6-0",
