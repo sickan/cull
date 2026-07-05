@@ -92,19 +92,23 @@ class InnehallSynk:
         return {"ok": False, "status": status, "fel": fel}
 
     # ── bilder (R2) ────────────────────────────────────────────────────────────
-    def ladda_upp_bild(self, typ, slug, lokal_sokvag, filnamn=None, forsok=3):
-        """Laddar upp en lokal bildfil till content-syncs permanenta R2-lagring.
-        Returnerar den publika URL:en, eller None vid fel/saknad fil — anroparen
-        ska då falla tillbaka på nåt förnuftigt (t.ex. hoppa över bilden) istället
-        för att fälla hela publiceringen."""
+    def ladda_upp_bild(self, typ, slug, lokal_sokvag, filnamn=None, *,
+                       max_bredd=2200, kvalitet=85, forsok=3):
+        """Optimerar (resize + JPEG-omkodning + sRGB + lätt skärpning, se
+        publicering.bildoptimering) och laddar upp en lokal bildfil till
+        content-syncs permanenta R2-lagring. Returnerar den publika URL:en,
+        eller None vid fel/saknad fil — anroparen ska då falla tillbaka på
+        nåt förnuftigt (t.ex. hoppa över bilden) istället för att fälla hela
+        publiceringen."""
         p = Path(lokal_sokvag).expanduser() if lokal_sokvag else None
         if not p or not p.exists():
             return None
-        malnamn = filnamn or p.name
+        from dpt2.publicering.bildoptimering import optimera
         try:
-            data = p.read_bytes()
+            data, andelse = optimera(p, max_bredd=max_bredd, kvalitet=kvalitet)
         except Exception:
             return None
+        malnamn = Path(filnamn or p.name).stem + andelse
         headers = {"Authorization": f"Bearer {self.api_key}",
                    "Content-Type": _content_type(malnamn)}
         status, resp = 0, None

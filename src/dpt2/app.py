@@ -797,7 +797,10 @@ class Api:
         till en lokal git-checkout via _kopiera_match_bilder) laddar den här
         vägen upp bildbytes direkt till content-syncs R2-lagring — annars
         skulle frontmatter peka på bildsökvägar som aldrig hamnar någonstans
-        den skarpa sajten kan läsa från."""
+        den skarpa sajten kan läsa från. Bilderna optimeras automatiskt vid
+        uppladdningen (resize + JPEG-omkodning + sRGB + lätt skärpning, se
+        innehall_synk.ladda_upp_bild/publicering.bildoptimering) — kameraorginal
+        på flera MB serveras aldrig rakt av."""
         data = data or {}
         typ = data.get("typ", "match")
         bild_urls = {}
@@ -812,7 +815,12 @@ class Api:
             for i, f in enumerate(data.get("figurer") or [], 1):
                 kalla = f.get("bild") or f.get("src")
                 if kalla and Path(kalla).expanduser().exists():
-                    url = self.innehall_synk.ladda_upp_bild(typ, slug_preliminar, kalla, f"{i}.jpg")
+                    # Galleribilder: mindre bredd/kvalitet än hero (se
+                    # bildoptimering.optimera) — de visas som tumnaglar/i
+                    # rutnät, inte i full bredd.
+                    url = self.innehall_synk.ladda_upp_bild(
+                        typ, slug_preliminar, kalla, f"{i}.jpg",
+                        max_bredd=1600, kvalitet=75)
                     if url:
                         bild_urls[i] = url
         fm, body, slug, _md = _innehall_md(data, bild_urls=bild_urls)

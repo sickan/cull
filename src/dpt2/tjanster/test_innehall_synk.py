@@ -92,17 +92,37 @@ class TestInnehallSynk(unittest.TestCase):
         k = InnehallSynk(api_key="x", transport=t)
         self.assertIsNone(k.status("match", "i1")["deploy"])
 
+    def _riktig_jpg(self, mapp, namn="01.jpg", storlek=(400, 300)):
+        """Skapar en riktig (liten) JPEG — ladda_upp_bild optimerar via PIL,
+        så en fejkad byte-sträng duger inte längre som testbild."""
+        from PIL import Image
+        p = Path(mapp) / namn
+        Image.new("RGB", storlek, (120, 80, 200)).save(p, "JPEG")
+        return p
+
     def test_ladda_upp_bild_ok(self):
         with tempfile.TemporaryDirectory() as d:
-            fil = Path(d) / "01.jpg"
-            fil.write_bytes(b"\xff\xd8\xff\xe0fejk-jpeg-innehall")
+            fil = self._riktig_jpg(d)
             t = FejkTransport({("PUT", "/api/bilder/match/malmo-if/01.jpg"):
                                 (200, {"ok": True, "url": "https://x/bilder/match/malmo-if/01.jpg"})})
             k = InnehallSynk(api_key="x", transport=t)
             url = k.ladda_upp_bild("match", "malmo-if", str(fil))
             self.assertEqual(url, "https://x/bilder/match/malmo-if/01.jpg")
-            self.assertEqual(t.anrop[0]["body"], fil.read_bytes())
+            # Optimerad (omkodad) JPEG, inte källfilens rå bytes rakt av.
+            self.assertTrue(t.anrop[0]["body"].startswith(b"\xff\xd8"))
             self.assertEqual(t.anrop[0]["headers"]["Content-Type"], "image/jpeg")
+
+    def test_ladda_upp_bild_skalar_ned_stor_bild(self):
+        with tempfile.TemporaryDirectory() as d:
+            fil = self._riktig_jpg(d, storlek=(3000, 2000))
+            t = FejkTransport({("PUT", "/api/bilder/match/malmo-if/01.jpg"):
+                                (200, {"ok": True, "url": "https://x/01.jpg"})})
+            k = InnehallSynk(api_key="x", transport=t)
+            k.ladda_upp_bild("match", "malmo-if", str(fil), max_bredd=1600, kvalitet=75)
+            from PIL import Image
+            import io
+            optimerad = Image.open(io.BytesIO(t.anrop[0]["body"]))
+            self.assertEqual(optimerad.width, 1600)
 
     def test_ladda_upp_bild_saknad_fil(self):
         k = InnehallSynk(api_key="x", transport=FejkTransport({}))
@@ -112,10 +132,16 @@ class TestInnehallSynk(unittest.TestCase):
         k = InnehallSynk(api_key="x", transport=FejkTransport({}))
         self.assertIsNone(k.ladda_upp_bild("match", "malmo-if", None))
 
-    def test_ladda_upp_bild_fel_ger_none(self):
+    def test_ladda_upp_bild_ogiltig_bild_ger_none(self):
         with tempfile.TemporaryDirectory() as d:
             fil = Path(d) / "01.jpg"
-            fil.write_bytes(b"data")
+            fil.write_bytes(b"inte-en-riktig-bild")
+            k = InnehallSynk(api_key="x", transport=FejkTransport({}))
+            self.assertIsNone(k.ladda_upp_bild("match", "malmo-if", str(fil)))
+
+    def test_ladda_upp_bild_fel_ger_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            fil = self._riktig_jpg(d)
             t = FejkTransport({("PUT", "/api/bilder/match/malmo-if/01.jpg"): (500, {"error": "internt fel"})})
             k = InnehallSynk(api_key="x", transport=t)
             self.assertIsNone(k.ladda_upp_bild("match", "malmo-if", str(fil), forsok=1))
