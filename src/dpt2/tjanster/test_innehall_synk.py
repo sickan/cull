@@ -1,6 +1,8 @@
 """Tester för content-sync-klienten — fejk-transport, inget nät, ingen nyckel läcker."""
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from dpt2.tjanster.innehall_synk import InnehallSynk
 
@@ -89,6 +91,34 @@ class TestInnehallSynk(unittest.TestCase):
         })})
         k = InnehallSynk(api_key="x", transport=t)
         self.assertIsNone(k.status("match", "i1")["deploy"])
+
+    def test_ladda_upp_bild_ok(self):
+        with tempfile.TemporaryDirectory() as d:
+            fil = Path(d) / "01.jpg"
+            fil.write_bytes(b"\xff\xd8\xff\xe0fejk-jpeg-innehall")
+            t = FejkTransport({("PUT", "/api/bilder/match/malmo-if/01.jpg"):
+                                (200, {"ok": True, "url": "https://x/bilder/match/malmo-if/01.jpg"})})
+            k = InnehallSynk(api_key="x", transport=t)
+            url = k.ladda_upp_bild("match", "malmo-if", str(fil))
+            self.assertEqual(url, "https://x/bilder/match/malmo-if/01.jpg")
+            self.assertEqual(t.anrop[0]["body"], fil.read_bytes())
+            self.assertEqual(t.anrop[0]["headers"]["Content-Type"], "image/jpeg")
+
+    def test_ladda_upp_bild_saknad_fil(self):
+        k = InnehallSynk(api_key="x", transport=FejkTransport({}))
+        self.assertIsNone(k.ladda_upp_bild("match", "malmo-if", "/finns/inte.jpg"))
+
+    def test_ladda_upp_bild_ingen_sokvag(self):
+        k = InnehallSynk(api_key="x", transport=FejkTransport({}))
+        self.assertIsNone(k.ladda_upp_bild("match", "malmo-if", None))
+
+    def test_ladda_upp_bild_fel_ger_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            fil = Path(d) / "01.jpg"
+            fil.write_bytes(b"data")
+            t = FejkTransport({("PUT", "/api/bilder/match/malmo-if/01.jpg"): (500, {"error": "internt fel"})})
+            k = InnehallSynk(api_key="x", transport=t)
+            self.assertIsNone(k.ladda_upp_bild("match", "malmo-if", str(fil), forsok=1))
 
 
 if __name__ == "__main__":

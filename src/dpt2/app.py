@@ -791,10 +791,31 @@ class Api:
     def publicera_innehall_natet(self, data):
         """Sparar innehållet lokalt (som spara_innehall) och publicerar det
         sedan till content-sync-workern — skilt från exportera_innehall, som
-        bara skriver en lokal .md-fil. Kräver ingen export-katalog."""
+        bara skriver en lokal .md-fil. Kräver ingen export-katalog.
+
+        Till skillnad från exportera_innehall (som bara kopierar bilderna
+        till en lokal git-checkout via _kopiera_match_bilder) laddar den här
+        vägen upp bildbytes direkt till content-syncs R2-lagring — annars
+        skulle frontmatter peka på bildsökvägar som aldrig hamnar någonstans
+        den skarpa sajten kan läsa från."""
         data = data or {}
         typ = data.get("typ", "match")
-        fm, body, slug, _md = _innehall_md(data)
+        bild_urls = {}
+        if typ == "match":
+            slug_preliminar = AX.slugga(data.get("titel", ""))
+            hero_kalla = data.get("heroKalla")
+            hero_namn = data.get("hero")
+            if hero_kalla and hero_namn:
+                url = self.innehall_synk.ladda_upp_bild(typ, slug_preliminar, hero_kalla, hero_namn)
+                if url:
+                    bild_urls["hero"] = url
+            for i, f in enumerate(data.get("figurer") or [], 1):
+                kalla = f.get("bild") or f.get("src")
+                if kalla and Path(kalla).expanduser().exists():
+                    url = self.innehall_synk.ladda_upp_bild(typ, slug_preliminar, kalla, f"{i}.jpg")
+                    if url:
+                        bild_urls[i] = url
+        fm, body, slug, _md = _innehall_md(data, bild_urls=bild_urls)
         iid = store.spara_innehall(
             self.conn, typ=typ, match_id=data.get("match_id") or None,
             status=fm.get("status"), frontmatter=fm, body=body,
@@ -944,7 +965,7 @@ def _utkast_till_jobbdict(u):
             "google_event_id": None, "source": "dpt", "utkast": True}
 
 
-def _innehall_md(data):
+def _innehall_md(data, bild_urls=None):
     """CMS-fält (UI-form) → (frontmatter-dict, body, slug, komplett .md).
     Typmedveten enligt DATAMODELL.md + Innehåll-synk-handoffen: match
     (befintligt sajt-kontrakt, rörs ej), event (kategori/kund/plats/galleri/
@@ -953,7 +974,14 @@ def _innehall_md(data):
     webben (Sport=Hav, Landskap=Sol, Event=Rosé, Blog ärver) — ingen typ
     skriver `tema:`. figurer läggs sist i brödtexten med härledda referenser
     /bilder/{slug}/{n}.jpg (explicit `bild` vinner); Landskap & Event är
-    bild-only (alt/bildtext strippas)."""
+    bild-only (alt/bildtext strippas).
+
+    bild_urls: valfri {"hero": url, 1: url, 2: url, ...} från
+    publicera_innehall_natet (bilderna redan uppladdade till content-syncs
+    R2-lagring) — vinner då över de härledda lokala public/-sökvägarna som
+    exportera_innehall/_kopiera_match_bilder använder. Tomt för den lokala
+    .md-exporten (rörs inte)."""
+    bild_urls = bild_urls or {}
     typ = data.get("typ", "match")
     titel = data.get("titel", "")
     slug = AX.slugga(titel)
@@ -1009,7 +1037,7 @@ def _innehall_md(data):
             prof["md_key"]: data.get("mellan") or None,
             "sport": data.get("sport") or None,
             "status": data.get("status") or None,
-            "hero": data.get("hero") or None,
+            "hero": bild_urls.get("hero") or data.get("hero") or None,
             "heroPosition": data.get("heroPosition") or None,
             "pixieset": data.get("pixieset") or None,
             "malskyttar": malskyttar or None,
@@ -1025,7 +1053,7 @@ def _innehall_md(data):
     # ALLTID den kanoniska webbsökvägen dit kopieringssteget lägger filen,
     # aldrig den lokala sökvägen (den ska förstås aldrig hamna publikt).
     if typ == "match":
-        figurer = [{"bild": f"/sport/{bildslug}/{i}.jpg",
+        figurer = [{"bild": bild_urls.get(i) or f"/sport/{bildslug}/{i}.jpg",
                     "alt": f.get("alt") or "", "bildtext": f.get("bildtext") or ""}
                    for i, f in enumerate(data.get("figurer") or [], 1)]
     else:
