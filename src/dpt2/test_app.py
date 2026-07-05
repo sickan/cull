@@ -337,13 +337,22 @@ class TestApi(unittest.TestCase):
         self.assertIn("felkanaler", r["fel"])
 
     def test_innehall_spara_forhandsgranska_lista(self):
-        data = {"typ": "match", "titel": "Malmö FF – KDFF", "resultat": "6-0",
-                "malskyttar": "Musovic 12', Persson 45'", "body": "Referat.",
+        # titel skickas fortfarande med (används bara för slug-generering,
+        # skrivs inte längre till frontmatter) — hem/borta/serie är sajtens
+        # verkliga matcher-schema.
+        data = {"typ": "match", "titel": "Malmö FF – KDFF",
+                "hem": "Malmö FF", "borta": "KDFF", "serie": "Damallsvenskan",
+                "resultat": "6-0", "malskyttar": "Musovic 12', Persson 45'",
+                "body": "Referat.",
                 "figurer": [{"bild": "1.jpg", "alt": "jubel", "bildtext": "Segern"}]}
         pre = self.api.forhandsgranska_innehall(data)
         self.assertEqual(pre["slug"], "malmo-ff-kdff")
-        self.assertIn("titel: Malmö FF – KDFF", pre["md"])
-        self.assertIn("![jubel](1.jpg)", pre["md"])
+        self.assertIn("hem: Malmö FF", pre["md"])
+        self.assertIn("borta: KDFF", pre["md"])
+        self.assertNotIn("titel:", pre["md"])
+        # Bildreferensen i markdown är alltid den publika sport-sökvägen, inte
+        # den lokala källfilen (den är bara till för _kopiera_match_bilder).
+        self.assertIn("![jubel](/sport/malmo-ff-kdff/1.jpg)", pre["md"])
         res = self.api.spara_innehall(data)
         self.assertTrue(res["ok"])
         lst = self.api.lista_innehall()

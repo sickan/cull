@@ -228,12 +228,16 @@ def _migrera(conn, fran_version):
     if fran_version < 12:
         # v12: nätverkspublicering till content-sync-workern (Innehåll →
         # hemsidan, skild från den lokala .md-exportens `publicerad`-flagga).
-        if not _har_kolumn(conn, "innehall", "synkad_tid"):
-            conn.execute("ALTER TABLE innehall ADD COLUMN synkad_tid TEXT")
-        # Legacy: 'portratt' var en egen typ innan Porträtt blev en
-        # Event-kategori (se CTYPER/EVENT_KAT i Innehall.svelte samma bytt
-        # som calendar-sync/migrations/0003_rename_portratt_to_event.sql).
-        conn.execute("UPDATE innehall SET typ = 'event' WHERE typ = 'portratt'")
+        # _har_tabell-kollen krävs — synteticka äldre testdatabaser (v7-v9)
+        # saknar innehall helt (tabellen kom in via schema.sql, aldrig via en
+        # egen migreringssteg), så en ovillkorad ALTER kraschar på dem.
+        if _har_tabell(conn, "innehall"):
+            if not _har_kolumn(conn, "innehall", "synkad_tid"):
+                conn.execute("ALTER TABLE innehall ADD COLUMN synkad_tid TEXT")
+            # Legacy: 'portratt' var en egen typ innan Porträtt blev en
+            # Event-kategori (se CTYPER/EVENT_KAT i Innehall.svelte samma bytt
+            # som calendar-sync/migrations/0003_rename_portratt_to_event.sql).
+            conn.execute("UPDATE innehall SET typ = 'event' WHERE typ = 'portratt'")
     if fran_version < 13:
         # v13: sportprofiler (data/sportprofil.py) styr resultat-/mellan-
         # resultat-/målskyttar-/uppställningsfälten per sport istället för
@@ -244,7 +248,12 @@ def _migrera(conn, fran_version):
         # FK:er från flera tabeller (fotojobb_match, match_trupp, urval,
         # some_material, publicera_material, innehall) så FK-tvång stängs
         # av under ombyggnaden och verifieras efteråt.
-        if not _har_kolumn(conn, "matchen", "mellan"):
+        # Samma typ av guard som övriga steg — synteticka äldre testdatabaser
+        # (t.ex. v1-v2, v7-v10) skapar inte alltid tavling/lag/matchen, och en
+        # ovillkorad ombyggnad kraschar då på "no such table".
+        if (_har_tabell(conn, "tavling") and _har_tabell(conn, "lag")
+                and _har_tabell(conn, "matchen")
+                and not _har_kolumn(conn, "matchen", "mellan")):
             conn.execute("PRAGMA foreign_keys=OFF")
             conn.executescript("""
             CREATE TABLE tavling_ny (
