@@ -51,6 +51,15 @@ class InnehallSynk:
         """PUT:ar innehållet till content-sync. Görs om vid fel/icke-2xx (kall
         Worker vid appstart failar ofta på FÖRSTA anropet). Returnerar
         {ok, status, innehall} eller {ok: False, status, fel}."""
+        if not self.api_key:
+            # En tom nyckel ger "Authorization: Bearer " (efterföljande
+            # blanksteg, ingen token) — httpx/h11 vägrar skicka ett sådant
+            # header-värde (LocalProtocolError) INNAN anropet ens går ut, så
+            # utan den här kollen fastnar felet i except-grenen nedan och ger
+            # ett innehållslöst "kontrollera anslutningen" i UI:t istället för
+            # den faktiska orsaken.
+            return {"ok": False, "status": 0,
+                    "fel": "CONTENT_SYNC_API_KEY saknas — kan inte publicera."}
         payload = {"slug": slug, "frontmatter": frontmatter, "body": body,
                    "match_id": match_id}
         status, data = 0, None

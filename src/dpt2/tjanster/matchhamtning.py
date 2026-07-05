@@ -262,6 +262,54 @@ def _innehall_block(path):
             "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}}
 
 
+# ── §7: Importera spelschema (kommande matcher för ETT lag) ─────────────────
+SYSTEM_SPELSCHEMA = (
+    "Du är en sportresearcher. Din uppgift är att hämta KOMMANDE matcher "
+    "(spelschema) för ETT lag från lagets OFFICIELLA hemsida eller matchsida. "
+    "Om en URL anges: besök den direkt utan att söka via Google. "
+    "Om ingen URL anges: hitta klubbens officiella webbsida och gå till "
+    "match-/spelschemasidan. "
+    "Ta bara med matcher som INTE redan spelats. "
+    "Hitta ALDRIG på datum, motståndare eller arena — ta bara med det som "
+    "tydligt framgår av källan; utelämna fält du är osäker på (tom sträng). "
+    "Svara ENBART med ett JSON-objekt enligt schemat, ingen annan text."
+)
+SCHEMA_SPELSCHEMA = (
+    '{"lag": "lagnamn", '
+    '"matcher": [{"motstandare": "Lagnamn", "hemma": true, '
+    '"datum": "2026-08-15", "tid": "15:00", "arena": "Arenanamn", '
+    '"liga": "Tävlingsnamn"}], '
+    '"kallor": ["https://…"]}'
+)
+
+
+def hamta_spelschema(lag, url="", sport="", logg=print, klient=None):
+    """Hämtar kommande matcher för ETT lag (URL:en om angiven, annars via
+    web-sök). Returnerar {lag, matcher:[{motstandare,hemma,datum,tid,arena,
+    liga}], kallor} eller None."""
+    if not (lag or "").strip():
+        logg("⚠ Ange ett lag.")
+        return None
+    klient = _klient_eller_skapa(klient, logg)
+    if klient is None:
+        return None
+
+    url = (url or "").strip() or klubb(lag).get("matches_url", "")
+    fraga = (f"Hämta kommande matcher för {lag}: besök {url}" if url
+             else f"Hämta kommande matcher för {lag}: hitta officiell "
+                  "match-/spelschemasida")
+    if sport and sport.lower() not in ("", "auto"):
+        fraga += f"\nSport: {sport}"
+    fraga += f"\n\nReturnera JSON:\n{SCHEMA_SPELSCHEMA}"
+
+    data = claude.fraga_json(klient, SYSTEM_SPELSCHEMA, fraga,
+                             verktyg=claude.web_search_verktyg(max_uses=4),
+                             logg=logg)
+    if data:
+        logg(f"✓ Hittade {len(data.get('matcher', []))} kommande matcher.")
+    return data
+
+
 def hamta_trupp_for_lag(namn, url="", sport="", logg=print, klient=None):
     """Hämtar ETT lags trupp från en hemsida (URL:en om angiven, annars via
     web-sök). Returnerar {lag, spelare:[{nr,namn,position}], kallor} eller None."""

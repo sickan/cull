@@ -3,7 +3,7 @@
   import { aktivMatch, genereraBildsvep, valjMapp, listaLag,
     listaSomeBilder, publiceraTillSoMe, oppnaILightroom, publiceraLiveStory,
     forhandsgranskaStory, listaMaterial, sparaMaterial, raderaMaterial,
-    forsokIgenMaterial } from '../lib/api.js'
+    forsokIgenMaterial, sportprofiler, listaMatcher } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
   import Lagbricka from '../lib/Lagbricka.svelte'
   import { grenFarg } from '../lib/gren.js'
@@ -50,8 +50,32 @@
   let moment = 'Avspark'
   let tema = 'Hav'
   let livePub = { kor: false, klar: false, publicerad: false, fel: '', url: '' }
+  let profiler = {}
+  const PROFIL_FALLBACK = { start_moment: 'Avspark', mid_moment: 'Halvtid', mid_label: 'Halvtid',
+    mid_ph: '1–0', mid_token: 'halvtid', res_label: 'Slutresultat', res_ph: '6–0', has_scorers: true,
+    lineup: 'Startelva', lineup_n: '(11)', squad: true }
+  $: profil = profiler[match?.sport] || profiler.fotboll || PROFIL_FALLBACK
+  // Moment-namn i UI:t översätts från profilen; interna nycklar (kanoniska
+  // Avspark/Halvtid/Resultat/Startelva/Målgörare/Nästa match) rör sig aldrig
+  // — story_overlays _STATE_MAP och renderaren förblir opåverkade.
+  $: momentLabel = { Avspark: profil.start_moment, Halvtid: profil.mid_moment,
+    Resultat: 'Resultat', Startelva: `${profil.lineup}${profil.lineup_n ? ' ' + profil.lineup_n : ''}`,
+    'Målgörare': 'Målgörare', 'Nästa match': 'Nästa match' }
+  $: momentList = MOMENT.filter((m) =>
+    (profil.has_scorers || m !== 'Målgörare') && (profil.squad || m !== 'Startelva'))
+  $: if (!momentList.includes(moment)) moment = momentList[0] || 'Avspark'
 
-  $: mallfalt = MALLFALT[moment] || []
+  $: mallfalt = (MALLFALT[moment] || []).map((f) => {
+    if (moment === 'Halvtid' && f.k === 'halvtid') return { ...f, label: profil.mid_label, ph: profil.mid_ph }
+    if (moment === 'Resultat' && f.k === 'slutresultat') return { ...f, label: profil.res_label, ph: profil.res_ph }
+    // Set-sporter saknar målskyttar — samma platsrad visar istället mellan-
+    // resultatet (setsiffror), bundet till samma cfg-nyckel som Halvtid-
+    // momentets fält (ingen dubblerad inmatning).
+    if (moment === 'Resultat' && f.k === 'malskyttar' && !profil.has_scorers)
+      return { k: 'halvtid', label: profil.mid_label, ph: profil.mid_ph, multi: false }
+    if (moment === 'Startelva' && f.k === 'startelva') return { ...f, label: momentLabel.Startelva }
+    return f
+  })
   // Gren-markör i previewn: bara när en bild är vald + aktiva matchens gren är känd.
   // Samexisterar med tema-kickern — tema = innehållstyp, gren = kön/klass.
   $: ovGren = liveVald !== null ? (match?.hem_gren || '') : ''
@@ -59,10 +83,10 @@
   // 9:16-förhandsvisning: kicker = mall, stor text = mallens nyckelfält.
   $: fixtur = match ? `${match.lag_hemma} – ${match.lag_borta}` : 'Hemma – Borta'
   $: ov = {
-    Avspark: { big: fixtur, small: 'Avspark ' + (cfg.avspark || '14:00') },
-    Halvtid: { big: cfg.halvtid || '—', small: 'Halvtid · ' + fixtur },
-    Resultat: { big: cfg.slutresultat || '—', small: cfg.malskyttar || '' },
-    Startelva: { big: 'Startelva', small: cfg.startelva || '' },
+    Avspark: { big: fixtur, small: profil.start_moment + ' ' + (cfg.avspark || '14:00') },
+    Halvtid: { big: cfg.halvtid || '—', small: profil.mid_moment + ' · ' + fixtur },
+    Resultat: { big: cfg.slutresultat || '—', small: (profil.has_scorers ? cfg.malskyttar : '') || '' },
+    Startelva: { big: profil.lineup || 'Startelva', small: cfg.startelva || '' },
     'Målgörare': { big: 'MÅL ' + (cfg.minut || ''), small: cfg.malskott || '' },
     'Nästa match': { big: cfg.motstandare || '—', small: cfg.nextdatum || '' },
   }[moment] || { big: '', small: '' }
@@ -94,10 +118,11 @@
 
   function storyConfig() {
     const c = { foto: liveVald !== null ? liveBilder[liveVald] : '',
-      moment, tema, ut_mapp: liveDropbox, match_id: match?.id }
+      moment, tema, ut_mapp: liveDropbox, match_id: match?.id, sport: match?.sport }
     if (moment === 'Avspark') c.avspark_tid = cfg.avspark
     if (moment === 'Halvtid') c.stallning = cfg.halvtid
-    if (moment === 'Resultat') { c.stallning = cfg.slutresultat; c.mal_rad = cfg.malskyttar }
+    if (moment === 'Resultat') { c.stallning = cfg.slutresultat
+      c.mal_rad = profil.has_scorers ? cfg.malskyttar : cfg.halvtid }
     if (moment === 'Startelva') c.startelva = cfg.startelva
     if (moment === 'Målgörare') c.mal_rad = [cfg.malskott, cfg.minut].filter(Boolean).join(' ')
     if (moment === 'Nästa match') { c.lag_borta = cfg.motstandare; c.next_when = cfg.nextdatum }
@@ -142,6 +167,30 @@
   // ── SoMe · Målbanor: ett paket, eget bildset per kanal ──────────────────────
   let someCaption = ''
   let someGen = false
+
+  // §5: bildtext-tokens — {resultat} {halvtid|setsiffror|periodsiffror|
+  // gamesiffror beroende på sportprofil} {målskyttar} {arena} {motståndare}
+  // {@lag} {#liga} {galleri} {datum} {tid}. Okända brickor lämnas orörda.
+  const _hashtagify = (s) => (s || '').replace(/[^\p{L}\p{N}]/gu, '')
+  function _resolveTokens(text) {
+    if (!text) return ''
+    const m = match
+    const handle = (namn) => (lagAlla.find((x) => x.namn === namn)?.instagram || '').replace(/^@/, '')
+    const vals = {
+      resultat: m?.resultat || '', [profil.mid_token]: m?.mellan || '',
+      målskyttar: m?.malskyttar || '', arena: m?.arena || '', motståndare: m?.lag_borta || '',
+      '@lag': handle(m?.lag_hemma) ? '@' + handle(m?.lag_hemma) : '',
+      '#liga': m?.liga ? '#' + _hashtagify(m.liga) : '',
+      galleri: m?.galleri || '', datum: m?.datum || '', tid: m?.tid || '',
+    }
+    return text.replace(/\{([^{}]+)\}/g, (whole, key) => (key in vals ? vals[key] : whole))
+  }
+  $: someCaptionResolved = _resolveTokens(someCaption)
+  $: someTokens = ['resultat', profil.mid_token].concat(profil.has_scorers ? ['målskyttar'] : [])
+    .concat(['arena', 'motståndare', '@lag', '#liga', 'galleri', 'datum', 'tid'])
+  function insertToken(tok) {
+    someCaption += (someCaption && !/\s$/.test(someCaption) ? ' ' : '') + `{${tok}}`
+  }
   let banor = {
     story: { pa: true, mapp: '', bilder: [] },
     ig: { pa: true, mapp: '', bilder: [] },
@@ -218,7 +267,7 @@
     const chResults = {}
     for (const k of korningar) {
       const r = await publiceraTillSoMe({ bilder: banor[k.nyckel].bilder,
-        caption: someCaption, mal: k.mal, match_id: match?.id })
+        caption: someCaptionResolved, mal: k.mal, match_id: match?.id })
       chResults[k.nyckel] = r?.ok ? 'ok' : 'fail'
       if (r?.ok) {
         someResultat = [...someResultat, ...(r.resultat || [])]
@@ -279,7 +328,7 @@
     match_namn: fixtur, moment, tema, dropbox: liveDropbox,
     foto: liveVald !== null ? liveBilder[liveVald] : null })
   const _someMat = (status) => ({ kind: 'some', status, match_id: match?.id || null,
-    match_namn: fixtur, channels: Object.keys(banor).filter((k) => banor[k].pa), caption: someCaption,
+    match_namn: fixtur, channels: Object.keys(banor).filter((k) => banor[k].pa), caption: someCaptionResolved,
     banor: { story: { mapp: banor.story.mapp, bilder: banor.story.bilder },
       ig: { mapp: banor.ig.mapp, bilder: banor.ig.bilder },
       fb: { mapp: banor.fb.mapp, bilder: banor.fb.bilder } } })
@@ -361,7 +410,8 @@
     // "Laddar…" — annars sitter den fast tills man navigerar bort och
     // tillbaka (remount = ny chans). try/finally garanterar det.
     try {
-      ;[match, lagAlla] = await Promise.all([aktivMatch(), listaLag()])
+      ;[match, lagAlla, profiler, allaMatcher] = await Promise.all(
+        [aktivMatch(), listaLag(), sportprofiler(), listaMatcher()])
     } catch (e) {
       console.error('Publicera: kunde inte läsa aktiv match/lag', e)
     } finally {
@@ -369,6 +419,27 @@
     }
     laddaMaterial()
   })
+
+  // ── §8: Schemalagd publicering — UI-skiss, ingen bakgrundskörning ännu.
+  // Rad-tillstånd är bara lokalt UI-state (nollställs vid omstart); manuell
+  // körning ovan förblir oförändrad. Platshållare för en kommande handoff.
+  let allaMatcher = []
+  $: kommandeMatcher = allaMatcher.filter((m) => m.status !== 'avslutad')
+    .sort((a, b) => (a.datum || '9999').localeCompare(b.datum || '9999')).slice(0, 5)
+  let schedPa = {}   // `${matchId}:${radNyckel}` → true/false, förvalt PÅ
+  // pa skickas in explicit (inte bara stängd över) — annars ser Svelte
+  // aldrig att {#each schedRader(m)} beror på schedPa (samma reaktivitets-
+  // gotcha som {@const}-funktioner: variabler lästa INNE i en funktionskropp
+  // spåras inte, bara de som syns i själva mall-uttrycket).
+  function schedRader(m, pa) {
+    return [
+      { key: 'ig', label: 'Nästa match · IG-inlägg', villkor: 'dagen före kl 18:00', redo: true },
+      { key: 'uppst', label: 'Uppställnings-grafik · IG Story',
+        villkor: '1 h före avspark · villkorad på uppställning', redo: (m.trupp_n || 0) > 0 },
+      { key: 'galleri', label: 'Galleri-story', villkor: 'när Pixieset-länk finns', redo: !!m.galleri },
+    ].map((r) => { const k = `${m.id}:${r.key}`; return { ...r, k, pa: pa[k] ?? true } })
+  }
+  function toggleSched(k) { schedPa = { ...schedPa, [k]: !(schedPa[k] ?? true) } }
 
   function fargForLag(namn) { const l = lagAlla.find((x) => x.namn === namn); return l ? (l.stall_hemma || l.profilfarg) : '' }
   function loggaForLag(namn) { return lagAlla.find((x) => x.namn === namn)?.logga || '' }
@@ -441,7 +512,7 @@
         <div class="tvakol">
           <div class="kol1">
             <div class="capsrad"><span class="caps">Overlay-mall</span><span class="note">alla 9:16</span></div>
-            <div class="rutnat3">{#each MOMENT as m}<button class="seg-b" class:on={moment === m} on:click={() => (moment = m)}>{m}</button>{/each}</div>
+            <div class="rutnat3">{#each momentList as m}<button class="seg-b" class:on={moment === m} on:click={() => (moment = m)}>{momentLabel[m]}</button>{/each}</div>
 
             <div class="caps">Innehåll i mallen</div>
             <div class="falt">
@@ -522,6 +593,15 @@
 
         <div class="capsrad2"><span class="caps">Bildtext (delas av alla kanaler)</span><button class="genlank" on:click={someGenerera} disabled={someGen}>{someGen ? 'Genererar…' : '✨ Generera'}</button></div>
         <textarea class="somecap" bind:value={someCaption} rows="3" placeholder="Bildsvep-text med #hashtags och @mentions…"></textarea>
+        <div class="tokenrad">
+          <span class="tokenlbl">Infoga bricka</span>
+          {#each someTokens as t}<button class="tokenchip" on:click={() => insertToken(t)}>{'{' + t + '}'}</button>{/each}
+        </div>
+        <div class="somepreview">
+          <div class="capsrad2"><span class="caps">Förhandsvisning</span>
+            <span class="hint">{match ? `hämtat från ${match.lag_hemma} – ${match.lag_borta}` : 'ingen aktiv match kopplad'}</span></div>
+          <div class="previewbox">{someCaptionResolved || '—'}</div>
+        </div>
 
         <div class="caps mt">Kanaler &amp; bildset</div>
         <div class="kanaler">
@@ -568,7 +648,7 @@
               {#if fbVarning}<div class="varn">⚠ {fbVarning}</div>{/if}
             {/if}
             {#if banor.fb.pa}
-              <div class="fbdiff"><div class="fbdifflbl">Facebook-text (utan #/@)</div><div class="fbtokens">{#each fbTokens(someCaption) as tk}<span class:bort={tk.bort}>{tk.s}</span>{/each}</div></div>
+              <div class="fbdiff"><div class="fbdifflbl">Facebook-text (utan #/@)</div><div class="fbtokens">{#each fbTokens(someCaptionResolved) as tk}<span class:bort={tk.bort}>{tk.s}</span>{/each}</div></div>
             {/if}
           </div>
         </div>
@@ -605,6 +685,27 @@
           <button class="sek" on:click={saveSomeDraft}>Spara utkast</button>
           <span class="summa">{someHarBilder ? someRunCount + ' poster' : 'Välj bilder i minst en kanal'}</span>
         </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if !laddar && kommandeMatcher.length}
+    <div class="schedsek">
+      <div class="matrubrik"><span class="caps">Schemalagd publicering</span>
+        <span class="hint">skiss — körs ännu bara manuellt ovan</span></div>
+      <div class="schedlista">
+        {#each kommandeMatcher as m (m.id)}
+          <div class="schedkort">
+            <div class="schedfix">{m.lag_hemma} – {m.lag_borta}<span class="scheddatum">{m.datum}{m.tid ? ' · ' + m.tid : ''}</span></div>
+            {#each schedRader(m, schedPa) as r (r.k)}
+              <button class="schedrad" on:click={() => toggleSched(r.k)}>
+                <span class="box" class:pa={r.pa}>{r.pa ? '✓' : ''}</span>
+                <span class="schedtxt"><span class="schedlbl">{r.label}</span><span class="schedvillkor">{r.villkor}{!r.redo ? ' · väntar på data' : ''}</span></span>
+                {#if r.pa}<span class="schedstatus">Väntar</span>{/if}
+              </button>
+            {/each}
+          </div>
+        {/each}
       </div>
     </div>
   {/if}
@@ -799,6 +900,16 @@
   .somecap { width: 100%; background: var(--panel); border: 1px solid var(--div); border-radius: 8px;
     padding: 9px 11px; font-size: 12.5px; line-height: 1.55; color: var(--t-head); font-family: inherit; outline: none; resize: vertical; }
   .somecap:focus { border-color: var(--acc); }
+  .tokenrad { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+  .tokenlbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--t-help); margin-right: 2px; }
+  .tokenchip { border: 1px solid var(--div); background: var(--panel); border-radius: 999px;
+    padding: 3px 9px; font-size: 11px; font-family: var(--mono, ui-monospace, monospace);
+    color: var(--t-mut); }
+  .tokenchip:hover { border-color: var(--acc); color: var(--acc); }
+  .somepreview { margin-top: 12px; }
+  .previewbox { background: var(--panel); border: 1px dashed var(--div); border-radius: 8px;
+    padding: 10px 12px; font-size: 12.5px; line-height: 1.55; color: var(--t-head); white-space: pre-wrap; }
   .valjbild { border: 1px solid var(--div); background: var(--kort); border-radius: 7px; padding: 5px 10px;
     font-size: 11.5px; font-weight: 600; color: var(--t-mut); flex: none; }
   .valjbild:hover { border-color: var(--acc); color: var(--acc); }
@@ -847,6 +958,21 @@
   .felbox { margin-top: 14px; border: 1px solid var(--div3); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; color: var(--varn); background: color-mix(in srgb, var(--varn) 8%, transparent); }
   .korrad { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--div3); }
   .summa { margin-left: auto; font-size: 11.5px; color: var(--t-help); }
+
+  /* §8: Schemalagd publicering (UI-skiss) */
+  .schedsek { margin-top: 28px; }
+  .schedlista { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .schedkort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
+    box-shadow: var(--skugga); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .schedfix { font-size: 13px; font-weight: 600; color: var(--t-head); display: flex; align-items: baseline; gap: 8px; }
+  .scheddatum { font-size: 11px; font-weight: 500; color: var(--t-mut); }
+  .schedrad { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 6px 0; text-align: left; }
+  .schedtxt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .schedlbl { font-size: 12.5px; font-weight: 500; color: var(--t-head); }
+  .schedvillkor { font-size: 10.5px; color: var(--t-help); }
+  .schedstatus { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--varn); background: color-mix(in srgb, var(--varn) 14%, transparent);
+    padding: 2px 8px; border-radius: 999px; flex: none; }
 
   /* Sparade material */
   .matsek { margin-top: 28px; }

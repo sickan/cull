@@ -100,6 +100,29 @@ class TestLasLineup(unittest.TestCase):
         self.assertEqual(kl.messages.anrop, 0)               # inget anrop
 
 
+class TestHamtaSpelschema(unittest.TestCase):
+    def test_explicit_url_i_prompt(self):
+        kl = _Klient([_Svar('{"lag":"Malmö FF","matcher":['
+                            '{"motstandare":"FC Rosengård","hemma":true,'
+                            '"datum":"2026-09-12","tid":"15:00","arena":"Malmö IP",'
+                            '"liga":"OBOS Damallsvenskan"}]}')])
+        d = MH.hamta_spelschema("Malmö FF", url="https://malmoff.se/matcher",
+                                logg=lambda *_: None, klient=kl)
+        self.assertEqual(len(d["matcher"]), 1)
+        self.assertEqual(d["matcher"][0]["motstandare"], "FC Rosengård")
+        self.assertIn("malmoff.se/matcher", kl._content_text())
+        self.assertIn("tools", kl.messages.sista_kw)          # web_search
+
+    def test_klubbregister_url_som_fallback(self):
+        kl = _Klient([_Svar('{"matcher":[]}')])
+        MH.hamta_spelschema("FC Rosengård", logg=lambda *_: None, klient=kl)
+        self.assertIn("fcrosengard.se", kl._content_text())   # ur KLUBBAR
+
+    def test_inget_lag(self):
+        self.assertIsNone(MH.hamta_spelschema("", logg=lambda *_: None,
+                                              klient=_Klient([])))
+
+
 class TestHamtaTruppForLag(unittest.TestCase):
     def test_explicit_url_i_prompt(self):
         kl = _Klient([_Svar('{"lag":"Malmö FF","spelare":'

@@ -40,6 +40,8 @@
     document.documentElement.setAttribute('data-theme', tema)
   }
   function aktiveraFranMatcher(m) { aktivMatchData = m; aktivM = m; aktiv = 'gallra' }
+  // §2: matchradens statuschips — samma aktivera-mekanism, valfri destination.
+  function aktiveraFranMatcherTill(m, dest) { aktivMatchData = m; aktivM = m; aktiv = dest }
 </script>
 
 <div class="app">
@@ -74,7 +76,8 @@
     {#if aktiv === 'fotojobb'}
       <Fotojobb on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'matcher'}
-      <Matcher on:aktiverad={(e) => aktiveraFranMatcher(e.detail)} />
+      <Matcher on:aktiverad={(e) => aktiveraFranMatcher(e.detail)}
+        on:gaTill={(e) => aktiveraFranMatcherTill(e.detail.match, e.detail.dest)} />
     {:else if aktiv === 'lag'}
       <Lag />
     {:else if aktiv === 'gallra'}

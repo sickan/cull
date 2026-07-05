@@ -95,6 +95,16 @@ const MOCK_TAVLINGAR = [
   { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', gren: 'herr', fran: '2026-09-01', till: '2027-04-30', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
 ]
 
+// Mock: sportprofiler (statisk fältmodell, speglar dpt2.data.sportprofil).
+const MOCK_SPORTPROFILER = {
+  fotboll:    { namn: 'Fotboll', res_label: 'Slutresultat', res_ph: '6–0', mid_label: 'Halvtid', mid_ph: '3–0', mid_moment: 'Halvtid', mid_token: 'halvtid', start_moment: 'Avspark', has_scorers: true, scorers_label: 'Målskyttar', lineup: 'Startelva', lineup_n: '(11)', squad: true, individ: false, md_key: 'halvtid', farg: '#2F7CB0' },
+  handboll:   { namn: 'Handboll', res_label: 'Slutresultat', res_ph: '28–24', mid_label: 'Halvtid', mid_ph: '14–11', mid_moment: 'Halvtid', mid_token: 'halvtid', start_moment: 'Avspark', has_scorers: true, scorers_label: 'Målskyttar', lineup: 'Startsju', lineup_n: '(7)', squad: true, individ: false, md_key: 'halvtid', farg: '#C9871F' },
+  innebandy:  { namn: 'Innebandy', res_label: 'Slutresultat', res_ph: '4–1', mid_label: 'Periodsiffror', mid_ph: '1–0, 2–1, 1–0', mid_moment: 'Periodpaus', mid_token: 'periodsiffror', start_moment: 'Nedsläpp', has_scorers: true, scorers_label: 'Målskyttar', lineup: 'Femma', lineup_n: '(5)', squad: true, individ: false, md_key: 'perioder', farg: '#6E8B5E' },
+  volleyboll: { namn: 'Volleyboll', res_label: 'Resultat i set', res_ph: '3–1', mid_label: 'Setsiffror', mid_ph: '25–21, 23–25, 25–19, 25–17', mid_moment: 'Mellan set', mid_token: 'setsiffror', start_moment: 'Matchstart', has_scorers: false, scorers_label: '', lineup: 'Startsexa', lineup_n: '(6)', squad: true, individ: false, md_key: 'set', farg: '#C9657F' },
+  beachvolley:{ namn: 'Beachvolley', res_label: 'Resultat i set', res_ph: '2–0', mid_label: 'Setsiffror', mid_ph: '21–18, 21–15', mid_moment: 'Mellan set', mid_token: 'setsiffror', start_moment: 'Matchstart', has_scorers: false, scorers_label: '', lineup: 'Par', lineup_n: '(2)', squad: false, individ: false, md_key: 'set', farg: '#E0A040' },
+  tennis:     { namn: 'Tennis', res_label: 'Resultat i set', res_ph: '2–1', mid_label: 'Gamesiffror', mid_ph: '6–4, 3–6, 7–5', mid_moment: 'Mellan set', mid_token: 'gamesiffror', start_moment: 'Matchstart', has_scorers: false, scorers_label: '', lineup: '', lineup_n: '', squad: false, individ: true, md_key: 'set', farg: '#7A8794' },
+}
+
 // Mock: vilka lag som deltar i en tävling (tavling_lag). I appen kommer detta
 // ur store.lista_lag_for_tavling; här räcker en enkel sport-baserad filtrering.
 const MOCK_TAVLING_LAG = {
@@ -151,10 +161,26 @@ export async function hamtaMatch(id) {
   return wait(structuredClone(MOCK_FULL[id] || { ...MOCK_MATCHER.find((m) => m.id === id), spelare: [] }))
 }
 
+let _matchSeq = 0
 export async function sparaMatch(match) {
   const api = brygga()
   if (api) return api.spara_match(match)
-  return wait({ ok: true, id: match.id || 'ny' })
+  // Mock: en riktig upsert mot MOCK_MATCHER — annars försvinner nya/redigerade
+  // matcher så fort panelen läser om listan efter en sparning.
+  const id = (match.id && !String(match.id).startsWith('ny-')) ? match.id : `mock${++_matchSeq}`
+  const rad = {
+    id, datum: match.datum || '', tid: match.tid || '', arena: match.arena || '',
+    status: match.resultat ? 'avslutad' : 'kommande', resultat: match.resultat || '',
+    mellan: match.mellan || '', malskyttar: match.malskyttar || '',
+    sport: match.sport || '', lag_hemma: match.lag_hemma || '', lag_borta: match.lag_borta || '',
+    liga: match.liga || '', tavling_id: null, hem_gren: '', hemfarg: '', bortafarg: '',
+    galleri: match.galleri || '', sida_url: match.sida_url || '',
+    trupp_n: 0, synk_jobb_id: null,
+  }
+  const i = MOCK_MATCHER.findIndex((m) => m.id === id)
+  if (i >= 0) MOCK_MATCHER[i] = { ...MOCK_MATCHER[i], ...rad }
+  else MOCK_MATCHER.unshift(rad)
+  return wait({ ok: true, id })
 }
 
 export async function raderaMatch(id) {
@@ -191,6 +217,12 @@ export async function listaTavlingar() {
   const api = brygga()
   if (api) return api.lista_tavlingar()
   return wait(structuredClone(MOCK_TAVLINGAR))
+}
+
+export async function sportprofiler() {
+  const api = brygga()
+  if (api) return api.sportprofiler()
+  return wait(structuredClone(MOCK_SPORTPROFILER))
 }
 
 export async function kopplaLagTavling(lagId, tavlingId, pa) {
@@ -364,6 +396,17 @@ export async function lasLineup(matchId, filsokvag) {
   return hamtaTrupp(matchId)   // mock: samma sammanslagning
 }
 
+// §7: Importera spelschema — riktig hämtning via Claude-tjänsten.
+export async function hamtaSpelschema(lag, url = '', sport = '') {
+  const api = brygga()
+  if (api) return api.hamta_spelschema(lag, url, sport)
+  return wait({ ok: true, lag, kallor: [`https://exempel.se/${slugga(lag)}/matcher`],
+    matcher: [
+      { motstandare: 'IK Exempel', hemma: true, datum: '2026-09-12', tid: '15:00', arena: 'Hemmaplan IP', liga: 'OBOS Damallsvenskan' },
+      { motstandare: 'FC Rosengård', hemma: false, datum: '2026-09-20', tid: '14:00', arena: 'Malmö Idrottsplats', liga: 'OBOS Damallsvenskan' },
+    ] })
+}
+
 let _aktivMock = null
 
 export async function sattAktivMatch(id) {
@@ -439,6 +482,13 @@ export async function levereraUrval(urvalId, config = {}) {
   return wait({ ok: true, status: 'levererad', skrivna: u.bilder, ratade: 0 })
 }
 
+export async function levereraEgenMapp(mapp, config = {}) {
+  const api = brygga()
+  if (api) return api.leverera_egen_mapp(mapp, config)
+  if (!mapp) return wait({ ok: false, fel: 'Ange en mapp.' })
+  return wait({ ok: true, status: 'levererad', skrivna: 12, ratade: 0 })
+}
+
 export async function startaNummer(urvalId) {
   const api = brygga()
   if (api) return api.starta_nummer(urvalId)
@@ -476,6 +526,7 @@ export async function skapaStory(config) {
 // Innehåll (CMS → Astro-export). Muteras lokalt i mock-läge.
 let MOCK_INNEHALL = [
   { id: 'i_match1', typ: 'match', status: 'avslutad', publicerad: true,
+    match_id: 'a1b2c3d4e5f6', synkad_tid: '2026-06-27T16:45:00',
     export_path: '/sajt/src/content/match/malmo-ff-kristianstads-dff.md',
     frontmatter: { titel: 'Malmö FF – Kristianstads DFF', resultat: '6-0' } },
 ]

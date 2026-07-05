@@ -2,7 +2,7 @@
 
 import unittest
 
-from dpt2.app import Api, _gallring_av_config
+from dpt2.app import Api, _gallring_av_config, _hitta_site_rot, _spara_export_bild
 from dpt2.data import store
 
 
@@ -13,7 +13,7 @@ class TestApi(unittest.TestCase):
 
     def test_info(self):
         info = self.api.info()
-        self.assertEqual(info["schemaversion"], 11)
+        self.assertEqual(info["schemaversion"], 13)
 
     def test_match_round_trip_genom_bryggan(self):
         res = self.api.spara_match({
@@ -157,6 +157,97 @@ class TestApi(unittest.TestCase):
     def test_leverera_okant_urval(self):
         self.assertFalse(self.api.leverera_urval("finns-inte")["ok"])
 
+    def test_leverera_egen_mapp_skapar_urval_och_levererar(self):
+        # §6: bildkälla "Egen mapp" — inget Gallra-urval behöver finnas i
+        # förväg, ett skapas i farten och alla bilder i mappen levereras
+        # (ingen behall_stems-filtrering eftersom ingen cull-körning finns).
+        import tempfile
+        from pathlib import Path
+        d = Path(tempfile.mkdtemp())
+        (d / "DSC_0010.nef").write_bytes(b"")
+        (d / "DSC_0011.nef").write_bytes(b"")
+        (d / "DSC_0012.nef").write_bytes(b"")
+        res = self.api.leverera_egen_mapp(str(d))
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["skrivna"], 3)
+        self.assertEqual(res["status"], "levererad")
+        urval = store.lista_urval(self.api.conn)
+        self.assertEqual(len(urval), 1)
+        self.assertEqual(urval[0]["kalla"], str(d))
+        self.assertIsNone(urval[0]["match_id"])
+
+    def test_leverera_egen_mapp_tom(self):
+        import tempfile
+        res = self.api.leverera_egen_mapp(tempfile.mkdtemp())
+        self.assertFalse(res["ok"])
+        self.assertEqual(store.lista_urval(self.api.conn), [])
+
+    def test_hitta_site_rot_hittar_astro_projekt(self):
+        import tempfile
+        from pathlib import Path
+        rot = Path(tempfile.mkdtemp()).resolve()   # macOS: /tmp är en symlink
+        (rot / "public").mkdir()
+        (rot / "astro.config.mjs").write_text("")
+        djup = rot / "src" / "content" / "matcher"
+        djup.mkdir(parents=True)
+        self.assertEqual(_hitta_site_rot(djup), rot)
+
+    def test_hitta_site_rot_ingen_traff(self):
+        import tempfile
+        self.assertIsNone(_hitta_site_rot(tempfile.mkdtemp()))
+        self.assertIsNone(_hitta_site_rot(""))
+
+    def test_spara_export_bild_jpeg_skalas_ned(self):
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        d = Path(tempfile.mkdtemp())
+        kalla = d / "in.jpg"
+        Image.new("RGB", (3000, 2000), "red").save(kalla, "JPEG")
+        mal = d / "ut" / "1.jpg"
+        self.assertTrue(_spara_export_bild(kalla, mal, maxsize=800))
+        with Image.open(mal) as im:
+            self.assertLessEqual(max(im.size), 800)
+
+    def test_spara_export_bild_saknad_kalla(self):
+        self.assertFalse(_spara_export_bild("/finns/ej.jpg", "/tmp/ut.jpg"))
+
+    def test_exportera_innehall_kopierar_galleribilder_till_sport_mapp(self):
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        site = Path(tempfile.mkdtemp())
+        (site / "public").mkdir()
+        (site / "astro.config.mjs").write_text("")
+        export_dir = site / "src" / "content" / "matcher"
+        export_dir.mkdir(parents=True)
+
+        kalla_dir = Path(tempfile.mkdtemp())
+        bild1 = kalla_dir / "DSC_0001.jpg"
+        Image.new("RGB", (400, 300), "blue").save(bild1, "JPEG")
+        hero = kalla_dir / "HERO.jpg"
+        Image.new("RGB", (400, 300), "green").save(hero, "JPEG")
+
+        r = self.api.exportera_innehall({
+            "typ": "match", "titel": "A – B", "hem": "A", "borta": "B", "resultat": "1-0",
+            "hero": "hero.jpg", "heroKalla": str(hero),
+            "figurer": [{"bild": str(bild1), "alt": "", "bildtext": ""}],
+        }, str(export_dir))
+        self.assertTrue(r["ok"])
+        self.assertTrue((export_dir / "a-b.md").exists())
+        self.assertTrue((site / "public" / "sport" / "a-b" / "1.jpg").exists())
+        self.assertTrue((site / "public" / "sport" / "a-b" / "hero.jpg").exists())
+
+    def test_exportera_innehall_utan_kalla_kraschar_inte(self):
+        import tempfile
+        from pathlib import Path
+        export_dir = Path(tempfile.mkdtemp()) / "matcher"
+        r = self.api.exportera_innehall({
+            "typ": "match", "hem": "A", "borta": "B",
+            "figurer": [{"bild": "", "alt": "", "bildtext": ""}],
+        }, str(export_dir))
+        self.assertTrue(r["ok"])
+
     def test_lista_urval_med_matchetikett_och_statusfilter(self):
         import tempfile
         mid = self.api.spara_match({"lag_hemma": "Malmö FF", "lag_borta": "KDFF",
@@ -298,14 +389,15 @@ class TestApi(unittest.TestCase):
         self.assertIn("period: sep–okt 2026", r["md"])
 
     def test_innehall_galleri_harledda_referenser(self):
-        # Utan explicit bild härleds /bilder/{slug}/{n}.jpg; Sport har alt+bildtext.
+        # Match härleder /sport/{slug}/{n}.jpg (dit _kopiera_match_bilder
+        # kopierar filerna vid export); Sport har alt+bildtext.
         r = self.api.forhandsgranska_innehall({
             "typ": "match", "titel": "A – B", "body": "Referat.",
             "figurer": [{"bild": "", "alt": "jubel", "bildtext": "Segern"},
                         {"bild": "", "alt": "nick", "bildtext": ""}]})
-        self.assertIn("![jubel](/bilder/a-b/1.jpg)", r["md"])
+        self.assertIn("![jubel](/sport/a-b/1.jpg)", r["md"])
         self.assertIn("*Segern*", r["md"])
-        self.assertIn("![nick](/bilder/a-b/2.jpg)", r["md"])
+        self.assertIn("![nick](/sport/a-b/2.jpg)", r["md"])
 
     def test_innehall_galleri_bild_only_landskap_event(self):
         # Landskap & Event: endast bild — alt/bildtext strippas.
@@ -340,8 +432,36 @@ class TestApi(unittest.TestCase):
     def test_innehall_md_match_har_halvtid(self):
         r = self.api.forhandsgranska_innehall({
             "typ": "match", "titel": "A – B", "resultat": "6-0",
-            "halvtid": "3-0"})
+            "mellan": "3-0"})
         self.assertIn("halvtid: 3-0", r["md"])
+
+    def test_innehall_md_match_sportprofil_byter_mellan_nyckel(self):
+        r = self.api.forhandsgranska_innehall({
+            "typ": "match", "titel": "A – B", "sport": "volleyboll",
+            "resultat": "3-1", "mellan": "25-21"})
+        self.assertIn("set: 25-21", r["md"])
+        self.assertNotIn("halvtid:", r["md"])
+        self.assertIn("sport: volleyboll", r["md"])
+
+    def test_innehall_md_match_figurer_anvander_sport_sokvag(self):
+        # Bildgalleriet: referensen i markdownen ska ALLTID vara den
+        # kanoniska webbsökvägen (/sport/<slug>/<n>.jpg) — ALDRIG den lokala
+        # källfilen (figurer[i].bild), även om en sådan är satt.
+        r = self.api.forhandsgranska_innehall({
+            "typ": "match", "titel": "A – B", "resultat": "6-0",
+            "figurer": [{"bild": "/Users/stig/Desktop/DSC_0001.NEF",
+                        "alt": "Jubel", "bildtext": "Mål!"}]})
+        self.assertIn("/sport/a-b/1.jpg", r["md"])
+        self.assertNotIn("DSC_0001.NEF", r["md"])
+        self.assertIn('bilder:\n  - "/sport/a-b/1.jpg"', r["md"])
+
+    def test_innehall_md_landskap_behaller_gamla_bildvagen(self):
+        # Landskap/Event rörs inte av sport-fixen — samma /bilder/-fallback
+        # som tidigare (ingen bilder:-frontmatter-array skrivs).
+        r = self.api.forhandsgranska_innehall({
+            "typ": "landskap", "titel": "Grönt", "figurer": [{}]})
+        self.assertIn("/bilder/gront/1.jpg", r["md"])
+        self.assertNotIn("bilder:", r["md"])
 
 
     def test_modell_bibliotek_och_vaxling(self):
@@ -491,6 +611,7 @@ class _FakeKalender:
     def __init__(self):
         self.skapade = []
         self.raderade = []
+        self.uppdaterade = []
 
     def har_nyckel(self):
         return True
@@ -507,6 +628,7 @@ class _FakeKalender:
                                      "google_event_id": "g1"}}
 
     def uppdatera_jobb(self, jid, jobb):
+        self.uppdaterade.append((jid, jobb))
         return {"ok": True}
 
     def radera_jobb(self, jid):
@@ -743,6 +865,28 @@ class TestMatchSynkOchRadering(unittest.TestCase):
         self.api.satt_aktiv_match(self.mid)
         self.api.radera_match(self.mid)
         self.assertIsNone(self.api.aktiv_match())
+
+    def test_redigering_uppdaterar_lankat_jobb_utan_resultat(self):
+        # §9: kalenderjobbet härleds från matchen — redigering (t.ex. ny
+        # arena) ska pusha ett uppdaterat jobb, men resultatet ska ALDRIG
+        # skrivas in där (ingen tredje kopia av "· 6-0").
+        self.api.satt_match_synk(self.mid, True)
+        self.assertEqual(self.fake.uppdaterade, [])
+        m = store.hamta_match(self.api.conn, self.mid)
+        m["arena"] = "Ny arena"
+        m["resultat"] = "6-0"
+        self.api.spara_match(m)
+        self.assertEqual(len(self.fake.uppdaterade), 1)
+        jid, jobb = self.fake.uppdaterade[0]
+        self.assertEqual(jid, "remote1")
+        self.assertEqual(jobb["location"], "Ny arena")
+        self.assertNotIn("resultat", jobb)
+        self.assertNotIn("6-0", jobb.values())
+
+    def test_spara_utan_lankat_jobb_pushar_inget(self):
+        mid = self.api.spara_match({"lag_hemma": "A", "lag_borta": "B",
+                                    "datum": "2026-08-20", "sport": "fotboll"})["id"]
+        self.assertEqual(self.fake.uppdaterade, [])
 
 
 class TestGallringConfig(unittest.TestCase):

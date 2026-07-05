@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall, listaMatcher, genereraBildsvep, valjMapp, urvalHojdpunkter, slugga } from '../lib/api.js'
+  import { forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall, listaMatcher, hamtaMatch, genereraBildsvep, valjMapp, valjFil, thumbForBild, urvalHojdpunkter, slugga, sportprofiler } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import BildvaljareFokuspunkt from '../lib/BildvaljareFokuspunkt.svelte'
 
@@ -20,9 +20,20 @@
   let matcher = []
   let pick = ''
   let auto = true
-  let cms = { status: 'kommande', hem: '', borta: '', resultat: '', halvtid: '',
+  let cms = { status: 'kommande', hem: '', borta: '', sport: '', resultat: '', mellan: '',
     datum: '', serie: '', arena: '', galleri: '', malskyttar: '', svep: '', figurer: [],
-    hero: '', heroPosition: 'center center' }
+    hero: '', heroPosition: 'center center', heroKalla: '' }
+  let profiler = {}
+  $: profil = profiler[cms.sport] || profiler.fotboll || { mid_label: 'Halvtid', has_scorers: true }
+  // §4: matchfältens frivilliga koppling. matchFull = fullständig matchdata
+  // (mellan/malskyttar/galleri finns inte i den lätta matcher-listan).
+  // cmsOwn[fält] = true när användaren skrivit över — bruten koppling för
+  // just det fältet, tills "↺ Hämta från match" trycks.
+  let matchFull = null
+  let cmsOwn = {}
+  const CMS_MATCHFALT = { hem: 'lag_hemma', borta: 'lag_borta', resultat: 'resultat',
+    mellan: 'mellan', malskyttar: 'malskyttar', datum: 'datum', serie: 'liga',
+    arena: 'arena', galleri: 'galleri' }
   let cmsEvent = { kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '',
     galleri: '', ingress: '', figurer: [] }
   let cmsLandskap = { titel: '', plats: '', period: '', ingress: '', figurer: [] }
@@ -54,8 +65,8 @@
   $: hlVisaKalla = ctyp === 'match' && !!hlKalla && hlAntal > 0
 
   onMount(async () => {
-    matcher = await listaMatcher()
-    if (matcher[0]) { pick = matcher[0].id; fyllFranMatch(matcher[0]) }
+    ;[matcher, profiler] = await Promise.all([listaMatcher(), sportprofiler()])
+    if (matcher[0]) { pick = matcher[0].id; await fyllFranMatch(matcher[0].id) }
     await forhandsgranska()
   })
 
@@ -69,17 +80,42 @@
     return new Date() >= start ? 'pagaende' : 'kommande'
   }
 
-  function fyllFranMatch(m) {
-    cms.hem = m.lag_hemma || ''; cms.borta = m.lag_borta || ''
-    cms.resultat = m.resultat || ''; cms.datum = m.datum || ''
-    cms.arena = m.arena || ''; cms.serie = m.liga || ''
-    if (auto) cms.status = harledStatus(m.datum, m.tid, m.resultat)
+  async function fyllFranMatch(matchId) {
+    matchFull = await hamtaMatch(matchId)
+    if (!matchFull) return
+    cms.hem = matchFull.lag_hemma || ''; cms.borta = matchFull.lag_borta || ''
+    cms.sport = matchFull.sport || ''
+    cms.resultat = matchFull.resultat || ''; cms.mellan = matchFull.mellan || ''
+    cms.malskyttar = matchFull.malskyttar || ''
+    cms.datum = matchFull.datum || ''; cms.arena = matchFull.arena || ''
+    cms.serie = matchFull.liga || ''; cms.galleri = matchFull.galleri || ''
+    if (auto) cms.status = harledStatus(matchFull.datum, matchFull.tid, matchFull.resultat)
+    cmsOwn = {}
     cms = cms
   }
-  function valjMatch(e) {
+  async function valjMatch(e) {
     pick = e.target.value
     const m = matcher.find((x) => x.id === pick)
-    if (m) fyllFranMatch(m)
+    if (m) await fyllFranMatch(m.id)
+    forhandsgranska()
+  }
+  async function cmsFetchAll() {
+    if (pick) await fyllFranMatch(pick)
+    forhandsgranska()
+  }
+  // Fältet skrivs över av användaren — kopplingen till matchen bryts för
+  // just det fältet (visas som "eget" tills "↺ Hämta från match" trycks).
+  function cmsSetOwn(falt, varde) {
+    cms[falt] = varde
+    cmsOwn = { ...cmsOwn, [falt]: true }
+    cms = cms
+    forhandsgranska()
+  }
+  function cmsFetchField(falt) {
+    if (!matchFull) return
+    cms[falt] = matchFull[CMS_MATCHFALT[falt]] || ''
+    cmsOwn = { ...cmsOwn, [falt]: false }
+    cms = cms
     forhandsgranska()
   }
   $: if (auto) cms.status = harledStatus(cms.datum, '', cms.resultat)
@@ -91,11 +127,11 @@
 
   function data() {
     if (ctyp === 'match') return { typ: 'match', titel: `${cms.hem} – ${cms.borta}`,
-      hem: cms.hem, borta: cms.borta, serie: cms.serie,
-      status: cms.status, datum: cms.datum, resultat: cms.resultat, halvtid: cms.halvtid,
+      hem: cms.hem, borta: cms.borta, serie: cms.serie, sport: cms.sport,
+      status: cms.status, datum: cms.datum, resultat: cms.resultat, mellan: cms.mellan,
       arena: cms.arena, malskyttar: cms.malskyttar,
       pixieset: cms.galleri, body: cms.svep, figurer: cms.figurer,
-      hero: cms.hero, heroPosition: cms.heroPosition }
+      hero: cms.hero, heroPosition: cms.heroPosition, heroKalla: cms.heroKalla }
     if (ctyp === 'event') return { typ: 'event', ...cmsEvent }
     if (ctyp === 'landskap') return { typ: 'landskap', ...cmsLandskap }
     return { typ: 'blogg', ...cmsBlogg }
@@ -108,7 +144,26 @@
 
   function pinga() { cms = cms; cmsEvent = cmsEvent; cmsLandskap = cmsLandskap; cmsBlogg = cmsBlogg }
   function laggBild() { akt.figurer = [...akt.figurer, { bild: '', alt: '', bildtext: '', src: '' }]; pinga(); forhandsgranska() }
-  function taBild(i) { akt.figurer = akt.figurer.filter((_, j) => j !== i); pinga(); forhandsgranska() }
+  function taBild(i) {
+    akt.figurer = akt.figurer.filter((_, j) => j !== i)
+    const novo = {}
+    Object.keys(figThumbs).map(Number).filter((k) => k !== i)
+      .forEach((k) => { novo[k > i ? k - 1 : k] = figThumbs[k] })
+    figThumbs = novo
+    pinga(); forhandsgranska()
+  }
+  // Miniatyr-cache (index → data-URI) — transient, skickas ALDRIG till
+  // backend (bara den lokala källsökvägen i figurer[i].bild gör det).
+  let figThumbs = {}
+  async function valjFigurBild(i) {
+    const r = await valjFil('Välj bild', ['Bilder (*.jpg;*.jpeg;*.png;*.nef;*.dng;*.cr2;*.cr3;*.arw)'])
+    if (!r?.ok || !r.path) return
+    const t = await thumbForBild(r.path)
+    if (!t?.ok) return
+    akt.figurer[i] = { ...akt.figurer[i], bild: r.path }
+    figThumbs = { ...figThumbs, [i]: t.data_uri }
+    pinga(); forhandsgranska()
+  }
   function laggPlats() { cmsBlogg.platser = [...cmsBlogg.platser, { plats: '', tips: '' }] }
   function taPlats(i) { cmsBlogg.platser = cmsBlogg.platser.filter((_, j) => j !== i); forhandsgranska() }
 
@@ -122,6 +177,7 @@
     const matchinfo = `${cms.hem} ${cms.resultat} ${cms.borta}`.replace(/\s+/g, ' ').trim()
     cms.figurer = Array.from({ length: antal }, (_, i) => ({
       bild: '', alt: `${matchinfo} — höjdpunkt ${i + 1}`, bildtext: '', src: filer[i] || '' }))
+    figThumbs = {}
     hlFlash = true
     setTimeout(() => (hlFlash = false), 2200)
     forhandsgranska()
@@ -196,6 +252,12 @@
   {#if ctyp === 'match'}
     <div class="kort">
       <div class="caps">Publicera till hemsidan</div>
+      {#if pick}
+        <div class="lankinfo">
+          <span>Fälten följer <b>{cms.hem} – {cms.borta}</b> tills du skriver över dem</span>
+          <button class="lank" on:click={cmsFetchAll}>↺ Hämta allt</button>
+        </div>
+      {/if}
       <div class="grid2">
         <div class="f"><label>Match / event</label>
           <select value={pick} on:change={valjMatch}>
@@ -212,19 +274,39 @@
       </div>
 
       <div class="grid2 mt">
-        <div class="f"><label>Hemmalag</label><input bind:value={cms.hem} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Bortalag</label><input bind:value={cms.borta} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Resultat</label><input bind:value={cms.resultat} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Halvtid</label><input bind:value={cms.halvtid} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Datum</label><input bind:value={cms.datum} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Serie</label><input bind:value={cms.serie} on:change={forhandsgranska} /></div>
+        <div class="f"><label>Hemmalag {#if pick}<span class="linktag" class:own={cmsOwn.hem}>{cmsOwn.hem ? 'eget' : '↺ länkad'}</span>{/if}</label>
+          <input value={cms.hem} on:input={(e) => cmsSetOwn('hem', e.target.value)} />
+          {#if pick && cmsOwn.hem}<button class="lank sm" on:click={() => cmsFetchField('hem')}>↺ Hämta från match</button>{/if}</div>
+        <div class="f"><label>Bortalag {#if pick}<span class="linktag" class:own={cmsOwn.borta}>{cmsOwn.borta ? 'eget' : '↺ länkad'}</span>{/if}</label>
+          <input value={cms.borta} on:input={(e) => cmsSetOwn('borta', e.target.value)} />
+          {#if pick && cmsOwn.borta}<button class="lank sm" on:click={() => cmsFetchField('borta')}>↺ Hämta från match</button>{/if}</div>
+        <div class="f"><label>Resultat {#if pick}<span class="linktag" class:own={cmsOwn.resultat}>{cmsOwn.resultat ? 'eget' : '↺ länkad'}</span>{/if}</label>
+          <input value={cms.resultat} on:input={(e) => cmsSetOwn('resultat', e.target.value)} />
+          {#if pick && cmsOwn.resultat}<button class="lank sm" on:click={() => cmsFetchField('resultat')}>↺ Hämta från match</button>{/if}</div>
+        <div class="f"><label>{profil.mid_label} {#if pick}<span class="linktag" class:own={cmsOwn.mellan}>{cmsOwn.mellan ? 'eget' : '↺ länkad'}</span>{/if}</label>
+          <input value={cms.mellan} on:input={(e) => cmsSetOwn('mellan', e.target.value)} />
+          {#if pick && cmsOwn.mellan}<button class="lank sm" on:click={() => cmsFetchField('mellan')}>↺ Hämta från match</button>{/if}</div>
+        <div class="f"><label>Datum {#if pick}<span class="linktag" class:own={cmsOwn.datum}>{cmsOwn.datum ? 'eget' : '↺ länkad'}</span>{/if}</label>
+          <input value={cms.datum} on:input={(e) => cmsSetOwn('datum', e.target.value)} />
+          {#if pick && cmsOwn.datum}<button class="lank sm" on:click={() => cmsFetchField('datum')}>↺ Hämta från match</button>{/if}</div>
+        <div class="f"><label>Serie {#if pick}<span class="linktag" class:own={cmsOwn.serie}>{cmsOwn.serie ? 'eget' : '↺ länkad'}</span>{/if}</label>
+          <input value={cms.serie} on:input={(e) => cmsSetOwn('serie', e.target.value)} />
+          {#if pick && cmsOwn.serie}<button class="lank sm" on:click={() => cmsFetchField('serie')}>↺ Hämta från match</button>{/if}</div>
       </div>
-      <div class="f mt"><label>Arena</label><input bind:value={cms.arena} on:change={forhandsgranska} /></div>
-      <div class="f mt"><label>Galleri-URL (Pixieset)</label><input class="mono" bind:value={cms.galleri} on:change={forhandsgranska} /></div>
-      <div class="f mt"><label>Målskyttar</label><input bind:value={cms.malskyttar} on:change={forhandsgranska} /></div>
+      <div class="f mt"><label>Arena {#if pick}<span class="linktag" class:own={cmsOwn.arena}>{cmsOwn.arena ? 'eget' : '↺ länkad'}</span>{/if}</label>
+        <input value={cms.arena} on:input={(e) => cmsSetOwn('arena', e.target.value)} />
+        {#if pick && cmsOwn.arena}<button class="lank sm" on:click={() => cmsFetchField('arena')}>↺ Hämta från match</button>{/if}</div>
+      <div class="f mt"><label>Galleri-URL (Pixieset) {#if pick}<span class="linktag" class:own={cmsOwn.galleri}>{cmsOwn.galleri ? 'eget' : '↺ länkad'}</span>{/if}</label>
+        <input class="mono" value={cms.galleri} on:input={(e) => cmsSetOwn('galleri', e.target.value)} />
+        {#if pick && cmsOwn.galleri}<button class="lank sm" on:click={() => cmsFetchField('galleri')}>↺ Hämta från match</button>{/if}</div>
+      {#if profil.has_scorers}
+        <div class="f mt"><label>{profil.scorers_label || 'Målskyttar'} {#if pick}<span class="linktag" class:own={cmsOwn.malskyttar}>{cmsOwn.malskyttar ? 'eget' : '↺ länkad'}</span>{/if}</label>
+          <input value={cms.malskyttar} on:input={(e) => cmsSetOwn('malskyttar', e.target.value)} />
+          {#if pick && cmsOwn.malskyttar}<button class="lank sm" on:click={() => cmsFetchField('malskyttar')}>↺ Hämta från match</button>{/if}</div>
+      {/if}
       <div class="f mt">
         <label>Hero-bild &amp; fokuspunkt</label>
-        <BildvaljareFokuspunkt bind:hero={cms.hero} bind:heroPosition={cms.heroPosition} on:change={forhandsgranska} />
+        <BildvaljareFokuspunkt bind:hero={cms.hero} bind:heroPosition={cms.heroPosition} bind:heroKalla={cms.heroKalla} on:change={forhandsgranska} />
       </div>
     </div>
   {:else if ctyp === 'event'}
@@ -308,7 +390,11 @@
     <div class="figurer">
       {#each akt.figurer as b, i}
         <div class="figrad">
-          <div class="figbild"><span>figur {i + 1}</span></div>
+          <button type="button" class="figbild" class:has={!!figThumbs[i]}
+            style={figThumbs[i] ? `background-image:url(${figThumbs[i]})` : ''}
+            on:click={() => valjFigurBild(i)} title="Välj bild">
+            {#if !figThumbs[i]}<span>+ bild {i + 1}</span>{/if}
+          </button>
           <div class="figin">
             {#if galText}
               {#if b.src}<div class="figsrc">från urval · {b.src}</div>{/if}
@@ -399,6 +485,16 @@
   .seg button:disabled { cursor: default; }
   .hint { font-size: 10.5px; color: var(--t-help); margin-top: 5px; line-height: 1.45; }
 
+  .lankinfo { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: var(--acc-soft); border: 1px solid var(--acc-border); border-radius: 8px;
+    padding: 8px 12px; font-size: 11.5px; color: var(--t-head); margin-bottom: 12px; }
+  .linktag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--ok); margin-left: 6px; }
+  .linktag.own { color: var(--varn); }
+  .lank { border: 0; background: none; color: var(--acc); font-size: 11.5px; font-weight: 600;
+    padding: 0; cursor: pointer; }
+  .lank.sm { font-size: 10px; margin-top: 2px; text-align: left; }
+
   /* Låst tema-indikator (temat härleds ur typen; Landskap = Sol) */
   .temalast { display: inline-flex; align-items: center; gap: 9px; background: var(--panel);
     border: 1px solid var(--div); border-radius: 8px; padding: 8px 12px; align-self: flex-start; }
@@ -421,8 +517,12 @@
   .figurer { display: flex; flex-direction: column; gap: 10px; }
   .figrad { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--div3); border-radius: 10px; padding: 10px; background: var(--panel); }
   .figbild { width: 92px; height: 69px; flex: none; border-radius: 6px; display: flex; align-items: center; justify-content: center;
-    background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 8px, var(--kort) 8px, var(--kort) 16px); }
-  .figbild span { font-family: var(--mono, ui-monospace, monospace); font-size: 10px; color: var(--t-mut); }
+    border: 1px solid var(--div); padding: 0; cursor: pointer; background-size: cover; background-position: center;
+    background-repeat: no-repeat; background-color: var(--kort);
+    background-image: repeating-linear-gradient(135deg, var(--div3), var(--div3) 8px, var(--kort) 8px, var(--kort) 16px); }
+  .figbild:hover { border-color: var(--acc); }
+  .figbild.has { border-style: solid; }
+  .figbild span { font-family: var(--mono, ui-monospace, monospace); font-size: 9.5px; color: var(--t-mut); text-align: center; padding: 0 4px; }
   .figin { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
   .figin input { background: var(--kort); font-size: 12.5px; padding: 7px 9px; }
   .figsrc { font-family: var(--mono, ui-monospace, monospace); font-size: 10.5px; color: var(--t-help); }

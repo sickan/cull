@@ -14,6 +14,8 @@ import re
 import subprocess
 import tempfile
 
+from dpt2.data import sportprofil
+
 # Migrerad till dpt2: app-assets (typsnitt + temaloggor) ligger i dpt2/assets.
 ASSETS_DIR  = Path(__file__).parent.parent / "assets"
 FONTS_DIR   = ASSETS_DIR / "fonts"
@@ -806,7 +808,7 @@ def _render_malgorare(canvas, accent, lag_hemma, lag_borta,
 def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                 liga="", stallning="", mal_rad="",
                 avspark_tid="", arena="", next_when="",
-                startelva=None,
+                startelva=None, sport="",
                 tema="Hav", gren="", hem_logga=None, borta_logga=None,
                 ut_path=None, ut_mapp=None,
                 format="9x16", env=None):
@@ -818,17 +820,23 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     tema:   "Hav"|"Sol"|"Rosé"
     gren:   "dam"|"herr"|"mixed" (eller tomt) — färgad kant längst till vänster,
             samma källa som gren-markören på matchkort/matchlista i appen.
+    sport:  "fotboll"|"handboll"|"innebandy"|"volleyboll"|"beachvolley"|"tennis"
+            (eller tomt → fotboll) — styr bara Halvtid/Slutresultat-etiketterna
+            (data/sportprofil.py mid_label/res_label), aldrig blockens layout.
     hem_logga/borta_logga: sökväg till lagets uppladdade logga (lag.logga i
         databasen). Saknas den → fallback till hitta_logga()s gamla
         filsystemkonvention, sist ett vitt monogram-badge.
     format: "9x16" (1080×1920) | "4x5" (1080×1350)
     stallning: "1-0" (paus/resultat/malgorare)
-    mal_rad: "Larsson 23', Berg 67'" (resultat/malgorare)
+    mal_rad: "Larsson 23', Berg 67'" (resultat/malgorare) — för set-sporter
+        (sportprofil.has_scorers=False) är detta istället mellanresultatet
+        (set-/period-/gamesiffror), ifyllt av story_korning._matchfalt.
     startelva: sträng med namn (\n- eller kommaseparerade) eller None
     next_when: "Lör 14 jun · 16:00" (för Nästa match)
     Returnerar Path till output-filen.
     """
     Image, ImageDraw, ImageFont, ImageOps = _pil()
+    profil = sportprofil.profil(sport)
 
     # Normera tillståndsnamn
     state = _STATE_MAP.get(moment.lower().replace(" ", "_"), moment)
@@ -891,8 +899,10 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     else:
         sub_line = f"{avspark_tid} · {venue_up}" if avspark_tid else venue_up
 
-    # Halvtid/Slutresultat
-    score_label = "Halvtid" if state == "Halvtid" else "Slutresultat"
+    # Halvtid/Slutresultat — etikett styrs av sportprofilen (fotboll:
+    # "Halvtid"/"Slutresultat" oförändrat, andra sporter: t.ex.
+    # "Periodsiffror"/"Resultat i set").
+    score_label = profil["mid_label"] if state == "Halvtid" else profil["res_label"]
     # SairaCondensed-Bold saknar space-glyf — rendera utan mellanslag
     if stallning and "-" in stallning:
         delar = stallning.split("-", 1)

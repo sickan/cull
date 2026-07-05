@@ -10,7 +10,7 @@ worker-processen (batch/tunga bilder), men är torch-fri.
 import os
 from pathlib import Path
 
-from dpt2.data import store
+from dpt2.data import store, sportprofil
 from dpt2.motorer import story_overlay
 from dpt2.motorer.nummer import _env
 
@@ -20,9 +20,19 @@ def _matchfalt(conn, config):
     config som fallback — utom mallfälten (stallning/mal_rad/startelva/lag_borta):
     där vinner config, eftersom Live-flödet skickar explicit ifyllda fält
     (t.ex. halvtidsställning eller 'Nästa match'-motståndare) som ska slå
-    matchens lagrade värden."""
+    matchens lagrade värden.
+
+    Sportprofilen (data/sportprofil.py) avgör vad "mal_rad" faktiskt visar:
+    målskyttar för scorer-sporter, annars mellanresultatet (set-/period-/
+    gamesiffror) i samma underrad — renderaren i story_overlay rör sig inte,
+    bara vilken sträng som skickas in i dess befintliga mal_rad-parameter."""
     m = store.hamta_match(conn, config.get("match_id")) if config.get("match_id") else None
     m = m or {}
+    sport = m.get("sport") or config.get("sport", "")
+    prof = sportprofil.profil(sport)
+    mellan = config.get("mellan") or m.get("mellan", "")
+    mal_rad = (config.get("mal_rad") or m.get("malskyttar", "")) if prof["has_scorers"] \
+        else (config.get("mal_rad") or mellan)
     startelva = None
     if m.get("spelare"):
         namn = [sp.get("namn") for sp in m["spelare"]
@@ -38,8 +48,9 @@ def _matchfalt(conn, config):
         "lag_borta": config.get("lag_borta") or m.get("lag_borta", ""),
         "liga": m.get("liga") or config.get("liga", ""),
         "arena": m.get("arena") or config.get("arena", ""),
+        "sport": sport,
         "stallning": config.get("stallning") or m.get("resultat", ""),
-        "mal_rad": config.get("mal_rad") or m.get("malskyttar", ""),
+        "mal_rad": mal_rad,
         "startelva": config.get("startelva") or startelva,
         "gren": m.get("hem_gren") or config.get("gren", ""),
         # Loggor som fotografen laddat upp under Lag & tävlingar (lag.logga i
@@ -66,7 +77,7 @@ def _rendera(conn, config, *, ut_path=None, ut_mapp=None, env=None):
     ut = story_overlay.skapa_story(
         foto, config["moment"], f["lag_hemma"], f["lag_borta"],
         liga=f["liga"], stallning=f["stallning"], mal_rad=f["mal_rad"],
-        arena=f["arena"], startelva=f["startelva"],
+        arena=f["arena"], startelva=f["startelva"], sport=f["sport"],
         avspark_tid=config.get("avspark_tid", ""),
         next_when=config.get("next_when", ""),
         tema=config.get("tema", "Hav"), gren=f["gren"],

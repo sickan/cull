@@ -40,6 +40,17 @@ class TestInnehallSynk(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertEqual(r["fel"], "Ogiltig API-nyckel")
 
+    def test_publicera_utan_nyckel_ger_tydligt_fel_utan_natanrop(self):
+        # Tom nyckel ska aldrig nå transporten (httpx/h11 vägrar ett
+        # "Bearer "-headervärde med LocalProtocolError innan anropet går ut —
+        # utan den här spärren fastnar det i ett generiskt fel i UI:t).
+        t = FejkTransport({("PUT", "/api/innehall/match/i1"): (200, {"innehall": {}})})
+        k = InnehallSynk(api_key="", transport=t)
+        r = k.publicera("match", "i1", slug="x", frontmatter={})
+        self.assertFalse(r["ok"])
+        self.assertIn("saknas", r["fel"])
+        self.assertEqual(t.anrop, [])
+
     def test_retry_vid_kall_start(self):
         # Första anropet failar (kall Worker), andra ger 200 → retry räddar.
         class Flaky:

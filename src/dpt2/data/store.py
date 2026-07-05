@@ -673,7 +673,7 @@ def spara_match(conn, match):
     liga→tävling, lagnamn→lag, spelare→match_trupp. Returnerar match-id.
 
     match: {lag_hemma, lag_borta, datum, tid, arena, liga, sport, resultat,
-            halvtid, malskyttar, galleri, sida_url, omslag, spelare[], id?, status?}
+            mellan, malskyttar, galleri, sida_url, omslag, spelare[], id?, status?}
     """
     sport = (match.get("sport") or "").strip().lower() or None
     tav_id = upsert_tavling(conn, match.get("liga", ""),
@@ -702,13 +702,26 @@ def spara_match(conn, match):
         datum, match.get("tid"), match.get("resultat"))
     skapad = match.get("skapad") or _nu()
 
+    # ON CONFLICT DO UPDATE (äkta upsert) — INTE "INSERT OR REPLACE": den
+    # senare löser PK-konflikter genom att RADERA raden och sätta in en ny,
+    # vilket triggar ON DELETE CASCADE på matchen(id) för varje befintlig
+    # redigering (fotojobb_match-länken och some_material-historiken
+    # försvann tyst vid varje sparning av en redan skapad match).
     conn.execute(
-        "INSERT OR REPLACE INTO matchen(id,tavling_id,sport,lag_hemma_id,"
-        "lag_borta_id,datum,tid,arena,resultat,halvtid,malskyttar,status,"
-        "galleri,sida_url,omslag,skapad) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO matchen(id,tavling_id,sport,lag_hemma_id,"
+        "lag_borta_id,datum,tid,arena,resultat,mellan,malskyttar,status,"
+        "galleri,sida_url,omslag,skapad) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(id) DO UPDATE SET "
+        "tavling_id=excluded.tavling_id, sport=excluded.sport, "
+        "lag_hemma_id=excluded.lag_hemma_id, lag_borta_id=excluded.lag_borta_id, "
+        "datum=excluded.datum, tid=excluded.tid, arena=excluded.arena, "
+        "resultat=excluded.resultat, mellan=excluded.mellan, "
+        "malskyttar=excluded.malskyttar, status=excluded.status, "
+        "galleri=excluded.galleri, sida_url=excluded.sida_url, "
+        "omslag=excluded.omslag",
         (mid, tav_id, sport, hemma_id, borta_id, datum,
          match.get("tid") or None, match.get("arena") or None,
-         match.get("resultat") or None, match.get("halvtid") or None,
+         match.get("resultat") or None, match.get("mellan") or None,
          match.get("malskyttar") or None, status,
          match.get("galleri") or None, match.get("sida_url") or None,
          match.get("omslag") or None, skapad))
@@ -779,7 +792,7 @@ def hamta_match(conn, match_id):
         "datum": m["datum"] or "",
         "tid": m["tid"] or "", "arena": m["arena"] or "", "liga": liga,
         "sport": m["sport"] or "", "resultat": m["resultat"] or "",
-        "halvtid": m["halvtid"] or "", "malskyttar": m["malskyttar"] or "",
+        "mellan": m["mellan"] or "", "malskyttar": m["malskyttar"] or "",
         "status": m["status"], "galleri": m["galleri"] or "",
         "sida_url": m["sida_url"] or "",
         "omslag": m["omslag"] or "", "skapad": m["skapad"], "spelare": spelare,

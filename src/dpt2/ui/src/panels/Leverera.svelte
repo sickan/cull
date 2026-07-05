@@ -1,6 +1,6 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte'
-  import { listaUrval, levereraUrval, startaNummer, valjMapp, aktivtUrval } from '../lib/api.js'
+  import { listaUrval, levereraUrval, levereraEgenMapp, startaNummer, valjMapp, aktivtUrval } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
 
   const dispatch = createEventDispatcher()
@@ -13,12 +13,18 @@
   let status = ''
   let nummerStatus = ''
 
+  // §6: bildkälla — Gallra-körning (förval om en finns) eller egen mapp
+  // (t.ex. redan gallrat i Photo Mechanic). Gallra är aldrig ett krav.
+  let bildkalla = 'gallra'
+  let egenMapp = ''
+
   let cfg = { exportRot: '', fotograf: 'Stig Johansson – Dalecarlia Photo AB',
     iptc: true, oppnaI: 'Lightroom', husstil: '(ingen)', expKnuff: '0.5' }
 
   onMount(async () => {
     ;[urval, mal] = await Promise.all([listaUrval(), aktivtUrval()])
     if (!mal) mal = urval.find((u) => u.status === 'gallrad') || urval[0] || null
+    bildkalla = mal ? 'gallra' : 'egen'
     laddar = false
   })
 
@@ -28,13 +34,18 @@
     const r = await valjMapp('Välj export-rot')
     if (r.ok) cfg.exportRot = r.path
   }
+  $: kanLevererera = bildkalla === 'gallra' ? !!mal : !!egenMapp.trim()
+  async function valjEgenMapp() {
+    const r = await valjMapp('Välj mapp att leverera från')
+    if (r.ok) egenMapp = r.path
+  }
   async function levereraNu() {
-    if (!mal) return
+    if (!kanLevererera) return
     levererar = true; status = ''
-    const r = await levereraUrval(mal.id, cfg)
+    const r = bildkalla === 'gallra' ? await levereraUrval(mal.id, cfg) : await levereraEgenMapp(egenMapp, cfg)
     levererar = false
     status = r.ok ? (r.skrivna ? `${r.skrivna} sidecars skrivna.` : 'Levererat.') : (r.fel || 'Fel vid leverans.')
-    if (r.ok) { mal = { ...mal, status: 'levererad' }; dispatch('urval') }
+    if (r.ok && bildkalla === 'gallra') { mal = { ...mal, status: 'levererad' }; dispatch('urval') }
   }
   async function korNummer() {
     if (!mal) return
@@ -53,11 +64,25 @@
   {#if laddar}
     <p class="tom">Laddar…</p>
   {:else}
-    {#if mal}
-      <div class="urvalrad">Urval: <b>{urvalLabel(mal)}</b> · {mal.bilder} bilder · <span class="st">{mal.status}</span></div>
-    {:else}
-      <div class="urvalrad tom">Inget urval att leverera — gallra en match först.</div>
-    {/if}
+    <div class="kallakort">
+      <div class="caps">Bildkälla</div>
+      <div class="kallaseg">
+        <button class:on={bildkalla === 'gallra'} disabled={!mal} on:click={() => (bildkalla = 'gallra')}>Från Gallra-körning</button>
+        <button class:on={bildkalla === 'egen'} on:click={() => (bildkalla = 'egen')}>Egen mapp</button>
+      </div>
+      {#if bildkalla === 'gallra'}
+        {#if mal}
+          <div class="urvalrad">Urval: <b>{urvalLabel(mal)}</b> · {mal.bilder} bilder · <span class="st">{mal.status}</span></div>
+        {:else}
+          <div class="urvalrad tom">Inget urval från Gallra — välj Egen mapp eller gallra en match först.</div>
+        {/if}
+      {:else}
+        <div class="frad"><span class="fl">Mapp</span>
+          <input class="mono" bind:value={egenMapp} placeholder="/Volumes/… eller gallrat i Photo Mechanic" />
+          <button class="valj" on:click={valjEgenMapp}>Välj…</button>
+        </div>
+      {/if}
+    </div>
 
     <div class="grid2">
       <div class="kort">
@@ -91,12 +116,12 @@
         <div class="ns">OCR av tröjnummer på urvalet → skrivs som keywords i Lightroom</div>
       </div>
       {#if nummerStatus}<span class="nstat">{nummerStatus}</span>{/if}
-      <button class="sek" on:click={korNummer} disabled={nummerKor || !mal}>{nummerKor ? 'Kör…' : 'Kör'}</button>
+      <button class="sek" on:click={korNummer} disabled={nummerKor || bildkalla !== 'gallra' || !mal}>{nummerKor ? 'Kör…' : 'Kör'}</button>
     </div>
 
     <div class="levrad">
       {#if status}<span class="ok">✓ {status}</span>{/if}
-      <button class="prim" on:click={levereraNu} disabled={levererar || !mal}>{levererar ? 'Levererar…' : 'Leverera urval ›'}</button>
+      <button class="prim" on:click={levereraNu} disabled={levererar || !kanLevererera}>{levererar ? 'Levererar…' : 'Leverera urval ›'}</button>
     </div>
   {/if}
 </div>
@@ -108,10 +133,19 @@
   .sub { margin: 7px 0 16px; font-size: 13px; color: var(--t-mut); }
   .tom { color: var(--t-help); font-size: 13px; }
 
-  .urvalrad { font-size: 12.5px; color: var(--t-mut); margin-bottom: 14px; }
+  .urvalrad { font-size: 12.5px; color: var(--t-mut); }
   .urvalrad b { color: var(--t-head); }
   .urvalrad .st { color: var(--acc); font-weight: 600; }
   .urvalrad.tom { color: var(--t-help); }
+
+  .kallakort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
+    box-shadow: var(--skugga); padding: 16px; margin-bottom: 14px; }
+  .kallaseg { display: flex; background: var(--div3); border-radius: 8px; padding: 3px; gap: 3px; margin-bottom: 12px; }
+  .kallaseg button { flex: 1; padding: 7px; border: 0; border-radius: 6px; background: transparent;
+    color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
+  .kallaseg button.on { background: var(--kort); color: var(--t-head); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .kallaseg button:disabled { opacity: 0.45; cursor: default; }
+  .kallakort .frad:last-child { margin-bottom: 0; }
 
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r); box-shadow: var(--skugga); padding: 16px; }

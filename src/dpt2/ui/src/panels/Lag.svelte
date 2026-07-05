@@ -14,9 +14,9 @@
   let laddar = true
   let sparad = null
 
-  const SPORTER = ['fotboll', 'handboll', 'volleyboll', 'beachvolley', 'tennis']
+  const SPORTER = ['fotboll', 'handboll', 'innebandy', 'volleyboll', 'beachvolley', 'tennis']
   const SPORT_ETIKETT = {
-    fotboll: 'Fotboll', handboll: 'Handboll', volleyboll: 'Volleyboll',
+    fotboll: 'Fotboll', handboll: 'Handboll', innebandy: 'Innebandy', volleyboll: 'Volleyboll',
     beachvolley: 'Beachvolley', tennis: 'Tennis',
   }
   const TYPER = ['liga', 'turnering', 'masterskap']

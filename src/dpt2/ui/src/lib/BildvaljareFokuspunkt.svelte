@@ -8,6 +8,7 @@
 
   export let hero = ''                      // filnamn, skrivs till frontmatter
   export let heroPosition = 'center center' // CSS object-position
+  export let heroKalla = ''                 // lokal källfil (för export-kopiering, aldrig publik)
 
   const dispatch = createEventDispatcher()
 
@@ -31,8 +32,9 @@
     if (!t?.ok) { fel = t?.fel || 'Kunde inte skapa miniatyr.'; return }
     dataUri = t.data_uri
     hero = t.filnamn
+    heroKalla = r.path
     heroPosition = 'center center'
-    dispatch('change', { hero, heroPosition })
+    dispatch('change', { hero, heroPosition, heroKalla })
   }
 
   function klickPosition(e) {

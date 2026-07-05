@@ -16,7 +16,7 @@ import os
 import re
 from datetime import datetime
 
-from dpt2.data import db, store
+from dpt2.data import db, store, sportprofil
 from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
                            publicera_korning, publicera_some, meta_api,
                            bildhosting, story_korning)
@@ -45,6 +45,12 @@ class Api:
         self.kalender = Kalender()   # klient mot deployade Calendar Sync-tjänsten
         self.innehall_synk = InnehallSynk()   # klient mot deployade Content Sync-tjänsten
 
+    # ── Sportprofiler ────────────────────────────────────────────────────────
+    def sportprofiler(self):
+        """Statisk fältmodell per sport (resultat/mellan/målskyttar/uppställning
+        -etiketter). Rör sig aldrig i drift — hämtas en gång av UI:t."""
+        return sportprofil.alla_profiler()
+
     # ── Matcher ──────────────────────────────────────────────────────────────
     def lista_matcher(self):
         return store.lista_matcher(self.conn)
@@ -54,7 +60,27 @@ class Api:
 
     def spara_match(self, match):
         mid = store.spara_match(self.conn, match)
+        self._synka_kalenderjobb(mid)
         return {"ok": True, "id": mid}
+
+    def _synka_kalenderjobb(self, match_id):
+        """Push:ar matchens aktuella titel/tid/arena/liga till ett redan
+        länkat, RIKTIGT kalenderjobb (utkast räknas inte) — härlett, inte
+        dubblat: resultatet skrivs aldrig in i jobbet (se _match_till_jobbdata).
+        Tyst best-effort — kalendersynk får aldrig blockera matchsparningen."""
+        if not self.kalender.har_nyckel():
+            return
+        lankade = [j for j in store.fotojobb_for_match(self.conn, match_id)
+                  if not store.hamta_fotojobb_utkast(self.conn, j)]
+        if not lankade:
+            return
+        m = store.hamta_match(self.conn, match_id)
+        if not m or not m.get("datum"):
+            return
+        try:
+            self.kalender.uppdatera_jobb(lankade[0], _match_till_jobbdata(m))
+        except Exception:
+            pass
 
     def radera_match(self, id):
         """Raderar matchen + alla kopplade fotojobb (utkast lokalt, riktiga
@@ -123,6 +149,16 @@ class Api:
             return {"ok": False, "fel": "Kunde inte läsa arket."}
         uppd = store.merge_in_trupp(self.conn, match_id, data.get("spelare", []))
         return {"ok": True, "match": uppd}
+
+    def hamta_spelschema(self, lag, url="", sport=""):
+        """§7: Importera spelschema — riktig hämtning via Claude-tjänsten
+        (samma mönster som hamta_trupp/hamta_trupp_for_lag). Returnerar
+        {ok, lag, matcher, kallor} eller {ok:False, fel}."""
+        data = matchhamtning.hamta_spelschema(lag, url=url, sport=sport)
+        if not data:
+            return {"ok": False, "fel": "Kunde inte hämta spelschemat "
+                    "(saknas API-nyckel eller inget svar)."}
+        return {"ok": True, **data}
 
     def las_uttag_fil(self, match_id, filsokvag, sida):
         """Matchdaguttag: läser ETT lags STARTELVA — en delmängd av lagets
@@ -468,6 +504,17 @@ class Api:
         return {"ok": True, "status": "levererad",
                 "skrivna": res["skrivna"], "ratade": res["ratade"]}
 
+    def leverera_egen_mapp(self, mapp, config=None):
+        """§6: bildkälla i Leverera — 'Egen mapp' (t.ex. redan gallrat i Photo
+        Mechanic), utan ett Gallra-urval. Skapar ett minimalt urval-register i
+        farten så samma leveranslogik (husstil/EV/IPTC) återanvänds; Gallra är
+        aldrig ett krav nedströms."""
+        filer = leverera.lista_bilder(mapp or "")
+        if not filer:
+            return {"ok": False, "fel": f"Hittar inga bildfiler i mappen ({mapp or '—'})."}
+        uid = store.spara_urval(self.conn, kalla=mapp, bilder=len(filer))
+        return self.leverera_urval(uid, config)
+
     # ── Publicera (Bildsvepet-text + Matchdag-story) ─────────────────────────
     def generera_bildsvep(self, matchinfo, sport="", hemma_farg=""):
         """Genererar Bildsvepet-bildtext (Claude web search) för granskning."""
@@ -667,8 +714,11 @@ class Api:
         CHLABEL = {"story": "IG Story", "ig": "IG-inlägg", "fb": "Facebook"}
         alla_ok = all(v == "ok" for v in nya.values())
         nystatus = "publicerad" if alla_ok else "delvis"
-        kvarvarande = [CHLABEL.get(k, k) for k, v in nya.items() if v != "ok"]
-        note = "" if alla_ok else f"omförsök — {', '.join(kvarvarande)}"
+        # Historikposten namnger ALLTID vilka kanaler just detta försök gällde
+        # (felkanaler, inte kvarvarande) — vid framgång ska raden visa t.ex.
+        # "omförsök — Facebook", inte en tom notis (§10-handoffen).
+        kanaler_forsokta = [CHLABEL.get(k, k) for k in felkanaler]
+        note = f"omförsök — {', '.join(kanaler_forsokta)}"
         store.spara_publicera_material(
             self.conn, id=material_id, kind="some", status=nystatus,
             match_id=material.get("match_id"), match_namn=material.get("match_namn"),
@@ -708,7 +758,31 @@ class Api:
             frontmatter=fm, body=body, id=data.get("id") or None)
         ut = AX.skriv_md(md, export_dir, slug)
         store.satt_export_path(self.conn, iid, str(ut))
+        self._kopiera_match_bilder(data, export_dir, slug)
         return {"ok": True, "id": iid, "path": str(ut)}
+
+    def _kopiera_match_bilder(self, data, export_dir, slug):
+        """Kopierar/konverterar hero- och galleribilder till sajtens
+        public/sport/<slug>/ — bara typ='match' (se _innehall_md URL-segment).
+        Tyst best-effort: en trasig/saknad källfil hoppas bara över, stoppar
+        aldrig .md-exporten. Källfilerna kommer från nativa filväljare
+        (Innehall.svelte `valjFigurBild`/BildvaljareFokuspunkt `heroKalla`) —
+        bilder hämtade i bulk via "Hämta från Publicera-urvalet" saknar ännu
+        en upplöst lokal sökväg (bara stam-namnet) och kopieras inte här."""
+        if (data.get("typ") or "match") != "match":
+            return
+        rot = _hitta_site_rot(export_dir)
+        if not rot:
+            return
+        mal_dir = rot / "public" / "sport" / slug
+        hero_kalla = data.get("heroKalla")
+        hero_namn = data.get("hero")
+        if hero_kalla and hero_namn:
+            _spara_export_bild(hero_kalla, mal_dir / hero_namn)
+        for i, f in enumerate(data.get("figurer") or [], 1):
+            kalla = f.get("bild") or f.get("src")
+            if kalla and Path(kalla).expanduser().exists():
+                _spara_export_bild(kalla, mal_dir / f"{i}.jpg")
 
     def radera_innehall(self, id):
         store.radera_innehall(self.conn, id)
@@ -921,6 +995,9 @@ def _innehall_md(data):
         # hem/borta/serie är sajtens verkliga matcher-schema (obligatoriska
         # fält) — titel/liga användes tidigare men matchar inte
         # content.config.ts och skulle fälla Astro-bygget vid publicering.
+        # Mellanresultatets nyckel varierar per sport (halvtid/set/perioder) —
+        # sportprofilen avgör, fotboll som fallback för event/omärkta poster.
+        prof = sportprofil.profil(data.get("sport"))
         fm = {
             "typ": typ,
             "hem": data.get("hem") or None,
@@ -929,7 +1006,8 @@ def _innehall_md(data):
             "serie": data.get("serie") or None,
             "arena": data.get("arena") or None,
             "resultat": data.get("resultat") or None,
-            "halvtid": data.get("halvtid") or None,
+            prof["md_key"]: data.get("mellan") or None,
+            "sport": data.get("sport") or None,
             "status": data.get("status") or None,
             "hero": data.get("hero") or None,
             "heroPosition": data.get("heroPosition") or None,
@@ -937,16 +1015,92 @@ def _innehall_md(data):
             "malskyttar": malskyttar or None,
         }
     gal_text = typ not in ("landskap", "event")         # bild-only annars
-    figurer = [{"bild": f.get("bild") or f"/bilder/{bildslug}/{i}.jpg",
-                "alt": (f.get("alt") or "") if gal_text else "",
-                "bildtext": (f.get("bildtext") or "") if gal_text else ""}
-               for i, f in enumerate(data.get("figurer") or [], 1)]
+    # URL-segmentet skiljer sig från content-collection-mappen för match:
+    # filerna hamnar i public/sport/<slug>/ (sidan är src/pages/sport/[slug]
+    # .astro), INTE public/bilder/<slug>/ — bara fixat för match hittills
+    # (se _kopiera_match_bilder); landskap/event/blogg orörda.
+    # OBS: `f.get("bild")`/`f.get("src")` här är den VALDA LOKALA källfilen
+    # (satt av Innehall.svelte filväljare/urvals-hämtning) — bara till för
+    # _kopiera_match_bilder att kopiera FRÅN. Referensen i markdownen är
+    # ALLTID den kanoniska webbsökvägen dit kopieringssteget lägger filen,
+    # aldrig den lokala sökvägen (den ska förstås aldrig hamna publikt).
+    if typ == "match":
+        figurer = [{"bild": f"/sport/{bildslug}/{i}.jpg",
+                    "alt": f.get("alt") or "", "bildtext": f.get("bildtext") or ""}
+                   for i, f in enumerate(data.get("figurer") or [], 1)]
+    else:
+        figurer = [{"bild": f.get("bild") or f"/bilder/{bildslug}/{i}.jpg",
+                    "alt": (f.get("alt") or "") if gal_text else "",
+                    "bildtext": (f.get("bildtext") or "") if gal_text else ""}
+                   for i, f in enumerate(data.get("figurer") or [], 1)]
+    if typ == "match" and figurer:
+        # sport.astro (listsidan) läser frontmatterns `bilder:`-array direkt
+        # för hero-stripens förhandsvisning — separat från figur-blocken i
+        # brödtexten (som matchsidans egen [slug].astro renderar via <Content/>).
+        fm["bilder"] = [f["bild"] for f in figurer] or None
     figur_md = AX.figurer_markdown(figurer)
     delar = [(data.get("body") or "").rstrip(), figur_md]
     if typ == "blogg":
         delar.append(_platser_md(data.get("platser")))
     body = "\n\n".join(p for p in delar if p)
     return fm, body, slug, AX.render_md(fm, body)
+
+
+def _hitta_site_rot(fran_dir, djup=6):
+    """Söker uppåt från fran_dir efter Astro-sajtens rot (mapp med både
+    public/ och astro.config.*) — export_dir pekar på en content-undermapp
+    (t.ex. src/content/matcher/), inte roten. None om ingen hittas."""
+    if not fran_dir:
+        return None
+    p = Path(fran_dir).expanduser().resolve()
+    for _ in range(djup):
+        if (p / "public").is_dir() and any(p.glob("astro.config.*")):
+            return p
+        if p.parent == p:
+            return None
+        p = p.parent
+    return None
+
+
+def _spara_export_bild(kalla_path, mal_path, maxsize=2000):
+    """Konverterar en lokal bildfil (RAW eller redan JPEG) till en webb-
+    lämplig JPEG på mal_path. RAW:ens inbäddade helupplösta preview
+    extraheras via exiftool (samma mekanism som Api.thumb_for_bild/
+    dpt.gui._extrahera_preview), JPEG-källor öppnas och skalas ned direkt.
+    Returnerar True vid lyckat, annars False (rör aldrig ut ett undantag —
+    en trasig bild ska inte stoppa exporten av de andra)."""
+    try:
+        from PIL import Image
+        p = Path(kalla_path).expanduser()
+        if not p.exists():
+            return False
+        mal_path = Path(mal_path)
+        mal_path.parent.mkdir(parents=True, exist_ok=True)
+        if p.suffix.lower() in (".jpg", ".jpeg"):
+            kalla_jpg, tmp = p, None
+        else:
+            import tempfile
+            from dpt import gui
+            env = os.environ.copy()
+            for extra in ("/opt/homebrew/bin", "/usr/local/bin"):
+                if extra not in env.get("PATH", "").split(os.pathsep):
+                    env["PATH"] = extra + os.pathsep + env.get("PATH", "")
+            tmp = Path(tempfile.mkdtemp()) / (p.stem + ".jpg")
+            if not gui._extrahera_preview(p, tmp, env):
+                return False
+            kalla_jpg = tmp
+        try:
+            img = Image.open(kalla_jpg)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img.thumbnail((maxsize, maxsize), Image.LANCZOS)
+            img.save(mal_path, "JPEG", quality=88, optimize=True)
+            return True
+        finally:
+            if tmp is not None and tmp.exists():
+                tmp.unlink()
+    except Exception:
+        return False
 
 
 def _platser_md(platser):

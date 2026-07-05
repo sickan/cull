@@ -3,7 +3,8 @@
   import {
     listaMatcher, hamtaMatch, sparaMatch, hamtaTrupp, sattAktivMatch,
     lasUttagFil, valjFil, listaTavlingar, listaLag, listaLagForTavling,
-    listaUrval, raderaMatch, sattMatchSynk,
+    listaUrval, raderaMatch, sattMatchSynk, sportprofiler,
+    listaMaterial, listaInnehall, sparaMaterial, sparaInnehall, hamtaSpelschema,
   } from '../lib/api.js'
   import Combobox from '../lib/Combobox.svelte'
   import Lagbricka from '../lib/Lagbricka.svelte'
@@ -27,8 +28,8 @@
   let matchSeasonSel = null      // null = aktiv säsong (se aktivAr nedan)
   let matchShowN = 12
 
-  const SPORTER = ['alla', 'fotboll', 'handboll', 'volleyboll', 'beachvolley', 'tennis']
-  const SPORT_ETIKETT = { fotboll: 'Fotboll', handboll: 'Handboll', volleyboll: 'Volleyboll', beachvolley: 'Beachvolley', tennis: 'Tennis' }
+  const SPORTER = ['alla', 'fotboll', 'handboll', 'innebandy', 'volleyboll', 'beachvolley', 'tennis']
+  const SPORT_ETIKETT = { fotboll: 'Fotboll', handboll: 'Handboll', innebandy: 'Innebandy', volleyboll: 'Volleyboll', beachvolley: 'Beachvolley', tennis: 'Tennis' }
   // Normallängd per sport (min) → uträknad sluttid; utan avsparkstid = heldag.
   // Speglar MATCH_LANGD_MIN i app.py (backend sätter kalenderjobbets sluttid).
   const MATCH_LANGD = { fotboll: 120, volleyboll: 150, handboll: 90, beachvolley: 90, innebandy: 120, tennis: 120 }
@@ -36,12 +37,47 @@
   const MK = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
   const MANAD = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December']
   const SPORT_FARG = '#2F7CB0'
+  const PROFIL_FALLBACK = { lineup: 'Startelva', lineup_n: '(11)', squad: true, individ: false }
+  let profiler = {}
+  $: uttagProfil = profiler[utkast?.sport] || profiler.fotboll || PROFIL_FALLBACK
+  let materialAlla = []
+  let innehallAlla = []
 
   onMount(async () => {
-    ;[matcher, tavlingar, lagAlla, projekt] = await Promise.all(
-      [listaMatcher(), listaTavlingar(), listaLag(), listaUrval()])
+    ;[matcher, tavlingar, lagAlla, projekt, profiler, materialAlla, innehallAlla] = await Promise.all(
+      [listaMatcher(), listaTavlingar(), listaLag(), listaUrval(), sportprofiler(),
+       listaMaterial(), listaInnehall('match')])
     laddar = false
   })
+
+  // ── §2: matchradens statuschips (Kalender/Gallrat/Live/SoMe/Webb) ─────────
+  // Allt härlett — inget nytt lagras. Chipsen är genvägar, inte steg.
+  function navChips(m) {
+    const gallrat = projekt.filter((p) => p.match_id === m.id)
+      .reduce((s, p) => s + (p.bilder || 0), 0)
+    const live = materialAlla.filter((x) => x.match_id === m.id && x.kind === 'live')
+    const some = materialAlla.filter((x) => x.match_id === m.id && x.kind === 'some')
+    const tona = (rader) => rader.some((x) => x.status === 'publicerad') ? 'ok'
+      : rader.length ? 'draft' : 'neutral'
+    const inn = innehallAlla.find((x) => x.match_id === m.id)
+    const webb = !inn
+      ? (m.resultat ? { label: 'Webb saknas · Skapa ›', tone: 'accent' } : { label: 'Webb', tone: 'neutral' })
+      : inn.synkad_tid ? { label: 'Webb · publicerad', tone: 'ok' }
+      : inn.publicerad ? { label: 'Webb · utkast', tone: 'draft' }
+      : { label: 'Webb', tone: 'neutral' }
+    return [
+      { key: 'kalender', label: 'Kalender', tone: m.synk_jobb_id ? 'ok' : 'neutral', dest: 'fotojobb' },
+      { key: 'gallrat', label: gallrat ? `Gallrat · ${gallrat}` : 'Gallrat', tone: gallrat ? 'ok' : 'neutral', dest: 'gallra' },
+      { key: 'live', label: 'Live', tone: tona(live), dest: 'publicera' },
+      { key: 'some', label: 'SoMe', tone: tona(some), dest: 'publicera' },
+      { key: 'webb', label: webb.label, tone: webb.tone, dest: 'innehall' },
+    ]
+  }
+  async function goFromMatch(m, dest) {
+    if (typeof m.id === 'string' && m.id.startsWith('ny-')) return
+    await sattAktivMatch(m.id)
+    dispatch('gaTill', { match: m, dest })
+  }
 
   // ── Sök, säsongsarkiv (demo: kalenderår ur datum) & paginering ────────────
   // Riktig säsongspartitionering + lazy-load per år är backend-arbete utanför
@@ -153,6 +189,7 @@
     oppen = m.id
     utkast = await hamtaMatch(m.id)
     await laddaLagForTavling(utkast.liga)
+    slutFran(utkast)
   }
   async function laddaLagForTavling(ligaNamn) {
     const t = tavlingar.find((x) => x.namn === ligaNamn)
@@ -163,6 +200,7 @@
     const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '' }
     matcher = [{ ...tmp, trupp_n: 0 }, ...matcher]
     oppen = tmp.id; utkast = { ...tmp, spelare: [] }; lagForTavling = []
+    slutFran(utkast)
   }
 
   async function valjTavling(o) {
@@ -178,6 +216,88 @@
   const skapaHemma = (namn) => { utkast.lag_hemma = namn; utkast.lag_hemma_id = null }
   const skapaBorta = (namn) => { utkast.lag_borta = namn; utkast.lag_borta_id = null }
   const arMatch = () => !utkast || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))
+
+  // ── §3: Slutsignal — skriv resultatet en gång, på matchen ─────────────────
+  let slutOpen = false
+  let slutForm = { resultat: '', mellan: '', malskyttar: '', mkLive: true, mkSome: true, mkWeb: true }
+  function slutFran(m) {
+    slutOpen = false
+    slutForm = { resultat: m?.resultat || '', mellan: m?.mellan || '', malskyttar: m?.malskyttar || '',
+      mkLive: true, mkSome: true, mkWeb: true }
+  }
+  function slutSet(f, v) { slutForm = { ...slutForm, [f]: v } }
+  async function slutSave() {
+    if (arMatch()) return
+    const m = { ...utkast, resultat: slutForm.resultat, mellan: slutForm.mellan,
+      malskyttar: slutForm.malskyttar }
+    await sparaMatch(m)
+    const namn = `${m.lag_hemma} – ${m.lag_borta}`
+    if (slutForm.mkLive) {
+      await sparaMaterial({ kind: 'live', status: 'utkast', match_id: m.id, match_namn: namn,
+        moment: 'Resultat', tema: 'Hav', dropbox: '', foto: null })
+    }
+    if (slutForm.mkSome) {
+      await sparaMaterial({ kind: 'some', status: 'utkast', match_id: m.id, match_namn: namn,
+        channels: ['story', 'ig'], caption: `${slutForm.resultat} · ${namn}${m.liga ? ' · ' + m.liga : ''}`,
+        banor: { story: { mapp: '', bilder: [] }, ig: { mapp: '', bilder: [] }, fb: { mapp: '', bilder: [] } } })
+    }
+    if (slutForm.mkWeb) {
+      await sparaInnehall({ typ: 'match', match_id: m.id, hem: m.lag_hemma, borta: m.lag_borta,
+        serie: m.liga, sport: m.sport, datum: m.datum, arena: m.arena, resultat: m.resultat,
+        mellan: m.mellan, malskyttar: m.malskyttar, status: 'avslutad', pixieset: m.galleri })
+    }
+    await sattAktivMatch(m.id)
+    ;[matcher] = await Promise.all([listaMatcher()])
+    utkast = m; slutOpen = false
+  }
+
+  // ── §7: Importera spelschema (riktig hämtning via Claude-tjänsten) ────────
+  let importOpen = false
+  let importLag = ''
+  let importUrl = ''
+  let importSport = ''
+  let importRader = []
+  let importLaddar = false
+  let importFel = ''
+  let importSkapaFotojobb = true
+  let importKor_ = false
+
+  function importVaxla() {
+    importOpen = !importOpen
+    if (!importOpen) { importRader = []; importFel = '' }
+  }
+  async function importHamta() {
+    if (!importLag.trim()) { importFel = 'Ange ett lag.'; return }
+    importFel = ''; importLaddar = true; importRader = []
+    const r = await hamtaSpelschema(importLag.trim(), importUrl.trim(), importSport)
+    importLaddar = false
+    if (!r?.ok) { importFel = r?.fel || 'Kunde inte hämta spelschemat.'; return }
+    importRader = (r.matcher || []).map((m) => {
+      const hem = m.hemma ? importLag.trim() : m.motstandare
+      const bort = m.hemma ? m.motstandare : importLag.trim()
+      const dubblett = matcher.some((x) => x.datum === m.datum &&
+        ((x.lag_hemma === hem && x.lag_borta === bort) || (x.lag_hemma === bort && x.lag_borta === hem)))
+      return { ...m, hem, bort, dubblett, checked: !dubblett }
+    })
+    if (!importRader.length) importFel = 'Inga kommande matcher hittades.'
+  }
+  function importToggleRad(i) {
+    if (importRader[i].dubblett) return
+    importRader[i] = { ...importRader[i], checked: !importRader[i].checked }
+    importRader = importRader
+  }
+  $: importValda = importRader.filter((r) => r.checked && !r.dubblett)
+  async function importGenomfor() {
+    if (!importValda.length || importKor_) return
+    importKor_ = true
+    for (const r of importValda) {
+      const res = await sparaMatch({ lag_hemma: r.hem, lag_borta: r.bort, datum: r.datum,
+        tid: r.tid || '', arena: r.arena || '', liga: r.liga || '', sport: importSport || '' })
+      if (importSkapaFotojobb && res?.id) await sattMatchSynk(res.id, true)
+    }
+    matcher = await listaMatcher()
+    importKor_ = false; importOpen = false; importRader = []; importLag = ''; importUrl = ''
+  }
 
   let hamtar = false
   async function lasUttag(sida) {
@@ -384,6 +504,12 @@
 
                 {#if oppen === m.id && utkast}
                   <div class="editor">
+                    <div class="navchips">
+                      {#each navChips(utkast) as c (c.key)}
+                        <button class="navchip" class:ok={c.tone === 'ok'} class:draft={c.tone === 'draft'}
+                          class:accent={c.tone === 'accent'} on:click={() => goFromMatch(utkast, c.dest)}>{c.label}</button>
+                      {/each}
+                    </div>
                     <div class="rad2">
                       <label>Hemmalag
                         <Combobox options={lagVal} value={utkast.lag_hemma} placeholder="Välj lag…"
@@ -408,27 +534,32 @@
                       <input bind:value={utkast.arena} placeholder="Arena" />
                     </div>
 
-                    <div class="uttagrad"><span class="caps2">Matchdaguttag</span><span class="uttagnot">kopplat till matchen</span></div>
-                    <div class="lagbox2">
-                      {#each [{ sida: 'hemma', namn: utkast.lag_hemma, lista: hemSpelare }, { sida: 'borta', namn: utkast.lag_borta, lista: bortaSpelare }] as kol}
-                        {@const nStart = kol.lista.filter((p) => p.start).length}
-                        <div class="lbox">
-                          <div class="lhuvud">
-                            <Lagbricka namn={kol.namn} farg={fargForLag(kol.namn)} logga={loggaForLag(kol.namn)} storlek={30} />
-                            <div class="lnamn-wrap">
-                              <div class="lnamn scd">{kol.namn || (kol.sida === 'hemma' ? 'Hemmalag' : 'Bortalag')}</div>
-                              <div class="lsub">{kol.sida === 'hemma' ? 'Hemma' : 'Borta'} · {truppNot(kol.namn)}</div>
+                    {#if uttagProfil.squad}
+                      <div class="uttagrad"><span class="caps2">Matchdaguttag</span><span class="uttagnot">kopplat till matchen</span></div>
+                      <div class="lagbox2">
+                        {#each [{ sida: 'hemma', namn: utkast.lag_hemma, lista: hemSpelare }, { sida: 'borta', namn: utkast.lag_borta, lista: bortaSpelare }] as kol}
+                          {@const nStart = kol.lista.filter((p) => p.start).length}
+                          <div class="lbox">
+                            <div class="lhuvud">
+                              <Lagbricka namn={kol.namn} farg={fargForLag(kol.namn)} logga={loggaForLag(kol.namn)} storlek={30} />
+                              <div class="lnamn-wrap">
+                                <div class="lnamn scd">{kol.namn || (kol.sida === 'hemma' ? 'Hemmalag' : 'Bortalag')}</div>
+                                <div class="lsub">{kol.sida === 'hemma' ? 'Hemma' : 'Borta'} · {truppNot(kol.namn)}</div>
+                              </div>
                             </div>
+                            <div class="grupplbl">{uttagProfil.lineup} <span class="grupplbl-sub">· delmängd av truppen</span></div>
+                            <button class="lbtn" class:i={nStart > 0} on:click={() => lasUttag(kol.sida)} disabled={hamtar || arMatch()}>
+                              <span>{nStart ? 'Byt fil…' : 'Ladda upp startelva…'}</span>
+                              <span class="lbtn-n">{startelvaEtikett(kol.namn, nStart)}</span>
+                            </button>
                           </div>
-                          <div class="grupplbl">Startelva <span class="grupplbl-sub">· delmängd av truppen</span></div>
-                          <button class="lbtn" class:i={nStart > 0} on:click={() => lasUttag(kol.sida)} disabled={hamtar || arMatch()}>
-                            <span>{nStart ? 'Byt fil…' : 'Ladda upp startelva…'}</span>
-                            <span class="lbtn-n">{startelvaEtikett(kol.namn, nStart)}</span>
-                          </button>
-                        </div>
-                      {/each}
-                    </div>
-                    <div class="hint">Hela truppen kommer från <b>Lag &amp; tävlingar</b>. Startelvan är en delmängd som läses ur matchblad/CSV/foto strax innan match — matchas mot lagets trupp och sparas på matchen. <button class="lank" on:click={hamtaTruppen} disabled={hamtar || arMatch()}>{hamtar ? 'Hämtar…' : 'Hämta trupp automatiskt'}</button></div>
+                        {/each}
+                      </div>
+                      <div class="hint">Hela truppen kommer från <b>Lag &amp; tävlingar</b>. {uttagProfil.lineup} är en delmängd som läses ur matchblad/CSV/foto strax innan match — matchas mot lagets trupp och sparas på matchen. <button class="lank" on:click={hamtaTruppen} disabled={hamtar || arMatch()}>{hamtar ? 'Hämtar…' : 'Hämta trupp automatiskt'}</button></div>
+                    {:else}
+                      <div class="uttagrad"><span class="caps2">Matchdaguttag</span></div>
+                      <div class="hint">Individuell sport — inga trupper eller startuppställningar för {SPORT_ETIKETT[utkast.sport] || 'den här sporten'}.</div>
+                    {/if}
 
                     <div class="gcalkort">
                       <span class="gcalik">
@@ -456,6 +587,44 @@
                       </div>
                     </div>
 
+                    <div class="slutblock">
+                      <button class="sluthuvud" on:click={() => (slutOpen = !slutOpen)} disabled={arMatch()}>
+                        <span class="caps2">Slutsignal</span>
+                        <span class="uttagnot">skriv resultatet en gång</span>
+                        <span class="slutchevron">{slutOpen ? '▴' : '▾'}</span>
+                      </button>
+                      {#if slutOpen}
+                        <div class="slutform">
+                          <div class="rad3">
+                            <label>{uttagProfil.res_label || 'Resultat'}
+                              <input value={slutForm.resultat} placeholder={uttagProfil.res_ph}
+                                on:input={(e) => slutSet('resultat', e.target.value)} />
+                            </label>
+                            <label>{uttagProfil.mid_label || 'Halvtid'}
+                              <input value={slutForm.mellan} placeholder={uttagProfil.mid_ph}
+                                on:input={(e) => slutSet('mellan', e.target.value)} />
+                            </label>
+                            {#if uttagProfil.has_scorers}
+                              <label>{uttagProfil.scorers_label || 'Målskyttar'}
+                                <input value={slutForm.malskyttar} placeholder="Efternamn, efternamn…"
+                                  on:input={(e) => slutSet('malskyttar', e.target.value)} />
+                              </label>
+                            {/if}
+                          </div>
+                          <div class="slutkryss">
+                            <label><input type="checkbox" checked={slutForm.mkLive}
+                              on:change={(e) => slutSet('mkLive', e.target.checked)} /> Resultat-story (Live)</label>
+                            <label><input type="checkbox" checked={slutForm.mkSome}
+                              on:change={(e) => slutSet('mkSome', e.target.checked)} /> SoMe-paket med ifylld bildtext</label>
+                            <label><input type="checkbox" checked={slutForm.mkWeb}
+                              on:change={(e) => slutSet('mkWeb', e.target.checked)} /> Webb-utkast (match-md)</label>
+                          </div>
+                          <div class="hint">Skriver värdena på matchen och skapar valda utkast utan bildval — öppnas tomma i respektive flik. Inget publiceras.</div>
+                          <button class="prim" on:click={slutSave}>Spara &amp; skapa utkast ›</button>
+                        </div>
+                      {/if}
+                    </div>
+
                     <div class="knappar">
                       <button class="prim" on:click={() => aktivera(utkast)}>Aktivera match ›</button>
                       <button class="sek" on:click={spara}>Spara</button>
@@ -475,7 +644,51 @@
         </div>
       {/if}
 
-      <button class="ny" on:click={nyMatch}>+ Ny match</button>
+      <div class="nyrad">
+        <button class="ny" on:click={nyMatch}>+ Ny match</button>
+        <button class="ny sek2" on:click={importVaxla}>Importera spelschema</button>
+      </div>
+
+      {#if importOpen}
+        <div class="importkort">
+          <div class="caps">Importera spelschema</div>
+          <div class="rad3">
+            <label>Lag<input bind:value={importLag} placeholder="t.ex. Malmö FF" /></label>
+            <label>URL (valfri)<input class="mono" bind:value={importUrl} placeholder="https://…/matcher" /></label>
+            <label>Sport
+              <select bind:value={importSport}>
+                <option value="">Auto</option>
+                {#each SPORTER.filter((s) => s !== 'alla') as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
+              </select>
+            </label>
+          </div>
+          <button class="sek" on:click={importHamta} disabled={importLaddar}>{importLaddar ? 'Hämtar…' : 'Hämta ›'}</button>
+          {#if importFel}<div class="importfel">⚠ {importFel}</div>{/if}
+
+          {#if importRader.length}
+            <div class="importlista">
+              {#each importRader as r, i}
+                <button class="importrad" class:dubblett={r.dubblett} disabled={r.dubblett}
+                  on:click={() => importToggleRad(i)}>
+                  <span class="box" class:pa={r.checked}>{r.checked ? '✓' : ''}</span>
+                  <span class="irtxt">
+                    <span class="irfix">{r.hem} – {r.bort}</span>
+                    <span class="irsub">{r.datum}{r.tid ? ' · ' + r.tid : ''}{r.arena ? ' · ' + r.arena : ''}{r.liga ? ' · ' + r.liga : ''}</span>
+                  </span>
+                  {#if r.dubblett}<span class="irdub">finns redan</span>{/if}
+                </button>
+              {/each}
+            </div>
+            <button class="chk" on:click={() => (importSkapaFotojobb = !importSkapaFotojobb)}>
+              <span class="box" class:pa={importSkapaFotojobb}>{importSkapaFotojobb ? '✓' : ''}</span>
+              Skapa även fotojobb i kalendern (kategori Sport)
+            </button>
+            <button class="prim" on:click={importGenomfor} disabled={!importValda.length || importKor_}>
+              {importKor_ ? 'Importerar…' : `Importera ${importValda.length} matcher`}
+            </button>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     {#if projekt.length}
@@ -587,6 +800,14 @@
   .synkpill.pa { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--div)); }
   .synkpill.pa .prick { background: var(--ok); }
   .synkpill:hover { border-color: var(--acc); }
+  .navchips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .navchip { display: inline-flex; align-items: center; padding: 6px 12px;
+    border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
+    font-size: 12px; font-weight: 600; color: var(--t-mut); cursor: pointer; }
+  .navchip:hover { border-color: var(--acc); color: var(--t-head); }
+  .navchip.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--div)); }
+  .navchip.draft { color: var(--varn); border-color: color-mix(in srgb, var(--varn) 40%, var(--div)); }
+  .navchip.accent { color: #fff; background: var(--acc); border-color: var(--acc); font-weight: 700; }
   .papperskorg { flex: none; width: 30px; height: 30px; display: inline-flex; align-items: center;
     justify-content: center; border: 1px solid var(--div); border-radius: 7px; background: var(--kort);
     color: var(--t-mut); }
@@ -657,13 +878,43 @@
 
   .lankblock { display: flex; flex-direction: column; gap: 8px; }
 
+  .slutblock { border: 1px solid var(--div3); border-radius: 10px; background: var(--panel); overflow: hidden; }
+  .sluthuvud { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+    background: none; border: 0; text-align: left; cursor: pointer; }
+  .sluthuvud:disabled { opacity: 0.5; cursor: default; }
+  .sluthuvud .caps2 { margin: 0; }
+  .slutchevron { margin-left: auto; color: var(--t-mut); }
+  .slutform { display: flex; flex-direction: column; gap: 12px; padding: 0 14px 14px; }
+  .slutkryss { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--t-head); }
+  .slutkryss label { display: flex; flex-direction: row; align-items: center; gap: 8px;
+    text-transform: none; letter-spacing: normal; font-size: 12.5px; font-weight: 500; color: var(--t-head); }
+  .slutkryss input[type="checkbox"] { width: auto; padding: 0; }
+
   .knappar { display: flex; gap: 10px; }
   .prim { padding: 9px 16px; border: 0; border-radius: 7px; background: var(--acc); color: #fff; font-size: 13px; font-weight: 600; }
   .sek { padding: 9px 14px; border: 1px solid var(--div); border-radius: 7px; background: var(--kort); color: var(--t-head); font-size: 13px; }
 
+  .nyrad { display: flex; gap: 10px; }
   .ny { padding: 14px; width: 100%; border: 1.5px dashed var(--div); border-radius: var(--r);
     background: transparent; color: var(--t-mut); font-size: 13px; font-weight: 500; }
   .ny:hover { border-color: var(--acc); color: var(--acc); }
+  .ny.sek2 { border-style: solid; }
+
+  .importkort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
+    box-shadow: var(--skugga); padding: 16px; margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .importfel { font-size: 12px; color: var(--fel, #c0453e); }
+  .importlista { display: flex; flex-direction: column; gap: 8px; }
+  .importrad { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--div);
+    border-radius: 9px; background: var(--panel); text-align: left; }
+  .importrad.dubblett { opacity: 0.55; }
+  .irtxt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .irfix { font-size: 13px; font-weight: 600; color: var(--t-head); }
+  .irsub { font-size: 11px; color: var(--t-mut); }
+  .irdub { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--t-help); flex: none; }
+  .chk { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; font-size: 13px; color: var(--t-head); }
+  .box { width: 19px; height: 19px; border-radius: 5px; border: 1px solid var(--div); background: var(--panel);
+    color: var(--acc); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .box.pa { background: var(--acc); color: #fff; border-color: var(--acc); }
 
   .proj { margin: 26px 2px 12px; }
   .projgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }

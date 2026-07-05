@@ -131,6 +131,25 @@ class TestMatchCRUD(unittest.TestCase):
         self.assertEqual(sparad["galleri"], m["galleri"])
         self.assertEqual(sparad["sida_url"], m["sida_url"])
 
+    def test_redigering_bevarar_cascade_lankade_rader(self):
+        # spara_match måste vara en äkta UPPDATERING (ON CONFLICT DO UPDATE),
+        # inte INSERT OR REPLACE — den senare raderar+återskapar raden, vilket
+        # (med FK-tvång på) tyst raderar allt som pekar på matchen(id) med
+        # ON DELETE CASCADE: fotojobb-länken och SoMe-publiceringshistoriken.
+        mid = store.spara_match(self.c, self.match)
+        store.lanka_fotojobb_match(self.c, "jobb1", mid)
+        store.spara_some_material(self.c, kanal="instagram", format="Inlägg 4:5",
+                                  match_id=mid, moment="Resultat", tema="Hav",
+                                  fil="/tmp/a.jpg")
+        self.assertEqual(len(store.lista_some_material(self.c, mid)), 1)
+
+        m2 = dict(self.match); m2["id"] = mid; m2["arena"] = "Ny arena"
+        store.spara_match(self.c, m2)
+
+        self.assertEqual(store.hamta_match(self.c, mid)["arena"], "Ny arena")
+        self.assertEqual(store.matchref_for_fotojobb(self.c, ["jobb1"]), {"jobb1": mid})
+        self.assertEqual(len(store.lista_some_material(self.c, mid)), 1)
+
     def test_delad_slug_id(self):
         store.spara_match(self.c, self.match)
         self.assertIsNotNone(store.hamta_lag(self.c, "malmo-ff"))   # samma som migrera
@@ -528,7 +547,7 @@ class TestFotojobbUtkast(unittest.TestCase):
 class TestMigrering(unittest.TestCase):
     def test_fresh_db_ar_v11_med_fotojobb_utkast(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 11)
+        self.assertEqual(db.schemaversion(c), 13)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
         self.assertIn("fotojobb_utkast", db.tabeller(c))
@@ -542,6 +561,13 @@ class TestMigrering(unittest.TestCase):
         self.assertIn("ch_results", pubmatkol)
         self.assertIn("trupp_kalla",
                       [r[1] for r in c.execute("PRAGMA table_info(lag)")])
+        # v13: sportneutralt mellanresultat + innebandy i sport-enumen.
+        matchkol = [r[1] for r in c.execute("PRAGMA table_info(matchen)")]
+        self.assertIn("mellan", matchkol)
+        self.assertNotIn("halvtid", matchkol)
+        mid = store.spara_match(c, {"lag_hemma": "A", "lag_borta": "B",
+                                    "sport": "innebandy"})
+        self.assertEqual(store.hamta_match(c, mid)["sport"], "innebandy")
         self.assertIn("sida_url",
                       [r[1] for r in c.execute("PRAGMA table_info(matchen)")])
         lagkol = [r[1] for r in c.execute("PRAGMA table_info(lag)")]
@@ -668,6 +694,57 @@ class TestMigrering(unittest.TestCase):
         c.execute("UPDATE publicera_material SET status='delvis' WHERE id='m1'")
         self.assertEqual(c.execute(
             "SELECT status FROM publicera_material WHERE id='m1'").fetchone()[0], "delvis")
+
+    def test_migrera_v12_till_v13(self):
+        # v12-läge (halvtid-kolumn, sport-CHECK utan innebandy på tavling/lag/
+        # matchen) → mellan-kolumn (lossless övertagen från halvtid) + CHECK
+        # utökad. Bygg ett minimalt v12-schema för de tre tabellerna.
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA foreign_keys=ON")
+        c.execute("PRAGMA user_version=12")
+        c.executescript("""
+        CREATE TABLE tavling (
+          id TEXT PRIMARY KEY, typ TEXT NOT NULL, namn TEXT NOT NULL,
+          sport TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','volleyboll','beachvolley','tennis')),
+          gren TEXT, hemsida TEXT, fran TEXT, till TEXT, ort TEXT, arena TEXT,
+          logga TEXT, kalender INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE lag (
+          id TEXT PRIMARY KEY, namn TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'team',
+          sport TEXT CHECK (sport IN ('fotboll','handboll','volleyboll','beachvolley','tennis')),
+          gren TEXT, hemsida TEXT, instagram TEXT, logga TEXT,
+          stall_hemma TEXT, stall_borta TEXT, stall_tredje TEXT,
+          profilfarg TEXT, klubb TEXT, trupp_kalla TEXT
+        );
+        CREATE TABLE matchen (
+          id TEXT PRIMARY KEY, tavling_id TEXT,
+          sport TEXT CHECK (sport IN ('fotboll','handboll','volleyboll','beachvolley','tennis')),
+          lag_hemma_id TEXT, lag_borta_id TEXT, datum TEXT, tid TEXT, arena TEXT,
+          resultat TEXT, halvtid TEXT, malskyttar TEXT,
+          status TEXT NOT NULL DEFAULT 'kommande', galleri TEXT, sida_url TEXT,
+          omslag TEXT, skapad TEXT NOT NULL
+        );
+        """)
+        c.execute("INSERT INTO lag(id,namn) VALUES('h','Hemma'),('b','Borta')")
+        c.execute(
+            "INSERT INTO matchen(id,sport,lag_hemma_id,lag_borta_id,resultat,"
+            "halvtid,skapad) VALUES('m1','fotboll','h','b','6-0','3-0','2026-07-05')")
+        db._migrera(c, 12)
+        matchkol = [r[1] for r in c.execute("PRAGMA table_info(matchen)")]
+        self.assertIn("mellan", matchkol)
+        self.assertNotIn("halvtid", matchkol)
+        rad = c.execute("SELECT resultat, mellan FROM matchen WHERE id='m1'").fetchone()
+        self.assertEqual((rad["resultat"], rad["mellan"]), ("6-0", "3-0"))
+        # sport-enumen tillåter nu innebandy på alla tre tabellerna.
+        c.execute("INSERT INTO tavling(id,typ,namn,sport) VALUES('t1','liga','L','innebandy')")
+        c.execute("INSERT INTO lag(id,namn,sport) VALUES('l1','Lag','innebandy')")
+        c.execute("UPDATE matchen SET sport='innebandy' WHERE id='m1'")
+        self.assertEqual(c.execute(
+            "SELECT sport FROM matchen WHERE id='m1'").fetchone()[0], "innebandy")
+        self.assertEqual(c.execute("PRAGMA foreign_key_check").fetchall(), [])
 
 
 class TestPubliceraMaterial(unittest.TestCase):
