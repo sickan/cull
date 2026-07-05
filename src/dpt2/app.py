@@ -19,7 +19,7 @@ from datetime import datetime
 from dpt2.data import db, store, sportprofil
 from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
                            publicera_korning, publicera_some, meta_api,
-                           bildhosting, story_korning)
+                           bildhosting, story_korning, testlage)
 from dpt2.tjanster.kalender import Kalender
 from dpt2.tjanster.innehall_synk import InnehallSynk
 from dpt2.publicering import astro_export as AX
@@ -572,7 +572,11 @@ class Api:
     def publicera_live_story(self, config):
         """Live-flödets 'Publicera story ›': renderar 9:16-overlayen i workern
         (ut_mapp = Dropbox-mappen, så filen sparas där) och publicerar den som
-        IG Story via SoMe-flödet. Returnerar {ok, path, publicerad, fel?}."""
+        IG Story via SoMe-flödet. Returnerar {ok, path, publicerad, fel?}.
+
+        Testläge (config.test): rendera renderas fortfarande RIKTIGT (samma
+        pipeline), men ut_mapp omdirigeras till testkatalogen och varken
+        Meta-API:et eller bildhosten rörs — "publicerad" simuleras True."""
         config = dict(config or {})
         if not config.get("moment"):
             return {"ok": False, "fel": "Välj ett moment."}
@@ -581,12 +585,17 @@ class Api:
         config.setdefault("match_id",
                           store.hamta_installning(self.conn, "aktiv_match_id"))
         config["format"] = "9x16"
+        test = bool(config.pop("test", False))
+        if test:
+            config["ut_mapp"] = str(testlage.live_mapp())
         r = self._kor_jobb("story", {"config": config})
         res = r.get("resultat") or {}
         path = res.get("path")
         if not (r["ok"] and path):
             return {"ok": False, "publicerad": False,
                     "fel": r.get("fel") or "Kunde inte rendera storyn."}
+        if test:
+            return {"ok": True, "path": path, "publicerad": True, "test": True}
 
         poster = meta_api.fran_env(logg=self._logg.append)
         if poster is None:
@@ -631,11 +640,35 @@ class Api:
             "caption": config.get("caption") or "",
             "mal": config.get("mal") or {}})
 
+    def ny_test_paket_mapp(self):
+        """Testläge: EN gemensam mapp för en hel SoMe-paket-körning — UI:t
+        hämtar den EN gång innan fan-out:en (ett brygganrop per aktiv kanal)
+        så alla kanalernas exempelfiler hamnar tillsammans, inte i en mapp var."""
+        return {"ok": True, "path": str(testlage.ny_some_mapp())}
+
     def publicera_till_some(self, config):
         """Skarp publicering. Kräver Meta-token (annars informativt fel — state 8).
         Laddar först upp bilderna till bild-hosten (Graph hämtar via publik URL).
-        Returnerar {ok, resultat, sparade, varningar} eller {ok:False, fel}."""
+        Returnerar {ok, resultat, sparade, varningar} eller {ok:False, fel}.
+
+        Testläge (config.test): inget API-anrop görs — den första bilden i
+        paketet kopieras som exempelfil till config.test_mapp (se
+        ny_test_paket_mapp) och "postad" simuleras för den anropade kanalen."""
         config = config or {}
+        if config.get("test"):
+            bilder = config.get("bilder") or []
+            malnyckel = next((k for k, v in (config.get("mal") or {}).items() if v), None)
+            # mal-nyckeln (story/ig_inlagg/fb, se publicera_some) → samma
+            # (kanal, form) som en skarp post skulle fått — postLabel() i
+            # Publicera.svelte kräver kanal 'instagram'/'facebook'.
+            kanal, form = {"story": ("instagram", "story"), "ig_inlagg": ("instagram", "inlägg"),
+                          "fb": ("facebook", "inlägg")}.get(malnyckel, ("instagram", "inlägg"))
+            mapp = config.get("test_mapp") or str(testlage.ny_some_mapp())
+            kopia = testlage.kopiera_exempel(bilder[0], mapp, malnyckel or "post") if bilder else None
+            return {"ok": True, "sparade": 0, "varningar": [],
+                    "resultat": [{"kanal": kanal, "form": form, "del": 1, "av": 1,
+                                 "status": "postad", "test": True}],
+                    "path": str(kopia) if kopia else mapp}
         poster = meta_api.fran_env(logg=self._logg.append)
         if poster is None:
             return {"ok": False, "fel": "Skarp publicering saknar Meta-token — "
@@ -746,12 +779,21 @@ class Api:
             frontmatter=fm, body=body, id=data.get("id") or None)
         return {"ok": True, "id": iid}
 
-    def exportera_innehall(self, data, export_dir):
-        """Sparar innehållet och skriver <export_dir>/<slug>.md i sajt-repot."""
-        if not export_dir:
-            return {"ok": False, "fel": "Ange en export-katalog."}
+    def exportera_innehall(self, data, export_dir, test=False):
+        """Sparar innehållet och skriver <export_dir>/<slug>.md i sajt-repot.
+
+        Testläge: varken innehållet eller export-katalogen rörs — .md skrivs
+        till test-output/content/<samma undermapp som skarpt>/<slug>.md,
+        bildkopieringen till sajtens public/ hoppas (ingen riktig sajt-repo
+        pekas ut). Kräver ingen export_dir."""
         data = data or {}
         fm, body, slug, md = _innehall_md(data)
+        if test:
+            ut_mapp = testlage.innehall_mapp(_INNEHALL_MAPP.get(data.get("typ", "match"), "matcher"))
+            ut = AX.skriv_md(md, ut_mapp, slug)
+            return {"ok": True, "id": None, "path": str(ut), "test": True}
+        if not export_dir:
+            return {"ok": False, "fel": "Ange en export-katalog."}
         iid = store.spara_innehall(
             self.conn, typ=data.get("typ", "match"),
             match_id=data.get("match_id") or None, status=fm.get("status"),
@@ -788,7 +830,7 @@ class Api:
         store.radera_innehall(self.conn, id)
         return {"ok": True}
 
-    def publicera_innehall_natet(self, data):
+    def publicera_innehall_natet(self, data, test=False):
         """Sparar innehållet lokalt (som spara_innehall) och publicerar det
         sedan till content-sync-workern — skilt från exportera_innehall, som
         bara skriver en lokal .md-fil. Kräver ingen export-katalog.
@@ -800,9 +842,18 @@ class Api:
         den skarpa sajten kan läsa från. Bilderna optimeras automatiskt vid
         uppladdningen (resize + JPEG-omkodning + sRGB + lätt skärpning, se
         innehall_synk.ladda_upp_bild/publicering.bildoptimering) — kameraorginal
-        på flera MB serveras aldrig rakt av."""
+        på flera MB serveras aldrig rakt av.
+
+        Testläge: varken R2-uppladdningen eller content-sync-anropet görs —
+        samma lokala .md-skrivning som exportera_innehall(test=True), utan
+        härledda bild-URL:er (rör aldrig sajten eller dess innehåll-DB-rad)."""
         data = data or {}
         typ = data.get("typ", "match")
+        if test:
+            _fm, _body, slug, md = _innehall_md(data)
+            ut_mapp = testlage.innehall_mapp(_INNEHALL_MAPP.get(typ, "matcher"))
+            ut = AX.skriv_md(md, ut_mapp, slug)
+            return {"ok": True, "id": None, "path": str(ut), "test": True}
         bild_urls = {}
         if typ == "match":
             slug_preliminar = AX.slugga(data.get("titel", ""))
@@ -971,6 +1022,13 @@ def _utkast_till_jobbdict(u):
             "location": u.get("location") or "", "description": "",
             "category": u.get("category"), "status": "confirmed",
             "google_event_id": None, "source": "dpt", "utkast": True}
+
+
+# Innehåll-typ → content-collection-mapp (speglar CTYPER.mapp i Innehall.svelte)
+# — används av testläge för att räkna ut samma relativa sökväg under
+# test-output/content/ som skarpt hade skrivit under sajtens content/.
+_INNEHALL_MAPP = {"blogg": "blogg", "match": "matcher",
+                  "landskap": "landskap", "event": "event"}
 
 
 def _innehall_md(data, bild_urls=None):

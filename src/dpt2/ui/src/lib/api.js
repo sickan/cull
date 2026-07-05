@@ -587,9 +587,10 @@ export async function sparaInnehall(data) {
   return wait({ ok: true, id: data.id || 'i_ny' })
 }
 
-export async function exporteraInnehall(data, exportDir) {
+export async function exporteraInnehall(data, exportDir, test = false) {
   const api = brygga()
-  if (api) return api.exportera_innehall(data, exportDir)
+  if (api) return api.exportera_innehall(data, exportDir, test)
+  if (test) return wait({ ok: true, id: null, path: `~/DPT/test-output/content/${slug(data.titel)}.md`, test: true })
   if (!exportDir) return wait({ ok: false, fel: 'Ange en export-katalog.' })
   return wait({ ok: true, id: data.id || 'i_ny', path: `${exportDir}/${slug(data.titel)}.md` })
 }
@@ -602,9 +603,10 @@ export async function raderaInnehall(id) {
 
 // Publicerar direkt till hemsidan via content-sync-workern (skilt från
 // exporteraInnehall, som bara skriver en lokal .md-fil).
-export async function publiceraInnehallNatet(data) {
+export async function publiceraInnehallNatet(data, test = false) {
   const api = brygga()
-  if (api) return api.publicera_innehall_natet(data)
+  if (api) return api.publicera_innehall_natet(data, test)
+  if (test) return wait({ ok: true, id: null, path: `~/DPT/test-output/content/${slug(data.titel)}.md`, test: true })
   return wait({ ok: true, id: data.id || 'i_ny' })
 }
 
@@ -733,6 +735,10 @@ export async function publiceraLiveStory(config) {
   if (api) return api.publicera_live_story(config)
   if (!config?.moment) return wait({ ok: false, fel: 'Välj ett moment.' })
   if (!config?.foto) return wait({ ok: false, fel: 'Välj en bild i steg 2.' })
+  if (config.test) {
+    return wait({ ok: true, publicerad: true, test: true,
+      path: `~/DPT/test-output/2026-01-01/live/story_${config.moment.toLowerCase()}.jpg` })
+  }
   return wait({ ok: true, path: `${config.ut_mapp || '~/Dropbox/DPT/Live'}/story_${config.moment.toLowerCase()}.jpg`,
     publicerad: true, url: 'https://exempel/story/1' })
 }
@@ -783,10 +789,26 @@ export async function publiceraForhandsvisa(config) {
 export async function publiceraTillSoMe(config) {
   const api = brygga()
   if (api) return api.publicera_till_some(config)
+  if (config?.test) {
+    const malnyckel = Object.keys(config.mal || {}).find((k) => config.mal[k])
+    const [kanal, form] = { story: ['instagram', 'story'], ig_inlagg: ['instagram', 'inlägg'],
+      fb: ['facebook', 'inlägg'] }[malnyckel] || ['instagram', 'inlägg']
+    return wait({ ok: true, sparade: 0, varningar: [],
+      resultat: [{ kanal, form, del: 1, av: 1, status: 'postad', test: true }],
+      path: config.test_mapp || '~/DPT/test-output/2026-01-01/some_paket_120000' })
+  }
   const plan = _mockPlanera(config || {})
   if (!plan.ok) return wait(plan)
   return wait({ ok: true, sparade: plan.poster.length, varningar: plan.varningar,
     resultat: plan.poster.map((p, i) => ({ ...p, status: 'postad', url: `https://exempel/post/${i + 1}` })) })
+}
+
+// Testläge: en gemensam mapp för en hel SoMe-paket-körning (se Publicera.svelte
+// somePublicera — hämtas EN gång innan fan-out:en, återanvänds för alla kanaler).
+export async function nyTestPaketMapp() {
+  const api = brygga()
+  if (api) return api.ny_test_paket_mapp()
+  return wait({ ok: true, path: '~/DPT/test-output/2026-01-01/some_paket_120000' })
 }
 
 // Sparade material + utkast (Publicera-panelens arbetsyta). Muteras lokalt i mock.

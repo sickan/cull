@@ -3,10 +3,12 @@
   import { aktivMatch, genereraBildsvep, valjMapp, listaLag,
     listaSomeBilder, publiceraTillSoMe, oppnaILightroom, publiceraLiveStory,
     forhandsgranskaStory, listaMaterial, sparaMaterial, raderaMaterial,
-    forsokIgenMaterial, sportprofiler, listaMatcher } from '../lib/api.js'
+    forsokIgenMaterial, sportprofiler, listaMatcher, nyTestPaketMapp } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
   import Lagbricka from '../lib/Lagbricka.svelte'
   import { grenFarg } from '../lib/gren.js'
+  import { testMode, testMaterial, nyttTestMaterial, uppdateraTestMaterial,
+    raderaTestMaterial } from '../lib/testlage.js'
 
   const dispatch = createEventDispatcher()
   const bytMatch = () => dispatch('navigera', 'matcher')
@@ -49,7 +51,7 @@
     startelva: '', malskott: '', minut: '', motstandare: '', nextdatum: '' }
   let moment = 'Avspark'
   let tema = 'Hav'
-  let livePub = { kor: false, klar: false, publicerad: false, fel: '', url: '' }
+  let livePub = { kor: false, klar: false, publicerad: false, fel: '', url: '', path: '' }
   let profiler = {}
   const PROFIL_FALLBACK = { start_moment: 'Avspark', mid_moment: 'Halvtid', mid_label: 'Halvtid',
     mid_ph: '1–0', mid_token: 'halvtid', res_label: 'Slutresultat', res_ph: '6–0', has_scorers: true,
@@ -154,12 +156,12 @@
   $: if (flik === 'live') { liveVald; moment; tema; cfg; schedulePreview() }
 
   async function publiceraStory() {
-    livePub = { kor: true, klar: false, publicerad: false, fel: '', url: '' }
-    const r = await publiceraLiveStory(storyConfig())
+    livePub = { kor: true, klar: false, publicerad: false, fel: '', url: '', path: '' }
+    const r = await publiceraLiveStory({ ...storyConfig(), test: $testMode })
     livePub = { kor: false, klar: !!r?.ok, publicerad: !!r?.publicerad,
-      fel: r?.fel || (r?.ok ? '' : 'Fel vid publicering.'), url: r?.url || '' }
+      fel: r?.fel || (r?.ok ? '' : 'Fel vid publicering.'), url: r?.url || '', path: r?.path || '' }
     if (r?.ok && r?.publicerad) {
-      await upsertMaterial(_liveMat('publicerad'))
+      await upsertMaterial(_liveMat('publicerad', livePub.path))
       setTimeout(() => (livePub = { ...livePub, klar: false }), 4200)
     }
   }
@@ -199,6 +201,7 @@
   let someLage = 'idle'         // idle | dry | progress | done | delfel | fel
   let someResultat = []         // [{kanal, form, del, av, status, url, fel?}]
   let someFel = ''
+  let someTestPath = ''         // testläge: gemensam mapp för senaste paket-körningen
 
   // Delplaner härleds live per bana — samma LÅSTA regler som backend.
   const _strippaFb = (t) => (t || '').replace(/[#@][\wåäöÅÄÖ]+/g, '').replace(/[ \t]{2,}/g, ' ')
@@ -255,7 +258,7 @@
   function someTestkor() { if (someHarBilder) { someLage = 'dry'; someResultat = [] } }
   async function somePublicera() {
     if (!someHarBilder || someLage === 'progress') return
-    someLage = 'progress'; someResultat = []; someFel = ''
+    someLage = 'progress'; someResultat = []; someFel = ''; someTestPath = ''
     // Ett paket, olika bildset per kanal → ett brygganrop per aktiv bana
     // (kontraktet {bilder, caption, mal} är stabilt; mal = enbart banans kanal).
     const korningar = [
@@ -263,11 +266,16 @@
       { nyckel: 'ig', mal: { story: false, ig_inlagg: true, fb: false } },
       { nyckel: 'fb', mal: { story: false, ig_inlagg: false, fb: true } },
     ].filter((k) => banor[k.nyckel].pa && banor[k.nyckel].bilder.length)
+    // Testläge: EN gemensam mapp för hela paket-körningen (delas av alla
+    // kanal-anropen nedan) i stället för en per kanal.
+    let testMapp = ''
+    if ($testMode) { const r = await nyTestPaketMapp(); testMapp = r?.path || '' }
     let fel = 0
     const chResults = {}
     for (const k of korningar) {
       const r = await publiceraTillSoMe({ bilder: banor[k.nyckel].bilder,
-        caption: someCaptionResolved, mal: k.mal, match_id: match?.id })
+        caption: someCaptionResolved, mal: k.mal, match_id: match?.id,
+        ...($testMode ? { test: true, test_mapp: testMapp } : {}) })
       chResults[k.nyckel] = r?.ok ? 'ok' : 'fail'
       if (r?.ok) {
         someResultat = [...someResultat, ...(r.resultat || [])]
@@ -280,12 +288,13 @@
       }
     }
     someLage = fel === 0 ? 'done' : (fel === korningar.length ? 'fel' : 'delfel')
+    someTestPath = $testMode ? testMapp : ''
     // Sparas ALLTID (inte bara vid full framgång) — en delvis publicering ska
     // synas i Sparade material med rätt kanalresultat och gå att försöka igen.
     const status = fel === 0 ? 'publicerad' : 'delvis'
     const felKanaler = korningar.filter((k) => chResults[k.nyckel] !== 'ok').map((k) => CHLABEL[k.nyckel])
     const historik_note = fel === 0 ? '' : `${felKanaler.join(', ')} föll`
-    await upsertMaterial({ ..._someMat(status), ch_results: chResults, historik_note })
+    await upsertMaterial({ ..._someMat(status, someTestPath), ch_results: chResults, historik_note })
   }
   const someReset = () => { someLage = 'idle'; someResultat = []; someFel = '' }
 
@@ -324,15 +333,31 @@
   async function laddaMaterial() { materials = await listaMaterial(); dispatch('materialAndrat') }
   // dropbox/foto och banor sparas med utkastet — annars återställer "Fortsätt"
   // bara moment/tema/caption och förhandsvisningen står tom (bildvalet borta).
-  const _liveMat = (status) => ({ kind: 'live', status, match_id: match?.id || null,
+  // path anges bara när ett riktigt (test-)flöde faktiskt skrev en fil —
+  // aldrig vid "Spara utkast" (ingen rendering sker då, varken skarpt eller i
+  // testläge — att visa en sökväg där vore att hitta på en fil som inte finns).
+  const _liveMat = (status, path) => ({ kind: 'live', status, match_id: match?.id || null,
     match_namn: fixtur, moment, tema, dropbox: liveDropbox,
-    foto: liveVald !== null ? liveBilder[liveVald] : null })
-  const _someMat = (status) => ({ kind: 'some', status, match_id: match?.id || null,
+    foto: liveVald !== null ? liveBilder[liveVald] : null,
+    ...(path ? { path } : {}) })
+  const _someMat = (status, path) => ({ kind: 'some', status, match_id: match?.id || null,
     match_namn: fixtur, channels: Object.keys(banor).filter((k) => banor[k].pa), caption: someCaptionResolved,
     banor: { story: { mapp: banor.story.mapp, bilder: banor.story.bilder },
       ig: { mapp: banor.ig.mapp, bilder: banor.ig.bilder },
-      fb: { mapp: banor.fb.mapp, bilder: banor.fb.bilder } } })
+      fb: { mapp: banor.fb.mapp, bilder: banor.fb.bilder } },
+    ...(path ? { path } : {}) })
+  // Testläge: material skapas/uppdateras ENDAST i minnet (lib/testlage.js),
+  // aldrig via sparaMaterial → publicera_material-tabellen (kontraktet: allt
+  // testmaterial exkluderas ur persistens och försvinner vid omstart).
   async function upsertMaterial(data) {
+    if ($testMode) {
+      if (editMatId && $testMaterial.some((m) => m.id === editMatId)) {
+        uppdateraTestMaterial(editMatId, data)
+      } else {
+        editMatId = nyttTestMaterial(data).id
+      }
+      return
+    }
     const r = await sparaMaterial({ ...data, id: editMatId || undefined })
     if (r?.ok) editMatId = r.id
     await laddaMaterial()
@@ -348,7 +373,7 @@
     setTimeout(() => (someDraftFlash = false), 1800)
   }
   async function openMaterial(id) {
-    const m = materials.find((x) => x.id === id)
+    const m = [...materials, ...$testMaterial].find((x) => x.id === id)
     if (!m) return
     editMatId = id
     if (m.kind === 'live') {
@@ -373,6 +398,11 @@
     }
   }
   async function deleteMaterial(id) {
+    if ($testMaterial.some((m) => m.id === id)) {
+      raderaTestMaterial(id)
+      if (editMatId === id) editMatId = null
+      return
+    }
     await raderaMaterial(id)
     if (editMatId === id) editMatId = null
     await laddaMaterial()
@@ -380,14 +410,19 @@
   const setMatFilter = (v) => (matFilter = v)
   const newMaterial = () => (editMatId = null)
 
-  $: matMatches = [...new Set(materials.map((m) => m.match_namn).filter(Boolean))]
-  $: matFiltered = materials.filter((m) => matFilter === 'alla' ? true
+  // Testmaterial (in-memory, se lib/testlage.js) slås ihop med de sparade
+  // (DB) materialen för listan/filtren/räkningarna — det är annars osynligt
+  // trots att det ligger kvar tills omstart (kontraktet, punkt 2).
+  $: allMaterial = [...materials, ...$testMaterial]
+    .slice().sort((a, b) => (b.uppdaterad || '').localeCompare(a.uppdaterad || ''))
+  $: matMatches = [...new Set(allMaterial.map((m) => m.match_namn).filter(Boolean))]
+  $: matFiltered = allMaterial.filter((m) => matFilter === 'alla' ? true
     : matFilter === 'utkast' ? m.status === 'utkast'
     : matFilter === 'publicerad' ? m.status === 'publicerad'
     : matFilter === 'delvis' ? m.status === 'delvis'
     : m.match_namn === matFilter)
   $: materialsV = matFiltered.map((m) => ({
-    id: m.id, isLive: m.kind === 'live',
+    id: m.id, isLive: m.kind === 'live', isTest: !!m.test, testPath: m.path || '',
     title: m.kind === 'live' ? `${m.moment || 'Story'}-story` : 'SoMe-paket',
     sub: m.match_namn || '—',
     meta: m.kind === 'live' ? `Live · tema ${m.tema || '—'}`
@@ -399,8 +434,8 @@
   $: matFilterChips = [['alla', 'Alla'], ['utkast', 'Utkast'], ['publicerad', 'Publicerade'], ['delvis', 'Delvis'],
     ...matMatches.map((mm) => [mm, mm.length > 24 ? mm.slice(0, 22) + '…' : mm])]
   $: materialsEmpty = materialsV.length === 0
-  $: draftCount = materials.filter((m) => m.status === 'utkast').length
-  $: delvisCount = materials.filter((m) => m.status === 'delvis').length
+  $: draftCount = allMaterial.filter((m) => m.status === 'utkast').length
+  $: delvisCount = allMaterial.filter((m) => m.status === 'delvis').length
   $: matEditing = editMatId != null
   $: matEdit = matEditing ? materials.find((m) => m.id === editMatId) : null
   $: matEditLabel = matEdit ? (matEdit.kind === 'live' ? `${matEdit.moment || 'Story'}-story` : 'SoMe-paket') : ''
@@ -561,9 +596,15 @@
         </div>
 
         <div class="korrad">
-          <span class="hint fl1">Publiceras som IG Story via SoMe API · filen sparas till Dropbox</span>
+          <span class="hint fl1" class:testhint={$testMode}>
+            {$testMode ? 'Testläge — ingen riktig publicering · exempelfil skrivs till disk'
+              : 'Publiceras som IG Story via SoMe API · filen sparas till Dropbox'}
+          </span>
           {#if liveDraftFlash}<span class="ok">✓ Sparat</span>{/if}
-          {#if livePub.klar && livePub.publicerad}<span class="ok">✓ Publicerad &amp; sparad{#if livePub.url}&nbsp;<a class="oppna" href={livePub.url} target="_blank" rel="noreferrer">öppna ›</a>{/if}</span>{/if}
+          {#if livePub.klar && livePub.publicerad}
+            <span class="ok">✓ Publicerad &amp; sparad{#if livePub.url}&nbsp;<a class="oppna" href={livePub.url} target="_blank" rel="noreferrer">öppna ›</a>{/if}</span>
+            {#if $testMode && livePub.path}<span class="testpath">{livePub.path}</span>{/if}
+          {/if}
           <button class="sek" on:click={saveLiveDraft} disabled={liveVald === null}>Spara utkast</button>
           <button class="prim" on:click={publiceraStory} disabled={livePub.kor || liveVald === null}>{livePub.kor ? 'Publicerar…' : 'Publicera story ›'}</button>
         </div>
@@ -665,6 +706,13 @@
               {:else}<span class="felc">!</span><span>Delvis klart — {someResultat.filter((p) => p.status === 'postad').length} av {someResultat.length} gick fram</span>{/if}
               <button class="lank rst" on:click={someReset}>Nytt paket</button>
             </div>
+            {#if $testMode && someTestPath}
+              <div class="testrow">
+                <span class="testbadge">TEST</span>
+                <span>inget postades på riktigt · exempelfiler:</span>
+                <span class="testpath">{someTestPath}</span>
+              </div>
+            {/if}
             {#each someResultat as p}
               <div class="donerad">
                 {#if p.status === 'postad'}<span class="okc">✓</span>{:else}<span class="felc">✗</span>{/if}
@@ -714,7 +762,7 @@
     <div class="matsek">
       <div class="mathuvud">
         <div class="matrubrik"><span class="caps">Sparade material</span>
-          <span class="hint">{materials.length} totalt · {draftCount} utkast{delvisCount ? ` · ${delvisCount} delvis` : ''}</span></div>
+          <span class="hint">{allMaterial.length} totalt · {draftCount} utkast{delvisCount ? ` · ${delvisCount} delvis` : ''}</span></div>
         {#if matEditing}
           <div class="matbanner">
             <span>Redigerar: {matEditLabel}</span>
@@ -745,6 +793,7 @@
                   <span class="matstatus" class:pa={mt.status === 'publicerad'} class:delvis={mt.status === 'delvis'}>
                     {mt.status === 'utkast' ? 'Utkast' : mt.status === 'delvis' ? 'Delvis publicerad' : 'Publicerad'}
                   </span>
+                  {#if mt.isTest}<span class="testbadge">TEST</span>{/if}
                   {#if mt.history.length > 1}
                     <button class="histchip" on:click={() => toggleHistory(mt.id)}>
                       {mt.history.length} publiceringar {historyOpen[mt.id] ? '▴' : '▾'}
@@ -752,6 +801,7 @@
                   {/if}
                 </div>
                 <div class="matsub">{mt.sub} · {mt.meta}</div>
+                {#if mt.isTest && mt.testPath}<div class="testpathrow">{mt.testPath}</div>{/if}
 
                 {#if mt.status === 'delvis'}
                   <div class="chrad">
@@ -1013,6 +1063,18 @@
   .retrybtn:hover:not(:disabled) { background: rgba(176,72,58,.1); }
   .retrybtn:disabled { opacity: 0.6; }
   .retryflash { margin-top: 8px; font-size: 11.5px; font-weight: 600; color: var(--ok); }
+
+  /* Testläge — amber (samma ton som befintlig "Utkast"/varnings-amber, var(--varn)) */
+  .testhint { color: var(--varn); font-weight: 600; }
+  .testpath { font-family: var(--mono, ui-monospace, monospace); font-size: 10.5px; color: var(--varn);
+    max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .testrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid var(--div3); font-size: 11.5px; color: var(--varn); }
+  .testbadge { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 6px; flex: none; color: var(--varn);
+    border: 1px solid color-mix(in srgb, var(--varn) 55%, transparent); }
+  .testpathrow { font-family: var(--mono, ui-monospace, monospace); font-size: 10.5px; color: var(--varn);
+    margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Historik-tidslinje */
   .histline { margin-top: 9px; padding-left: 10px; border-left: 2px solid var(--div3);

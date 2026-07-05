@@ -3,6 +3,7 @@
   import { forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall, listaMatcher, hamtaMatch, genereraBildsvep, valjMapp, valjFil, thumbForBild, urvalHojdpunkter, slugga, sportprofiler } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import BildvaljareFokuspunkt from '../lib/BildvaljareFokuspunkt.svelte'
+  import { testMode } from '../lib/testlage.js'
 
   // Fyra färgkodade typer (DATAMODELL.md). Porträtt är en Event-kategori,
   // inte en egen typ. match = "Sport" utåt; sajtens collection heter matcher.
@@ -42,9 +43,11 @@
   let md = ''
   let exportDirs = { match: '', event: '', landskap: '', blogg: '' }
   let sparad = false
+  let sparadPath = ''
   let synkar = false
   let synkFel = ''
   let synkad = false
+  let synkadPath = ''
   let publiceradId = ''
   let statusInfo = null
   let statusLaddar = false
@@ -191,12 +194,15 @@
     if (r?.ok) { cms.svep = r.bildsvep; forhandsgranska() }
   }
   async function spara() {
-    if (!exportDirs[ctyp]) {
+    // Testläge: skriver till test-output/content/ i stället — kräver ingen
+    // export-katalog, så prompten för att välja en hoppas helt över.
+    if (!$testMode && !exportDirs[ctyp]) {
       const r = await valjMapp(`Välj content/${typinfo.mapp}-katalog`)
       if (r.ok) exportDirs[ctyp] = r.path; else return
     }
-    const r = await exporteraInnehall(data(), exportDirs[ctyp])
+    const r = await exporteraInnehall(data(), exportDirs[ctyp], $testMode)
     sparad = !!r?.ok
+    sparadPath = r?.path || ''
     if (sparad) setTimeout(() => (sparad = false), 2600)
   }
 
@@ -204,9 +210,10 @@
     synkar = true
     synkFel = ''
     statusInfo = null
-    const r = await publiceraInnehallNatet(data())
+    const r = await publiceraInnehallNatet(data(), $testMode)
     synkar = false
     synkad = !!r?.ok
+    synkadPath = r?.path || ''
     if (synkad) { publiceradId = r.id; setTimeout(() => (synkad = false), 2600) }
     else synkFel = r?.fel || 'Kunde inte publicera — kontrollera anslutningen.'
   }
@@ -430,9 +437,15 @@
     <pre>{md}</pre>
     <div class="mdfot">
       <button class="prim" on:click={spara}>Spara .md-fil</button>
-      {#if sparad}<span class="ok">✓ Sparad till content/{typinfo.mapp}/</span>{/if}
+      {#if sparad}
+        {#if $testMode}<span class="ok testhint">✓ Test — exempelfil: <span class="testpath">{sparadPath}</span> · rensas vid omstart</span>
+        {:else}<span class="ok">✓ Sparad till content/{typinfo.mapp}/</span>{/if}
+      {/if}
       <button class="prim" on:click={publicera} disabled={synkar}>{synkar ? 'Publicerar…' : 'Publicera till hemsidan'}</button>
-      {#if synkad}<span class="ok">✓ Publicerad</span>{/if}
+      {#if synkad}
+        {#if $testMode}<span class="ok testhint">✓ Test — exempelfil: <span class="testpath">{synkadPath}</span> · rensas vid omstart</span>
+        {:else}<span class="ok">✓ Publicerad</span>{/if}
+      {/if}
       {#if synkFel}<span class="synkfel">{synkFel}</span>{/if}
       {#if publiceradId}
         <button class="statusbtn" on:click={kollaStatus} disabled={statusLaddar}>{statusLaddar ? 'Kollar…' : 'Kolla status'}</button>
@@ -552,6 +565,8 @@
   .prim { background: var(--acc); color: #fff; border: 0; border-radius: 7px; padding: 9px 16px; font-size: 13px; font-weight: 600; flex: none; }
   .prim:disabled { opacity: 0.5; }
   .ok { font-size: 12.5px; color: var(--ok); font-weight: 600; }
+  .testhint { color: var(--varn); }
+  .testpath { font-family: var(--mono, ui-monospace, monospace); font-size: 11.5px; }
   .synkfel { font-size: 12.5px; color: #C0453E; font-weight: 600; }
   .statusbtn { border: 1px solid var(--div); background: var(--panel); border-radius: 7px;
     padding: 8px 14px; font-size: 12.5px; font-weight: 600; color: var(--t-head); flex: none; }

@@ -12,6 +12,7 @@
   import Logg from './panels/Logg.svelte'
   import Installningar from './panels/Installningar.svelte'
   import { erMock, aktivMatch, aktivtUrval, listaMaterial } from './lib/api.js'
+  import { testMode } from './lib/testlage.js'
 
   const ARMOCK = erMock()
 
@@ -70,8 +71,22 @@
         </span>
       </button>
       {#if ARMOCK}<span class="mock">mock</span>{/if}
+      <button class="testswitch" class:on={$testMode} on:click={() => ($testMode = !$testMode)}
+        title="Testläge — inget sparas eller postas på riktigt">
+        <span class="tsw-track"><span class="tsw-knob"></span></span>
+        <span class="tsw-label">Testläge</span>
+      </button>
       <button class="tema" on:click={vaxlaTema} title="Växla tema">{tema === 'light' ? '☾' : '☀'}</button>
     </div>
+
+    {#if $testMode}
+      <div class="testbanner">
+        <span class="testtag">TESTLÄGE</span>
+        <span>Allt skapas i minnet · exempelfiler skrivs till</span>
+        <span class="testpath mono">~/DPT/test-output/</span>
+        <span>· inget sparas — rensas vid omstart</span>
+      </div>
+    {/if}
 
     {#if aktiv === 'fotojobb'}
       <Fotojobb on:navigera={(e) => (aktiv = e.detail)} />
@@ -122,4 +137,26 @@
   .tema { width: 40px; height: 40px; border: 1px solid var(--div); border-radius: 20px;
     background: var(--kort); color: var(--t-head); font-size: 15px; flex: none; }
   .tema:hover { background: var(--div3); }
+
+  .testswitch { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 14px;
+    background: var(--kort); border: 1px solid var(--div); border-radius: 20px;
+    font-size: 12.5px; font-weight: 600; color: var(--t-mut); flex: none; }
+  .testswitch.on { background: color-mix(in srgb, var(--varn) 13%, transparent);
+    border-color: color-mix(in srgb, var(--varn) 55%, transparent); color: var(--varn); }
+  .tsw-track { width: 30px; height: 17px; border-radius: 999px; background: var(--div3);
+    border: 1px solid var(--div); position: relative; flex: none; transition: background .15s, border-color .15s; }
+  .testswitch.on .tsw-track { background: var(--varn); border-color: var(--varn); }
+  .tsw-knob { position: absolute; top: 1px; left: 1px; width: 13px; height: 13px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: left .15s; }
+  .testswitch.on .tsw-knob { left: 14px; }
+
+  .testbanner { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; flex: none;
+    padding: 7px 22px; font-size: 11.5px; font-weight: 600; color: var(--varn);
+    background: color-mix(in srgb, var(--varn) 10%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--varn) 30%, transparent); }
+  .testbanner .testtag { font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+    border: 1px solid color-mix(in srgb, var(--varn) 55%, transparent); padding: 1px 7px; border-radius: 5px; }
+  .testbanner .testpath { font-family: var(--mono, ui-monospace, monospace); font-size: 11px;
+    background: color-mix(in srgb, var(--varn) 14%, transparent); padding: 1px 7px; border-radius: 5px; }
+  .testbanner .mono { font-family: var(--mono, ui-monospace, monospace); }
 </style>
