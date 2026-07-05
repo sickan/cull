@@ -487,6 +487,7 @@ function mockMd(data) {
     if (data[k]) fm.push(`${k}: "${data[k]}"`)
   }
   if (data.hero) fm.push(`hero: ${data.hero}`)
+  if (data.heroPosition) fm.push(`heroPosition: "${data.heroPosition}"`)
   if (data.pixieset) fm.push(`pixieset: ${data.pixieset}`)
   const mal = (typeof data.malskyttar === 'string'
     ? data.malskyttar.split(',').map((s) => s.trim()).filter(Boolean)
@@ -546,6 +547,14 @@ export async function raderaInnehall(id) {
   const api = brygga()
   if (api) return api.radera_innehall(id)
   return wait({ ok: true })
+}
+
+// Publicerar direkt till hemsidan via content-sync-workern (skilt från
+// exporteraInnehall, som bara skriver en lokal .md-fil).
+export async function publiceraInnehallNatet(data) {
+  const api = brygga()
+  if (api) return api.publicera_innehall_natet(data)
+  return wait({ ok: true, id: data.id || 'i_ny' })
 }
 
 // Modeller (din smak / arkiv / hybrid — modell-växlaren). Muteras lokalt i mock.
@@ -638,6 +647,27 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
   const api = brygga()
   if (api) return api.valj_fil(titel, filter)
   return wait(_promptPath(titel))
+}
+
+// Miniatyr (base64 data-URI) för en vald hero-bild — raw extraheras, jpg
+// öppnas direkt (samma logik som dpt v1:s "Visa urval"-miniatyrer).
+export async function thumbForBild(path) {
+  const api = brygga()
+  if (api) return api.thumb_for_bild(path)
+  const filnamn = (path || '').split('/').pop() || ''
+  return wait({ ok: true, filnamn,
+    data_uri: 'data:image/svg+xml;base64,' + btoa(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360">
+        <rect width="100%" height="100%" fill="#cbb896"/>
+        <text x="50%" y="50%" font-size="20" text-anchor="middle" fill="#5c4a2c">${filnamn}</text>
+      </svg>`) })
+}
+
+// Live-status (senaste Cloudflare Pages-deploy) för en publicerad innehållsrad.
+export async function statusInnehall(typ, id) {
+  const api = brygga()
+  if (api) return api.status_innehall(typ, id)
+  return wait({ id, publicerad: true, deploy: { status: 'success', skapad: new Date().toISOString(), url: null } })
 }
 
 // ── Publicera → Live (snabb story) ───────────────────────────────────────────

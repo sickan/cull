@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte'
-  import { forhandsgranskaInnehall, exporteraInnehall, listaMatcher, genereraBildsvep, valjMapp, urvalHojdpunkter, slugga } from '../lib/api.js'
+  import { forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall, listaMatcher, genereraBildsvep, valjMapp, urvalHojdpunkter, slugga } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
+  import BildvaljareFokuspunkt from '../lib/BildvaljareFokuspunkt.svelte'
 
   // Fyra färgkodade typer (DATAMODELL.md). Porträtt är en Event-kategori,
   // inte en egen typ. match = "Sport" utåt; sajtens collection heter matcher.
@@ -20,7 +21,8 @@
   let pick = ''
   let auto = true
   let cms = { status: 'kommande', hem: '', borta: '', resultat: '', halvtid: '',
-    datum: '', serie: '', arena: '', galleri: '', malskyttar: '', svep: '', figurer: [] }
+    datum: '', serie: '', arena: '', galleri: '', malskyttar: '', svep: '', figurer: [],
+    hero: '', heroPosition: 'center center' }
   let cmsEvent = { kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '',
     galleri: '', ingress: '', figurer: [] }
   let cmsLandskap = { titel: '', plats: '', period: '', ingress: '', figurer: [] }
@@ -29,6 +31,12 @@
   let md = ''
   let exportDirs = { match: '', event: '', landskap: '', blogg: '' }
   let sparad = false
+  let synkar = false
+  let synkFel = ''
+  let synkad = false
+  let publiceradId = ''
+  let statusInfo = null
+  let statusLaddar = false
   let genKor = false
   let hlKalla = ''       // källetikett för hämtade höjdpunkter (urval/match)
   let hlFlash = false
@@ -83,9 +91,11 @@
 
   function data() {
     if (ctyp === 'match') return { typ: 'match', titel: `${cms.hem} – ${cms.borta}`,
+      hem: cms.hem, borta: cms.borta, serie: cms.serie,
       status: cms.status, datum: cms.datum, resultat: cms.resultat, halvtid: cms.halvtid,
-      liga: cms.serie, arena: cms.arena, malskyttar: cms.malskyttar,
-      pixieset: cms.galleri, body: cms.svep, figurer: cms.figurer }
+      arena: cms.arena, malskyttar: cms.malskyttar,
+      pixieset: cms.galleri, body: cms.svep, figurer: cms.figurer,
+      hero: cms.hero, heroPosition: cms.heroPosition }
     if (ctyp === 'event') return { typ: 'event', ...cmsEvent }
     if (ctyp === 'landskap') return { typ: 'landskap', ...cmsLandskap }
     return { typ: 'blogg', ...cmsBlogg }
@@ -133,6 +143,32 @@
     sparad = !!r?.ok
     if (sparad) setTimeout(() => (sparad = false), 2600)
   }
+
+  async function publicera() {
+    synkar = true
+    synkFel = ''
+    statusInfo = null
+    const r = await publiceraInnehallNatet(data())
+    synkar = false
+    synkad = !!r?.ok
+    if (synkad) { publiceradId = r.id; setTimeout(() => (synkad = false), 2600) }
+    else synkFel = r?.fel || 'Kunde inte publicera — kontrollera anslutningen.'
+  }
+
+  async function kollaStatus() {
+    if (!publiceradId) return
+    statusLaddar = true
+    statusInfo = await statusInnehall(ctyp, publiceradId)
+    statusLaddar = false
+  }
+
+  const DEPLOY_ETI = { success: 'Live', building: 'Bygger…', queued: 'Köad', failure: 'Fel', canceled: 'Avbruten' }
+  $: deployText = statusInfo?.deploy
+    ? (DEPLOY_ETI[statusInfo.deploy.status] || statusInfo.deploy.status)
+      + (statusInfo.deploy.status === 'success' && statusInfo.deploy.skapad
+          ? ' sedan ' + new Date(statusInfo.deploy.skapad).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
+          : '')
+    : statusInfo ? 'Ingen deploy-status tillgänglig (CF-nycklar ej satta i workern)' : ''
 </script>
 
 <div class="panel">
@@ -186,6 +222,10 @@
       <div class="f mt"><label>Arena</label><input bind:value={cms.arena} on:change={forhandsgranska} /></div>
       <div class="f mt"><label>Galleri-URL (Pixieset)</label><input class="mono" bind:value={cms.galleri} on:change={forhandsgranska} /></div>
       <div class="f mt"><label>Målskyttar</label><input bind:value={cms.malskyttar} on:change={forhandsgranska} /></div>
+      <div class="f mt">
+        <label>Hero-bild &amp; fokuspunkt</label>
+        <BildvaljareFokuspunkt bind:hero={cms.hero} bind:heroPosition={cms.heroPosition} on:change={forhandsgranska} />
+      </div>
     </div>
   {:else if ctyp === 'event'}
     <div class="kort">
@@ -305,6 +345,13 @@
     <div class="mdfot">
       <button class="prim" on:click={spara}>Spara .md-fil</button>
       {#if sparad}<span class="ok">✓ Sparad till content/{typinfo.mapp}/</span>{/if}
+      <button class="prim" on:click={publicera} disabled={synkar}>{synkar ? 'Publicerar…' : 'Publicera till hemsidan'}</button>
+      {#if synkad}<span class="ok">✓ Publicerad</span>{/if}
+      {#if synkFel}<span class="synkfel">{synkFel}</span>{/if}
+      {#if publiceradId}
+        <button class="statusbtn" on:click={kollaStatus} disabled={statusLaddar}>{statusLaddar ? 'Kollar…' : 'Kolla status'}</button>
+        {#if deployText}<span class="deploystatus">{deployText}</span>{/if}
+      {/if}
     </div>
   </div>
 </div>
@@ -405,4 +452,9 @@
   .prim { background: var(--acc); color: #fff; border: 0; border-radius: 7px; padding: 9px 16px; font-size: 13px; font-weight: 600; flex: none; }
   .prim:disabled { opacity: 0.5; }
   .ok { font-size: 12.5px; color: var(--ok); font-weight: 600; }
+  .synkfel { font-size: 12.5px; color: #C0453E; font-weight: 600; }
+  .statusbtn { border: 1px solid var(--div); background: var(--panel); border-radius: 7px;
+    padding: 8px 14px; font-size: 12.5px; font-weight: 600; color: var(--t-head); flex: none; }
+  .statusbtn:disabled { opacity: 0.5; }
+  .deploystatus { font-size: 12.5px; color: var(--t-mut); font-weight: 600; }
 </style>

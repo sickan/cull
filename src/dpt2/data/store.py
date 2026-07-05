@@ -193,6 +193,15 @@ def satt_export_path(conn, innehall_id, export_path, *, publicerad=True):
     conn.commit()
 
 
+def satt_synkad(conn, innehall_id, synkad_tid):
+    """Märker ett innehåll som publicerat till content-sync-workern (nätet) —
+    skilt från publicerad/export_path ovan, som bara gäller den lokala .md-
+    exporten."""
+    conn.execute("UPDATE innehall SET synkad_tid=? WHERE id=?",
+                 (synkad_tid, innehall_id))
+    conn.commit()
+
+
 def radera_innehall(conn, innehall_id):
     conn.execute("DELETE FROM innehall WHERE id=?", (innehall_id,))
     conn.commit()

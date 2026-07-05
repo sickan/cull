@@ -281,7 +281,8 @@ CREATE TABLE innehall (
   frontmatter TEXT,                      -- json
   body        TEXT,
   export_path TEXT,                      -- skriven .md i sajt-repot
-  publicerad  INTEGER NOT NULL DEFAULT 0,
+  publicerad  INTEGER NOT NULL DEFAULT 0, -- lokal .md skriven (export_path satt)
+  synkad_tid  TEXT,                      -- senast publicerad till content-sync (nätet) — skilt från publicerad ovan
   skapad      TEXT
 );
 

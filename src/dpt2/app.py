@@ -12,13 +12,16 @@ Saknas dist/ faller den tillbaka på Vite-dev-servern (localhost:5173).
 from pathlib import Path
 
 import json
+import os
 import re
+from datetime import datetime
 
 from dpt2.data import db, store
 from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
                            publicera_korning, publicera_some, meta_api,
                            bildhosting, story_korning)
 from dpt2.tjanster.kalender import Kalender
+from dpt2.tjanster.innehall_synk import InnehallSynk
 from dpt2.publicering import astro_export as AX
 
 UI_DIR = Path(__file__).parent / "ui"
@@ -40,6 +43,7 @@ class Api:
         self.conn = db.oppna(self.db_path, check_same_thread=False)
         self._logg = []      # buffrade worker-events (Logg-panelen)
         self.kalender = Kalender()   # klient mot deployade Calendar Sync-tjänsten
+        self.innehall_synk = InnehallSynk()   # klient mot deployade Content Sync-tjänsten
 
     # ── Matcher ──────────────────────────────────────────────────────────────
     def lista_matcher(self):
@@ -710,6 +714,48 @@ class Api:
         store.radera_innehall(self.conn, id)
         return {"ok": True}
 
+    def publicera_innehall_natet(self, data):
+        """Sparar innehållet lokalt (som spara_innehall) och publicerar det
+        sedan till content-sync-workern — skilt från exportera_innehall, som
+        bara skriver en lokal .md-fil. Kräver ingen export-katalog."""
+        data = data or {}
+        typ = data.get("typ", "match")
+        fm, body, slug, _md = _innehall_md(data)
+        iid = store.spara_innehall(
+            self.conn, typ=typ, match_id=data.get("match_id") or None,
+            status=fm.get("status"), frontmatter=fm, body=body,
+            id=data.get("id") or None)
+        r = self.innehall_synk.publicera(
+            typ, iid, slug=slug, frontmatter=fm, body=body,
+            match_id=data.get("match_id") or None)
+        if r.get("ok"):
+            store.satt_synkad(self.conn, iid, datetime.now().isoformat(timespec="seconds"))
+        return {"ok": r.get("ok", False), "id": iid, "fel": r.get("fel")}
+
+    def thumb_for_bild(self, path):
+        """Miniatyr (base64 data-URI) för en vald hero-bild — raw extraheras
+        via exiftool, jpg öppnas direkt. Återanvänder dpt v1:s
+        gui_web._thumb_for (samma logik som "Visa urval"-miniatyrerna)."""
+        if not path:
+            return {"ok": False, "fel": "Ingen fil angiven."}
+        p = Path(path)
+        if not p.exists():
+            return {"ok": False, "fel": "Filen hittades inte."}
+        from dpt.gui_web import _thumb_for
+        env = os.environ.copy()
+        for extra in ("/opt/homebrew/bin", "/usr/local/bin"):
+            if extra not in env.get("PATH", "").split(os.pathsep):
+                env["PATH"] = extra + os.pathsep + env.get("PATH", "")
+        uri = _thumb_for(p, env, maxsize=(480, 360))
+        if not uri:
+            return {"ok": False, "fel": "Kunde inte skapa miniatyr."}
+        return {"ok": True, "data_uri": uri, "filnamn": p.name}
+
+    def status_innehall(self, typ, id):
+        """Live-status för en publicerad innehållsrad (senaste deploy),
+        för "Kolla status" i Innehåll-panelen. None om anropet misslyckas."""
+        return self.innehall_synk.status(typ, id)
+
     # ── Träna (modell-bibliotek + träning i ML-workern) ──────────────────────
     def lista_modeller(self):
         return store.lista_modeller(self.conn)
@@ -872,11 +918,15 @@ def _innehall_md(data):
         malskyttar = data.get("malskyttar")
         if isinstance(malskyttar, str):
             malskyttar = [m.strip() for m in malskyttar.split(",") if m.strip()]
+        # hem/borta/serie är sajtens verkliga matcher-schema (obligatoriska
+        # fält) — titel/liga användes tidigare men matchar inte
+        # content.config.ts och skulle fälla Astro-bygget vid publicering.
         fm = {
             "typ": typ,
-            "titel": titel,
+            "hem": data.get("hem") or None,
+            "borta": data.get("borta") or None,
             "datum": data.get("datum") or None,
-            "liga": data.get("liga") or None,
+            "serie": data.get("serie") or None,
             "arena": data.get("arena") or None,
             "resultat": data.get("resultat") or None,
             "halvtid": data.get("halvtid") or None,

@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -225,6 +225,15 @@ def _migrera(conn, fran_version):
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_pubmathist_material "
             "ON publicera_material_historik(material_id, tid DESC);")
+    if fran_version < 12:
+        # v12: nätverkspublicering till content-sync-workern (Innehåll →
+        # hemsidan, skild från den lokala .md-exportens `publicerad`-flagga).
+        if not _har_kolumn(conn, "innehall", "synkad_tid"):
+            conn.execute("ALTER TABLE innehall ADD COLUMN synkad_tid TEXT")
+        # Legacy: 'portratt' var en egen typ innan Porträtt blev en
+        # Event-kategori (se CTYPER/EVENT_KAT i Innehall.svelte samma bytt
+        # som calendar-sync/migrations/0003_rename_portratt_to_event.sql).
+        conn.execute("UPDATE innehall SET typ = 'event' WHERE typ = 'portratt'")
 
 
 def _har_kolumn(conn, tabell, kolumn):
