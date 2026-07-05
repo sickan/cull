@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700&display=swap" rel="stylesheet">
+</helmet>
+<div title="{{ namn }}" style="width:{{ sizePx }};height:{{ sizePx }};border-radius:50%;background:{{ bg }};border:1px solid rgba(35,32,26,.14);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none;">
+  <sc-if value="{{ hasLogo }}" hint-placeholder-val="{{ false }}"><img src="{{ logga }}" alt="{{ namn }}" style="width:78%;height:78%;object-fit:contain;display:block;"></sc-if>
+  <sc-if value="{{ noLogo }}" hint-placeholder-val="{{ true }}"><span style="font-family:'Saira Condensed',sans-serif;font-weight:700;color:{{ fgColor }};font-size:{{ initSize }};letter-spacing:.02em;line-height:1;">{{ initialer }}</span></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;64px&quot;,&quot;height&quot;:&quot;64px&quot;},&quot;namn&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Malmö FF&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Lag&quot;},&quot;farg&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#2F7CB0&quot;,&quot;options&quot;:[&quot;#2F7CB0&quot;,&quot;#B0483A&quot;,&quot;#4E8A3E&quot;,&quot;#C9871F&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Lag&quot;},&quot;logga&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Lag&quot;},&quot;storlek&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:34,&quot;min&quot;:20,&quot;max&quot;:96,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Utseende&quot;}}">
+class Component extends DCLogic {
+  renderVals(){
+    const namn = this.props.namn ?? 'Malmö FF';
+    const farg = this.props.farg ?? '#2F7CB0';
+    const logga = this.props.logga ?? '';
+    const size = Number(this.props.storlek ?? 34) || 34;
+    const words = String(namn).trim().split(/\s+/).filter(Boolean);
+    let init = words.map(w => (w.length <= 3 && w === w.toUpperCase()) ? w : w[0]).join('');
+    if (words.length === 1) init = words[0].slice(0, 3);
+    init = init.slice(0, 4).toUpperCase();
+    const hasLogo = !!logga;
+    const lum = (hex) => { const h = String(hex).replace('#',''); if (h.length < 6) return 0; const r = parseInt(h.slice(0,2),16)/255, g = parseInt(h.slice(2,4),16)/255, b = parseInt(h.slice(4,6),16)/255; return .2126*r + .7152*g + .0722*b; };
+    return {
+      namn, logga, hasLogo, noLogo: !hasLogo,
+      sizePx: size + 'px',
+      bg: hasLogo ? '#FBF8F1' : farg,
+      fgColor: lum(farg) > 0.6 ? 'rgba(24,22,18,.9)' : '#fff',
+      initSize: Math.round(size * (init.length >= 4 ? 0.26 : 0.34)) + 'px',
+      initialer: init
+    };
+  }
+}
+</script>
+</body>
+</html>
