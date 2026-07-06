@@ -194,8 +194,21 @@ def spara_innehall(conn, *, typ, match_id=None, status=None, frontmatter=None,
                    body=None, export_path=None, publicerad=False, id=None,
                    skapad=None):
     """Skapar (eller ersätter) ett innehåll. frontmatter = dict (lagras som json).
-    Returnerar innehåll-id."""
-    iid = id or ny_id()
+    Returnerar innehåll-id.
+
+    Utan explicit id men MED match_id återanvänds den befintliga match-posten
+    (en match = ett match-innehåll) i stället för att skapa en ny rad varje
+    ompublicering. Annars fick content-sync-workern en ny rad per publicering
+    (den nycklar på id) → flera rader med samma slug → sajten kunde visa en
+    äldre version (t.ex. gammal hero-bild). Gäller bara typer med match_id."""
+    iid = id
+    if not iid and match_id:
+        rad = conn.execute(
+            "SELECT id FROM innehall WHERE typ=? AND match_id=? "
+            "ORDER BY skapad DESC LIMIT 1", (typ, match_id)).fetchone()
+        if rad:
+            iid = rad[0]
+    iid = iid or ny_id()
     conn.execute(
         "INSERT OR REPLACE INTO innehall"
         "(id,typ,match_id,status,frontmatter,body,export_path,publicerad,skapad) "

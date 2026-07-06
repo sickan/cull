@@ -502,6 +502,25 @@ class TestLagTavling(unittest.TestCase):
         self.assertEqual(len(store.lista_innehall(self.c)), 1)
         self.assertEqual(len(store.lista_innehall(self.c, typ="blogg")), 0)
 
+    def test_innehall_aterustar_matchpost_vid_ompublicering(self):
+        # En match = ett match-innehåll. Ompublicering utan explicit id ska
+        # UPPDATERA samma rad, inte skapa en dubblett (annars flera rader med
+        # samma slug i content-sync → sajten kan visa en äldre hero-bild).
+        self.c.execute("INSERT INTO matchen(id,skapad) VALUES('m1','2026-06-27')")
+        a = store.spara_innehall(self.c, typ="match", match_id="m1",
+                                 frontmatter={"titel": "A – B", "hero": "gammal.jpg"})
+        b = store.spara_innehall(self.c, typ="match", match_id="m1",
+                                 frontmatter={"titel": "A – B", "hero": "ny.jpg"})
+        self.assertEqual(a, b)                                    # samma id återanvänt
+        self.assertEqual(len(store.lista_innehall(self.c, typ="match")), 1)
+        self.assertEqual(store.hamta_innehall(self.c, b)["frontmatter"]["hero"], "ny.jpg")
+        # annan match → egen rad
+        self.c.execute("INSERT INTO matchen(id,skapad) VALUES('m2','2026-06-28')")
+        c = store.spara_innehall(self.c, typ="match", match_id="m2",
+                                 frontmatter={"titel": "C – D"})
+        self.assertNotEqual(a, c)
+        self.assertEqual(len(store.lista_innehall(self.c, typ="match")), 2)
+
     def test_innehall_export_path_och_radera(self):
         iid = store.spara_innehall(self.c, typ="event",
                                    frontmatter={"titel": "Cup"})
