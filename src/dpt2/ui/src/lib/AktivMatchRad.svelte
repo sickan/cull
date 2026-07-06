@@ -32,48 +32,54 @@
 </script>
 
 {#if !laddar}
-  <div class="amrad" class:tom={!match}>
-    {#if match}
+  {#if match}
+    <div class="amrad">
+      <span class="amcaps">Aktiv match</span>
       <span class="ambrickor">
         <span class="ambricka" style={brickStil(fargForLag(match.lag_hemma))}>{#if loggaForLag(match.lag_hemma)}<img src={bildUrl(loggaForLag(match.lag_hemma))} alt="" />{:else}{initialer(match.lag_hemma)}{/if}</span>
         <span class="ambricka away" style={brickStil(fargForLag(match.lag_borta))}>{#if loggaForLag(match.lag_borta)}<img src={bildUrl(loggaForLag(match.lag_borta))} alt="" />{:else}{initialer(match.lag_borta)}{/if}</span>
       </span>
       <div class="aminfo">
-        <div class="amkick">Aktiv match</div>
-        <div class="amfix scd">{match.lag_hemma} – {match.lag_borta}</div>
-        <div class="amsub">{[match.liga, datumTxt(match.datum), match.resultat].filter(Boolean).join(' · ')}</div>
+        <span class="amfix scd">{match.lag_hemma} – {match.lag_borta}</span>
+        <span class="amsub">{[match.liga, datumTxt(match.datum), match.resultat].filter(Boolean).join(' · ')}</span>
       </div>
       <div class="amknappar">
         {#if match.galleri}<a class="ampill" href={match.galleri} target="_blank" rel="noreferrer">Pixieset</a>{/if}
         {#if match.sida_url}<a class="ampill" href={match.sida_url} target="_blank" rel="noreferrer">På hemsidan</a>{/if}
         <button class="ampill prim" on:click={bytMatch}>Byt match</button>
       </div>
-    {:else}
-      <div class="aminfo">
-        <div class="amfix scd">Ingen aktiv match</div>
-        <div class="amsub">Välj match i Matcher så följer den med genom Gallra, Leverera och Publicera</div>
-      </div>
-      <button class="ampill prim" on:click={bytMatch}>Välj match i Matcher ›</button>
-    {/if}
-  </div>
+    </div>
+  {:else}
+    <div class="amtom">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--t-mut)" stroke-width="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+      <div class="amtomtxt">Ingen aktiv match — stegen fungerar ändå, men koppla en match för genvägar och auto-ifyllnad.</div>
+      <button class="amtombtn" on:click={bytMatch}>Välj match i Matcher ›</button>
+    </div>
+  {/if}
 {/if}
 
 <style>
-  .amrad { display: flex; align-items: center; gap: 14px; background: var(--kort); border: 1px solid var(--div);
-    border-left: 3px solid var(--hav); border-radius: var(--r); box-shadow: var(--skugga); padding: 12px 16px; margin-bottom: 16px; }
-  .amrad.tom { border-left-color: var(--div); }
+  .amrad { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--kort); border: 1px solid var(--div);
+    border-left: 3px solid var(--hav); border-radius: 10px; box-shadow: var(--skugga); padding: 6px 12px; margin-bottom: 12px; }
+  .amcaps { font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t-caps); flex: none; }
   .ambrickor { display: flex; align-items: center; flex: none; }
-  .ambricka { width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-    font-family: var(--font-c); font-size: 12px; font-weight: 700; border: 2px solid var(--kort); overflow: hidden; }
+  .ambricka { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--font-c); font-size: 9px; font-weight: 700; border: 2px solid var(--kort); overflow: hidden; }
   .ambricka img { width: 100%; height: 100%; object-fit: contain; }
-  .ambricka.away { margin-left: -10px; }
-  .aminfo { flex: 1; min-width: 0; }
-  .amkick { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-mut); }
-  .amfix { font-size: 16px; font-weight: 700; color: var(--t-head); }
-  .amsub { font-size: 12px; color: var(--t-mut); margin-top: 1px; }
-  .amknappar { display: flex; align-items: center; gap: 8px; flex: none; }
-  .ampill { display: inline-flex; align-items: center; padding: 7px 14px; border: 1px solid var(--div); border-radius: 999px;
-    background: var(--panel); color: var(--t-head); font-size: 12.5px; font-weight: 600; text-decoration: none; }
+  .ambricka.away { margin-left: -7px; }
+  .aminfo { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; overflow: hidden; }
+  .amfix { font-size: 13px; font-weight: 600; color: var(--t-head); flex: none; }
+  .amsub { font-size: 11px; color: var(--t-mut); overflow: hidden; text-overflow: ellipsis; }
+  .amknappar { display: flex; align-items: center; gap: 7px; flex: none; flex-wrap: wrap; }
+  .ampill { display: inline-flex; align-items: center; padding: 3px 9px; border: 1px solid var(--div); border-radius: 999px;
+    background: var(--panel); color: var(--t-mut); font-size: 11px; font-weight: 600; text-decoration: none; }
   .ampill:hover { border-color: var(--acc); color: var(--acc); }
-  .ampill.prim { color: var(--acc); border-color: var(--acc-border); background: var(--acc-soft); }
+  .ampill.prim { color: var(--acc); border-color: var(--acc-border); background: var(--kort); }
+
+  .amtom { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px dashed var(--div);
+    border-radius: 11px; padding: 10px 14px; margin-bottom: 12px; }
+  .amtom svg { flex: none; }
+  .amtomtxt { flex: 1; min-width: 0; font-size: 12.5px; color: var(--t-mut); }
+  .amtombtn { flex: none; background: var(--acc); color: var(--ink); border: none; border-radius: 7px;
+    padding: 6px 12px; font-size: 12px; font-weight: 600; }
 </style>
