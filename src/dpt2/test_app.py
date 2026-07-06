@@ -13,7 +13,7 @@ class TestApi(unittest.TestCase):
 
     def test_info(self):
         info = self.api.info()
-        self.assertEqual(info["schemaversion"], 13)
+        self.assertEqual(info["schemaversion"], 14)
 
     def test_match_round_trip_genom_bryggan(self):
         res = self.api.spara_match({
@@ -272,6 +272,16 @@ class TestApi(unittest.TestCase):
             self.skipTest("API-nyckel satt — skarp väg testas ej här")
         res = self.api.generera_bildsvep("Malmö FF–Växjö DFF 3–0", "fotboll")
         self.assertFalse(res["ok"])           # ingen nyckel → snäll fallback
+
+    def test_forhandsgranska_bildsvep_fraga_inget_natverksanrop(self):
+        # Ren strängbyggnad — ska funka oavsett API-nyckel/nätverk, för
+        # "godkänn prompten"-steget i UI:t.
+        res = self.api.forhandsgranska_bildsvep_fraga(
+            "Malmö FF–Kristianstads DFF 6-0",
+            {"resultat": "6-0", "arena": "Eleda Stadion", "liga": "OBOS Damallsvenskan"})
+        self.assertTrue(res["ok"])
+        self.assertIn("Resultat: 6-0", res["fraga"])
+        self.assertIn("Arena: Eleda Stadion", res["fraga"])
 
 
     def test_forhandsgranska_story_genom_bryggan(self):

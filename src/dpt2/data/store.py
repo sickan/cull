@@ -129,6 +129,27 @@ def urval_for_match(conn, match_id):
         "SELECT * FROM urval WHERE match_id=? ORDER BY skapad DESC", (match_id,))]
 
 
+def resolve_urval_bilder(conn, urval_id):
+    """Fullständiga sökvägar för ett urvals behållna bilder — urval_bild
+    lagrar bara stammen (grunden för poängsättning/rapporter), inte sökvägen
+    eller filändelsen, så den slås upp mot urvalets källmapp (urval.kalla).
+    Stammar utan träff i mappen hoppas (flyttad/borttagen fil). Backar
+    SoMe-bildbibliotekets "Publicera-urvalet"-källa."""
+    urval = hamta_urval(conn, urval_id)
+    if not urval or not urval.get("kalla"):
+        return []
+    from pathlib import Path
+    mapp = Path(urval["kalla"]).expanduser()
+    if not mapp.is_dir():
+        return []
+    bilder = []
+    for stem in behall_stems(conn, urval_id):
+        trafffar = sorted(mapp.glob(stem + ".*"))
+        if trafffar:
+            bilder.append(str(trafffar[0]))
+    return bilder
+
+
 def lista_urval(conn, *, status=None, limit=50):
     """Urval för Leverera-/översiktsvyer, nyast först. Joinar matchen för en
     etikett (lag_hemma/lag_borta). status filtrerar om satt."""
@@ -745,6 +766,18 @@ def spara_match(conn, match):
     return mid
 
 
+def satt_resultat(conn, match_id, resultat=None, mellan=None, malskyttar=None):
+    """Skriver bara resultat/mellan/malskyttar (resultat-remsan i Publicera/
+    Innehåll — kontinuerlig redigering, inte Slutsignalens engångsskrivning).
+    Ren UPDATE mot de tre kolumnerna, INTE spara_match: den senare kräver ett
+    fullständigt match-dict (lag/tävling-normalisering) och bygger om hela
+    match_trupp vid varje anrop — fel verktyg för en fältvis autospar-remsa."""
+    conn.execute(
+        "UPDATE matchen SET resultat=?, mellan=?, malskyttar=? WHERE id=?",
+        (resultat or None, mellan or None, malskyttar or None, match_id))
+    conn.commit()
+
+
 def hamta_match(conn, match_id):
     """Rekonstruerar en match som UI-dict med inline-spelare (lag=hemma/borta
     härleds ur spelarens lag_id mot matchens hemma/borta-lag)."""
@@ -936,4 +969,56 @@ def lista_publicera_material(conn):
 
 def radera_publicera_material(conn, material_id):
     conn.execute("DELETE FROM publicera_material WHERE id=?", (material_id,))
+    conn.commit()
+
+
+# ── Arbetsyta — autosparade utkast (Live/SoMe/Webb-Sport, per match) ─────────
+# Skilt från publicera_material/innehall ovan: det här är arbetsytans minne,
+# skrivet löpande (debounce ~500ms i UI:t), inte en post i Sparade material/
+# Innehålls-listan. Se design_handoff_live_some_webb/DATAMODELL-UTKAST-
+# RESULTAT.md §2. json-kolumnerna avkodas/kodas här så anroparna alltid
+# jobbar med dicts/listor, aldrig råa json-strängar.
+_UTKAST_JSON_KOL = {"some_targets", "some_lib", "live_cfg", "cms", "cms_own"}
+_UTKAST_KOL = ("some_caption", "some_targets", "some_lib", "live_moment",
+               "live_tema", "live_cfg", "live_dropbox", "live_vald",
+               "cms", "cms_own")
+
+
+def hamta_utkast(conn, match_id):
+    """Utkastet för en match, eller None om inget sparats än."""
+    r = conn.execute(
+        "SELECT * FROM arbetsyta_utkast WHERE match_id=?", (match_id,)).fetchone()
+    if not r:
+        return None
+    d = dict(r)
+    for kol in _UTKAST_JSON_KOL:
+        d[kol] = json.loads(d[kol]) if d.get(kol) else None
+    return d
+
+
+def spara_utkast(conn, match_id, **kolumner):
+    """Partiell upsert av utkastet — bara de kolumner som anges rörs (en
+    Live-sparning ska t.ex. inte nollställa Webb-fliktens `cms`-kolumn).
+    Okända nycklar i kolumner är ett programmeringsfel (fail fast)."""
+    okanda = set(kolumner) - set(_UTKAST_KOL)
+    if okanda:
+        raise ValueError(f"okända utkast-kolumner: {sorted(okanda)}")
+    if not kolumner:
+        return
+    rader = {k: (json.dumps(v, ensure_ascii=False) if k in _UTKAST_JSON_KOL and v is not None else v)
+             for k, v in kolumner.items()}
+    rader["uppdaterad"] = _nu()
+    finns = conn.execute(
+        "SELECT 1 FROM arbetsyta_utkast WHERE match_id=?", (match_id,)).fetchone()
+    if finns:
+        set_sql = ", ".join(f"{k}=?" for k in rader)
+        conn.execute(
+            f"UPDATE arbetsyta_utkast SET {set_sql} WHERE match_id=?",
+            (*rader.values(), match_id))
+    else:
+        kol_sql = ", ".join(rader)
+        plats_sql = ", ".join("?" for _ in rader)
+        conn.execute(
+            f"INSERT INTO arbetsyta_utkast(match_id, {kol_sql}) VALUES(?, {plats_sql})",
+            (match_id, *rader.values()))
     conn.commit()

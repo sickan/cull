@@ -7,10 +7,11 @@ filer — DB:n lagrar sökvägar, inte blobbar.
 """
 
 import sqlite3
+import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -22,13 +23,98 @@ def _schema_sql():
     return _SCHEMA_PATH.read_text(encoding="utf-8")
 
 
+class _SafeCursor:
+    """Tunt cursor-omslag — varje fetch serialiseras med samma lås som
+    skapade cursorn (se SafeConnection). Bara fetch/iteration omsluts;
+    raderna som kommer ut (sqlite3.Row) är oförändrade och trådsäkra att
+    läsa efteråt."""
+    __slots__ = ("_cur", "_lock")
+
+    def __init__(self, cur, lock):
+        object.__setattr__(self, "_cur", cur)
+        object.__setattr__(self, "_lock", lock)
+
+    def fetchall(self):
+        with self._lock:
+            return self._cur.fetchall()
+
+    def fetchone(self):
+        with self._lock:
+            return self._cur.fetchone()
+
+    def fetchmany(self, size=None):
+        with self._lock:
+            return self._cur.fetchmany() if size is None else self._cur.fetchmany(size)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        with self._lock:
+            row = self._cur.fetchone()
+        if row is None:
+            raise StopIteration
+        return row
+
+    def __getattr__(self, name):
+        return getattr(self._cur, name)
+
+
+class SafeConnection:
+    """Serialiserar allt bruk av en delad sqlite3.Connection med ett lås.
+
+    pywebviews JS-brygga kan anropa Api-metoder från flera trådar samtidigt
+    (self.conn öppnas med check_same_thread=False för att tillåta just det),
+    men en enda sqlite3.Connection är INTE trådsäker för samtidiga anrop från
+    flera trådar — check_same_thread=False stänger bara av Pythons EGEN
+    trådaffinitetskontroll, inte samtidighetssäkerheten i C-nivå-anropen.
+    Utan ett lås observerades intermittent `sqlite3.InterfaceError`/
+    `IndexError` OCH tystare fall där två samtidiga `hamta_match`-liknande
+    anrop läste ihopblandade rader (bekräftat: databasen på disk förblev
+    korrekt, bara det tillfälliga Python-objektet blandades ihop) — se
+    projektminnet för detaljer. Låset omsluter bara den faktiska DB-
+    operationen (execute/fetch/commit), ALDRIG en hel Api-metod — annars
+    skulle en långsam nätverksanrop (t.ex. Bildsvepets Claude-generering,
+    ~2 min) blockera alla andra paneler under tiden."""
+
+    def __init__(self, conn):
+        self._conn = conn
+        self._lock = threading.RLock()
+
+    def execute(self, *a, **kw):
+        with self._lock:
+            cur = self._conn.execute(*a, **kw)
+        return _SafeCursor(cur, self._lock)
+
+    def executemany(self, *a, **kw):
+        with self._lock:
+            cur = self._conn.executemany(*a, **kw)
+        return _SafeCursor(cur, self._lock)
+
+    def executescript(self, *a, **kw):
+        with self._lock:
+            return self._conn.executescript(*a, **kw)
+
+    def commit(self):
+        with self._lock:
+            return self._conn.commit()
+
+    def close(self):
+        with self._lock:
+            return self._conn.close()
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
 def oppna(path=DB_DEFAULT, *, init=True, check_same_thread=True):
     """Öppnar (och skapar) databasen. Sätter FK-tvång och Row-factory.
 
     path : sökväg till .db-filen (skapas inkl. föräldrakatalog vid behov).
     init : kör init_db automatiskt (default). Sätt False för en rå anslutning.
     check_same_thread : False när anslutningen delas mellan trådar (t.ex.
-        pywebview-bryggan som anropas från JS-tråden).
+        pywebview-bryggan som anropas från JS-tråden) — se SafeConnection för
+        varför det då MÅSTE serialiseras med ett lås.
     """
     path = Path(path)
     if path != Path(":memory:"):
@@ -36,6 +122,7 @@ def oppna(path=DB_DEFAULT, *, init=True, check_same_thread=True):
     conn = sqlite3.connect(str(path), check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn = SafeConnection(conn)
     if init:
         init_db(conn)
     return conn
@@ -334,6 +421,25 @@ def _migrera(conn, fran_version):
             if problem:
                 raise RuntimeError(
                     f"v13-migrering: FK-integritet trasig efter ombyggnad: {problem}")
+    if fran_version < 14:
+        # v14: arbetsyta_utkast — autosparat utkastinnehåll per match (Live/
+        # SoMe/Webb-Sport), skilt från publicera_material/innehall som bara
+        # skrivs på explicit Spara-klick (se DATAMODELL-UTKAST-RESULTAT.md).
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS arbetsyta_utkast (
+          match_id     TEXT PRIMARY KEY REFERENCES matchen(id) ON DELETE CASCADE,
+          some_caption TEXT,
+          some_targets TEXT,
+          some_lib     TEXT,
+          live_moment  TEXT,
+          live_tema    TEXT,
+          live_cfg     TEXT,
+          live_dropbox TEXT,
+          live_vald    TEXT,
+          cms          TEXT,
+          cms_own      TEXT,
+          uppdaterad   TEXT NOT NULL
+        );""")
 
 
 def _har_kolumn(conn, tabell, kolumn):

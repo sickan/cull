@@ -73,6 +73,46 @@ class TestGenerera(unittest.TestCase):
         kl = _Klient([_Svar("ingen json här")])
         self.assertIsNone(BS.generera("X–Y 1–0", logg=lambda *_: None, klient=kl))
 
+    def test_kanda_matchfakta_vavs_in_i_prompten(self):
+        # Regression: appen har redan resultat/mellan/malskyttar/arena/datum/
+        # liga lokalt (resultat-remsan/matchposten) — Claude ska INTE behöva
+        # websöka efter dem, de ska stå rakt i frågan.
+        kl = _Klient([_Svar(GILTIGT)])
+        BS.generera("Malmö FF–Kristianstads DFF 6–0", sport="fotboll",
+                    resultat="6-0", mellan="3-0",
+                    malskyttar="Ivanovic 10', Kanutte Fornes 50', 58'",
+                    arena="Eleda Stadion", datum="2026-06-27",
+                    liga="OBOS Damallsvenskan", logg=lambda *_: None, klient=kl)
+        prompt = kl._content_text()
+        self.assertIn("KÄNDA MATCHFAKTA", prompt)
+        self.assertIn("Resultat: 6-0", prompt)
+        self.assertIn("Halvtid/set: 3-0", prompt)
+        self.assertIn("Kanutte Fornes 50', 58'", prompt)
+        self.assertIn("Arena: Eleda Stadion", prompt)
+        self.assertIn("Liga: OBOS Damallsvenskan", prompt)
+
+    def test_utan_kanda_fakta_ingen_rubrik(self):
+        kl = _Klient([_Svar(GILTIGT)])
+        BS.generera("X–Y 1–0", logg=lambda *_: None, klient=kl)
+        self.assertNotIn("KÄNDA MATCHFAKTA", kl._content_text())
+
+
+class TestByggFraga(unittest.TestCase):
+    """bygg_fraga är en ren strängoperation (inget nätverksanrop) — UI:t
+    använder den för att visa exakt vad som SKULLE skickas, för godkännande
+    innan det skarpa Claude-anropet (som tar ~2 minuter)."""
+
+    def test_ingen_natverksanrop_kravs(self):
+        fraga = BS.bygg_fraga("Malmö FF–Kristianstads DFF 6-0", resultat="6-0",
+                              arena="Eleda Stadion")
+        self.assertIn("Resultat: 6-0", fraga)
+        self.assertIn("Arena: Eleda Stadion", fraga)
+
+    def test_tom_matchinfo_bygger_anda_en_fraga(self):
+        # bygg_fraga kastar aldrig — bara generera() vägrar tom matchinfo.
+        fraga = BS.bygg_fraga("")
+        self.assertIn("Skriv Bildsvepet", fraga)
+
 
 if __name__ == "__main__":
     unittest.main()

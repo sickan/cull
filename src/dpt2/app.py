@@ -63,6 +63,13 @@ class Api:
         self._synka_kalenderjobb(mid)
         return {"ok": True, "id": mid}
 
+    def satt_resultat(self, match_id, resultat, mellan, malskyttar):
+        """Resultat-remsan (Publicera/Innehåll) — kontinuerlig, fältvis
+        redigering. Se store.satt_resultat för varför den inte återanvänder
+        spara_match."""
+        store.satt_resultat(self.conn, match_id, resultat, mellan, malskyttar)
+        return {"ok": True}
+
     def _synka_kalenderjobb(self, match_id):
         """Push:ar matchens aktuella titel/tid/arena/liga till ett redan
         länkat, RIKTIGT kalenderjobb (utkast räknas inte) — härlett, inte
@@ -435,6 +442,26 @@ class Api:
         return {"ok": True, "urval": u, "namn": namn,
                 "filer": store.urval_toppbilder(self.conn, u["id"], n)}
 
+    def bilder_for_urval(self):
+        """SoMe-bildbibliotekets "Publicera-urvalet"-källa: fullständiga
+        sökvägar för det aktiva urvalets behållna bilder (samma aktiva urval
+        som urval_hojdpunkter ovan, men riktiga sökvägar i stället för bara
+        toppbilder-stammar — biblioteket visar ALLA behållna bilder, inte
+        bara topp-N)."""
+        u = self.aktivt_urval()
+        if not u:
+            return {"ok": False, "fel": "Inget aktivt urval — gallra en match först."}
+        return {"ok": True, "urval": u,
+                "bilder": store.resolve_urval_bilder(self.conn, u["id"])}
+
+    # ── Arbetsyta — autosparade utkast (Live/SoMe/Webb-Sport) ────────────────
+    def hamta_utkast(self, match_id):
+        return store.hamta_utkast(self.conn, match_id)
+
+    def spara_utkast(self, match_id, patch):
+        store.spara_utkast(self.conn, match_id, **(patch or {}))
+        return {"ok": True}
+
     # ── Gallra (skapar urval + cull_jobb; motorn körs i ML-miljö) ────────────
     def starta_cull(self, config):
         from dpt2.motorer.gallring import Gallring
@@ -516,10 +543,29 @@ class Api:
         return self.leverera_urval(uid, config)
 
     # ── Publicera (Bildsvepet-text + Matchdag-story) ─────────────────────────
-    def generera_bildsvep(self, matchinfo, sport="", hemma_farg=""):
-        """Genererar Bildsvepet-bildtext (Claude web search) för granskning."""
+    def forhandsgranska_bildsvep_fraga(self, matchinfo, fakta=None):
+        """Bygger (utan nätverksanrop) exakt den fråga som skulle skickas till
+        Claude — för "godkänn prompten"-steget i UI:t innan det skarpa,
+        ~2 minuter långa anropet görs."""
+        f = fakta or {}
+        return {"ok": True, "fraga": bildsvep.bygg_fraga(
+            matchinfo, sport=f.get("sport", ""), hemma_farg=f.get("hemma_farg", ""),
+            resultat=f.get("resultat", ""), mellan=f.get("mellan", ""),
+            malskyttar=f.get("malskyttar", ""), arena=f.get("arena", ""),
+            datum=f.get("datum", ""), liga=f.get("liga", ""))}
+
+    def generera_bildsvep(self, matchinfo, sport="", hemma_farg="", fakta=None):
+        """Genererar Bildsvepet-bildtext (Claude web search) för granskning.
+        fakta = redan kända matchfakta (resultat/mellan/malskyttar/arena/
+        datum/liga, se bildsvep.bygg_fraga) — vävs in i frågan så Claude
+        inte behöver websöka efter sånt appen redan vet."""
+        f = fakta or {}
         try:
-            data = bildsvep.generera(matchinfo, sport=sport, hemma_farg=hemma_farg)
+            data = bildsvep.generera(
+                matchinfo, sport=sport, hemma_farg=hemma_farg,
+                resultat=f.get("resultat", ""), mellan=f.get("mellan", ""),
+                malskyttar=f.get("malskyttar", ""), arena=f.get("arena", ""),
+                datum=f.get("datum", ""), liga=f.get("liga", ""))
         except Exception as e:
             return {"ok": False, "fel": f"Kunde inte generera: {e}"}
         if not data:

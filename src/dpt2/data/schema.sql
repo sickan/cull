@@ -211,6 +211,25 @@ CREATE TABLE publicera_material_historik (
 );
 CREATE INDEX idx_pubmathist_material ON publicera_material_historik(material_id, tid DESC);
 
+-- Autosparat utkastinnehåll per match (Live/SoMe/Webb-Sport) — arbetsytans
+-- minne. Skilt från publicera_material/innehall ovan/nedan, som bara skrivs
+-- på explicit Spara-klick (se design_handoff_live_some_webb/DATAMODELL-
+-- UTKAST-RESULTAT.md §2).
+CREATE TABLE arbetsyta_utkast (
+  match_id     TEXT PRIMARY KEY REFERENCES matchen(id) ON DELETE CASCADE,
+  some_caption TEXT,
+  some_targets TEXT,                     -- json {story,ig,fb: bool}
+  some_lib     TEXT,                     -- json {source,target,picks:{story,ig,fb},cover}
+  live_moment  TEXT,
+  live_tema    TEXT,
+  live_cfg     TEXT,                     -- json (mall-fälten, se MALLFALT i Publicera.svelte)
+  live_dropbox TEXT,
+  live_vald    TEXT,                     -- vald bilds fullständiga sökväg (Live steg 2)
+  cms          TEXT,                     -- json snapshot av Innehålls `cms` (typ=match)
+  cms_own      TEXT,                     -- json cmsOwn-karta (vilka fält är egna/länkade)
+  uppdaterad   TEXT NOT NULL
+);
+
 -- ── Modell (träning) ─────────────────────────────────────────────────────────
 
 CREATE TABLE modell (

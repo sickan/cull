@@ -61,23 +61,31 @@ Det svängde, det var tajt, och det var mycket nerver i luften. Men Malmö stod 
 
 SYSTEM = (
     "Du skriver 'Bildsvepet'-bildtexter för Instagram åt sportfotografen Dalecarlia "
-    "Photo, på svenska. Använd web search för att hitta matchfakta: resultat och "
-    "halvtid/set, målskyttar/poänggörare och nyckelhändelser, tabell- eller "
-    "sammanhangskontext, och gärna lagets nästa match. Skriv ett EGET, omskrivet "
-    "referat — återge ALDRIG källornas formuleringar, bara fakta. Hitta aldrig på "
-    "resultat, namn eller händelser.\n\n"
+    "Photo, på svenska. Frågan innehåller KÄNDA MATCHFAKTA (resultat, halvtid/set, "
+    "arena, datum, liga, målskyttar) hämtade direkt ur fotografens egen matchdatabas "
+    "— dessa är REDAN VERIFIERADE. Använd dem rakt av, sök INTE efter dem och "
+    "motsäg dem ALDRIG. Använd web search bara för det KÄNDA MATCHFAKTA inte täcker: "
+    "nyckelhändelser/spelförlopp (om målskyttar saknar minuter/sammanhang), tabell- "
+    "eller sammanhangskontext, lagets nästa match, och lagens/ligans OFFICIELLA "
+    "Instagram-handles. Skriv ett EGET, omskrivet referat — återge ALDRIG källornas "
+    "formuleringar, bara fakta. Hitta ALDRIG på resultat, namn eller händelser; "
+    "saknas en uppgift (även efter sökning) — utelämna den eller den raden hellre "
+    "än att gissa.\n\n"
     "FORMAT (följ fotografens stil i exemplen exakt):\n"
     "1. Rubrikrad: en sport-emoji + 'BILDSVEPET' (⚽ fotboll, 🤾 handboll, 🏐 volleyboll).\n"
     "2. Matchrad: 'Hemma–Borta resultat (halvtid/set) · Liga · Arena · datum på "
-    "svenska'. Tankstreck '–' mellan lagen och i resultat; ' · ' som avgränsare.\n"
+    "svenska'. Tankstreck '–' mellan lagen och i resultat; ' · ' som avgränsare. "
+    "Dessa fält kommer direkt ur KÄNDA MATCHFAKTA — skriv dem ordagrant, hitta "
+    "aldrig egna varianter.\n"
     f"3. Länkrad: '{LANKRAD}'.\n"
-    "4. Referat: 2–4 meningar. NAMNGE målskyttarna/poänggörarna och i vilken ordning/"
-    "minut målen kom när det framgår av källorna — det är kärnan i stilen (t.ex. "
-    "'X sköt in 1–0 ... innan Y ökade på'). Lägg till tabell-/sammanhangskontext. "
-    "Sök vidare specifikt efter målskyttar om första sökningen inte ger dem. "
-    "Journalistisk men personlig och varm ton.\n"
+    "4. Referat: 2–4 meningar. NAMNGE målskyttarna/poänggörarna (redan givna i "
+    "KÄNDA MATCHFAKTA om de finns där) och i vilken ordning/minut målen kom — det "
+    "är kärnan i stilen (t.ex. 'X sköt in 1–0 ... innan Y ökade på'). Lägg till "
+    "tabell-/sammanhangskontext via websökning. Journalistisk men personlig och "
+    "varm ton.\n"
     "5. 'Nästa uppdrag 📸 nästa match · tävling · arena · datum tid. <en mening "
-    "teaser>' — bara om du hittar lagets nästa match; annars utelämna raden.\n"
+    "teaser>' — bara om du hittar lagets nästa match via websökning; annars "
+    "utelämna raden.\n"
     "6. Exakt 5 hashtags, blanda lag/liga/sport + #sportfoto, avsluta med #Bildsvepet.\n"
     "7. Exakt 5 @-omnämnanden på sista raden: hemmalag, bortalag, liga, förbund, "
     "@nikonsverige (alltid sist). Sök upp lagens/ligans/förbundets OFFICIELLA "
@@ -98,23 +106,56 @@ def _klient_eller_skapa(klient, logg):
     return claude.ny_klient()
 
 
-def generera(matchinfo, *, sport="", hemma_farg="", logg=print, klient=None):
-    """Returnerar {referat, bildsvep} eller None. matchinfo = matchrad/-sträng;
-    sport/hemma_farg ger kontext. Klienten injiceras i test."""
+def bygg_fraga(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
+               malskyttar="", arena="", datum="", liga=""):
+    """Bygger frågesträngen som skickas till Claude — en ren strängoperation,
+    inget nätverksanrop. Utbruten ur generera() så UI:t kan visa EXAKT vad som
+    kommer skickas (för godkännande) innan det skarpa, ~2 minuter långa
+    anropet görs. De redan kända matchfakta (resultat/mellan/målskyttar/arena/
+    datum/liga — allt appen redan har lokalt via resultat-remsan/matchposten)
+    skickas med rakt av så Claude inte behöver websöka efter sånt som redan
+    är verifierat; websökning används bara för sådant appen INTE har (nästa
+    match, tabellkontext, @-handles)."""
     matchinfo = (matchinfo or "").strip()
-    if not matchinfo:
+    fraga = f"Match: {matchinfo}."
+    if sport and sport.lower() != "auto":
+        fraga += f" Sport: {sport}."
+    if hemma_farg:
+        fraga += f" Hemmalaget (det fotografen följt) spelar i {hemma_farg}."
+    kanda = []
+    if resultat:
+        kanda.append(f"Resultat: {resultat}")
+    if mellan:
+        kanda.append(f"Halvtid/set: {mellan}")
+    if malskyttar:
+        kanda.append(f"Målskyttar: {malskyttar}")
+    if arena:
+        kanda.append(f"Arena: {arena}")
+    if datum:
+        kanda.append(f"Datum: {datum}")
+    if liga:
+        kanda.append(f"Liga: {liga}")
+    if kanda:
+        fraga += ("\n\nKÄNDA MATCHFAKTA (redan verifierade av fotografen, "
+                  "använd rakt av — sök inte efter dessa):\n" + "\n".join(kanda))
+    fraga += "\nSkriv Bildsvepet enligt formatet och svara med JSON."
+    return fraga
+
+
+def generera(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
+             malskyttar="", arena="", datum="", liga="", logg=print, klient=None):
+    """Returnerar {referat, bildsvep} eller None. matchinfo = matchrad/-sträng;
+    övriga kwargs ger kontext/kända matchfakta (se bygg_fraga). Klienten
+    injiceras i test."""
+    if not (matchinfo or "").strip():
         logg("⚠ Ingen matchinfo angiven.")
         return None
     klient = _klient_eller_skapa(klient, logg)
     if klient is None:
         return None
 
-    fraga = f"Match: {matchinfo}."
-    if sport and sport.lower() != "auto":
-        fraga += f" Sport: {sport}."
-    if hemma_farg:
-        fraga += f" Hemmalaget (det fotografen följt) spelar i {hemma_farg}."
-    fraga += "\nSkriv Bildsvepet enligt formatet och svara med JSON."
+    fraga = bygg_fraga(matchinfo, sport=sport, hemma_farg=hemma_farg, resultat=resultat,
+                       mellan=mellan, malskyttar=malskyttar, arena=arena, datum=datum, liga=liga)
 
     logg("Hämtar matchfakta och skriver Bildsvepet via Claude (web search)…")
     data = claude.fraga_json(klient, SYSTEM, fraga,

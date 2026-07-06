@@ -1,8 +1,10 @@
 <script>
   import { onMount } from 'svelte'
-  import { forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall, listaMatcher, hamtaMatch, genereraBildsvep, valjMapp, valjFil, thumbForBild, urvalHojdpunkter, slugga, sportprofiler } from '../lib/api.js'
+  import { forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall, listaMatcher, hamtaMatch, genereraBildsvep, forhandsgranskaBildsvepFraga, valjMapp, valjFil, thumbForBild, urvalHojdpunkter, slugga, sportprofiler, hamtaUtkast, sparaUtkast, aktivMatch, listaLag } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import BildvaljareFokuspunkt from '../lib/BildvaljareFokuspunkt.svelte'
+  import ResultatRemsa from '../lib/ResultatRemsa.svelte'
+  import AktivMatchRad from '../lib/AktivMatchRad.svelte'
   import { testMode } from '../lib/testlage.js'
 
   // Fyra färgkodade typer (DATAMODELL.md). Porträtt är en Event-kategori,
@@ -52,6 +54,11 @@
   let statusInfo = null
   let statusLaddar = false
   let genKor = false
+  let genFel = ''
+  let genGranska = null      // frågetext när förhandsgranskningen är öppen, annars null
+  let genLaddarFraga = false
+  let genSekunder = 0
+  let genTimer = null
   let hlKalla = ''       // källetikett för hämtade höjdpunkter (urval/match)
   let hlFlash = false
 
@@ -67,9 +74,23 @@
   $: hlAntal = ctyp === 'match' ? cms.figurer.filter((f) => f.src).length : 0
   $: hlVisaKalla = ctyp === 'match' && !!hlKalla && hlAntal > 0
 
+  let lagAlla = []
+
   onMount(async () => {
-    ;[matcher, profiler] = await Promise.all([listaMatcher(), sportprofiler()])
-    if (matcher[0]) { pick = matcher[0].id; await fyllFranMatch(matcher[0].id) }
+    let akt = null
+    // Bryggan kan (kända, ospårade race i store.lista_lag/hamta_match delad
+    // self.conn) tappa ett enstaka anrop — try/catch så panelen faller
+    // tillbaka på tomma listor i stället för att fastna, samma mönster som
+    // Publicera.svelte:s onMount.
+    try {
+      ;[matcher, profiler, akt, lagAlla] = await Promise.all(
+        [listaMatcher(), sportprofiler(), aktivMatch(), listaLag()])
+    } catch (e) {
+      console.error('Innehåll: kunde inte läsa matcher/lag/aktiv match', e)
+    }
+    // §5: förvalt = aktiv match (samma som Live &amp; SoMe) — annars första i listan.
+    const forval = (akt && matcher.some((m) => m.id === akt.id)) ? akt.id : (matcher[0] && matcher[0].id)
+    if (forval) { pick = forval; await fyllFranMatch(forval) }
     await forhandsgranska()
   })
 
@@ -83,9 +104,18 @@
     return new Date() >= start ? 'pagaende' : 'kommande'
   }
 
+  // ── Autospar per match (dpt2.drafts) — arbetsytans minne för Sport-
+  // formuläret, skilt från explicit "Spara"/"Publicera" (se DATAMODELL-
+  // UTKAST-RESULTAT.md §2). cmsUtkastLaddar spärrar autospar under
+  // fyllFranMatch så den inbyggda länkningen (matchFull → cms) inte tolkas
+  // som en användarredigering och sparas tillbaka i onödan.
+  let cmsUtkastLaddar = true
+  let cmsDraftTimer = null
+
   async function fyllFranMatch(matchId) {
     matchFull = await hamtaMatch(matchId)
     if (!matchFull) return
+    cmsUtkastLaddar = true
     cms.hem = matchFull.lag_hemma || ''; cms.borta = matchFull.lag_borta || ''
     cms.sport = matchFull.sport || ''
     cms.resultat = matchFull.resultat || ''; cms.mellan = matchFull.mellan || ''
@@ -94,14 +124,38 @@
     cms.serie = matchFull.liga || ''; cms.galleri = matchFull.galleri || ''
     if (auto) cms.status = harledStatus(matchFull.datum, matchFull.tid, matchFull.resultat)
     cmsOwn = {}
+    const d = await hamtaUtkast(matchId)
+    if (d) {
+      cmsOwn = d.cms_own || {}
+      if (d.cms) {
+        // Länkade fält (CMS_MATCHFALT): återställ BARA om användaren skrivit
+        // över just det fältet (cmsOwn[falt]) — annars ska det alltid spegla
+        // matchens FÄRSKA värde (redan satt ovan från matchFull), inte en
+        // gammal utkast-ögonblicksbild. Utan detta villkor skrev en tidigare
+        // sparad draft tillbaka ett förlegat resultat även efter att
+        // resultat-remsan skrivit ett nytt (bekräftat live: "2-1" stod kvar
+        // i CMS-fältet trots att matchen redan visade "6-0").
+        for (const falt of Object.keys(CMS_MATCHFALT)) {
+          if (cmsOwn[falt] && falt in d.cms) cms[falt] = d.cms[falt]
+        }
+        // Fält utan matchmotsvarighet (svep/galleribilder/hero) saknar en
+        // "färsk" källa att falla tillbaka på — återställ alltid.
+        for (const falt of ['svep', 'figurer', 'hero', 'heroPosition', 'heroKalla']) {
+          if (falt in d.cms) cms[falt] = d.cms[falt]
+        }
+        if (!auto && 'status' in d.cms) cms.status = d.cms.status
+      }
+    }
     cms = cms
+    setTimeout(() => (cmsUtkastLaddar = false), 0)
   }
-  async function valjMatch(e) {
-    pick = e.target.value
-    const m = matcher.find((x) => x.id === pick)
-    if (m) await fyllFranMatch(m.id)
-    forhandsgranska()
+
+  function scheduleCmsUtkast() {
+    if (cmsUtkastLaddar || ctyp !== 'match' || !pick) return
+    if (cmsDraftTimer) clearTimeout(cmsDraftTimer)
+    cmsDraftTimer = setTimeout(() => { sparaUtkast(pick, { cms, cms_own: cmsOwn }) }, 500)
   }
+  $: if (ctyp === 'match' && pick) { cms; cmsOwn; scheduleCmsUtkast() }
   async function cmsFetchAll() {
     if (pick) await fyllFranMatch(pick)
     forhandsgranska()
@@ -186,12 +240,71 @@
     forhandsgranska()
   }
 
-  async function genereraSvep() {
+  function fargForLag(namn) { const l = lagAlla.find((x) => x.namn === namn); return l ? (l.stall_hemma || l.profilfarg) : '' }
+  // §10: matchfakta appen REDAN har (cms speglar länkade/egna fält) — vävs
+  // in i Claude-frågan så websökning inte behöver leta upp sånt som redan
+  // är känt. cms.sport (inte hårdkodat 'fotboll') styr sport-emoji/format.
+  const _svepInfo = () => `${cms.hem}–${cms.borta}${cms.resultat ? ' ' + cms.resultat : ''}`
+  function _svepFakta() {
+    return { sport: cms.sport || '', hemma_farg: fargForLag(cms.hem) || '',
+      resultat: cms.resultat || '', mellan: cms.mellan || '', malskyttar: cms.malskyttar || '',
+      arena: cms.arena || '', datum: cms.datum || '', liga: cms.serie || '' }
+  }
+  async function genOppnaGranska() {
+    genFel = ''
+    genLaddarFraga = true
+    const r = await forhandsgranskaBildsvepFraga(_svepInfo(), _svepFakta())
+    genLaddarFraga = false
+    if (r?.ok) genGranska = r.fraga
+    else genFel = r?.fel || 'Kunde inte bygga frågan.'
+  }
+  const genAvbryt = () => (genGranska = null)
+  async function genSkicka() {
+    const info = _svepInfo()
+    const fakta = _svepFakta()
+    genGranska = null
     genKor = true
-    const info = `${cms.hem}–${cms.borta}${cms.resultat ? ' ' + cms.resultat : ''}`
-    const r = await genereraBildsvep(info, 'fotboll', '')
-    genKor = false
-    if (r?.ok) { cms.svep = r.bildsvep; forhandsgranska() }
+    genFel = ''
+    genSekunder = 0
+    genTimer = setInterval(() => (genSekunder += 1), 1000)
+    try {
+      const r = await genereraBildsvep(info, fakta.sport, fakta.hemma_farg, fakta)
+      if (r?.ok) { cms.svep = r.bildsvep; forhandsgranska() }
+      else genFel = r?.fel || 'Kunde inte generera bildtexten.'
+    } catch (e) {
+      genFel = 'Kunde inte generera bildtexten.'
+    } finally {
+      genKor = false
+      clearInterval(genTimer); genTimer = null
+    }
+  }
+
+  // §5: "↺ Hämta från SoMe" — samma token-upplösning som SoMe-bildtexten i
+  // Publicera.svelte (_resolveTokens/handle/_hashtagify, dupliceras hellre
+  // än att brytas ut för en tio-radig hjälpfunktion).
+  let svepHamtadFlash = false
+  const _hashtagify = (s) => (s || '').replace(/[^\p{L}\p{N}]/gu, '')
+  function _resolveTokens(text, m, prof, lag) {
+    if (!text) return ''
+    const handle = (namn) => (lag.find((x) => x.namn === namn)?.instagram || '').replace(/^@/, '')
+    const vals = {
+      resultat: m?.resultat || '', [prof.mid_token]: m?.mellan || '',
+      målskyttar: m?.malskyttar || '', arena: m?.arena || '', motståndare: m?.lag_borta || '',
+      '@lag': handle(m?.lag_hemma) ? '@' + handle(m?.lag_hemma) : '',
+      '#liga': m?.liga ? '#' + _hashtagify(m.liga) : '',
+      galleri: m?.galleri || '', datum: m?.datum || '', tid: m?.tid || '',
+    }
+    return text.replace(/\{([^{}]+)\}/g, (whole, key) => (key in vals ? vals[key] : whole))
+  }
+  async function hamtaSvepFranSome() {
+    if (!matchFull) return
+    const d = await hamtaUtkast(matchFull.id)
+    if (!d?.some_caption) return
+    cms.svep = _resolveTokens(d.some_caption, matchFull, profil, lagAlla)
+    cms = cms
+    forhandsgranska()
+    svepHamtadFlash = true
+    setTimeout(() => (svepHamtadFlash = false), 2200)
   }
   async function spara() {
     // Testläge: skriver till test-output/content/ i stället — kräver ingen
@@ -257,6 +370,8 @@
   </div>
 
   {#if ctyp === 'match'}
+    <AktivMatchRad on:navigera />
+    {#if pick && matchFull}<ResultatRemsa match={matchFull} {profil} {lagAlla} />{/if}
     <div class="kort">
       <div class="caps">Publicera till hemsidan</div>
       {#if pick}
@@ -266,11 +381,6 @@
         </div>
       {/if}
       <div class="grid2">
-        <div class="f"><label>Match / event</label>
-          <select value={pick} on:change={valjMatch}>
-            {#each matcher as m}<option value={m.id}>{m.lag_hemma} – {m.lag_borta}{m.datum ? ' · ' + m.datum : ''}</option>{/each}
-          </select>
-        </div>
         <div class="f">
           <div class="statushuvud"><label>Status på hemsidan</label><button class="autochip" class:on={auto} on:click={() => (auto = !auto)}>Auto</button></div>
           <div class="seg">
@@ -425,8 +535,24 @@
     <div class="kort svepkort">
       <span class="svepik"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20l1-4 11-11 3 3-11 11z"/><path d="M14 6l3 3"/></svg></span>
       <div class="sveptxt"><div class="svt">Instagram Bildsvepet</div><div class="svs">Genereras från matchinfo</div></div>
-      <button class="prim" on:click={genereraSvep} disabled={genKor}>{genKor ? 'Genererar…' : 'Generera'}</button>
+      {#if svepHamtadFlash}<span class="ok">✓ Hämtad från SoMe</span>{/if}
+      <button class="lank" on:click={hamtaSvepFranSome}>↺ Hämta från SoMe</button>
+      <button class="prim" on:click={genOppnaGranska} disabled={genKor || genLaddarFraga}>{genLaddarFraga ? 'Bygger fråga…' : (genKor ? 'Genererar…' : 'Generera')}</button>
     </div>
+    {#if genFel}<div class="kort felbox">⚠ {genFel}</div>{/if}
+    {#if genGranska}
+      <div class="kort genGranska">
+        <div class="genGranskaTitel">Granska frågan innan den skickas till Claude</div>
+        <div class="genGranskaHint">Tar cirka 2 minuter — websökning används bara för det som inte redan står här (nästa match, tabellkontext, @-handles).</div>
+        <pre class="genGranskaFraga">{genGranska}</pre>
+        <div class="genGranskaKnappar">
+          <button class="lank" on:click={genAvbryt}>Avbryt</button>
+          <button class="prim" on:click={genSkicka}>Skicka till Claude ›</button>
+        </div>
+      </div>
+    {:else if genKor}
+      <div class="kort genProgress"><span class="genspin"></span>Genererar… {genSekunder}s (websöker matchfakta, tar ofta ~2 min)</div>
+    {/if}
     <div class="kort nogap">
       <textarea bind:value={cms.svep} on:change={forhandsgranska} rows="4" placeholder="Klicka Generera så skriver bildsvep.py en bildtext från matchinfo — redigerbar."></textarea>
     </div>
@@ -556,6 +682,18 @@
   .sveptxt { flex: 1; min-width: 0; }
   .svt { font-size: 14.5px; font-weight: 600; color: var(--t-head); }
   .svs { font-size: 11.5px; color: var(--t-mut); margin-top: 1px; }
+
+  /* §10: godkänn prompten + generera-progress (Instagram Bildsvepet) */
+  .felbox { border: 1px solid var(--div3); color: var(--varn); background: color-mix(in srgb, var(--varn) 8%, transparent); font-size: 12.5px; }
+  .genGranska { border: 1px solid var(--acc-border); background: var(--acc-soft); }
+  .genGranskaTitel { font-size: 12.5px; font-weight: 700; color: var(--t-head); }
+  .genGranskaHint { font-size: 11px; color: var(--t-mut); margin-top: 2px; }
+  .genGranskaFraga { margin-top: 9px; max-height: 220px; overflow-y: auto; font-size: 11.5px; }
+  .genGranskaKnappar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+  .genProgress { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--t-head); }
+  .genspin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--acc-soft); border-top-color: var(--acc);
+    flex: none; animation: gospin 0.8s linear infinite; }
+  @keyframes gospin { to { transform: rotate(360deg); } }
 
   .mdhuvud { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
   pre { margin: 0; background: var(--panel); border: 1px solid var(--div3); border-radius: 8px; padding: 14px;

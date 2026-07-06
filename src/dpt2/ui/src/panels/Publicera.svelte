@@ -1,10 +1,12 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte'
-  import { aktivMatch, genereraBildsvep, valjMapp, listaLag,
+  import { aktivMatch, genereraBildsvep, forhandsgranskaBildsvepFraga, valjMapp, listaLag,
     listaSomeBilder, publiceraTillSoMe, oppnaILightroom, publiceraLiveStory,
     forhandsgranskaStory, listaMaterial, sparaMaterial, raderaMaterial,
-    forsokIgenMaterial, sportprofiler, listaMatcher, nyTestPaketMapp } from '../lib/api.js'
+    forsokIgenMaterial, sportprofiler, listaMatcher, nyTestPaketMapp,
+    bilderForUrval, hamtaUtkast, sparaUtkast } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
+  import ResultatRemsa from '../lib/ResultatRemsa.svelte'
   import Lagbricka from '../lib/Lagbricka.svelte'
   import { grenFarg } from '../lib/gren.js'
   import { testMode, testMaterial, nyttTestMaterial, uppdateraTestMaterial,
@@ -38,7 +40,7 @@
     Avspark: [{ k: 'avspark', label: 'Avsparkstid', ph: '14:00', type: 'time' }],
     Halvtid: [{ k: 'halvtid', label: 'Ställning i halvtid', ph: '1–0' }],
     Resultat: [{ k: 'slutresultat', label: 'Slutresultat', ph: '6–0' },
-      { k: 'malskyttar', label: 'Målskyttar', ph: 'Efternamn, efternamn…', multi: true }],
+      { k: 'malskyttar', label: 'Målskyttar', ph: "Efternamn 10', efternamn 25'…", multi: true }],
     Startelva: [{ k: 'startelva', label: 'Startelva (11)', ph: 'Målvakt · försvar · mittfält · anfall', multi: true }],
     'Målgörare': [{ k: 'malskott', label: 'Målskytt', ph: 'Efternamn' },
       { k: 'minut', label: 'Minut', ph: "58'" }],
@@ -193,11 +195,116 @@
   function insertToken(tok) {
     someCaption += (someCaption && !/\s$/.test(someCaption) ? ' ' : '') + `{${tok}}`
   }
-  let banor = {
-    story: { pa: true, mapp: '', bilder: [] },
-    ig: { pa: true, mapp: '', bilder: [] },
-    fb: { pa: false, mapp: '', bilder: [] },
+  // ── SoMe · bildbibliotek (variant 1a) — delad grid, klick lägger till/tar
+  // bort bilden i vald mål-kanal. Ersätter tidigare per-kanal mappväljare:
+  // ett bibliotek, tre ordnade bildlistor (karusellordning), ett IG-omslag.
+  const LIBLABEL = { story: 'Story', ig: 'IG-inlägg', fb: 'FB' }
+  const LIBBADGE = { story: 'S', ig: 'IG', fb: 'FB' }
+  let someLibSource = 'dropbox'   // dropbox | urval | annan
+  let someLibTarget = 'story'     // vilken kanal klick i gridden lägger till i
+  let someLibAnnanMapp = ''
+  let someLibItems = []           // aktiv källas bilder (fullständiga sökvägar)
+  let someLibLaddar = false
+  let somePicks = { story: [], ig: [], fb: [] }   // ordnade sökvägar per kanal
+  let someCover = null             // omslag för IG-inlägg (måste finnas i somePicks.ig)
+
+  async function someLibLaddaGrid() {
+    someLibLaddar = true
+    if (someLibSource === 'dropbox') someLibItems = liveDropbox ? await listaSomeBilder(liveDropbox) : []
+    else if (someLibSource === 'urval') { const r = await bilderForUrval(); someLibItems = r?.ok ? r.bilder : [] }
+    else someLibItems = someLibAnnanMapp ? await listaSomeBilder(someLibAnnanMapp) : []
+    someLibLaddar = false
   }
+  async function someLibValjAnnanMapp() {
+    const r = await valjMapp('Välj mapp med bilder')
+    if (!r.ok) return
+    someLibAnnanMapp = r.path
+    someLibSource = 'annan'
+  }
+  $: if (flik === 'some') { someLibSource; liveDropbox; someLibAnnanMapp; someLibLaddaGrid() }
+  $: someLibPath = { dropbox: liveDropbox || '(ingen Dropbox-mapp vald i Live steg 2 än)',
+    urval: 'Publicera-urvalet · gallrade & valda bilder från matchen',
+    annan: someLibAnnanMapp || '(ingen mapp vald)' }[someLibSource]
+
+  function someLibBadges(p) { return ['story', 'ig', 'fb'].filter((k) => somePicks[k].includes(p)) }
+  function someLibToggle(p) {
+    const arr = somePicks[someLibTarget].slice()
+    const ix = arr.indexOf(p)
+    if (ix >= 0) arr.splice(ix, 1); else arr.push(p)
+    somePicks = { ...somePicks, [someLibTarget]: arr }
+    if (someLibTarget === 'ig') {
+      if (!somePicks.ig.length) someCover = null
+      else if (somePicks.ig.indexOf(someCover) < 0) someCover = somePicks.ig[0]
+    }
+  }
+  const someLibSetCover = (p) => (someCover = p)
+
+  // ── Autospar per match (dpt2.drafts) — arbetsytans minne, ingen Spara-knapp.
+  // Skilt från saveLiveDraft/saveSomeDraft nedan, som skapar poster i
+  // Sparade material på explicit klick (se DATAMODELL-UTKAST-RESULTAT.md §2).
+  let utkastLaddar = true    // spärrar autospar tills första hämtningen (eller
+                             // seedningen, om inget utkast finns) är klar
+  let draftSavedAt = ''
+  let _utkastTimer = null
+
+  async function laddaUtkast() {
+    if (!match?.id) { utkastLaddar = false; return }
+    const d = await hamtaUtkast(match.id)
+    if (d) {
+      if (d.some_caption != null) someCaption = d.some_caption
+      if (d.some_lib) {
+        someLibSource = d.some_lib.source || someLibSource
+        someLibTarget = d.some_lib.target || someLibTarget
+        somePicks = d.some_lib.picks || somePicks
+        someCover = d.some_lib.cover ?? someCover
+        someLibAnnanMapp = d.some_lib.annanMapp || someLibAnnanMapp
+      }
+      if (d.live_moment) moment = d.live_moment
+      if (d.live_tema) tema = d.live_tema
+      // live_cfg återställs, men slutresultat/halvtid/malskyttar skrivs över
+      // igen direkt efteråt (nedan) — de speglar alltid resultat-remsans
+      // FÄRSKA värde, aldrig en gammal utkast-ögonblicksbild (annars visar
+      // Live-momentet "Resultat" ett förlegat resultat efter att
+      // resultat-remsan skrivit ett nytt, samma klass av bugg som redan
+      // hittades+fixades i Innehall.svelte:s cms-återställning).
+      if (d.live_cfg) cfg = { ...cfg, ...d.live_cfg }
+      if (d.live_dropbox) liveDropbox = d.live_dropbox
+      if (d.live_vald) {
+        await uppdateraDropbox()
+        const i = liveBilder.indexOf(d.live_vald)
+        liveVald = i >= 0 ? i : null
+      }
+    } else {
+      // Inget utkast — bildval tomt (redan default), bildtext behåller mallen.
+      cfg = { ...cfg, avspark: match.tid || cfg.avspark }
+    }
+    cfg = { ...cfg, slutresultat: match.resultat || '', halvtid: match.mellan || '',
+      malskyttar: match.malskyttar || '' }
+    // setTimeout(0): släpper spärren EFTER att Sveltes reaktivitet hunnit
+    // flusha de tilldelningar som redan gjorts ovan — annars hinner
+    // scheduleUtkast() nedan se utkastLaddar=false innan sista tilldelningen
+    // (t.ex. liveVald) har lagts i kö, och sparar en autospar-runda i onödan.
+    setTimeout(() => (utkastLaddar = false), 0)
+  }
+
+  function scheduleUtkast() {
+    if (utkastLaddar || !match?.id) return
+    if (_utkastTimer) clearTimeout(_utkastTimer)
+    _utkastTimer = setTimeout(async () => {
+      await sparaUtkast(match.id, {
+        some_caption: someCaption,
+        some_lib: { source: someLibSource, target: someLibTarget, picks: somePicks, cover: someCover,
+          annanMapp: someLibAnnanMapp },
+        live_moment: moment, live_tema: tema, live_cfg: cfg, live_dropbox: liveDropbox,
+        live_vald: liveVald !== null ? liveBilder[liveVald] : null,
+      })
+      const d = new Date()
+      draftSavedAt = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    }, 500)
+  }
+  $: if (match?.id) { someCaption; someLibSource; someLibTarget; somePicks; someCover;
+    moment; tema; cfg; liveDropbox; liveVald; scheduleUtkast() }
+
   let someLage = 'idle'         // idle | dry | progress | done | delfel | fel
   let someResultat = []         // [{kanal, form, del, av, status, url, fel?}]
   let someFel = ''
@@ -210,55 +317,76 @@
   const fbTokens = (t) => (t || '').split(/([#@][\wåäöÅÄÖ]+)/).filter((s) => s !== '')
     .map((s) => ({ s, bort: /^[#@][\wåäöÅÄÖ]+$/.test(s) }))
 
-  $: storyPlanN = banor.story.pa ? banor.story.bilder.length : 0
+  $: storyPlanN = somePicks.story.length
   $: igBitar = (() => {
-    const b = []; for (let i = 0; i < banor.ig.bilder.length; i += 10) b.push(banor.ig.bilder.slice(i, i + 10))
+    const b = []; for (let i = 0; i < somePicks.ig.length; i += 10) b.push(somePicks.ig.slice(i, i + 10))
     return b
   })()
-  $: igPlanN = banor.ig.pa ? igBitar.length : 0
-  $: igVarning = banor.ig.pa && banor.ig.bilder.length > 10
-    ? `${banor.ig.bilder.length} bilder → ${igBitar.length} IG-inlägg (max 10/karusell).` : ''
-  $: fbPlanN = banor.fb.pa && banor.fb.bilder.length ? 1 : 0
-  $: fbVarning = banor.fb.pa && banor.fb.bilder.length > 4
-    ? `${banor.fb.bilder.length} bilder → kapas till 4 på Facebook.` : ''
+  $: igPlanN = igBitar.length
+  $: igVarning = somePicks.ig.length > 10
+    ? `${somePicks.ig.length} bilder → ${igBitar.length} IG-inlägg (max 10/karusell).` : ''
+  $: fbPlanN = somePicks.fb.length ? 1 : 0
+  $: fbVarning = somePicks.fb.length > 4
+    ? `${somePicks.fb.length} bilder → kapas till 4 på Facebook.` : ''
   $: someRunCount = storyPlanN + igPlanN + fbPlanN
-  $: someHarBilder = (banor.story.pa && banor.story.bilder.length) ||
-    (banor.ig.pa && banor.ig.bilder.length) || (banor.fb.pa && banor.fb.bilder.length)
+  $: someHarBilder = somePicks.story.length || somePicks.ig.length || somePicks.fb.length
 
   function somePlanLista() {
     const p = []
-    if (banor.story.pa) banor.story.bilder.forEach((_b, i) =>
-      p.push({ kanal: 'instagram', form: 'story', n: 1, del: i + 1, av: banor.story.bilder.length }))
-    if (banor.ig.pa) igBitar.forEach((bit, i) =>
+    somePicks.story.forEach((_b, i) =>
+      p.push({ kanal: 'instagram', form: 'story', n: 1, del: i + 1, av: somePicks.story.length }))
+    igBitar.forEach((bit, i) =>
       p.push({ kanal: 'instagram', form: 'inlägg', n: bit.length, del: i + 1, av: igBitar.length }))
-    if (banor.fb.pa && banor.fb.bilder.length)
-      p.push({ kanal: 'facebook', form: 'inlägg', n: Math.min(banor.fb.bilder.length, 4), del: 1, av: 1 })
+    if (somePicks.fb.length)
+      p.push({ kanal: 'facebook', form: 'inlägg', n: Math.min(somePicks.fb.length, 4), del: 1, av: 1 })
     return p
   }
   const postLabel = (p) => `${p.kanal === 'instagram' ? 'Instagram' : 'Facebook'} · ${p.form === 'story' ? 'Story' : 'Inlägg'}${p.av > 1 ? ' ' + p.del + '/' + p.av : ''}`
 
-  async function valjBanMapp(nyckel) {
-    const r = await valjMapp('Välj mapp med färdiga bilder')
-    if (!r.ok) return
-    const bilder = await listaSomeBilder(r.path)
-    banor = { ...banor, [nyckel]: { ...banor[nyckel], mapp: r.path, bilder } }
+  // §10: matchfakta appen REDAN har lokalt (resultat-remsan/matchposten) —
+  // vävs in i Claude-frågan så websökning inte behöver leta upp sånt som
+  // redan är känt (bara nästa match/tabellkontext/@-handles kräver sökning).
+  function _someFakta() {
+    return { sport: match?.sport || '', hemma_farg: fargForLag(match?.lag_hemma) || '',
+      resultat: match?.resultat || '', mellan: match?.mellan || '',
+      malskyttar: match?.malskyttar || '', arena: match?.arena || '',
+      datum: match?.datum || '', liga: match?.liga || '' }
   }
-  function togglaBana(nyckel) {
-    banor = { ...banor, [nyckel]: { ...banor[nyckel], pa: !banor[nyckel].pa } }
-  }
+  const _someInfo = () => match ? `${match.lag_hemma}–${match.lag_borta}${match.resultat ? ' ' + match.resultat : ''}` : ''
 
-  async function someGenerera() {
+  // §10: "godkänn prompten" — bygger frågan (inget nätverksanrop) och visar
+  // den för granskning INNAN det skarpa, ~2 minuter långa Claude-anropet.
+  let someGenGranska = null       // frågetext när förhandsgranskningen är öppen, annars null
+  let someGenLaddarFraga = false
+  async function someGenOppnaGranska() {
+    someGenFel = ''
+    someGenLaddarFraga = true
+    const r = await forhandsgranskaBildsvepFraga(_someInfo(), _someFakta())
+    someGenLaddarFraga = false
+    if (r?.ok) someGenGranska = r.fraga
+    else someGenFel = r?.fel || 'Kunde inte bygga frågan.'
+  }
+  const someGenAvbryt = () => (someGenGranska = null)
+
+  let someGenSekunder = 0
+  let someGenTimer = null
+  async function someGenSkicka() {
+    const info = _someInfo()
+    const fakta = _someFakta()
+    someGenGranska = null
     someGen = true
     someGenFel = ''
-    const info = match ? `${match.lag_hemma}–${match.lag_borta}${match.resultat ? ' ' + match.resultat : ''}` : ''
+    someGenSekunder = 0
+    someGenTimer = setInterval(() => (someGenSekunder += 1), 1000)
     try {
-      const r = await genereraBildsvep(info, match?.sport || '', fargForLag(match?.lag_hemma) || '')
+      const r = await genereraBildsvep(info, fakta.sport, fakta.hemma_farg, fakta)
       if (r?.ok) someCaption = r.bildsvep
       else someGenFel = r?.fel || 'Kunde inte generera bildtexten.'
     } catch (e) {
       someGenFel = 'Kunde inte generera bildtexten.'
     } finally {
       someGen = false
+      clearInterval(someGenTimer); someGenTimer = null
     }
   }
 
@@ -272,7 +400,7 @@
       { nyckel: 'story', mal: { story: true, ig_inlagg: false, fb: false } },
       { nyckel: 'ig', mal: { story: false, ig_inlagg: true, fb: false } },
       { nyckel: 'fb', mal: { story: false, ig_inlagg: false, fb: true } },
-    ].filter((k) => banor[k.nyckel].pa && banor[k.nyckel].bilder.length)
+    ].filter((k) => somePicks[k.nyckel].length)
     // Testläge: EN gemensam mapp för hela paket-körningen (delas av alla
     // kanal-anropen nedan) i stället för en per kanal.
     let testMapp = ''
@@ -280,7 +408,7 @@
     let fel = 0
     const chResults = {}
     for (const k of korningar) {
-      const r = await publiceraTillSoMe({ bilder: banor[k.nyckel].bilder,
+      const r = await publiceraTillSoMe({ bilder: somePicks[k.nyckel],
         caption: someCaptionResolved, mal: k.mal, match_id: match?.id,
         ...($testMode ? { test: true, test_mapp: testMapp } : {}) })
       chResults[k.nyckel] = r?.ok ? 'ok' : 'fail'
@@ -348,10 +476,9 @@
     foto: liveVald !== null ? liveBilder[liveVald] : null,
     ...(path ? { path } : {}) })
   const _someMat = (status, path) => ({ kind: 'some', status, match_id: match?.id || null,
-    match_namn: fixtur, channels: Object.keys(banor).filter((k) => banor[k].pa), caption: someCaptionResolved,
-    banor: { story: { mapp: banor.story.mapp, bilder: banor.story.bilder },
-      ig: { mapp: banor.ig.mapp, bilder: banor.ig.bilder },
-      fb: { mapp: banor.fb.mapp, bilder: banor.fb.bilder } },
+    match_namn: fixtur, channels: Object.keys(somePicks).filter((k) => somePicks[k].length),
+    caption: someCaptionResolved,
+    banor: { source: someLibSource, picks: somePicks, cover: someCover },
     ...(path ? { path } : {}) })
   // Testläge: material skapas/uppdateras ENDAST i minnet (lib/testlage.js),
   // aldrig via sparaMaterial → publicera_material-tabellen (kontraktet: allt
@@ -397,11 +524,14 @@
     } else {
       flik = 'some'
       someCaption = m.caption != null ? m.caption : someCaption
-      const ch = m.channels || []
       const b = m.banor || {}
-      banor = { story: { pa: ch.includes('story'), mapp: b.story?.mapp || '', bilder: b.story?.bilder || [] },
-        ig: { pa: ch.includes('ig'), mapp: b.ig?.mapp || '', bilder: b.ig?.bilder || [] },
-        fb: { pa: ch.includes('fb'), mapp: b.fb?.mapp || '', bilder: b.fb?.bilder || [] } }
+      // b.picks = nuvarande formatet (bibliotek). Äldre sparade material har
+      // b.{story,ig,fb}.bilder (per-kanal mappväljare, före biblioteket) —
+      // läs in dem som picks så gamla utkast inte tappar sitt bildval.
+      somePicks = b.picks || { story: b.story?.bilder || [], ig: b.ig?.bilder || [], fb: b.fb?.bilder || [] }
+      someCover = b.cover ?? (somePicks.ig[0] || null)
+      someLibSource = b.source || 'dropbox'
+      someLibAnnanMapp = b.annanMapp || someLibAnnanMapp
     }
   }
   async function deleteMaterial(id) {
@@ -454,8 +584,10 @@
     try {
       ;[match, lagAlla, profiler, allaMatcher] = await Promise.all(
         [aktivMatch(), listaLag(), sportprofiler(), listaMatcher()])
+      await laddaUtkast()
     } catch (e) {
       console.error('Publicera: kunde inte läsa aktiv match/lag', e)
+      utkastLaddar = false
     } finally {
       laddar = false
     }
@@ -494,6 +626,7 @@
     <span class="sub">Skapa och publicera material för sociala medier och hemsidan</span>
   </header>
   <AktivMatchRad on:navigera />
+  <ResultatRemsa {match} {profil} {lagAlla} />
 
   <div class="tabs">
     <button class:on={flik === 'live'} on:click={() => (flik = 'live')}>Live</button>
@@ -639,9 +772,22 @@
           <button class="lank" on:click={bytMatch}>Byt ›</button>
         </div>
 
-        <div class="capsrad2"><span class="caps">Bildtext (delas av alla kanaler)</span><button class="genlank" on:click={someGenerera} disabled={someGen}>{someGen ? 'Genererar…' : '✨ Generera'}</button></div>
+        <div class="capsrad2"><span class="caps">Bildtext (delas av alla kanaler)</span><button class="genlank" on:click={someGenOppnaGranska} disabled={someGen || someGenLaddarFraga}>{someGenLaddarFraga ? 'Bygger fråga…' : '✨ Generera'}</button></div>
         {#if someGenFel}<div class="felbox">⚠ {someGenFel}</div>{/if}
-        <textarea class="somecap" bind:value={someCaption} rows="3" placeholder="Bildsvep-text med #hashtags och @mentions…"></textarea>
+        {#if someGenGranska}
+          <div class="genGranska">
+            <div class="genGranskaTitel">Granska frågan innan den skickas till Claude</div>
+            <div class="genGranskaHint">Tar cirka 2 minuter — websökning används bara för det som inte redan står här (nästa match, tabellkontext, @-handles).</div>
+            <pre class="genGranskaFraga">{someGenGranska}</pre>
+            <div class="genGranskaKnappar">
+              <button class="sek" on:click={someGenAvbryt}>Avbryt</button>
+              <button class="prim" on:click={someGenSkicka}>Skicka till Claude ›</button>
+            </div>
+          </div>
+        {:else if someGen}
+          <div class="genProgress"><span class="genspin"></span>Genererar… {someGenSekunder}s (websöker matchfakta, tar ofta ~2 min)</div>
+        {/if}
+        <textarea class="somecap" bind:value={someCaption} rows="3" placeholder="Bildsvep-text med #hashtags och @mentions… eller klicka ✨ Generera för ett AI-skrivet Bildsvep"></textarea>
         <div class="tokenrad">
           <span class="tokenlbl">Infoga bricka</span>
           {#each someTokens as t}<button class="tokenchip" on:click={() => insertToken(t)}>{'{' + t + '}'}</button>{/each}
@@ -652,52 +798,90 @@
           <div class="previewbox">{someCaptionResolved || '—'}</div>
         </div>
 
+        <div class="capsrad2"><span class="caps mt">Bildbibliotek</span>{#if draftSavedAt}<span class="ok">✓ Sparad {draftSavedAt}</span>{/if}</div>
+        <div class="somelib">
+          <div class="libtabs">
+            <button class:on={someLibSource === 'dropbox'} on:click={() => (someLibSource = 'dropbox')}>Dropbox-export</button>
+            <button class:on={someLibSource === 'urval'} on:click={() => (someLibSource = 'urval')}>Publicera-urvalet</button>
+            <button class:on={someLibSource === 'annan'} on:click={someLibValjAnnanMapp}>Annan mapp…</button>
+            <span class="libpath mono">{someLibPath}</span>
+          </div>
+          <div class="libmal">
+            <span class="libmallbl">Lägger till i:</span>
+            {#each ['story', 'ig', 'fb'] as k}
+              <button class:on={someLibTarget === k} on:click={() => (someLibTarget = k)}>
+                {LIBLABEL[k]} <span class="libn">{somePicks[k].length}</span>
+              </button>
+            {/each}
+          </div>
+          {#if someLibLaddar}
+            <p class="tom">Laddar bilder…</p>
+          {:else if !someLibItems.length}
+            <p class="tom">Inga bilder i den här källan.</p>
+          {:else}
+            <div class="libgrid">
+              {#each someLibItems as p (p)}
+                <button class="libtile" class:vald={somePicks[someLibTarget].includes(p)} on:click={() => someLibToggle(p)}>
+                  <img src={bildUrl(p)} alt="" loading="lazy" />
+                  {#if someLibTarget === 'ig' && someCover === p}<span class="libomslag">OMSLAG</span>{/if}
+                  {#if someLibBadges(p).length}<span class="libbadges">{someLibBadges(p).map((k) => LIBBADGE[k]).join(' ')}</span>{/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+          {#if someLibTarget === 'ig' && somePicks.ig.length}
+            <div class="libomslagrad">
+              <span class="libmallbl">Omslag:</span>
+              {#each somePicks.ig as p (p)}
+                <button class="libomslagtile" class:vald={someCover === p} on:click={() => someLibSetCover(p)}>
+                  <img src={bildUrl(p)} alt="" />
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
         <div class="caps mt">Kanaler &amp; bildset</div>
         <div class="kanaler">
           <!-- Story-banan -->
           <div class="kanal">
             <div class="krad">
-              <button class="ktoggle" on:click={() => togglaBana('story')}><span class="box" class:pa={banor.story.pa}>{banor.story.pa ? '✓' : ''}</span><span class="knamn">Instagram Story</span></button>
-              {#if banor.story.pa}
-                {#if banor.story.bilder.length}<span class="antal">{banor.story.bilder.length} bilder → {banor.story.bilder.length} stories</span>{/if}
-                <button class="valjbild" on:click={() => valjBanMapp('story')}>{banor.story.bilder.length ? 'byt bildset…' : 'Välj bildset…'}</button>
-              {/if}
+              <span class="knamn">Instagram Story</span>
+              {#if somePicks.story.length}<span class="antal">{somePicks.story.length} bilder → {somePicks.story.length} stories</span>{/if}
             </div>
-            {#if banor.story.pa && banor.story.bilder.length}
-              <div class="strip">{#each banor.story.bilder as _b, i}<span class="thumb"><b>{i + 1}</b></span>{/each}</div>
+            {#if somePicks.story.length}
+              <div class="strip">{#each somePicks.story.slice(0, 6) as p (p)}<span class="thumb"><img src={bildUrl(p)} alt="" /></span>{/each}{#if somePicks.story.length > 6}<span class="thumb plus">+{somePicks.story.length - 6}</span>{/if}</div>
+            {:else}
+              <div class="hjalptext">Välj bilder i biblioteket ovan (mål: Story).</div>
             {/if}
           </div>
 
           <!-- IG-inläggs-banan -->
           <div class="kanal">
             <div class="krad">
-              <button class="ktoggle" on:click={() => togglaBana('ig')}><span class="box" class:pa={banor.ig.pa}>{banor.ig.pa ? '✓' : ''}</span><span class="knamn">Instagram-inlägg</span></button>
-              {#if banor.ig.pa}
-                {#if banor.ig.bilder.length}<span class="antal">{banor.ig.bilder.length === 1 ? 'enkel' : (igBitar.length > 1 ? igBitar.length + ' inlägg' : 'karusell · ' + banor.ig.bilder.length)}</span>{/if}
-                <button class="valjbild" on:click={() => valjBanMapp('ig')}>{banor.ig.bilder.length ? 'byt bildset…' : 'Välj bildset…'}</button>
-              {/if}
+              <span class="knamn">Instagram-inlägg</span>
+              {#if somePicks.ig.length}<span class="antal">{somePicks.ig.length === 1 ? 'enkel' : (igBitar.length > 1 ? igBitar.length + ' inlägg' : 'karusell · ' + somePicks.ig.length)}</span>{/if}
             </div>
-            {#if banor.ig.pa && banor.ig.bilder.length}
-              <div class="strip">{#each banor.ig.bilder.slice(0, 10) as _b, i}<span class="thumb">{#if i === 0}<em>omslag</em>{/if}</span>{/each}{#if banor.ig.bilder.length > 10}<span class="thumb plus">+{banor.ig.bilder.length - 10}</span>{/if}</div>
+            {#if somePicks.ig.length}
+              <div class="strip">{#each somePicks.ig.slice(0, 6) as p (p)}<span class="thumb"><img src={bildUrl(p)} alt="" />{#if p === someCover}<em>omslag</em>{/if}</span>{/each}{#if somePicks.ig.length > 6}<span class="thumb plus">+{somePicks.ig.length - 6}</span>{/if}</div>
               {#if igVarning}<div class="varn">⚠ {igVarning}</div>{/if}
+            {:else}
+              <div class="hjalptext">Välj bilder i biblioteket ovan (mål: IG-inlägg).</div>
             {/if}
           </div>
 
           <!-- FB-banan -->
           <div class="kanal">
             <div class="krad">
-              <button class="ktoggle" on:click={() => togglaBana('fb')}><span class="box" class:pa={banor.fb.pa}>{banor.fb.pa ? '✓' : ''}</span><span class="knamn">Facebook-sida</span></button>
-              {#if banor.fb.pa}
-                {#if banor.fb.bilder.length}<span class="antal">{Math.min(banor.fb.bilder.length, 4)} bilder · max 4</span>{/if}
-                <button class="valjbild" on:click={() => valjBanMapp('fb')}>{banor.fb.bilder.length ? 'byt bildset…' : 'Välj bildset…'}</button>
-              {/if}
+              <span class="knamn">Facebook-sida</span>
+              {#if somePicks.fb.length}<span class="antal">{Math.min(somePicks.fb.length, 4)} bilder · max 4</span>{/if}
             </div>
-            {#if banor.fb.pa && banor.fb.bilder.length}
-              <div class="strip">{#each banor.fb.bilder.slice(0, 6) as _b, i}<span class="thumb" class:dim={i >= 4}></span>{/each}</div>
+            {#if somePicks.fb.length}
+              <div class="strip">{#each somePicks.fb.slice(0, 6) as p, i (p)}<span class="thumb" class:dim={i >= 4}><img src={bildUrl(p)} alt="" /></span>{/each}</div>
               {#if fbVarning}<div class="varn">⚠ {fbVarning}</div>{/if}
-            {/if}
-            {#if banor.fb.pa}
               <div class="fbdiff"><div class="fbdifflbl">Facebook-text (utan #/@)</div><div class="fbtokens">{#each fbTokens(someCaptionResolved) as tk}<span class:bort={tk.bort}>{tk.s}</span>{/each}</div></div>
+            {:else}
+              <div class="hjalptext">Välj bilder i biblioteket ovan (mål: FB).</div>
             {/if}
           </div>
         </div>
@@ -972,6 +1156,36 @@
     font-size: 11.5px; font-weight: 600; color: var(--t-mut); flex: none; }
   .valjbild:hover { border-color: var(--acc); color: var(--acc); }
 
+  /* SoMe · bildbibliotek (variant 1a) */
+  .somelib { border: 1px solid var(--div3); border-radius: 11px; background: var(--panel); padding: 12px 13px; }
+  .libtabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 9px; }
+  .libtabs button { border: 1px solid var(--div); background: var(--kort); border-radius: 7px; padding: 5px 10px;
+    font-size: 11.5px; font-weight: 600; color: var(--t-mut); }
+  .libtabs button.on { border-color: var(--acc); color: var(--acc); background: var(--acc-soft); }
+  .libpath { color: var(--t-help); font-size: 10.5px; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .libmal { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .libmallbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-caps); }
+  .libmal button { border: 1px solid var(--div); background: var(--kort); border-radius: 999px; padding: 4px 11px;
+    font-size: 11.5px; font-weight: 600; color: var(--t-mut); display: flex; align-items: center; gap: 5px; }
+  .libmal button.on { border-color: var(--acc); color: var(--acc); background: var(--acc-soft); }
+  .libn { background: var(--div3); border-radius: 999px; padding: 0 6px; font-size: 10.5px; }
+  .libmal button.on .libn { background: rgba(0, 0, 0, 0.14); }
+  .libgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 7px; }
+  .libtile { position: relative; aspect-ratio: 3 / 4; border-radius: 7px; overflow: hidden; border: 0; padding: 0;
+    outline: 2px solid transparent; outline-offset: 1px; background: var(--div3); }
+  .libtile.vald { outline-color: var(--acc); }
+  .libtile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .libbadges { position: absolute; left: 4px; bottom: 4px; font-size: 8.5px; font-weight: 700;
+    background: rgba(0, 0, 0, 0.65); color: #fff; border-radius: 4px; padding: 1px 4px; }
+  .libomslag { position: absolute; top: 4px; right: 4px; font-size: 8px; font-weight: 700;
+    background: var(--acc); color: #fff; border-radius: 4px; padding: 1px 5px; letter-spacing: 0.03em; }
+  .libomslagrad { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .libomslagtile { width: 40px; height: 40px; border-radius: 6px; overflow: hidden; border: 0; padding: 0;
+    outline: 2px solid transparent; outline-offset: 1px; flex: none; }
+  .libomslagtile.vald { outline-color: var(--acc); }
+  .libomslagtile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .hjalptext { padding: 0 13px 11px; font-size: 11.5px; color: var(--t-help); }
+
   .kanaler { display: flex; flex-direction: column; gap: 10px; }
   .kanal { border: 1px solid var(--div3); border-radius: 11px; background: var(--panel); overflow: hidden; }
   .krad { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 13px; }
@@ -983,7 +1197,8 @@
   .strip { display: flex; gap: 6px; padding: 0 13px 11px; overflow-x: auto; }
   .thumb { width: 44px; height: 55px; border-radius: 5px; flex: none; position: relative;
     border: 1px solid var(--div); display: flex; align-items: center; justify-content: center;
-    background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 8px, var(--kort) 8px, var(--kort) 16px); }
+    overflow: hidden; background: var(--kort); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .thumb b { font-family: var(--font-c); font-size: 11px; color: var(--t-mut); }
   .thumb em { position: absolute; top: 2px; left: 3px; font-size: 8px; font-style: normal;
     font-family: var(--mono, monospace); background: var(--kort); border-radius: 3px; padding: 0 3px; color: var(--t-mut); }
@@ -1014,6 +1229,19 @@
   .dl { flex: 1; } .dfel { color: var(--varn); }
   .oppna { color: var(--acc); text-decoration: none; font-weight: 600; }
   .felbox { margin-top: 14px; border: 1px solid var(--div3); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; color: var(--varn); background: color-mix(in srgb, var(--varn) 8%, transparent); }
+
+  /* §10: godkänn prompten + generera-progress */
+  .genGranska { margin-top: 10px; border: 1px solid var(--acc-border); border-radius: 10px; background: var(--acc-soft); padding: 12px 13px; }
+  .genGranskaTitel { font-size: 12.5px; font-weight: 700; color: var(--t-head); }
+  .genGranskaHint { font-size: 11px; color: var(--t-mut); margin-top: 2px; }
+  .genGranskaFraga { margin-top: 9px; background: var(--kort); border: 1px solid var(--div); border-radius: 8px;
+    padding: 9px 11px; font-size: 11.5px; line-height: 1.5; color: var(--t-head); white-space: pre-wrap;
+    max-height: 220px; overflow-y: auto; font-family: var(--mono, ui-monospace, monospace); }
+  .genGranskaKnappar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+  .genProgress { margin-top: 10px; display: flex; align-items: center; gap: 9px; border: 1px solid var(--div3);
+    border-radius: 10px; background: var(--panel); padding: 10px 13px; font-size: 12px; color: var(--t-head); }
+  .genspin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--acc-soft); border-top-color: var(--acc);
+    flex: none; animation: sospin 0.8s linear infinite; }
   .korrad { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--div3); }
   .summa { margin-left: auto; font-size: 11.5px; color: var(--t-help); }
 

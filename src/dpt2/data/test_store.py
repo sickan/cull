@@ -1,5 +1,6 @@
 """Tester för datalager-CRUD (store) — körs mot in-memory SQLite (stdlib)."""
 
+import threading
 import unittest
 
 from dpt2.data import db, store
@@ -547,7 +548,7 @@ class TestFotojobbUtkast(unittest.TestCase):
 class TestMigrering(unittest.TestCase):
     def test_fresh_db_ar_v11_med_fotojobb_utkast(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 13)
+        self.assertEqual(db.schemaversion(c), 14)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
         self.assertIn("fotojobb_utkast", db.tabeller(c))
@@ -881,6 +882,42 @@ class TestSomeMaterial(unittest.TestCase):
     def test_utan_match_id_ok(self):
         sid = store.spara_some_material(self.c, kanal="instagram", format="story")
         self.assertTrue(sid)                                # match_id=None → ingen FK
+
+
+class TestTradsakerAnslutning(unittest.TestCase):
+    """Regression: pywebviews brygga anropar Api-metoder från flera trådar
+    samtidigt mot samma anslutning (check_same_thread=False). Utan
+    SafeConnection-låset (se db.py) kraschar detta intermittent med
+    sqlite3.InterfaceError/IndexError — bekräftat både i produktion (se
+    projektminnet) och reproducerat rått i denna testfil innan låset
+    lades till. Inga asserts på RESULTATET (racen är intermittent, ett
+    lyckat enstaka test bevisar inget) — testet ska bara ALDRIG kasta."""
+
+    def test_samtidiga_lasningar_kraschar_inte(self):
+        c = db.oppna(":memory:", check_same_thread=False)
+        for i in range(20):
+            store.upsert_lag(c, f"Lag {i}")
+        mids = [store.spara_match(c, {"lag_hemma": f"Lag {i}",
+                                       "lag_borta": f"Lag {i + 1}", "sport": "fotboll"})
+                for i in range(10)]
+
+        errors = []
+
+        def worker():
+            try:
+                for _ in range(50):
+                    store.lista_lag(c)
+                    for mid in mids[:5]:
+                        store.hamta_match(c, mid)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
 
 
 if __name__ == "__main__":

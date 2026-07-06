@@ -102,7 +102,7 @@
     {:else if aktiv === 'publicera'}
       <Publicera on:navigera={(e) => (aktiv = e.detail)} on:materialAndrat={uppdateraDelvis} />
     {:else if aktiv === 'innehall'}
-      <Innehall />
+      <Innehall on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'trana'}
       <Trana />
     {:else if aktiv === 'logg'}

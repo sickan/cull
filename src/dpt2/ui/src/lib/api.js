@@ -191,6 +191,17 @@ export async function raderaMatch(id) {
   return wait({ ok: true })
 }
 
+// Resultat-remsan (Publicera/Innehåll) — kontinuerlig fältvis redigering av
+// resultat/mellan/malskyttar, skild från sparaMatch (Slutsignal/Matcher).
+export async function sattResultat(matchId, resultat, mellan, malskyttar) {
+  const api = brygga()
+  if (api) return api.satt_resultat(matchId, resultat, mellan, malskyttar)
+  const i = MOCK_MATCHER.findIndex((m) => m.id === matchId)
+  if (i >= 0) MOCK_MATCHER[i] = { ...MOCK_MATCHER[i], resultat, mellan, malskyttar }
+  if (MOCK_FULL[matchId]) MOCK_FULL[matchId] = { ...MOCK_FULL[matchId], resultat, mellan, malskyttar }
+  return wait({ ok: true })
+}
+
 export async function sattMatchSynk(id, pa) {
   const api = brygga()
   if (api) return api.satt_match_synk(id, pa)
@@ -422,6 +433,22 @@ export async function aktivMatch() {
   return wait(_aktivMock)
 }
 
+// ── Arbetsyta — autosparade utkast (Live/SoMe/Webb-Sport, per match) ────────
+const _mockUtkast = {}
+
+export async function hamtaUtkast(matchId) {
+  const api = brygga()
+  if (api) return api.hamta_utkast(matchId)
+  return wait(_mockUtkast[matchId] ? structuredClone(_mockUtkast[matchId]) : null)
+}
+
+export async function sparaUtkast(matchId, patch) {
+  const api = brygga()
+  if (api) return api.spara_utkast(matchId, patch)
+  _mockUtkast[matchId] = { ...(_mockUtkast[matchId] || {}), ...patch }
+  return wait({ ok: true })
+}
+
 // ── Aktivt urval (topbar-chippet; ①Gallra → ②Leverera → ③Publicera) ──────────
 let _aktivtUrvalId = null
 
@@ -449,6 +476,19 @@ export async function urvalHojdpunkter(n = 6) {
   const antal = Math.min(u.bilder || n, n)
   return wait({ ok: true, urval: structuredClone(u), namn,
     filer: Array.from({ length: antal }, (_, i) => `DSC_0${417 + i}`) })
+}
+
+// SoMe-bildbibliotekets "Publicera-urvalet"-källa — samma aktiva urval som
+// urval_hojdpunkter, men riktiga sökvägar för ALLA behållna bilder (inte
+// bara topp-N).
+export async function bilderForUrval() {
+  const api = brygga()
+  if (api) return api.bilder_for_urval()
+  const u = await aktivtUrval()
+  if (!u) return wait({ ok: false, fel: 'Inget aktivt urval — gallra en match först.' })
+  const antal = u.bilder || 12
+  return wait({ ok: true, urval: structuredClone(u),
+    bilder: Array.from({ length: antal }, (_, i) => `/mock/urval/DSC_0${417 + i}.jpg`) })
 }
 
 export async function startaCull(config) {
@@ -498,9 +538,12 @@ export async function startaNummer(urvalId) {
     meddelande: `Tröjnummer skrivna på ${Math.round(n * 0.8)} av ${n} bilder.` })
 }
 
-export async function genereraBildsvep(matchinfo, sport = '', hemmaFarg = '') {
+// fakta = redan kända matchfakta ({resultat, mellan, malskyttar, arena, datum,
+// liga}) — vävs in i Claude-frågan så websökning inte behöver leta upp sånt
+// appen redan vet (se tjanster/bildsvep.py:bygg_fraga).
+export async function genereraBildsvep(matchinfo, sport = '', hemmaFarg = '', fakta = null) {
   const api = brygga()
-  if (api) return api.generera_bildsvep(matchinfo, sport, hemmaFarg)
+  if (api) return api.generera_bildsvep(matchinfo, sport, hemmaFarg, fakta)
   return wait({
     ok: true,
     referat: 'Malmö FF tog kommandot tidigt och Nellie Lilja sköt in 1–0 innan Izzy D’Aquila ökade på till 2–0 före paus.',
@@ -511,6 +554,14 @@ export async function genereraBildsvep(matchinfo, sport = '', hemmaFarg = '') {
       '#MalmöFF #Damallsvenskan #sportfoto #fotboll #Bildsvepet\n\n' +
       '@malmo_ff @?motstandare @obosdamallsvenskan @svenskfotboll @nikonsverige',
   })
+}
+
+// "Godkänn prompten" — bygger (utan nätverksanrop) exakt den fråga som
+// skulle skickas, för granskning innan det skarpa ~2-minuters Claude-anropet.
+export async function forhandsgranskaBildsvepFraga(matchinfo, fakta = null) {
+  const api = brygga()
+  if (api) return api.forhandsgranska_bildsvep_fraga(matchinfo, fakta)
+  return wait({ ok: true, fraga: `Match: ${matchinfo}.\n(mock — riktig fråga byggs i skarpa appen)` })
 }
 
 export async function skapaStory(config) {
