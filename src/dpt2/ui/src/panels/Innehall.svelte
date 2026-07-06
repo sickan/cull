@@ -147,6 +147,8 @@
       }
     }
     cms = cms
+    figThumbs = {}                       // rensa förra matchens miniatyrer
+    aterupplosaFigThumbs(cms.figurer)    // återskapa ur figurernas sökvägar
     setTimeout(() => (cmsUtkastLaddar = false), 0)
   }
 
@@ -229,15 +231,39 @@
   async function hamtaHojdpunkter() {
     const r = await urvalHojdpunkter(6)
     const filer = (r?.ok && r.filer) || []
+    const sokvagar = (r?.ok && r.sokvagar) || []
     const antal = Math.min(filer.length || (r?.ok && r.urval?.bilder) || 6, 6)
     hlKalla = (r?.ok && r.namn) || `${cms.hem} – ${cms.borta}`.replace(/\s+/g, ' ').trim()
     const matchinfo = `${cms.hem} ${cms.resultat} ${cms.borta}`.replace(/\s+/g, ' ').trim()
+    // bild = upplöst full sökväg (för miniatyr + export-kopiering), src = stam
+    // (proveniens/räkning). Tidigare lagrades bara stammen → tomma rutor + ingen
+    // export-kopiering.
     cms.figurer = Array.from({ length: antal }, (_, i) => ({
-      bild: '', alt: `${matchinfo} — höjdpunkt ${i + 1}`, bildtext: '', src: filer[i] || '' }))
+      bild: sokvagar[i] || '', alt: `${matchinfo} — höjdpunkt ${i + 1}`, bildtext: '', src: filer[i] || '' }))
     figThumbs = {}
     hlFlash = true
     setTimeout(() => (hlFlash = false), 2200)
     forhandsgranska()
+    aterupplosaFigThumbs(cms.figurer)
+  }
+
+  // Återskapa miniatyr-cachen ur figurernas lokala källsökväg (figurer[i].bild).
+  // Körs efter höjdpunkts-hämtning OCH när ett sparat utkast öppnas — annars är
+  // rutorna tomma (figThumbs är transient, sparas aldrig). Parallellt; hoppar
+  // figurer utan sökväg eller som redan har en miniatyr.
+  async function aterupplosaFigThumbs(figs) {
+    const arr = figs || (akt && akt.figurer) || []
+    const jobb = []
+    arr.forEach((f, i) => {
+      if (f && f.bild && !figThumbs[i]) {
+        jobb.push(thumbForBild(f.bild).then((t) => (t?.ok ? { i, u: t.data_uri } : null)))
+      }
+    })
+    if (!jobb.length) return
+    const res = await Promise.all(jobb)
+    const novo = { ...figThumbs }
+    for (const x of res) if (x) novo[x.i] = x.u
+    figThumbs = novo
   }
 
   function fargForLag(namn) { const l = lagAlla.find((x) => x.namn === namn); return l ? (l.stall_hemma || l.profilfarg) : '' }

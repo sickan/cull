@@ -475,7 +475,8 @@ export async function urvalHojdpunkter(n = 6) {
   const namn = u.lag_hemma ? `${u.lag_hemma} – ${u.lag_borta}` : (u.kalla || '').split('/').pop()
   const antal = Math.min(u.bilder || n, n)
   return wait({ ok: true, urval: structuredClone(u), namn,
-    filer: Array.from({ length: antal }, (_, i) => `DSC_0${417 + i}`) })
+    filer: Array.from({ length: antal }, (_, i) => `DSC_0${417 + i}`),
+    sokvagar: Array.from({ length: antal }, (_, i) => `/Users/sickan/Dropbox/DPT/Live/DSC_0${417 + i}.jpg`) })
 }
 
 // SoMe-bildbibliotekets "Publicera-urvalet"-källa — samma aktiva urval som

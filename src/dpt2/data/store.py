@@ -150,6 +150,28 @@ def resolve_urval_bilder(conn, urval_id):
     return bilder
 
 
+def urval_toppbilder_sokvagar(conn, urval_id, n=6):
+    """Som urval_toppbilder, men returnerar [{stem, sokvag}] för topp-N — varje
+    stam slås upp mot urvalets källmapp (urval.kalla, samma glob som
+    resolve_urval_bilder). sokvag='' om filen inte hittas (flyttad/borttagen).
+    Backar Innehålls höjdpunkter: stammen behålls för provenienstagg, sökvägen
+    behövs för miniatyr-återupplösning OCH export-kopiering."""
+    from pathlib import Path
+    urval = hamta_urval(conn, urval_id)
+    kalla = (urval or {}).get("kalla")
+    mapp = Path(kalla).expanduser() if kalla else None
+    har_mapp = bool(mapp and mapp.is_dir())
+    ut = []
+    for stem in urval_toppbilder(conn, urval_id, n):
+        sokvag = ""
+        if har_mapp:
+            traffar = sorted(mapp.glob(stem + ".*"))
+            if traffar:
+                sokvag = str(traffar[0])
+        ut.append({"stem": stem, "sokvag": sokvag})
+    return ut
+
+
 def lista_urval(conn, *, status=None, limit=50):
     """Urval för Leverera-/översiktsvyer, nyast först. Joinar matchen för en
     etikett (lag_hemma/lag_borta). status filtrerar om satt."""

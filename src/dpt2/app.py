@@ -439,8 +439,10 @@ class Api:
             return {"ok": False, "fel": "Inget aktivt urval — gallra en match först."}
         namn = (f"{u['lag_hemma']} – {u['lag_borta']}" if u.get("lag_hemma")
                 else (u.get("kalla") or "").rstrip("/").rsplit("/", 1)[-1])
+        toppar = store.urval_toppbilder_sokvagar(self.conn, u["id"], n)
         return {"ok": True, "urval": u, "namn": namn,
-                "filer": store.urval_toppbilder(self.conn, u["id"], n)}
+                "filer": [t["stem"] for t in toppar],
+                "sokvagar": [t["sokvag"] for t in toppar]}
 
     def bilder_for_urval(self):
         """SoMe-bildbibliotekets "Publicera-urvalet"-källa: fullständiga

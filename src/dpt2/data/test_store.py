@@ -38,6 +38,26 @@ class TestUrval(unittest.TestCase):
                          ["s2", "s4", "s1"])
         self.assertEqual(store.urval_toppbilder(self.c, "finns-ej"), [])
 
+    def test_toppbilder_sokvagar_upploser_mot_kallmapp(self):
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as d:
+            for namn in ("s2.jpg", "s4.NEF"):
+                open(os.path.join(d, namn), "w").close()
+            uid = store.spara_urval(self.c, kalla=d, bilder=0)
+            store.ersatt_urval_bilder(self.c, uid, [
+                ("s2", 1, 0.95), ("s4", 1, 0.70), ("s1", 1, 0.50)])  # s1 saknar fil
+            res = store.urval_toppbilder_sokvagar(self.c, uid, 3)
+            self.assertEqual([r["stem"] for r in res], ["s2", "s4", "s1"])
+            self.assertTrue(res[0]["sokvag"].endswith("s2.jpg"))
+            self.assertTrue(res[1]["sokvag"].endswith("s4.NEF"))
+            self.assertEqual(res[2]["sokvag"], "")   # ingen fil på disk → tom sökväg
+
+    def test_toppbilder_sokvagar_saknad_mapp_ger_tomma(self):
+        uid = store.spara_urval(self.c, kalla="/finns/inte/alls", bilder=0)
+        store.ersatt_urval_bilder(self.c, uid, [("s1", 1, 0.9)])
+        res = store.urval_toppbilder_sokvagar(self.c, uid, 3)
+        self.assertEqual(res, [{"stem": "s1", "sokvag": ""}])
+
     def test_status_livscykel(self):
         uid = store.spara_urval(self.c, kalla="x", bilder=10)
         store.satt_urval_status(self.c, uid, "levererad")
