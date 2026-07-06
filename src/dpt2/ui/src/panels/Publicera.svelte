@@ -169,17 +169,17 @@
   // ── SoMe · Målbanor: ett paket, eget bildset per kanal ──────────────────────
   let someCaption = ''
   let someGen = false
+  let someGenFel = ''
 
   // §5: bildtext-tokens — {resultat} {halvtid|setsiffror|periodsiffror|
   // gamesiffror beroende på sportprofil} {målskyttar} {arena} {motståndare}
   // {@lag} {#liga} {galleri} {datum} {tid}. Okända brickor lämnas orörda.
   const _hashtagify = (s) => (s || '').replace(/[^\p{L}\p{N}]/gu, '')
-  function _resolveTokens(text) {
+  function _resolveTokens(text, m, prof, lag) {
     if (!text) return ''
-    const m = match
-    const handle = (namn) => (lagAlla.find((x) => x.namn === namn)?.instagram || '').replace(/^@/, '')
+    const handle = (namn) => (lag.find((x) => x.namn === namn)?.instagram || '').replace(/^@/, '')
     const vals = {
-      resultat: m?.resultat || '', [profil.mid_token]: m?.mellan || '',
+      resultat: m?.resultat || '', [prof.mid_token]: m?.mellan || '',
       målskyttar: m?.malskyttar || '', arena: m?.arena || '', motståndare: m?.lag_borta || '',
       '@lag': handle(m?.lag_hemma) ? '@' + handle(m?.lag_hemma) : '',
       '#liga': m?.liga ? '#' + _hashtagify(m.liga) : '',
@@ -187,7 +187,7 @@
     }
     return text.replace(/\{([^{}]+)\}/g, (whole, key) => (key in vals ? vals[key] : whole))
   }
-  $: someCaptionResolved = _resolveTokens(someCaption)
+  $: someCaptionResolved = _resolveTokens(someCaption, match, profil, lagAlla)
   $: someTokens = ['resultat', profil.mid_token].concat(profil.has_scorers ? ['målskyttar'] : [])
     .concat(['arena', 'motståndare', '@lag', '#liga', 'galleri', 'datum', 'tid'])
   function insertToken(tok) {
@@ -249,10 +249,17 @@
 
   async function someGenerera() {
     someGen = true
+    someGenFel = ''
     const info = match ? `${match.lag_hemma}–${match.lag_borta}${match.resultat ? ' ' + match.resultat : ''}` : ''
-    const r = await genereraBildsvep(info, match?.sport || '', fargForLag(match?.lag_hemma) || '')
-    someGen = false
-    if (r?.ok) someCaption = r.bildsvep
+    try {
+      const r = await genereraBildsvep(info, match?.sport || '', fargForLag(match?.lag_hemma) || '')
+      if (r?.ok) someCaption = r.bildsvep
+      else someGenFel = r?.fel || 'Kunde inte generera bildtexten.'
+    } catch (e) {
+      someGenFel = 'Kunde inte generera bildtexten.'
+    } finally {
+      someGen = false
+    }
   }
 
   function someTestkor() { if (someHarBilder) { someLage = 'dry'; someResultat = [] } }
@@ -633,6 +640,7 @@
         </div>
 
         <div class="capsrad2"><span class="caps">Bildtext (delas av alla kanaler)</span><button class="genlank" on:click={someGenerera} disabled={someGen}>{someGen ? 'Genererar…' : '✨ Generera'}</button></div>
+        {#if someGenFel}<div class="felbox">⚠ {someGenFel}</div>{/if}
         <textarea class="somecap" bind:value={someCaption} rows="3" placeholder="Bildsvep-text med #hashtags och @mentions…"></textarea>
         <div class="tokenrad">
           <span class="tokenlbl">Infoga bricka</span>

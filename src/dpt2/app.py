@@ -518,7 +518,10 @@ class Api:
     # ── Publicera (Bildsvepet-text + Matchdag-story) ─────────────────────────
     def generera_bildsvep(self, matchinfo, sport="", hemma_farg=""):
         """Genererar Bildsvepet-bildtext (Claude web search) för granskning."""
-        data = bildsvep.generera(matchinfo, sport=sport, hemma_farg=hemma_farg)
+        try:
+            data = bildsvep.generera(matchinfo, sport=sport, hemma_farg=hemma_farg)
+        except Exception as e:
+            return {"ok": False, "fel": f"Kunde inte generera: {e}"}
         if not data:
             return {"ok": False, "fel": "Kunde inte generera (saknas API-nyckel "
                     "eller inget svar)."}
