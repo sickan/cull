@@ -937,6 +937,67 @@ class Api:
             store.satt_synkad(self.conn, iid, datetime.now().isoformat(timespec="seconds"))
         return {"ok": r.get("ok", False), "id": iid, "fel": r.get("fel")}
 
+    # ── På gång (aktivitetslista → content/pagang/*.md) ─────────────────────
+    def lista_aktiviteter(self):
+        return store.lista_aktiviteter(self.conn)
+
+    def spara_aktivitet(self, akt):
+        """Upsert av EN aktivitet (autospar). Returnerar {ok, id}."""
+        aid = store.spara_aktivitet(self.conn, akt or {})
+        return {"ok": True, "id": aid}
+
+    def radera_aktivitet(self, id):
+        store.radera_aktivitet(self.conn, id)
+        return {"ok": True}
+
+    def forhandsgranska_aktivitet(self, akt):
+        """Genererar .md (utan att skriva) + filnamn för förhandsvisning."""
+        _fm, _b, slug, md = _aktivitet_md(akt or {})
+        return {"slug": slug, "filnamn": f"content/pagang/{slug}.md", "md": md}
+
+    def exportera_aktiviteter(self, export_dir, test=False):
+        """Skriver en content/pagang/{datum}-{slug}.md per aktivitet med titel
+        (frontmatter bär `publicerad` — webben filtrerar dolda/passerade). Hela
+        den kurerade listan skrivs på en gång; det är den som driver "På gång"-
+        sektionen. Testläge skriver till test-output/content/pagang/ och kräver
+        ingen export-katalog (jfr exportera_innehall)."""
+        poster = [a for a in store.lista_aktiviteter(self.conn) if a.get("titel")]
+        if not test and not export_dir:
+            return {"ok": False, "fel": "Ange en export-katalog."}
+        mal = (testlage.innehall_mapp("pagang") if test else export_dir)
+        skrivna = []
+        for a in poster:
+            _fm, _b, slug, md = _aktivitet_md(a)
+            ut = AX.skriv_md(md, mal, slug)
+            skrivna.append(str(ut))
+        return {"ok": True, "antal": len(skrivna), "path": mal if test else export_dir,
+                "test": test}
+
+    def publicera_aktiviteter_natet(self, test=False):
+        """Publicerar hela den kurerade listan till content-sync-workern (typ
+        'pagang') — en rad per aktivitet med titel. Passerade/dolda poster
+        skickas ändå (frontmatter bär `publicerad`, webben filtrerar) så att
+        avpublicering slår igenom. Testläge skriver bara lokala .md-filer, som
+        exportera_aktiviteter(test=True). Returnerar {ok, antal, fel}."""
+        if test:
+            r = self.exportera_aktiviteter("", test=True)
+            return {"ok": True, "antal": r.get("antal", 0), "path": r.get("path"),
+                    "test": True}
+        poster = [a for a in store.lista_aktiviteter(self.conn) if a.get("titel")]
+        antal, fel = 0, None
+        for a in poster:
+            fm, body, slug, _md = _aktivitet_md(a)
+            r = self.innehall_synk.publicera("pagang", a["id"], slug=slug,
+                                             frontmatter=fm, body=body)
+            if r.get("ok"):
+                store.satt_aktivitet_synkad(
+                    self.conn, a["id"],
+                    datetime.now().isoformat(timespec="seconds"))
+                antal += 1
+            elif fel is None:
+                fel = r.get("fel") or f"Kunde inte publicera (status {r.get('status')})."
+        return {"ok": fel is None, "antal": antal, "fel": fel}
+
     def thumb_for_bild(self, path):
         """Miniatyr (base64 data-URI) för en vald hero-bild — raw extraheras
         via exiftool, jpg öppnas direkt. Återanvänder dpt v1:s
@@ -1188,6 +1249,31 @@ def _innehall_md(data, bild_urls=None):
     if typ == "blogg":
         delar.append(_platser_md(data.get("platser")))
     body = "\n\n".join(p for p in delar if p)
+    return fm, body, slug, AX.render_md(fm, body)
+
+
+def _aktivitet_md(akt):
+    """En aktivitet (På gång-post) → (frontmatter-dict, body, slug, komplett
+    .md). Speglar DATAMODELL-PAGANG.md: datum är enda datumkällan (veckodag/
+    månad härleds på webben, lagras aldrig), body = beskrivningen (valfri).
+    slug = {datum}-{slugga(titel)} → filnamnet content/pagang/{slug}.md."""
+    akt = akt or {}
+    titel = akt.get("titel") or ""
+    datum = akt.get("datum") or ""
+    kategori = akt.get("kategori") or "Match"
+    namnslug = AX.slugga(titel) if titel else "ny-aktivitet"
+    slug = f"{datum}-{namnslug}" if datum else namnslug
+    fm = {
+        "typ": "aktivitet",
+        "kategori": kategori,
+        "etikett": akt.get("etikett") or None,
+        "titel": titel or None,
+        "datum": datum or None,
+        "tid": akt.get("tid") or None,
+        "plats": akt.get("plats") or None,
+        "publicerad": bool(akt.get("publicerad")),
+    }
+    body = (akt.get("beskrivning") or "").rstrip()
     return fm, body, slug, AX.render_md(fm, body)
 
 

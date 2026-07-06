@@ -263,6 +263,73 @@ def radera_innehall(conn, innehall_id):
     conn.commit()
 
 
+# ── På gång (aktivitetslista → content/pagang/*.md) ──────────────────────────
+_AKT_KATEGORIER = ("Match", "Uppdrag", "Utställning", "Övrigt")
+
+
+def _aktivitet_dict(r):
+    d = dict(r)
+    d["publicerad"] = bool(d.get("publicerad"))
+    return d
+
+
+def lista_aktiviteter(conn):
+    """Alla aktiviteter, stigande på datum (tomt datum sist). Sortering/
+    passerad-filtrering görs i UI:t — store returnerar hela den kurerade
+    listan."""
+    rader = conn.execute(
+        "SELECT * FROM aktivitet ORDER BY datum IS NULL, datum ASC, skapad ASC"
+    ).fetchall()
+    return [_aktivitet_dict(r) for r in rader]
+
+
+def hamta_aktivitet(conn, aktivitet_id):
+    r = conn.execute("SELECT * FROM aktivitet WHERE id=?",
+                     (aktivitet_id,)).fetchone()
+    return _aktivitet_dict(r) if r else None
+
+
+def spara_aktivitet(conn, akt):
+    """Upsert av EN aktivitet (autospar-vänlig — hela raden skrivs varje gång).
+    akt: dict med kategori/etikett/titel/datum/tid/plats/beskrivning/publicerad
+    (+ valfritt id). Okänd/tom kategori normaliseras till 'Match'. Returnerar
+    aktivitet-id."""
+    aid = akt.get("id") or ny_id()
+    kategori = akt.get("kategori")
+    if kategori not in _AKT_KATEGORIER:
+        kategori = "Match"
+    nu = _nu()
+    # Bevara skapad-tid vid uppdatering (INSERT OR REPLACE skulle annars nolla
+    # den) — läs ut befintlig rad först.
+    bef = conn.execute("SELECT skapad FROM aktivitet WHERE id=?",
+                       (aid,)).fetchone()
+    skapad = bef["skapad"] if bef else nu
+    conn.execute(
+        "INSERT OR REPLACE INTO aktivitet"
+        "(id,kategori,etikett,titel,datum,tid,plats,beskrivning,publicerad,"
+        " synkad_tid,skapad,uppdaterad) "
+        "VALUES(?,?,?,?,?,?,?,?,?,"
+        " (SELECT synkad_tid FROM aktivitet WHERE id=?),?,?)",
+        (aid, kategori, akt.get("etikett") or None, akt.get("titel") or None,
+         akt.get("datum") or None, akt.get("tid") or None,
+         akt.get("plats") or None, akt.get("beskrivning") or None,
+         1 if akt.get("publicerad") else 0, aid, skapad, nu))
+    conn.commit()
+    return aid
+
+
+def satt_aktivitet_synkad(conn, aktivitet_id, synkad_tid):
+    """Märker en aktivitet som publicerad till content-sync-workern (nätet)."""
+    conn.execute("UPDATE aktivitet SET synkad_tid=? WHERE id=?",
+                 (synkad_tid, aktivitet_id))
+    conn.commit()
+
+
+def radera_aktivitet(conn, aktivitet_id):
+    conn.execute("DELETE FROM aktivitet WHERE id=?", (aktivitet_id,))
+    conn.commit()
+
+
 # ── Cull-jobb ─────────────────────────────────────────────────────────────────
 def spara_cull_jobb(conn, *, urval_id, verktyg, behall_varde=None,
                     behall_enhet=None, burst_grans=None, trojnummer_ocr=False,

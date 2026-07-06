@@ -662,6 +662,84 @@ export async function publiceraInnehallNatet(data, test = false) {
   return wait({ ok: true, id: data.id || 'i_ny' })
 }
 
+// ── På gång (aktivitetslista → content/pagang/*.md på webbens Sport-sida) ────
+// Muteras lokalt i mock så list/spara/radera hänger ihop utan brygga (jfr
+// MOCK_MATCHER). Seed speglar prototypens dpt2.pagang.v1.
+let _aktSeq = 0
+let MOCK_AKTIVITETER = [
+  { id: 'akt1', kategori: 'Match', etikett: 'OBOS Damallsvenskan · omgång 13',
+    titel: 'Malmö FF – IFK Norrköping', datum: '2026-07-12', tid: 'Avspark 16:00',
+    plats: 'Eleda Stadion, Malmö', publicerad: true,
+    beskrivning: 'Toppmöte på hemmaplan. Jag bevakar matchen från läktarkant till mittcirkel — bilderna publiceras i galleriet samma kväll.' },
+  { id: 'akt2', kategori: 'Match', etikett: 'OBOS Damallsvenskan · omgång 14',
+    titel: 'Vittsjö GIK – Malmö FF', datum: '2026-07-19', tid: '15:00',
+    plats: 'Vittsjö IP', publicerad: true, beskrivning: '' },
+  { id: 'akt3', kategori: 'Utställning', etikett: 'Utställning',
+    titel: 'Sommarutställning: Skagen', datum: '2026-07-26', tid: '11:00–16:00',
+    plats: 'Galleri Dalecarlia', publicerad: true, beskrivning: '' },
+  { id: 'akt4', kategori: 'Match', etikett: 'OBOS Damallsvenskan · omgång 12',
+    titel: 'FC Rosengård – Malmö FF', datum: '2026-07-04', tid: 'Avspark 16:00',
+    plats: 'Malmö IP', publicerad: true, beskrivning: '' },
+]
+
+function mockAktivitetMd(a) {
+  const slugd = (a.datum ? a.datum + '-' : '') + (slug(a.titel) || 'ny-aktivitet')
+  const fm = ['---', 'typ: aktivitet', `kategori: ${a.kategori || 'Match'}`,
+    `etikett: ${a.etikett || ''}`, `titel: ${a.titel || ''}`, `datum: ${a.datum || ''}`,
+    `tid: ${a.tid || ''}`, `plats: ${a.plats || ''}`,
+    `publicerad: ${a.publicerad ? 'true' : 'false'}`, '---']
+  const body = a.beskrivning ? ['', a.beskrivning] : []
+  return { slug: slugd, filnamn: `content/pagang/${slugd}.md`,
+    md: fm.concat(body).join('\n') + '\n' }
+}
+
+export async function listaAktiviteter() {
+  const api = brygga()
+  if (api) return api.lista_aktiviteter()
+  return wait(structuredClone(MOCK_AKTIVITETER))
+}
+
+export async function sparaAktivitet(akt) {
+  const api = brygga()
+  if (api) return api.spara_aktivitet(akt)
+  const id = akt.id || `aktny${++_aktSeq}`
+  const i = MOCK_AKTIVITETER.findIndex((a) => a.id === id)
+  const rad = { ...akt, id }
+  if (i >= 0) MOCK_AKTIVITETER[i] = { ...MOCK_AKTIVITETER[i], ...rad }
+  else MOCK_AKTIVITETER.push(rad)
+  return wait({ ok: true, id })
+}
+
+export async function raderaAktivitet(id) {
+  const api = brygga()
+  if (api) return api.radera_aktivitet(id)
+  MOCK_AKTIVITETER = MOCK_AKTIVITETER.filter((a) => a.id !== id)
+  return wait({ ok: true })
+}
+
+export async function forhandsgranskaAktivitet(akt) {
+  const api = brygga()
+  if (api) return api.forhandsgranska_aktivitet(akt)
+  return wait(mockAktivitetMd(akt || {}))
+}
+
+export async function exporteraAktiviteter(exportDir, test = false) {
+  const api = brygga()
+  if (api) return api.exportera_aktiviteter(exportDir, test)
+  const antal = MOCK_AKTIVITETER.filter((a) => a.titel).length
+  if (test) return wait({ ok: true, antal, path: '~/DPT/test-output/content/pagang', test: true })
+  if (!exportDir) return wait({ ok: false, fel: 'Ange en export-katalog.' })
+  return wait({ ok: true, antal, path: exportDir })
+}
+
+export async function publiceraAktiviteterNatet(test = false) {
+  const api = brygga()
+  if (api) return api.publicera_aktiviteter_natet(test)
+  const antal = MOCK_AKTIVITETER.filter((a) => a.titel).length
+  if (test) return wait({ ok: true, antal, path: '~/DPT/test-output/content/pagang', test: true })
+  return wait({ ok: true, antal })
+}
+
 // Modeller (din smak / arkiv / hybrid — modell-växlaren). Muteras lokalt i mock.
 let MOCK_MODELLER = [
   { id: 'm_dinsmak', typ: 'din_smak', aktiv: true, pkl_path: '~/.config/dpt2/modeller/din_smak.pkl',

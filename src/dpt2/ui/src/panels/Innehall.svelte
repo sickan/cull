@@ -5,6 +5,7 @@
   import BildvaljareFokuspunkt from '../lib/BildvaljareFokuspunkt.svelte'
   import ResultatRemsa from '../lib/ResultatRemsa.svelte'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
+  import PaGang from './PaGang.svelte'
   import { testMode } from '../lib/testlage.js'
 
   // Fyra färgkodade typer (DATAMODELL.md). Porträtt är en Event-kategori,
@@ -14,6 +15,7 @@
     { id: 'match', namn: 'Sport', farg: '#2F7CB0', sub: 'från match', mapp: 'matcher' },
     { id: 'landskap', namn: 'Landskap', farg: '#C9871F', sub: 'bildserier', mapp: 'landskap' },
     { id: 'event', namn: 'Event', farg: '#C9657F', sub: 'porträtt, bröllop…', mapp: 'event' },
+    { id: 'pagang', namn: 'På gång', farg: '#A0653B', sub: 'kommande på webben', mapp: 'pagang' },
   ]
   const STATUSAR = ['kommande', 'pagaende', 'avslutad']
   const STATUS_ETI = { kommande: 'Kommande', pagaende: 'Pågående', avslutad: 'Avslutad' }
@@ -387,6 +389,7 @@
           {#if ct.id === 'blogg'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
           {:else if ct.id === 'match'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/></svg>
           {:else if ct.id === 'landskap'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-8 4 6 3-4 6 6"/><circle cx="17.5" cy="7.5" r="1.8"/></svg>
+          {:else if ct.id === 'pagang'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="4.5" width="17" height="16" rx="2.4"/><path d="M3.5 9h17M8 3v3M16 3v3"/><path d="M8 13.5l2.5 2.5L16 11"/></svg>
           {:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg>{/if}
         </span>
         <span class="tnamn scd">{ct.namn}</span>
@@ -395,6 +398,9 @@
     {/each}
   </div>
 
+  {#if ctyp === 'pagang'}
+    <PaGang on:navigera />
+  {:else}
   {#if ctyp === 'match'}
     <AktivMatchRad on:navigera />
     {#if pick && matchFull}<ResultatRemsa match={matchFull} {profil} {lagAlla} />{/if}
@@ -605,6 +611,7 @@
       {/if}
     </div>
   </div>
+  {/if}
 </div>
 
 <style>
@@ -614,7 +621,7 @@
   .sub { font-size: 13px; color: var(--t-mut); }
 
   /* Fyra färgkodade typkort (Blog · Sport · Landskap · Event) */
-  .typkort { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+  .typkort { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 16px; }
   .tkort { display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
     padding: 12px 14px; border: 1px solid var(--div); border-radius: 12px;
     background: var(--kort); box-shadow: var(--skugga); text-align: left; }

@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -440,6 +440,28 @@ def _migrera(conn, fran_version):
           cms_own      TEXT,
           uppdaterad   TEXT NOT NULL
         );""")
+    if fran_version < 15:
+        # v15: På gång — kurerad aktivitetslista → content/pagang/*.md på
+        # webbens Sport-sida. Persistent lista (autospar), skild från innehall
+        # (engångspublicering per formulär). Se schema.sql för kolumn-noter.
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS aktivitet (
+          id          TEXT PRIMARY KEY,
+          kategori    TEXT NOT NULL DEFAULT 'Match'
+                        CHECK (kategori IN ('Match','Uppdrag','Utställning','Övrigt')),
+          etikett     TEXT,
+          titel       TEXT,
+          datum       TEXT,
+          tid         TEXT,
+          plats       TEXT,
+          beskrivning TEXT,
+          publicerad  INTEGER NOT NULL DEFAULT 0,
+          synkad_tid  TEXT,
+          skapad      TEXT NOT NULL,
+          uppdaterad  TEXT NOT NULL
+        );""")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_aktivitet_datum ON aktivitet(datum);")
 
 
 def _har_kolumn(conn, tabell, kolumn):

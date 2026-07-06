@@ -13,7 +13,7 @@ class TestApi(unittest.TestCase):
 
     def test_info(self):
         info = self.api.info()
-        self.assertEqual(info["schemaversion"], 14)
+        self.assertEqual(info["schemaversion"], 15)
 
     def test_match_round_trip_genom_bryggan(self):
         res = self.api.spara_match({
@@ -382,6 +382,63 @@ class TestApi(unittest.TestCase):
 
     def test_innehall_export_utan_katalog(self):
         self.assertFalse(self.api.exportera_innehall({"titel": "X"}, "")["ok"])
+
+    # ── På gång (aktivitet) ──────────────────────────────────────────────
+    def test_aktivitet_md_frontmatter_och_slug(self):
+        r = self.api.forhandsgranska_aktivitet({
+            "kategori": "Match", "etikett": "Damallsvenskan · omgång 13",
+            "titel": "Malmö FF – IFK Norrköping", "datum": "2026-07-12",
+            "tid": "Avspark 16:00", "plats": "Eleda Stadion, Malmö",
+            "beskrivning": "Toppmöte på hemmaplan.", "publicerad": True})
+        self.assertEqual(r["slug"], "2026-07-12-malmo-ff-ifk-norrkoping")
+        self.assertEqual(r["filnamn"], "content/pagang/2026-07-12-malmo-ff-ifk-norrkoping.md")
+        self.assertIn("typ: aktivitet", r["md"])
+        self.assertIn("kategori: Match", r["md"])
+        self.assertIn("datum: 2026-07-12", r["md"])
+        self.assertIn("publicerad: true", r["md"])
+        self.assertIn("Toppmöte på hemmaplan.", r["md"])
+        # datum är enda datumkällan — inga härledda visningssträngar lagras
+        self.assertNotIn("veckodag", r["md"])
+        self.assertNotIn("SÖNDAG", r["md"])
+
+    def test_aktivitet_md_odold_publicerad_false(self):
+        r = self.api.forhandsgranska_aktivitet(
+            {"titel": "Utkast", "datum": "2026-08-01", "publicerad": False})
+        self.assertIn("publicerad: false", r["md"])
+
+    def test_aktivitet_crud_bridge(self):
+        res = self.api.spara_aktivitet(
+            {"kategori": "Utställning", "titel": "Skagen", "datum": "2026-07-26",
+             "publicerad": True})
+        self.assertTrue(res["ok"])
+        aid = res["id"]
+        lst = self.api.lista_aktiviteter()
+        self.assertEqual(len(lst), 1)
+        self.assertEqual(lst[0]["titel"], "Skagen")
+        self.assertTrue(lst[0]["publicerad"])
+        # upsert på samma id
+        self.api.spara_aktivitet({"id": aid, "titel": "Skagen 2", "datum": "2026-07-26"})
+        lst = self.api.lista_aktiviteter()
+        self.assertEqual(len(lst), 1)
+        self.assertEqual(lst[0]["titel"], "Skagen 2")
+        self.api.radera_aktivitet(aid)
+        self.assertEqual(self.api.lista_aktiviteter(), [])
+
+    def test_aktivitet_exportera_hela_listan(self):
+        import tempfile
+        from pathlib import Path
+        d = tempfile.mkdtemp()
+        self.api.spara_aktivitet({"titel": "Match A", "datum": "2026-07-12", "publicerad": True})
+        self.api.spara_aktivitet({"titel": "Utst B", "datum": "2026-07-26", "kategori": "Utställning"})
+        self.api.spara_aktivitet({"titel": "", "datum": "2026-08-01"})   # utan titel — hoppas
+        res = self.api.exportera_aktiviteter(d)
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["antal"], 2)
+        self.assertTrue((Path(d) / "2026-07-12-match-a.md").exists())
+        self.assertIn("typ: aktivitet", (Path(d) / "2026-07-26-utst-b.md").read_text(encoding="utf-8"))
+
+    def test_aktivitet_exportera_utan_katalog(self):
+        self.assertFalse(self.api.exportera_aktiviteter("")["ok"])
 
     def test_innehall_md_event(self):
         r = self.api.forhandsgranska_innehall({

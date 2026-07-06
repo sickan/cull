@@ -587,12 +587,13 @@ class TestFotojobbUtkast(unittest.TestCase):
 class TestMigrering(unittest.TestCase):
     def test_fresh_db_ar_v11_med_fotojobb_utkast(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 14)
+        self.assertEqual(db.schemaversion(c), 15)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
         self.assertIn("fotojobb_utkast", db.tabeller(c))
         self.assertIn("fotojobb_match", db.tabeller(c))
         self.assertIn("publicera_material", db.tabeller(c))
+        self.assertIn("aktivitet", db.tabeller(c))
         self.assertIn("publicera_material_historik", db.tabeller(c))
         pubmatkol = [r[1] for r in c.execute("PRAGMA table_info(publicera_material)")]
         self.assertIn("dropbox", pubmatkol)
@@ -957,6 +958,47 @@ class TestTradsakerAnslutning(unittest.TestCase):
         for t in threads:
             t.join()
         self.assertEqual(errors, [])
+
+
+class TestAktivitet(unittest.TestCase):
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+
+    def test_spara_lista_radera(self):
+        aid = store.spara_aktivitet(self.c, {
+            "kategori": "Match", "titel": "Malmö FF – KDFF",
+            "datum": "2026-07-12", "tid": "16:00", "publicerad": True})
+        lst = store.lista_aktiviteter(self.c)
+        self.assertEqual(len(lst), 1)
+        self.assertEqual(lst[0]["titel"], "Malmö FF – KDFF")
+        self.assertTrue(lst[0]["publicerad"])          # bool, inte int
+        store.radera_aktivitet(self.c, aid)
+        self.assertEqual(store.lista_aktiviteter(self.c), [])
+
+    def test_upsert_bevarar_skapad(self):
+        aid = store.spara_aktivitet(self.c, {"titel": "A", "datum": "2026-07-01"})
+        skapad = store.hamta_aktivitet(self.c, aid)["skapad"]
+        store.spara_aktivitet(self.c, {"id": aid, "titel": "B", "datum": "2026-07-02"})
+        rad = store.hamta_aktivitet(self.c, aid)
+        self.assertEqual(rad["titel"], "B")
+        self.assertEqual(rad["skapad"], skapad)        # skapad orörd vid uppdatering
+
+    def test_upsert_bevarar_synkad_tid(self):
+        aid = store.spara_aktivitet(self.c, {"titel": "A", "datum": "2026-07-01"})
+        store.satt_aktivitet_synkad(self.c, aid, "2026-07-06T10:00:00")
+        store.spara_aktivitet(self.c, {"id": aid, "titel": "A2", "datum": "2026-07-01"})
+        self.assertEqual(store.hamta_aktivitet(self.c, aid)["synkad_tid"],
+                         "2026-07-06T10:00:00")
+
+    def test_okand_kategori_blir_match(self):
+        aid = store.spara_aktivitet(self.c, {"titel": "X", "kategori": "Nonsens"})
+        self.assertEqual(store.hamta_aktivitet(self.c, aid)["kategori"], "Match")
+
+    def test_sortering_pa_datum_stigande(self):
+        store.spara_aktivitet(self.c, {"titel": "Sen", "datum": "2026-08-01"})
+        store.spara_aktivitet(self.c, {"titel": "Tidig", "datum": "2026-07-01"})
+        titlar = [a["titel"] for a in store.lista_aktiviteter(self.c)]
+        self.assertEqual(titlar, ["Tidig", "Sen"])
 
 
 if __name__ == "__main__":
