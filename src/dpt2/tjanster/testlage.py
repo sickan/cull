@@ -40,8 +40,8 @@ def ny_some_mapp():
 def kopiera_exempel(kalla, mal_mapp, namn):
     """Kopierar EN redan vald bild in i test-mappen som exempelfil för en
     kanal/post — SoMe-paketets bilder är redan färdiga filer (inget renderas
-    om), testläge återanvänder bara den första som representant. Tyst
-    best-effort: en trasig/saknad källfil ska aldrig stoppa testkörningen."""
+    om). Tyst best-effort: en trasig/saknad källfil ska aldrig stoppa
+    testkörningen."""
     try:
         kalla = Path(kalla).expanduser()
         if not kalla.exists():
@@ -51,6 +51,20 @@ def kopiera_exempel(kalla, mal_mapp, namn):
         return mal
     except Exception:
         return None
+
+
+def kopiera_exempel_set(bilder, mal_mapp, namn):
+    """Kopierar HELA bildsetet för en kanal in i test-mappen (numrerat
+    {namn}-01, {namn}-02 …) så testkörningen speglar exakt vad som skulle
+    postats — inte bara första bilden. Returnerar (första kopian, antal
+    lyckade). Tyst best-effort per fil."""
+    forsta, antal = None, 0
+    for i, kalla in enumerate(bilder or [], start=1):
+        mal = kopiera_exempel(kalla, mal_mapp, f"{namn}-{i:02d}")
+        if mal:
+            antal += 1
+            forsta = forsta or mal
+    return forsta, antal
 
 
 def innehall_mapp(rel_dir):

@@ -715,11 +715,13 @@ class Api:
             kanal, form = {"story": ("instagram", "story"), "ig_inlagg": ("instagram", "inlägg"),
                           "fb": ("facebook", "inlägg")}.get(malnyckel, ("instagram", "inlägg"))
             mapp = config.get("test_mapp") or str(testlage.ny_some_mapp())
-            kopia = testlage.kopiera_exempel(bilder[0], mapp, malnyckel or "post") if bilder else None
+            # Kopiera HELA bildsetet för kanalen (inte bara första) så testkatalogen
+            # visar exakt vad som skulle postats — omslag + karusell/stories.
+            _, antal = testlage.kopiera_exempel_set(bilder, mapp, malnyckel or "post")
             return {"ok": True, "sparade": 0, "varningar": [],
                     "resultat": [{"kanal": kanal, "form": form, "del": 1, "av": 1,
-                                 "status": "postad", "test": True}],
-                    "path": str(kopia) if kopia else mapp}
+                                 "status": "postad", "test": True, "antal_bilder": antal}],
+                    "path": mapp}
         poster = meta_api.fran_env(logg=self._logg.append)
         if poster is None:
             return {"ok": False, "fel": "Skarp publicering saknar Meta-token — "
