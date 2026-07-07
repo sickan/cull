@@ -337,6 +337,9 @@
   // vald som OMSLAG i SoMe (someCover) — inte momentets eget foto. Fallback:
   // första valda IG-bilden.
   function ovFoto() { return someCover || somePicks.ig[0] || '' }
+  // Karusellbilder efter omslaget. I overlay-läge är omslagsbilden "förbrukad"
+  // som overlay-bakgrund → ta ut den ur karusellen (annars dubblas den).
+  $: igKarusell = (someCoverKind === 'overlay' && someCoverOv) ? somePicks.ig.filter((p) => p !== someCover) : somePicks.ig
   function ovConfig() {
     const lm = liveMoments.find((x) => x.moment === someCoverOv)
     return { ...storyConfig(someCoverOv), foto: ovFoto(), tema: lm?.tema || tema, format: '4x5', preview_slot: 'overlay' }
@@ -470,13 +473,13 @@
     const chResults = {}
     for (const k of korningar) {
       let bilder = somePicks[k.nyckel]
-      // IG-inlägg med overlay-omslag: rendera valt Live-moment i 4:5 (ovanpå
-      // momentets/första bildens foto) och lägg först i listan — fan-out tar
-      // bilder[0] som omslag. De valda bilderna behålls som karusell efter det.
+      // IG-inlägg med overlay-omslag: rendera valt Live-moment i 4:5 ovanpå den
+      // valda omslagsbilden och lägg först — fan-out tar bilder[0] som omslag.
+      // Omslagsbilden tas UT ur karusellen (annars dubbleras den som bild 2).
       if (k.nyckel === 'ig' && someCoverKind === 'overlay' && someCoverOv) {
         let ovPath = ovPreview
         if (!ovPath && ovFoto()) { const rr = await forhandsgranskaStory(ovConfig()); if (rr?.ok) ovPath = rr.path; else someFel = rr?.fel || 'Kunde inte rendera overlay-omslaget.' }
-        if (ovPath) bilder = [ovPath, ...bilder]
+        if (ovPath) bilder = [ovPath, ...somePicks.ig.filter((p) => p !== someCover)]
         else someFel = someFel || 'Overlay-omslaget kunde inte renderas — välj minst en IG-bild som foto.'
       }
       const r = await publiceraTillSoMe({ bilder,
@@ -1010,7 +1013,7 @@
               {#if somePicks.ig.length}<span class="antal">{somePicks.ig.length === 1 ? 'enkel' : (igBitar.length > 1 ? igBitar.length + ' inlägg' : 'karusell · ' + somePicks.ig.length)}</span>{/if}
             </div>
             {#if somePicks.ig.length}
-              <div class="strip">{#if someCoverKind === 'overlay' && someCoverOv && ovPreviewUrl}<span class="thumb"><img src={ovPreviewUrl} alt="" /><em>omslag</em></span>{/if}{#each somePicks.ig.slice(0, 6) as p (p)}<span class="thumb"><img src={bildUrl(p)} alt="" />{#if someCoverKind === 'foto' && p === someCover}<em>omslag</em>{/if}</span>{/each}{#if somePicks.ig.length > 6}<span class="thumb plus">+{somePicks.ig.length - 6}</span>{/if}</div>
+              <div class="strip">{#if someCoverKind === 'overlay' && someCoverOv && ovPreviewUrl}<span class="thumb"><img src={ovPreviewUrl} alt="" /><em>omslag</em></span>{/if}{#each igKarusell.slice(0, 6) as p (p)}<span class="thumb"><img src={bildUrl(p)} alt="" />{#if someCoverKind === 'foto' && p === someCover}<em>omslag</em>{/if}</span>{/each}{#if igKarusell.length > 6}<span class="thumb plus">+{igKarusell.length - 6}</span>{/if}</div>
               {#if igVarning}<div class="varn">⚠ {igVarning}</div>{/if}
             {:else}
               <div class="hjalptext">Välj bilder i biblioteket ovan (mål: IG-inlägg).</div>
