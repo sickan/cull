@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -462,6 +462,11 @@ def _migrera(conn, fran_version):
         );""")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_aktivitet_datum ON aktivitet(datum);")
+    if fran_version < 16:
+        # v16: heldagsaktivitet — döljer tid i På gång, webben visar "Heldag".
+        if not _har_kolumn(conn, "aktivitet", "heldag"):
+            conn.execute(
+                "ALTER TABLE aktivitet ADD COLUMN heldag INTEGER NOT NULL DEFAULT 0;")
 
 
 def _har_kolumn(conn, tabell, kolumn):

@@ -587,7 +587,7 @@ class TestFotojobbUtkast(unittest.TestCase):
 class TestMigrering(unittest.TestCase):
     def test_fresh_db_ar_v11_med_fotojobb_utkast(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 15)
+        self.assertEqual(db.schemaversion(c), 16)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
         self.assertIn("fotojobb_utkast", db.tabeller(c))

@@ -1288,15 +1288,17 @@ def _aktivitet_md(akt):
     kategori = akt.get("kategori") or "Match"
     namnslug = AX.slugga(titel) if titel else "ny-aktivitet"
     slug = f"{datum}-{namnslug}" if datum else namnslug
+    heldag = bool(akt.get("heldag"))
     fm = {
         "typ": "aktivitet",
         "kategori": kategori,
         "etikett": akt.get("etikett") or None,
         "titel": titel or None,
         "datum": datum or None,
-        "tid": akt.get("tid") or None,
+        "tid": None if heldag else (akt.get("tid") or None),  # tom tid vid heldag
         "plats": akt.get("plats") or None,
         "publicerad": bool(akt.get("publicerad")),
+        "heldag": heldag,
     }
     body = (akt.get("beskrivning") or "").rstrip()
     return fm, body, slug, AX.render_md(fm, body)
