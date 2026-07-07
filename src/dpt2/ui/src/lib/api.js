@@ -736,8 +736,8 @@ export async function publiceraAktiviteterNatet(test = false) {
   const api = brygga()
   if (api) return api.publicera_aktiviteter_natet(test)
   const antal = MOCK_AKTIVITETER.filter((a) => a.titel).length
-  if (test) return wait({ ok: true, antal, path: '~/DPT/test-output/content/pagang', test: true })
-  return wait({ ok: true, antal })
+  if (test) return wait({ ok: true, antal, borttagna: 0, path: '~/DPT/test-output/content/pagang', test: true })
+  return wait({ ok: true, antal, borttagna: 0 })
 }
 
 // Modeller (din smak / arkiv / hybrid — modell-växlaren). Muteras lokalt i mock.

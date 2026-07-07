@@ -947,7 +947,18 @@ class Api:
         return {"ok": True, "id": aid}
 
     def radera_aktivitet(self, id):
+        """Tar bort posten lokalt och — om den redan publicerats till nätet —
+        raderar den även på content-sync (så den försvinner från sajten direkt
+        vid nästa bygge). Fjärr-raderingen är best-effort med ETT försök: den
+        får aldrig blockera UI-raderingen om nätet är nere (reconciling publish
+        städar bort kvarvarande rader nästa gång man publicerar)."""
+        akt = store.hamta_aktivitet(self.conn, id)
         store.radera_aktivitet(self.conn, id)
+        if akt and akt.get("synkad_tid"):
+            try:
+                self.innehall_synk.radera("pagang", id, forsok=1)
+            except Exception:
+                pass
         return {"ok": True}
 
     def forhandsgranska_aktivitet(self, akt):
@@ -996,7 +1007,21 @@ class Api:
                 antal += 1
             elif fel is None:
                 fel = r.get("fel") or f"Kunde inte publicera (status {r.get('status')})."
-        return {"ok": fel is None, "antal": antal, "fel": fel}
+        # Reconciliation: publicering är en full synk av den kurerade listan —
+        # rader som finns kvar på workern men INTE längre lokalt (raderade, eller
+        # en post som fått titeln rensad) städas bort så sajten speglar listan
+        # exakt. Best-effort: en miss här ska inte fälla en i övrigt lyckad
+        # publicering (nästa publicering försöker igen). Hoppas om själva
+        # publiceringen redan failat (då är fjärrlistan opålitlig).
+        borttagna = 0
+        if fel is None:
+            lokala_ids = {a["id"] for a in poster}
+            for rad in self.innehall_synk.lista("pagang"):
+                rid = rad.get("id")
+                if rid and rid not in lokala_ids:
+                    if self.innehall_synk.radera("pagang", rid).get("ok"):
+                        borttagna += 1
+        return {"ok": fel is None, "antal": antal, "borttagna": borttagna, "fel": fel}
 
     def thumb_for_bild(self, path):
         """Miniatyr (base64 data-URI) för en vald hero-bild — raw extraheras

@@ -161,7 +161,7 @@
     sparar = false
     if (r?.ok) klarText = $testMode
       ? `✓ Test — ${r.antal} .md-filer skrivna · rensas vid omstart`
-      : `✓ ${r.antal} aktiviteter publicerade till hemsidan`
+      : `✓ ${r.antal} aktiviteter publicerade${r.borttagna ? ` · ${r.borttagna} borttagna` : ''} till hemsidan`
     else synkFel = r?.fel || 'Kunde inte publicera — kontrollera anslutningen.'
     if (klarText) setTimeout(() => (klarText = ''), 3600)
   }

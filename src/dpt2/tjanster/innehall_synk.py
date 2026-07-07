@@ -125,6 +125,44 @@ class InnehallSynk:
                 time.sleep(0.6)
         return None
 
+    # ── radering / reconciliation ───────────────────────────────────────────────
+    def lista(self, typ):
+        """GET /api/innehall/:typ (skyddad) — alla rader (draft + publicerade)
+        av en typ, för reconciling publish (jämför workerns rader mot den
+        lokala listan). Returnerar en lista av dicts (minst {id, slug}), eller
+        [] vid fel/tom — anroparen ska då hoppa reconciliation, inte krascha."""
+        try:
+            status, data = self._anrop("GET", f"/api/innehall/{typ}")
+        except Exception:
+            return []
+        if status == 200 and isinstance(data, dict) and isinstance(data.get("innehall"), list):
+            return data["innehall"]
+        return []
+
+    def radera(self, typ, innehall_id, *, forsok=3):
+        """DELETE /api/innehall/:typ/:id — tar bort en rad på workern (posten
+        försvinner ur public-API:t → från sajten vid nästa bygge). Idempotent:
+        workern svarar 200 även om raden redan var borta. Best-effort med
+        omförsök (samma mönster som publicera). Returnerar {ok, status}."""
+        if not self.api_key:
+            return {"ok": False, "status": 0,
+                    "fel": "CONTENT_SYNC_API_KEY saknas — kan inte radera."}
+        status, data = 0, None
+        for i in range(max(1, forsok)):
+            try:
+                status, data = self._anrop(
+                    "DELETE", f"/api/innehall/{typ}/{innehall_id}")
+            except Exception:
+                status, data = 0, None
+            # 200/204 = borttagen (eller redan borta), 404 = finns inte → allt
+            # räknas som lyckad radering (målet "raden ska inte finnas" är nått).
+            if status in (200, 204, 404):
+                return {"ok": True, "status": status}
+            if i < forsok - 1:
+                time.sleep(0.6)
+        fel = data.get("error") if isinstance(data, dict) else None
+        return {"ok": False, "status": status, "fel": fel}
+
     def status(self, typ, innehall_id):
         """Hämtar den senast publicerade raden + senaste Cloudflare Pages-
         deploystatus (nyckeln "deploy", None om CF_*-secrets inte är satta i

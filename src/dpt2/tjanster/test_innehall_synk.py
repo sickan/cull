@@ -147,5 +147,48 @@ class TestInnehallSynk(unittest.TestCase):
             self.assertIsNone(k.ladda_upp_bild("match", "malmo-if", str(fil), forsok=1))
 
 
+class TestListaOchRadera(unittest.TestCase):
+    def test_lista_returnerar_rader(self):
+        t = FejkTransport({("GET", "/api/innehall/pagang"):
+                           (200, {"innehall": [{"id": "a1"}, {"id": "a2"}]})})
+        k = InnehallSynk(api_key="x", transport=t)
+        self.assertEqual([r["id"] for r in k.lista("pagang")], ["a1", "a2"])
+
+    def test_lista_tom_vid_fel(self):
+        t = FejkTransport({("GET", "/api/innehall/pagang"): (500, None)})
+        k = InnehallSynk(api_key="x", transport=t)
+        self.assertEqual(k.lista("pagang"), [])
+
+    def test_radera_lyckas(self):
+        t = FejkTransport({("DELETE", "/api/innehall/pagang/a1"):
+                           (200, {"ok": True, "borttagen": True})})
+        k = InnehallSynk(api_key="x", transport=t)
+        r = k.radera("pagang", "a1")
+        self.assertTrue(r["ok"])
+        self.assertEqual(t.anrop[0]["metod"], "DELETE")
+        self.assertEqual(t.anrop[0]["headers"]["Authorization"], "Bearer x")
+
+    def test_radera_404_ar_ok(self):
+        # Redan borta → målet (raden finns inte) är nått, räknas som lyckat.
+        t = FejkTransport({("DELETE", "/api/innehall/pagang/borta"): (404, {"error": "hittas inte"})})
+        k = InnehallSynk(api_key="x", transport=t)
+        self.assertTrue(k.radera("pagang", "borta")["ok"])
+
+    def test_radera_utan_nyckel_ger_fel_utan_natanrop(self):
+        t = FejkTransport({("DELETE", "/api/innehall/pagang/a1"): (200, {"ok": True})})
+        k = InnehallSynk(api_key="", transport=t)
+        r = k.radera("pagang", "a1")
+        self.assertFalse(r["ok"])
+        self.assertIn("saknas", r["fel"])
+        self.assertEqual(t.anrop, [])
+
+    def test_radera_serverfel_retry_och_ger_upp(self):
+        t = FejkTransport({("DELETE", "/api/innehall/pagang/a1"): (500, {"error": "internt"})})
+        k = InnehallSynk(api_key="x", transport=t)
+        r = k.radera("pagang", "a1", forsok=2)
+        self.assertFalse(r["ok"])
+        self.assertEqual(len(t.anrop), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

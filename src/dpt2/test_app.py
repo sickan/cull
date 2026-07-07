@@ -6,6 +6,35 @@ from dpt2.app import Api, _gallring_av_config, _hitta_site_rot, _spara_export_bi
 from dpt2.data import store
 
 
+class _FakeSynk:
+    """Fejkad content-sync-klient för aktivitet-publicering/radering — spelar
+    in publicera/lista/radera utan nät. `fjarr_ids` = de rader workern "har"."""
+    def __init__(self, fjarr_ids=(), *, publicera_ok=True):
+        self.fjarr = list(fjarr_ids)
+        self.publicera_ok = publicera_ok
+        self.publicerade = []
+        self.raderade = []
+
+    def har_nyckel(self):
+        return True
+
+    def publicera(self, typ, innehall_id, *, slug, frontmatter, body=None,
+                  match_id=None, forsok=3):
+        if self.publicera_ok:
+            self.publicerade.append(innehall_id)
+            return {"ok": True, "status": 200}
+        return {"ok": False, "status": 500, "fel": "nej"}
+
+    def lista(self, typ):
+        return [{"id": i} for i in self.fjarr]
+
+    def radera(self, typ, innehall_id, *, forsok=3):
+        self.raderade.append(innehall_id)
+        if innehall_id in self.fjarr:
+            self.fjarr.remove(innehall_id)
+        return {"ok": True, "status": 200}
+
+
 class TestApi(unittest.TestCase):
     def setUp(self):
         # En delad in-memory-anslutning (Api håller self.conn).
@@ -439,6 +468,45 @@ class TestApi(unittest.TestCase):
 
     def test_aktivitet_exportera_utan_katalog(self):
         self.assertFalse(self.api.exportera_aktiviteter("")["ok"])
+
+    def test_aktivitet_reconciling_publish_raderar_foraldralosa(self):
+        # Två lokala poster + en föräldralös rad kvar på workern → publicering
+        # tar bort den föräldralösa så sajten speglar listan exakt.
+        a = self.api.spara_aktivitet({"titel": "A", "datum": "2026-07-12", "publicerad": True})["id"]
+        b = self.api.spara_aktivitet({"titel": "B", "datum": "2026-07-19", "publicerad": True})["id"]
+        fake = _FakeSynk(fjarr_ids=[a, b, "gammal-borttagen"])
+        self.api.innehall_synk = fake
+        r = self.api.publicera_aktiviteter_natet()
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["antal"], 2)
+        self.assertEqual(r["borttagna"], 1)
+        self.assertEqual(fake.raderade, ["gammal-borttagen"])
+        self.assertEqual(sorted(fake.publicerade), sorted([a, b]))
+
+    def test_aktivitet_publish_misslyckad_hoppar_reconciliation(self):
+        # Om publiceringen failar är fjärrlistan opålitlig → radera inget.
+        self.api.spara_aktivitet({"titel": "A", "datum": "2026-07-12"})
+        fake = _FakeSynk(fjarr_ids=["nagot"], publicera_ok=False)
+        self.api.innehall_synk = fake
+        r = self.api.publicera_aktiviteter_natet()
+        self.assertFalse(r["ok"])
+        self.assertEqual(fake.raderade, [])
+
+    def test_radera_aktivitet_propagerar_om_synkad(self):
+        aid = self.api.spara_aktivitet({"titel": "A", "datum": "2026-07-12"})["id"]
+        store.satt_aktivitet_synkad(self.api.conn, aid, "2026-07-06T10:00:00")
+        fake = _FakeSynk(fjarr_ids=[aid])
+        self.api.innehall_synk = fake
+        self.api.radera_aktivitet(aid)
+        self.assertEqual(fake.raderade, [aid])                 # fjärr-raderad
+        self.assertEqual(self.api.lista_aktiviteter(), [])     # och lokalt borta
+
+    def test_radera_aktivitet_ej_synkad_ror_inte_natet(self):
+        aid = self.api.spara_aktivitet({"titel": "A", "datum": "2026-07-12"})["id"]
+        fake = _FakeSynk()
+        self.api.innehall_synk = fake
+        self.api.radera_aktivitet(aid)
+        self.assertEqual(fake.raderade, [])                    # aldrig synkad → ingen fjärr-radering
 
     def test_innehall_md_event(self):
         r = self.api.forhandsgranska_innehall({
