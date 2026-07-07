@@ -333,16 +333,18 @@
     return ut
   })()
 
-  // Bakgrundsfoto för overlay-omslaget: momentets egna foto, annars första
-  // valda IG-bilden (overlayen ritas ovanpå ett foto).
-  function ovFoto() {
+  // Live-overlayen (momentets Horisont-grafik) läggs ovanpå den bild som är
+  // vald som OMSLAG i SoMe (someCover) — inte momentets eget foto. Fallback:
+  // första valda IG-bilden.
+  function ovFoto() { return someCover || somePicks.ig[0] || '' }
+  function ovConfig() {
     const lm = liveMoments.find((x) => x.moment === someCoverOv)
-    return lm?.foto || somePicks.ig[0] || ''
+    return { ...storyConfig(someCoverOv), foto: ovFoto(), tema: lm?.tema || tema, format: '4x5', preview_slot: 'overlay' }
   }
-  function ovConfig() { return { ...storyConfig(someCoverOv), foto: ovFoto(), format: '4x5', preview_slot: 'overlay' } }
 
-  // Auto-välj första skapade momentet när man går in i overlay-läget.
+  // Auto-välj första momentet + en omslagsbild när man går in i overlay-läget.
   $: if (someCoverKind === 'overlay' && !someCoverOv && liveMoments.length) someCoverOv = liveMoments[0].moment
+  $: if (someCoverKind === 'overlay' && !someCover && somePicks.ig.length) someCover = somePicks.ig[0]
 
   // Riktig 4:5-förhandsvisning av valt overlay-moment (samma Horisont-render).
   // ovTick = cache-buster: forhandsgranska skriver till en FAST tempfil (delad
@@ -361,7 +363,7 @@
     ovPreviewLaddar = false
     if (rr?.ok && rr.path) { ovPreview = rr.path; ovTick += 1 } else { ovPreview = ''; ovPreviewFel = rr?.fel || 'Kunde inte rendera overlayen.' }
   }
-  $: if (someCoverKind === 'overlay') { someCoverOv; somePicks.ig; cfg; tema; clearTimeout(_ovTimer); _ovTimer = setTimeout(renderaOvPreview, 400) }
+  $: if (someCoverKind === 'overlay') { someCoverOv; someCover; cfg; tema; clearTimeout(_ovTimer); _ovTimer = setTimeout(renderaOvPreview, 400) }
   $: ovPreviewUrl = ovPreview ? bildUrl(ovPreview) + '?t=' + ovTick : ''
 
   let someLage = 'idle'         // idle | dry | progress | done | delfel | fel
@@ -963,18 +965,23 @@
                   {/each}
                 </div>
               {/if}
-              <!-- Omslaget = 4:5-overlayen; de valda bilderna står kvar efter den. -->
+              <!-- Overlayen (Live-momentet) läggs på den bild man väljer som omslag. -->
+              <div class="ovvalj">Välj bild som <b>{someCoverOv}</b>-overlayen läggs på:</div>
               <div class="libomslagrad">
-                <span class="ovomslag" title="Overlay-omslag {someCoverOv} · 4:5">
-                  {#if ovPreviewUrl}<img src={ovPreviewUrl} alt="" />{/if}
-                  {#if ovPreviewLaddar}<span class="ovbadge">…</span>{/if}
-                  <span class="omslagtag">OMSLAG</span>
-                </span>
                 {#each somePicks.ig as p (p)}
-                  <span class="libomslagtile stel"><img src={bildUrl(p)} alt="" /></span>
+                  <button class="libomslagtile" class:vald={someCover === p} on:click={() => someLibSetCover(p)}>
+                    <img src={bildUrl(p)} alt="" />
+                  </button>
                 {/each}
               </div>
-              {#if ovPreviewFel}<div class="ovtom">{ovPreviewFel}</div>{/if}
+              <div class="ovprev">
+                <div class="ovprevbild">
+                  {#if ovPreviewUrl}<img src={ovPreviewUrl} alt="Overlay-omslag" />{/if}
+                  {#if ovPreviewLaddar}<span class="ovprevbadge">Renderar…</span>{/if}
+                  {#if !ovPreviewUrl && !ovPreviewLaddar}<span class="ovprevtom">{ovPreviewFel || 'Ingen förhandsvisning'}</span>{/if}
+                </div>
+                <div class="ovprevtxt"><b>{someCoverOv}</b>-overlayen (4:5) läggs på den valda bilden och blir omslag. Dina övriga bilder följer som karusell.</div>
+              </div>
             {:else}
               <div class="ovtom">Inga Live-moment skapade för matchen än — skapa en story i Live-fliken först.</div>
             {/if}
@@ -1339,14 +1346,18 @@
   .ovmomentval button { border: 1px solid var(--div); background: var(--kort); border-radius: 999px;
     padding: 3px 11px; font-size: 11.5px; font-weight: 600; color: var(--t-mut); }
   .ovmomentval button.on { border-color: var(--acc); color: var(--acc); background: var(--acc-soft); }
-  /* Overlay-omslaget: 4:5-tile först i omslagsraden, valda bilder (stel) efter. */
-  .ovomslag { position: relative; width: 32px; height: 40px; border-radius: 6px; overflow: hidden; flex: none;
-    border: 2px solid var(--acc); background: var(--panel); display: inline-flex; align-items: center; justify-content: center; }
-  .ovomslag img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .ovbadge { font-size: 11px; color: var(--t-help); }
-  .omslagtag { position: absolute; bottom: 0; left: 0; right: 0; font-size: 7px; font-weight: 700; letter-spacing: .04em;
-    text-align: center; color: #fff; background: rgba(0,0,0,.55); padding: 1px 0; }
-  .libomslagtile.stel { cursor: default; outline: none; }
+  .ovvalj { margin-top: 10px; font-size: 11px; color: var(--t-mut); }
+  .ovvalj b { color: var(--t-head); }
+  /* 4:5-förhandsvisning av overlayen på den valda bilden. */
+  .ovprev { display: flex; gap: 12px; align-items: flex-start; margin-top: 10px; }
+  .ovprevbild { position: relative; width: 96px; height: 120px; flex: none; border-radius: 8px; overflow: hidden;
+    border: 2px solid var(--acc); background: var(--panel); display: flex; align-items: center; justify-content: center; }
+  .ovprevbild img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ovprevbadge { position: absolute; top: 5px; right: 5px; font-size: 9px; font-weight: 700; color: #fff;
+    background: rgba(0,0,0,.55); border-radius: 4px; padding: 2px 6px; }
+  .ovprevtom { font-size: 10px; color: var(--t-help); text-align: center; padding: 6px; }
+  .ovprevtxt { font-size: 11.5px; color: var(--t-mut); line-height: 1.5; }
+  .ovprevtxt b { color: var(--t-head); }
   .hjalptext { padding: 0 13px 11px; font-size: 11.5px; color: var(--t-help); }
 
   .kanaler { display: flex; flex-direction: column; gap: 10px; }
