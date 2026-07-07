@@ -339,10 +339,17 @@
     const lm = liveMoments.find((x) => x.moment === someCoverOv)
     return lm?.foto || somePicks.ig[0] || ''
   }
-  function ovConfig() { return { ...storyConfig(someCoverOv), foto: ovFoto(), format: '4x5' } }
+  function ovConfig() { return { ...storyConfig(someCoverOv), foto: ovFoto(), format: '4x5', preview_slot: 'overlay' } }
+
+  // Auto-välj första skapade momentet när man går in i overlay-läget.
+  $: if (someCoverKind === 'overlay' && !someCoverOv && liveMoments.length) someCoverOv = liveMoments[0].moment
 
   // Riktig 4:5-förhandsvisning av valt overlay-moment (samma Horisont-render).
+  // ovTick = cache-buster: forhandsgranska skriver till en FAST tempfil (delad
+  // med Live-förhandsvisningen som är 9:16), så img-URL:en måste ändras varje
+  // gång annars visar webbläsaren den cachade (fel-format) bilden.
   let ovPreview = ''
+  let ovTick = 0
   let ovPreviewLaddar = false
   let ovPreviewFel = ''
   let _ovTimer = null
@@ -350,11 +357,12 @@
     if (someCoverKind !== 'overlay' || !someCoverOv) { ovPreview = ''; ovPreviewFel = ''; return }
     if (!ovFoto()) { ovPreview = ''; ovPreviewFel = 'Overlayen behöver ett foto — välj minst en IG-bild.'; return }
     ovPreviewLaddar = true; ovPreviewFel = ''
-    const rr = await forhandsgranskaStory(ovConfig())
+    const rr = await forhandsgranskaStory(ovConfig())   // ovConfig sätter format:'4x5'
     ovPreviewLaddar = false
-    if (rr?.ok && rr.path) { ovPreview = rr.path } else { ovPreview = ''; ovPreviewFel = rr?.fel || 'Kunde inte rendera overlayen.' }
+    if (rr?.ok && rr.path) { ovPreview = rr.path; ovTick += 1 } else { ovPreview = ''; ovPreviewFel = rr?.fel || 'Kunde inte rendera overlayen.' }
   }
   $: if (someCoverKind === 'overlay') { someCoverOv; somePicks.ig; cfg; tema; clearTimeout(_ovTimer); _ovTimer = setTimeout(renderaOvPreview, 400) }
+  $: ovPreviewUrl = ovPreview ? bildUrl(ovPreview) + '?t=' + ovTick : ''
 
   let someLage = 'idle'         // idle | dry | progress | done | delfel | fel
   let someResultat = []         // [{kanal, form, del, av, status, url, fel?}]
@@ -948,32 +956,25 @@
                 {/each}
               </div>
             {:else if liveMoments.length}
-              <div class="ovrad">
-                {#each liveMoments as lm (lm.moment)}
-                  <button class="ovtile" class:vald={someCoverOv === lm.moment}
-                    style="--ov:{TEMAFARG[lm.tema] || TEMAFARG.Hav}" on:click={() => (someCoverOv = lm.moment)}>
-                    <span class="ovmoment scd">{lm.moment}</span>
-                    <span class="ovformat">4:5</span>
-                  </button>
-                {/each}
-              </div>
-              {#if someCoverOv}
-                <div class="ovprev">
-                  <div class="ovprevbild">
-                    {#if ovPreview}<img src={bildUrl(ovPreview)} alt="Overlay-förhandsvisning" />{/if}
-                    {#if ovPreviewLaddar}<span class="ovprevbadge">Renderar…</span>{/if}
-                    {#if !ovPreview && !ovPreviewLaddar}<span class="ovprevtom">{ovPreviewFel || 'Ingen förhandsvisning'}</span>{/if}
-                  </div>
-                  <div class="ovprevtxt">
-                    <b>{someCoverOv}</b> som omslag (4:5).
-                    Dina {somePicks.ig.length} valda bilder följer som karusell efter omslaget — de tas inte bort.
-                  </div>
+              {#if liveMoments.length > 1}
+                <div class="ovmomentval">
+                  {#each liveMoments as lm (lm.moment)}
+                    <button class:on={someCoverOv === lm.moment} on:click={() => (someCoverOv = lm.moment)}>{lm.moment}</button>
+                  {/each}
                 </div>
               {/if}
-              <div class="ovkarusell">
-                <span class="libmallbl">Karusell efter omslaget:</span>
-                {#each somePicks.ig as p (p)}<span class="ovkbild"><img src={bildUrl(p)} alt="" /></span>{/each}
+              <!-- Omslaget = 4:5-overlayen; de valda bilderna står kvar efter den. -->
+              <div class="libomslagrad">
+                <span class="ovomslag" title="Overlay-omslag {someCoverOv} · 4:5">
+                  {#if ovPreviewUrl}<img src={ovPreviewUrl} alt="" />{/if}
+                  {#if ovPreviewLaddar}<span class="ovbadge">…</span>{/if}
+                  <span class="omslagtag">OMSLAG</span>
+                </span>
+                {#each somePicks.ig as p (p)}
+                  <span class="libomslagtile stel"><img src={bildUrl(p)} alt="" /></span>
+                {/each}
               </div>
+              {#if ovPreviewFel}<div class="ovtom">{ovPreviewFel}</div>{/if}
             {:else}
               <div class="ovtom">Inga Live-moment skapade för matchen än — skapa en story i Live-fliken först.</div>
             {/if}
@@ -1002,7 +1003,7 @@
               {#if somePicks.ig.length}<span class="antal">{somePicks.ig.length === 1 ? 'enkel' : (igBitar.length > 1 ? igBitar.length + ' inlägg' : 'karusell · ' + somePicks.ig.length)}</span>{/if}
             </div>
             {#if somePicks.ig.length}
-              <div class="strip">{#each somePicks.ig.slice(0, 6) as p (p)}<span class="thumb"><img src={bildUrl(p)} alt="" />{#if p === someCover}<em>omslag</em>{/if}</span>{/each}{#if somePicks.ig.length > 6}<span class="thumb plus">+{somePicks.ig.length - 6}</span>{/if}</div>
+              <div class="strip">{#if someCoverKind === 'overlay' && someCoverOv && ovPreviewUrl}<span class="thumb"><img src={ovPreviewUrl} alt="" /><em>omslag</em></span>{/if}{#each somePicks.ig.slice(0, 6) as p (p)}<span class="thumb"><img src={bildUrl(p)} alt="" />{#if someCoverKind === 'foto' && p === someCover}<em>omslag</em>{/if}</span>{/each}{#if somePicks.ig.length > 6}<span class="thumb plus">+{somePicks.ig.length - 6}</span>{/if}</div>
               {#if igVarning}<div class="varn">⚠ {igVarning}</div>{/if}
             {:else}
               <div class="hjalptext">Välj bilder i biblioteket ovan (mål: IG-inlägg).</div>
@@ -1333,27 +1334,19 @@
   .omslagvaxel button { border: 1px solid var(--div); background: var(--kort); border-radius: 999px;
     padding: 4px 11px; font-size: 11.5px; font-weight: 600; color: var(--t-mut); }
   .omslagvaxel button.on { border-color: var(--acc); color: var(--acc); background: var(--acc-soft); }
-  .ovrad { display: flex; align-items: stretch; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .ovtile { width: 68px; height: 85px; border-radius: 7px; border: 1px solid var(--div); padding: 7px 6px;
-    display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start;
-    background: color-mix(in srgb, var(--ov) 16%, var(--kort)); outline: 2px solid transparent; outline-offset: 1px; }
-  .ovtile.vald { outline-color: var(--ov); border-color: var(--ov); }
-  .ovmoment { font-size: 11px; font-weight: 700; color: var(--t-head); text-align: left; line-height: 1.15; }
-  .ovformat { font-size: 9px; font-weight: 700; letter-spacing: 0.05em; color: #fff; background: var(--ov);
-    border-radius: 4px; padding: 1px 5px; }
   .ovtom { margin-top: 10px; font-size: 11.5px; color: var(--t-help); }
-  .ovprev { display: flex; gap: 12px; align-items: flex-start; margin-top: 10px; }
-  .ovprevbild { position: relative; width: 96px; height: 120px; flex: none; border-radius: 8px; overflow: hidden;
-    border: 1px solid var(--div); background: var(--panel); display: flex; align-items: center; justify-content: center; }
-  .ovprevbild img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .ovprevbadge { position: absolute; top: 5px; right: 5px; font-size: 9px; font-weight: 700; color: #fff;
-    background: rgba(0,0,0,.55); border-radius: 4px; padding: 2px 6px; }
-  .ovprevtom { font-size: 10px; color: var(--t-help); text-align: center; padding: 6px; }
-  .ovprevtxt { font-size: 11.5px; color: var(--t-mut); line-height: 1.5; }
-  .ovprevtxt b { color: var(--t-head); }
-  .ovkarusell { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-  .ovkbild { width: 34px; height: 34px; border-radius: 5px; overflow: hidden; flex: none; border: 1px solid var(--div); }
-  .ovkbild img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ovmomentval { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .ovmomentval button { border: 1px solid var(--div); background: var(--kort); border-radius: 999px;
+    padding: 3px 11px; font-size: 11.5px; font-weight: 600; color: var(--t-mut); }
+  .ovmomentval button.on { border-color: var(--acc); color: var(--acc); background: var(--acc-soft); }
+  /* Overlay-omslaget: 4:5-tile först i omslagsraden, valda bilder (stel) efter. */
+  .ovomslag { position: relative; width: 32px; height: 40px; border-radius: 6px; overflow: hidden; flex: none;
+    border: 2px solid var(--acc); background: var(--panel); display: inline-flex; align-items: center; justify-content: center; }
+  .ovomslag img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ovbadge { font-size: 11px; color: var(--t-help); }
+  .omslagtag { position: absolute; bottom: 0; left: 0; right: 0; font-size: 7px; font-weight: 700; letter-spacing: .04em;
+    text-align: center; color: #fff; background: rgba(0,0,0,.55); padding: 1px 0; }
+  .libomslagtile.stel { cursor: default; outline: none; }
   .hjalptext { padding: 0 13px 11px; font-size: 11.5px; color: var(--t-help); }
 
   .kanaler { display: flex; flex-direction: column; gap: 10px; }

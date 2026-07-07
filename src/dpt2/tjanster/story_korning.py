@@ -110,6 +110,13 @@ FORHANDSVISNING_PATH = Path.home() / ".config" / "dpt2" / "forhandsvisning.jpg"
 def forhandsgranska(conn, config, *, env=None):
     """Renderar SAMMA mall som kor_story men till en fast tempfil, för
     Publicera→Live-panelens 'riktiga' förhandsvisning. Returnerar {ok, path}
-    eller {ok:False, fel}."""
-    FORHANDSVISNING_PATH.parent.mkdir(parents=True, exist_ok=True)
-    return _rendera(conn, config, ut_path=FORHANDSVISNING_PATH, env=env)
+    eller {ok:False, fel}.
+
+    config['preview_slot'] (valfritt) ger en EGEN tempfil per anropare — så
+    t.ex. SoMe-overlay-omslaget (4:5) inte skriver över Live-förhandsvisningen
+    (9:16) i den delade filen."""
+    slot = (config or {}).get("preview_slot")
+    path = (FORHANDSVISNING_PATH.parent / f"forhandsvisning-{slot}.jpg") if slot \
+        else FORHANDSVISNING_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return _rendera(conn, config, ut_path=path, env=env)
