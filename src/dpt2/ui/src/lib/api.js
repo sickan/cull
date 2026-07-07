@@ -684,10 +684,11 @@ let MOCK_AKTIVITETER = [
 
 function mockAktivitetMd(a) {
   const slugd = (a.datum ? a.datum + '-' : '') + (slug(a.titel) || 'ny-aktivitet')
+  const heldag = !!a.heldag
   const fm = ['---', 'typ: aktivitet', `kategori: ${a.kategori || 'Match'}`,
     `etikett: ${a.etikett || ''}`, `titel: ${a.titel || ''}`, `datum: ${a.datum || ''}`,
-    `tid: ${a.tid || ''}`, `plats: ${a.plats || ''}`,
-    `publicerad: ${a.publicerad ? 'true' : 'false'}`, '---']
+    `tid: ${heldag ? '' : (a.tid || '')}`, `plats: ${a.plats || ''}`,
+    `publicerad: ${a.publicerad ? 'true' : 'false'}`, `heldag: ${heldag ? 'true' : 'false'}`, '---']
   const body = a.beskrivning ? ['', a.beskrivning] : []
   return { slug: slugd, filnamn: `content/pagang/${slugd}.md`,
     md: fm.concat(body).join('\n') + '\n' }

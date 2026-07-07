@@ -1,12 +1,11 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte'
-  import { aktivMatch, genereraBildsvep, forhandsgranskaBildsvepFraga, valjMapp, listaLag,
+  import { aktivMatch, sattAktivMatch, genereraBildsvep, forhandsgranskaBildsvepFraga, valjMapp, listaLag,
     listaSomeBilder, publiceraTillSoMe, oppnaILightroom, publiceraLiveStory,
     forhandsgranskaStory, listaMaterial, sparaMaterial, raderaMaterial,
     forsokIgenMaterial, sportprofiler, listaMatcher, nyTestPaketMapp,
     bilderForUrval, hamtaUtkast, sparaUtkast } from '../lib/api.js'
-  import AktivMatchRad from '../lib/AktivMatchRad.svelte'
-  import ResultatRemsa from '../lib/ResultatRemsa.svelte'
+  import MatchHuvud from '../lib/MatchHuvud.svelte'
   import Lagbricka from '../lib/Lagbricka.svelte'
   import { grenFarg } from '../lib/gren.js'
   import { testMode, testMaterial, nyttTestMaterial, uppdateraTestMaterial,
@@ -120,16 +119,16 @@
   const bildUrl = (p) => (/^(https?|file):/.test(p) ? p : 'file://' + p)
   const bildNamn = (p) => (p || '').split('/').pop().replace(/\.[^.]+$/, '')
 
-  function storyConfig() {
+  function storyConfig(mMoment = moment) {
     const c = { foto: liveVald !== null ? liveBilder[liveVald] : '',
-      moment, tema, ut_mapp: liveDropbox, match_id: match?.id, sport: match?.sport }
-    if (moment === 'Avspark') c.avspark_tid = cfg.avspark
-    if (moment === 'Halvtid') c.stallning = cfg.halvtid
-    if (moment === 'Resultat') { c.stallning = cfg.slutresultat
+      moment: mMoment, tema, ut_mapp: liveDropbox, match_id: match?.id, sport: match?.sport }
+    if (mMoment === 'Avspark') c.avspark_tid = cfg.avspark
+    if (mMoment === 'Halvtid') c.stallning = cfg.halvtid
+    if (mMoment === 'Resultat') { c.stallning = cfg.slutresultat
       c.mal_rad = profil.has_scorers ? cfg.malskyttar : cfg.halvtid }
-    if (moment === 'Startelva') c.startelva = cfg.startelva
-    if (moment === 'Målgörare') c.mal_rad = [cfg.malskott, cfg.minut].filter(Boolean).join(' ')
-    if (moment === 'Nästa match') { c.lag_borta = cfg.motstandare; c.next_when = cfg.nextdatum }
+    if (mMoment === 'Startelva') c.startelva = cfg.startelva
+    if (mMoment === 'Målgörare') c.mal_rad = [cfg.malskott, cfg.minut].filter(Boolean).join(' ')
+    if (mMoment === 'Nästa match') { c.lag_borta = cfg.motstandare; c.next_when = cfg.nextdatum }
     return c
   }
   // Riktig förhandsvisning — samma Horisont-mall PIL renderar vid publicering,
@@ -192,14 +191,30 @@
   $: someCaptionResolved = _resolveTokens(someCaption, match, profil, lagAlla)
   $: someTokens = ['resultat', profil.mid_token].concat(profil.has_scorers ? ['målskyttar'] : [])
     .concat(['arena', 'motståndare', '@lag', '#liga', 'galleri', 'datum', 'tid'])
+  let someCapEl = null
   function insertToken(tok) {
-    someCaption += (someCaption && !/\s$/.test(someCaption) ? ' ' : '') + `{${tok}}`
+    const tk = `{${tok}}`
+    const el = someCapEl
+    if (!el) { someCaption += (someCaption && !/\s$/.test(someCaption) ? ' ' : '') + tk; return }
+    const s = el.selectionStart ?? someCaption.length
+    const e = el.selectionEnd ?? s
+    const fore = someCaption.slice(0, s)
+    const efter = someCaption.slice(e)
+    const vFore = fore && !/\s$/.test(fore) ? ' ' : ''
+    const vEfter = efter && !/^\s/.test(efter) ? ' ' : ''
+    const infogad = vFore + tk + vEfter
+    someCaption = fore + infogad + efter
+    const pos = s + infogad.length
+    // Flytta markören till efter den infogade brickan (efter Sveltes DOM-flush).
+    setTimeout(() => { el.focus(); el.setSelectionRange(pos, pos) }, 0)
   }
   // ── SoMe · bildbibliotek (variant 1a) — delad grid, klick lägger till/tar
   // bort bilden i vald mål-kanal. Ersätter tidigare per-kanal mappväljare:
   // ett bibliotek, tre ordnade bildlistor (karusellordning), ett IG-omslag.
   const LIBLABEL = { story: 'Story', ig: 'IG-inlägg', fb: 'FB' }
   const LIBBADGE = { story: 'S', ig: 'IG', fb: 'FB' }
+  let someCoverKind = 'foto'      // 'foto' | 'overlay' — IG-inläggets omslag
+  let someCoverOv = ''            // valt Live-moment (namn) när kind === 'overlay'
   let someLibSource = 'dropbox'   // dropbox | urval | annan
   let someLibTarget = 'story'     // vilken kanal klick i gridden lägger till i
   let someLibAnnanMapp = ''
@@ -257,6 +272,8 @@
         someLibTarget = d.some_lib.target || someLibTarget
         somePicks = d.some_lib.picks || somePicks
         someCover = d.some_lib.cover ?? someCover
+        someCoverKind = d.some_lib.coverKind || someCoverKind
+        someCoverOv = d.some_lib.coverOv || someCoverOv
         someLibAnnanMapp = d.some_lib.annanMapp || someLibAnnanMapp
       }
       if (d.live_moment) moment = d.live_moment
@@ -294,7 +311,7 @@
       await sparaUtkast(match.id, {
         some_caption: someCaption,
         some_lib: { source: someLibSource, target: someLibTarget, picks: somePicks, cover: someCover,
-          annanMapp: someLibAnnanMapp },
+          coverKind: someCoverKind, coverOv: someCoverOv, annanMapp: someLibAnnanMapp },
         live_moment: moment, live_tema: tema, live_cfg: cfg, live_dropbox: liveDropbox,
         live_vald: liveVald !== null ? liveBilder[liveVald] : null,
       })
@@ -303,7 +320,54 @@
     }, 500)
   }
   $: if (match?.id) { someCaption; someLibSource; someLibTarget; somePicks; someCover;
-    moment; tema; cfg; liveDropbox; liveVald; scheduleUtkast() }
+    someCoverKind; someCoverOv; moment; tema; cfg; liveDropbox; liveVald; scheduleUtkast() }
+
+  // Skapade Live-moment för aktiv match (unika per moment) — valbara som
+  // overlay-omslag (renderas i 4:5 vid publicering). Källa: sparade material.
+  $: liveMoments = (() => {
+    const sett = new Set(); const ut = []
+    for (const m of allMaterial) {
+      if (m.kind !== 'live' || m.match_id !== match?.id || !m.moment || sett.has(m.moment)) continue
+      sett.add(m.moment); ut.push({ moment: m.moment, tema: m.tema || 'Hav', foto: m.foto || null })
+    }
+    return ut
+  })()
+
+  // Live-overlayen (momentets Horisont-grafik) läggs ovanpå den bild som är
+  // vald som OMSLAG i SoMe (someCover) — inte momentets eget foto. Fallback:
+  // första valda IG-bilden.
+  function ovFoto() { return someCover || somePicks.ig[0] || '' }
+  // Karusellbilder efter omslaget. I overlay-läge är omslagsbilden "förbrukad"
+  // som overlay-bakgrund → ta ut den ur karusellen (annars dubblas den).
+  $: igKarusell = (someCoverKind === 'overlay' && someCoverOv) ? somePicks.ig.filter((p) => p !== someCover) : somePicks.ig
+  function ovConfig() {
+    const lm = liveMoments.find((x) => x.moment === someCoverOv)
+    return { ...storyConfig(someCoverOv), foto: ovFoto(), tema: lm?.tema || tema, format: '4x5', preview_slot: 'overlay' }
+  }
+
+  // Auto-välj första momentet + en omslagsbild när man går in i overlay-läget.
+  $: if (someCoverKind === 'overlay' && !someCoverOv && liveMoments.length) someCoverOv = liveMoments[0].moment
+  $: if (someCoverKind === 'overlay' && !someCover && somePicks.ig.length) someCover = somePicks.ig[0]
+
+  // Riktig 4:5-förhandsvisning av valt overlay-moment (samma Horisont-render).
+  // ovTick = cache-buster: forhandsgranska skriver till en FAST tempfil (delad
+  // med Live-förhandsvisningen som är 9:16), så img-URL:en måste ändras varje
+  // gång annars visar webbläsaren den cachade (fel-format) bilden.
+  let ovPreview = ''
+  let ovTick = 0
+  let ovPreviewLaddar = false
+  let ovPreviewFel = ''
+  let _ovTimer = null
+  async function renderaOvPreview() {
+    if (someCoverKind !== 'overlay' || !someCoverOv) { ovPreview = ''; ovPreviewFel = ''; return }
+    if (!ovFoto()) { ovPreview = ''; ovPreviewFel = 'Overlayen behöver ett foto — välj minst en IG-bild.'; return }
+    ovPreviewLaddar = true; ovPreviewFel = ''
+    const rr = await forhandsgranskaStory(ovConfig())   // ovConfig sätter format:'4x5'
+    ovPreviewLaddar = false
+    if (rr?.ok && rr.path) { ovPreview = rr.path; ovTick += 1 } else { ovPreview = ''; ovPreviewFel = rr?.fel || 'Kunde inte rendera overlayen.' }
+  }
+  $: if (someCoverKind === 'overlay') { someCoverOv; someCover; cfg; tema; clearTimeout(_ovTimer); _ovTimer = setTimeout(renderaOvPreview, 400) }
+  $: ovPreviewUrl = ovPreview ? bildUrl(ovPreview) + '?t=' + ovTick : ''
 
   let someLage = 'idle'         // idle | dry | progress | done | delfel | fel
   let someResultat = []         // [{kanal, form, del, av, status, url, fel?}]
@@ -408,7 +472,17 @@
     let fel = 0
     const chResults = {}
     for (const k of korningar) {
-      const r = await publiceraTillSoMe({ bilder: somePicks[k.nyckel],
+      let bilder = somePicks[k.nyckel]
+      // IG-inlägg med overlay-omslag: rendera valt Live-moment i 4:5 ovanpå den
+      // valda omslagsbilden och lägg först — fan-out tar bilder[0] som omslag.
+      // Omslagsbilden tas UT ur karusellen (annars dubbleras den som bild 2).
+      if (k.nyckel === 'ig' && someCoverKind === 'overlay' && someCoverOv) {
+        let ovPath = ovPreview
+        if (!ovPath && ovFoto()) { const rr = await forhandsgranskaStory(ovConfig()); if (rr?.ok) ovPath = rr.path; else someFel = rr?.fel || 'Kunde inte rendera overlay-omslaget.' }
+        if (ovPath) bilder = [ovPath, ...somePicks.ig.filter((p) => p !== someCover)]
+        else someFel = someFel || 'Overlay-omslaget kunde inte renderas — välj minst en IG-bild som foto.'
+      }
+      const r = await publiceraTillSoMe({ bilder,
         caption: someCaptionResolved, mal: k.mal, match_id: match?.id,
         ...($testMode ? { test: true, test_mapp: testMapp } : {}) })
       chResults[k.nyckel] = r?.ok ? 'ok' : 'fail'
@@ -618,6 +692,41 @@
   function fargForLag(namn) { const l = lagAlla.find((x) => x.namn === namn); return l ? (l.stall_hemma || l.profilfarg) : '' }
   function loggaForLag(namn) { return lagAlla.find((x) => x.namn === namn)?.logga || '' }
   function _rgba(hex, a) { const n = parseInt((hex || '').replace('#', ''), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})` }
+
+  // Byt aktiv match från match-huvudet — sätt, ladda om match + utkast + material.
+  async function bytAktivMatch(id) {
+    const r = await sattAktivMatch(id)
+    match = r?.match || (await aktivMatch())
+    await laddaUtkast()
+    laddaMaterial()
+  }
+  async function inaktiveraMatch() {
+    await sattAktivMatch('')
+    match = null
+    laddaMaterial()
+  }
+
+  // ── Moment "Nästa match": hämta nästa i spelschemat (aktivt lag först) ──────
+  const _pad = (n) => String(n).padStart(2, '0')
+  const _MK = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+  function _datumTxt(iso) { const d = (iso || '').split('-').map(Number); return d.length === 3 ? `${d[2]} ${_MK[d[1] - 1]}` : (iso || '') }
+  $: nastaSchema = (() => {
+    const n = new Date(); const idag = `${n.getFullYear()}-${_pad(n.getMonth() + 1)}-${_pad(n.getDate())}`
+    const kommande = allaMatcher.filter((m) => (m.datum || '') >= idag && m.id !== match?.id)
+      .sort((a, b) => (a.datum || '9999').localeCompare(b.datum || '9999'))
+    const aktiva = [match?.lag_hemma, match?.lag_borta].filter(Boolean)
+    return kommande.find((m) => aktiva.includes(m.lag_hemma) || aktiva.includes(m.lag_borta)) || kommande[0] || null
+  })()
+  $: nastaSchemaTxt = nastaSchema
+    ? `${nastaSchema.lag_hemma} – ${nastaSchema.lag_borta} · ${[_datumTxt(nastaSchema.datum), nastaSchema.tid].filter(Boolean).join(' ')}`
+    : ''
+  function hamtaNastaMatch() {
+    const m = nastaSchema; if (!m) return
+    const aktiva = [match?.lag_hemma, match?.lag_borta]
+    const mot = aktiva.includes(m.lag_hemma) ? m.lag_borta : (aktiva.includes(m.lag_borta) ? m.lag_hemma : m.lag_borta)
+    const nd = [[_datumTxt(m.datum), m.tid].filter(Boolean).join(' '), m.arena].filter(Boolean).join(' · ')
+    cfg = { ...cfg, motstandare: mot, nextdatum: nd }
+  }
 </script>
 
 <div class="panel">
@@ -625,8 +734,9 @@
     <h1 class="scd">Publicera</h1>
     <span class="sub">Skapa och publicera material för sociala medier och hemsidan</span>
   </header>
-  <AktivMatchRad on:navigera />
-  <ResultatRemsa {match} {profil} {lagAlla} />
+  <MatchHuvud {match} {profil} {lagAlla} materials={allMaterial} matcher={allaMatcher}
+    on:byt={(e) => bytAktivMatch(e.detail)} on:inaktivera={inaktiveraMatch} on:navigera />
+
 
   <div class="tabs">
     <button class:on={flik === 'live'} on:click={() => (flik = 'live')}>Live</button>
@@ -704,6 +814,13 @@
                 </div>
               {/each}
             </div>
+
+            {#if moment === 'Nästa match'}
+              <div class="nastarad">
+                <span class="nastatxt">{nastaSchema ? `Nästa i schemat: ${nastaSchemaTxt}` : 'Ingen kommande match i spelschemat.'}</span>
+                <button class="hamtabtn" on:click={hamtaNastaMatch} disabled={!nastaSchema}>Hämta från Matcher →</button>
+              </div>
+            {/if}
 
             <div class="caps">Tema</div>
             <div class="rutnat3">{#each TEMAN as t}<button class="tema-b" class:on={tema === t} style={tema === t ? `background:${TEMAFARG[t]};border-color:${TEMAFARG[t]}` : ''} on:click={() => (tema = t)}>{t}</button>{/each}</div>
@@ -787,9 +904,9 @@
         {:else if someGen}
           <div class="genProgress"><span class="genspin"></span>Genererar… {someGenSekunder}s (websöker matchfakta, tar ofta ~2 min)</div>
         {/if}
-        <textarea class="somecap" bind:value={someCaption} rows="3" placeholder="Bildsvep-text med #hashtags och @mentions… eller klicka ✨ Generera för ett AI-skrivet Bildsvep"></textarea>
+        <textarea class="somecap" bind:this={someCapEl} bind:value={someCaption} rows="3" placeholder="Bildsvep-text med #hashtags och @mentions… eller klicka ✨ Generera för ett AI-skrivet Bildsvep"></textarea>
         <div class="tokenrad">
-          <span class="tokenlbl">Infoga bricka</span>
+          <span class="tokenlbl">Infoga vid markören:</span>
           {#each someTokens as t}<button class="tokenchip" on:click={() => insertToken(t)}>{'{' + t + '}'}</button>{/each}
         </div>
         <div class="somepreview">
@@ -830,14 +947,47 @@
             </div>
           {/if}
           {#if someLibTarget === 'ig' && somePicks.ig.length}
-            <div class="libomslagrad">
+            <div class="omslagvaxel">
               <span class="libmallbl">Omslag:</span>
-              {#each somePicks.ig as p (p)}
-                <button class="libomslagtile" class:vald={someCover === p} on:click={() => someLibSetCover(p)}>
-                  <img src={bildUrl(p)} alt="" />
-                </button>
-              {/each}
+              <button class:on={someCoverKind === 'foto'} on:click={() => (someCoverKind = 'foto')}>Vald bild</button>
+              <button class:on={someCoverKind === 'overlay'} on:click={() => (someCoverKind = 'overlay')}>Live-overlay 4:5</button>
             </div>
+            {#if someCoverKind === 'foto'}
+              <div class="libomslagrad">
+                {#each somePicks.ig as p (p)}
+                  <button class="libomslagtile" class:vald={someCover === p} on:click={() => someLibSetCover(p)}>
+                    <img src={bildUrl(p)} alt="" />
+                  </button>
+                {/each}
+              </div>
+            {:else if liveMoments.length}
+              {#if liveMoments.length > 1}
+                <div class="ovmomentval">
+                  {#each liveMoments as lm (lm.moment)}
+                    <button class:on={someCoverOv === lm.moment} on:click={() => (someCoverOv = lm.moment)}>{lm.moment}</button>
+                  {/each}
+                </div>
+              {/if}
+              <!-- Overlayen (Live-momentet) läggs på den bild man väljer som omslag. -->
+              <div class="ovvalj">Välj bild som <b>{someCoverOv}</b>-overlayen läggs på:</div>
+              <div class="libomslagrad">
+                {#each somePicks.ig as p (p)}
+                  <button class="libomslagtile" class:vald={someCover === p} on:click={() => someLibSetCover(p)}>
+                    <img src={bildUrl(p)} alt="" />
+                  </button>
+                {/each}
+              </div>
+              <div class="ovprev">
+                <div class="ovprevbild">
+                  {#if ovPreviewUrl}<img src={ovPreviewUrl} alt="Overlay-omslag" />{/if}
+                  {#if ovPreviewLaddar}<span class="ovprevbadge">Renderar…</span>{/if}
+                  {#if !ovPreviewUrl && !ovPreviewLaddar}<span class="ovprevtom">{ovPreviewFel || 'Ingen förhandsvisning'}</span>{/if}
+                </div>
+                <div class="ovprevtxt"><b>{someCoverOv}</b>-overlayen (4:5) läggs på den valda bilden och blir omslag. Dina övriga bilder följer som karusell.</div>
+              </div>
+            {:else}
+              <div class="ovtom">Inga Live-moment skapade för matchen än — skapa en story i Live-fliken först.</div>
+            {/if}
           {/if}
         </div>
 
@@ -863,7 +1013,7 @@
               {#if somePicks.ig.length}<span class="antal">{somePicks.ig.length === 1 ? 'enkel' : (igBitar.length > 1 ? igBitar.length + ' inlägg' : 'karusell · ' + somePicks.ig.length)}</span>{/if}
             </div>
             {#if somePicks.ig.length}
-              <div class="strip">{#each somePicks.ig.slice(0, 6) as p (p)}<span class="thumb"><img src={bildUrl(p)} alt="" />{#if p === someCover}<em>omslag</em>{/if}</span>{/each}{#if somePicks.ig.length > 6}<span class="thumb plus">+{somePicks.ig.length - 6}</span>{/if}</div>
+              <div class="strip">{#if someCoverKind === 'overlay' && someCoverOv && ovPreviewUrl}<span class="thumb"><img src={ovPreviewUrl} alt="" /><em>omslag</em></span>{/if}{#each igKarusell.slice(0, 6) as p (p)}<span class="thumb"><img src={bildUrl(p)} alt="" />{#if someCoverKind === 'foto' && p === someCover}<em>omslag</em>{/if}</span>{/each}{#if igKarusell.length > 6}<span class="thumb plus">+{igKarusell.length - 6}</span>{/if}</div>
               {#if igVarning}<div class="varn">⚠ {igVarning}</div>{/if}
             {:else}
               <div class="hjalptext">Välj bilder i biblioteket ovan (mål: IG-inlägg).</div>
@@ -1111,6 +1261,12 @@
   .kol2 { flex: none; }
   .falt { display: flex; flex-direction: column; gap: 10px; }
   .flabel { display: block; font-size: 11px; color: var(--t-mut); margin-bottom: 5px; }
+  .nastarad { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    margin-top: 10px; padding: 8px 12px; border: 1px dashed var(--div); border-radius: 9px; background: var(--panel); }
+  .nastatxt { font-size: 11.5px; color: var(--t-mut); min-width: 0; }
+  .hamtabtn { flex: none; font-size: 11.5px; font-weight: 600; color: var(--acc); background: var(--kort);
+    border: 1px solid var(--acc-border); border-radius: 7px; padding: 5px 12px; }
+  .hamtabtn:disabled { color: var(--t-help); border-color: var(--div); background: var(--panel); cursor: default; }
   .ovbox { position: relative; width: 150px; aspect-ratio: 9 / 16; border-radius: 12px; overflow: hidden;
     border: 1px solid var(--div); display: flex; flex-direction: column; justify-content: flex-end;
     background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 10px, var(--panel) 10px, var(--panel) 20px); }
@@ -1184,6 +1340,27 @@
     outline: 2px solid transparent; outline-offset: 1px; flex: none; }
   .libomslagtile.vald { outline-color: var(--acc); }
   .libomslagtile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .omslagvaxel { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .omslagvaxel button { border: 1px solid var(--div); background: var(--kort); border-radius: 999px;
+    padding: 4px 11px; font-size: 11.5px; font-weight: 600; color: var(--t-mut); }
+  .omslagvaxel button.on { border-color: var(--acc); color: var(--acc); background: var(--acc-soft); }
+  .ovtom { margin-top: 10px; font-size: 11.5px; color: var(--t-help); }
+  .ovmomentval { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .ovmomentval button { border: 1px solid var(--div); background: var(--kort); border-radius: 999px;
+    padding: 3px 11px; font-size: 11.5px; font-weight: 600; color: var(--t-mut); }
+  .ovmomentval button.on { border-color: var(--acc); color: var(--acc); background: var(--acc-soft); }
+  .ovvalj { margin-top: 10px; font-size: 11px; color: var(--t-mut); }
+  .ovvalj b { color: var(--t-head); }
+  /* 4:5-förhandsvisning av overlayen på den valda bilden. */
+  .ovprev { display: flex; gap: 12px; align-items: flex-start; margin-top: 10px; }
+  .ovprevbild { position: relative; width: 96px; height: 120px; flex: none; border-radius: 8px; overflow: hidden;
+    border: 2px solid var(--acc); background: var(--panel); display: flex; align-items: center; justify-content: center; }
+  .ovprevbild img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ovprevbadge { position: absolute; top: 5px; right: 5px; font-size: 9px; font-weight: 700; color: #fff;
+    background: rgba(0,0,0,.55); border-radius: 4px; padding: 2px 6px; }
+  .ovprevtom { font-size: 10px; color: var(--t-help); text-align: center; padding: 6px; }
+  .ovprevtxt { font-size: 11.5px; color: var(--t-mut); line-height: 1.5; }
+  .ovprevtxt b { color: var(--t-head); }
   .hjalptext { padding: 0 13px 11px; font-size: 11.5px; color: var(--t-help); }
 
   .kanaler { display: flex; flex-direction: column; gap: 10px; }

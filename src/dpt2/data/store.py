@@ -270,6 +270,7 @@ _AKT_KATEGORIER = ("Match", "Uppdrag", "Utställning", "Övrigt")
 def _aktivitet_dict(r):
     d = dict(r)
     d["publicerad"] = bool(d.get("publicerad"))
+    d["heldag"] = bool(d.get("heldag"))
     return d
 
 
@@ -304,16 +305,19 @@ def spara_aktivitet(conn, akt):
     bef = conn.execute("SELECT skapad FROM aktivitet WHERE id=?",
                        (aid,)).fetchone()
     skapad = bef["skapad"] if bef else nu
+    heldag = 1 if akt.get("heldag") else 0
+    # Heldag → ingen specifik tid (datamodellen: tid tomt när heldag).
+    tid = None if heldag else (akt.get("tid") or None)
     conn.execute(
         "INSERT OR REPLACE INTO aktivitet"
-        "(id,kategori,etikett,titel,datum,tid,plats,beskrivning,publicerad,"
+        "(id,kategori,etikett,titel,datum,tid,plats,beskrivning,publicerad,heldag,"
         " synkad_tid,skapad,uppdaterad) "
-        "VALUES(?,?,?,?,?,?,?,?,?,"
+        "VALUES(?,?,?,?,?,?,?,?,?,?,"
         " (SELECT synkad_tid FROM aktivitet WHERE id=?),?,?)",
         (aid, kategori, akt.get("etikett") or None, akt.get("titel") or None,
-         akt.get("datum") or None, akt.get("tid") or None,
+         akt.get("datum") or None, tid,
          akt.get("plats") or None, akt.get("beskrivning") or None,
-         1 if akt.get("publicerad") else 0, aid, skapad, nu))
+         1 if akt.get("publicerad") else 0, heldag, aid, skapad, nu))
     conn.commit()
     return aid
 

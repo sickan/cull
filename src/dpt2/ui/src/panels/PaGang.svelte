@@ -69,15 +69,23 @@
     : plac >= 1 && plac <= 3 ? `Visas som rad ${plac} i den kompakta listan under nästa-kortet.`
     : plac < 0 ? '' : `Plats ${plac + 1} i kön — visas när tidigare aktiviteter passerat.`
 
-  // nästa kommande match i spelschemat (för Hämta-förifyll + hjälptexten)
-  $: nastaMatch = matcher.filter((m) => (m.datum || '') >= IDAG)
-    .sort((a, b) => ((a.datum || '') < (b.datum || '') ? -1 : 1))[0]
+  // Kommande matcher i spelschemat (för matchväljaren i Förifyll).
+  $: kommandeMatcher = matcher.filter((m) => (m.datum || '') >= IDAG)
+    .sort((a, b) => ((a.datum || '') < (b.datum || '') ? -1 : 1))
+  $: nastaMatch = kommandeMatcher[0]
+  // Vald match att förifylla från (specifik, inte bara nästa). Faller tillbaka
+  // på nästa kommande när inget valts eller valet inte längre finns.
+  let valForifyllId = ''
+  $: forifyllMatch = kommandeMatcher.find((m) => m.id === valForifyllId) || nastaMatch
+  $: forifyllMatchTxt = forifyllMatch
+    ? `${forifyllMatch.lag_hemma} – ${forifyllMatch.lag_borta}${forifyllMatch.datum ? ' · ' + forifyllMatch.datum : ''}${forifyllMatch.tid ? ' ' + forifyllMatch.tid : ''}`
+    : ''
 
   let mdText = ''
   $: (async () => { if (vald) { const r = await forhandsgranskaAktivitet(vald); mdText = r?.md || '' } else mdText = '' })()
 
   function korta(m) { return (m || '').slice(0, 3).toUpperCase() }
-  function metaText(p) { return [p.tid, p.plats].filter(Boolean).join(' · ') }
+  function metaText(p) { return [p.heldag ? 'Heldag' : p.tid, p.plats].filter(Boolean).join(' · ') }
 
   // ── Autospar (debounce ~500 ms) ──────────────────────────────────────────
   let sparaTimer = null
@@ -109,7 +117,7 @@
   async function nyAktivitet() {
     // Skapa direkt i backend så posten får ett riktigt id att autospara mot.
     const utkast = { kategori: 'Match', etikett: '', titel: 'Ny aktivitet',
-      datum: IDAG, tid: '', plats: '', beskrivning: '', publicerad: false }
+      datum: IDAG, tid: '', plats: '', beskrivning: '', publicerad: false, heldag: false }
     const r = await sparaAktivitet(utkast)
     const id = r?.id || `tmp${Date.now()}`
     poster = [...poster, { ...utkast, id }]
@@ -125,13 +133,13 @@
   }
 
   function forifyll() {
-    if (!nastaMatch || !vald) return
-    const m = nastaMatch
+    const m = forifyllMatch
+    if (!m || !vald) return
     oppdatera(vald.id, {
       kategori: 'Match',
       titel: `${m.lag_hemma || ''} – ${m.lag_borta || ''}`.trim(),
       datum: m.datum || '',
-      tid: m.tid ? `Avspark ${m.tid}` : '',
+      tid: vald.heldag ? '' : (m.tid ? `Avspark ${m.tid}` : ''),
       plats: m.arena || '',
       etikett: m.liga || '',
     })
@@ -238,10 +246,19 @@
 
       {#if vald.kategori === 'Match'}
         <div class="prefill">
-          <div class="prefilltxt"><b>Förifyll från Matcher</b> — {nastaMatch
-            ? `Hämta nästa match i spelschemat: ${nastaMatch.lag_hemma} – ${nastaMatch.lag_borta} (lag, serie, avspark, arena).`
+          <div class="prefillhuvud"><b>Förifyll från Matcher</b>
+            {#if kommandeMatcher.length}
+              <select class="matchval" bind:value={valForifyllId}>
+                {#each kommandeMatcher as m (m.id)}
+                  <option value={m.id}>{m.lag_hemma} – {m.lag_borta}{m.datum ? ` · ${m.datum}` : ''}</option>
+                {/each}
+              </select>
+            {/if}
+          </div>
+          <div class="prefilltxt">{forifyllMatch
+            ? `Hämtar ${forifyllMatchTxt} (lag, serie, avspark, arena).`
             : 'Ingen kommande match i spelschemat.'}</div>
-          <button class="hamta" on:click={forifyll} disabled={!nastaMatch}>Hämta →</button>
+          <button class="hamta" on:click={forifyll} disabled={!forifyllMatch}>Hämta →</button>
         </div>
       {/if}
 
@@ -250,8 +267,14 @@
       <div class="grid3 mt">
         <div class="f"><label>Datum</label>
           <input value={vald.datum || ''} placeholder="ÅÅÅÅ-MM-DD" on:input={(e) => satt('datum', e.target.value)} /></div>
-        <div class="f"><label>Tid</label>
-          <input value={vald.tid || ''} placeholder="t.ex. Avspark 16:00" on:input={(e) => satt('tid', e.target.value)} /></div>
+        <div class="f"><label class="tidlabel">Tid
+            <button class="heldagtgl" class:pa={vald.heldag} on:click={() => satt('heldag', !vald.heldag)}>
+              <span class="htrack" class:pa={vald.heldag}><span class="hknob"></span></span>Heldag</button></label>
+          {#if vald.heldag}
+            <div class="heldagtxt">Heldag — ingen specifik tid</div>
+          {:else}
+            <input value={vald.tid || ''} placeholder="t.ex. Avspark 16:00" on:input={(e) => satt('tid', e.target.value)} />
+          {/if}</div>
         <div class="f"><label>Plats</label>
           <input value={vald.plats || ''} on:input={(e) => satt('plats', e.target.value)} /></div>
       </div>
@@ -300,7 +323,7 @@
             <div class="pgtxt">
               <div class="pgeti" style="color:{SPORT}">{vald.etikett || ''}</div>
               <div class="pgtitel scd">{vald.titel}</div>
-              <div class="pgmeta"><span class="pgtid">{vald.tid || ''}</span><span class="pgplats">{vald.plats || ''}</span></div>
+              <div class="pgmeta"><span class="pgtid">{vald.heldag ? 'Heldag' : (vald.tid || '')}</span><span class="pgplats">{vald.plats || ''}</span></div>
               {#if vald.beskrivning && arNasta}<p class="pgbesk">{vald.beskrivning}</p>{/if}
             </div>
           </div>
@@ -393,14 +416,29 @@
   .kat { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
     padding: 7px 15px; border-radius: 999px; border: 1px solid var(--div); color: var(--t-head);
     background: var(--panel); }
-  .prefill { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  .prefill { display: flex; align-items: center; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap;
     border: 1px dashed var(--acc-border); background: var(--acc-soft); border-radius: 9px;
     padding: 10px 13px; margin-bottom: 14px; }
-  .prefilltxt { font-size: 12px; color: var(--t-head); line-height: 1.45; }
+  .prefillhuvud { flex-basis: 100%; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--t-head); }
+  .prefillhuvud b { font-weight: 600; }
+  .matchval { font-size: 12px; color: var(--t-head); background: var(--kort); border: 1px solid var(--div);
+    border-radius: 7px; padding: 4px 8px; max-width: 260px; }
+  .prefilltxt { flex: 1; min-width: 0; font-size: 12px; color: var(--t-mut); line-height: 1.45; }
   .prefilltxt b { font-weight: 600; }
   .hamta { flex: none; background: var(--kort); border: 1px solid var(--acc); color: var(--acc);
     border-radius: 7px; padding: 7px 13px; font-size: 12px; font-weight: 600; }
   .hamta:disabled { opacity: 0.5; }
+  .tidlabel { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .heldagtgl { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0;
+    font-size: 11px; color: var(--t-mut); cursor: pointer; }
+  .heldagtgl.pa { color: var(--acc); }
+  .htrack { position: relative; display: inline-block; flex: none; width: 30px; height: 17px;
+    background: var(--div); border-radius: 999px; transition: background 0.12s; }
+  .htrack.pa { background: var(--acc); }
+  .hknob { position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%;
+    background: #fff; transition: left 0.12s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .htrack.pa .hknob { left: 15px; }
+  .heldagtxt { font-size: 12px; color: var(--t-mut); padding: 8px 2px; font-style: italic; }
   .f { display: flex; flex-direction: column; gap: 5px; }
   .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
   .mt { margin-top: 12px; }

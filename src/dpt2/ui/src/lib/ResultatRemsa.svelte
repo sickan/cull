@@ -7,6 +7,7 @@
   // alltid direkt under AktivMatchRad/matchväljaren, som redan har den.
   import { sattResultat } from './api.js'
   import Lagbricka from './Lagbricka.svelte'
+  import { grenFarg } from './gren.js'
 
   export let match = null       // {id, lag_hemma, lag_borta, liga, resultat, mellan, malskyttar, ...}
   export let profil = { res_label: 'Slutresultat', res_ph: '6–0', mid_label: 'Halvtid',
@@ -73,10 +74,18 @@
   let scorersRaw = ''
   function oppnaScorers() { scorersRaw = malskyttar; scorersOpen = true }
   function stangScorers() { malskyttar = scorersRaw; scorersOpen = false }
+
+  // Ljus tavla med gren-behandling (låst: ingen kant om gren okänd).
+  $: grenPa = !!match?.hem_gren
+  $: grenC = grenFarg(match?.hem_gren)
+  function _rgba(hex, a) { const n = parseInt((hex || '#8A8172').replace('#', ''), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})` }
+  $: remsaStil = grenPa
+    ? `border-left:5px solid ${grenC}; box-shadow: var(--skugga), 0 0 0 1px ${_rgba(grenC, 0.25)}, 0 0 14px ${_rgba(grenC, 0.18)};`
+    : ''
 </script>
 
 {#if match}
-  <div class="remsa">
+  <div class="remsa" style={remsaStil}>
     <div class="vanster">
       <Lagbricka namn={match.lag_hemma} farg={fargForLag(match.lag_hemma)} logga={loggaForLag(match.lag_hemma)} storlek={32} />
       <input class="res scd" bind:value={resultat} placeholder={profil.res_ph} size="6" />
@@ -114,26 +123,26 @@
 
 <style>
   .remsa { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-    background: #23201a; border: 1px solid rgba(0, 0, 0, 0.3); border-radius: var(--r);
+    background: var(--kort); border: 1px solid var(--div); border-left: 5px solid var(--div); border-radius: var(--r);
     box-shadow: var(--skugga); padding: 10px 16px; margin-bottom: 16px; }
   .vanster { display: flex; align-items: center; gap: 9px; flex: none; }
-  .res { width: auto; font-size: 26px; font-weight: 700; color: #fff; line-height: 1;
-    background: transparent; border: none; border-bottom: 1px dashed rgba(255, 255, 255, 0.25);
+  .res { width: auto; font-size: 26px; font-weight: 700; color: var(--ink); line-height: 1;
+    background: transparent; border: none; border-bottom: 1px dashed var(--div);
     text-align: center; font-family: var(--font-c); }
   .mitt { flex: none; }
-  .fixtur { font-size: 12.5px; font-weight: 600; color: #fff; }
-  .undertext { font-size: 10.5px; color: rgba(255, 255, 255, 0.5); display: flex; align-items: center; gap: 4px; }
-  .mid { background: transparent; border: none; border-bottom: 1px dashed rgba(255, 255, 255, 0.25);
-    font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: rgba(255, 255, 255, 0.85); padding: 1px 2px; }
+  .fixtur { font-size: 12.5px; font-weight: 600; color: var(--t-head); }
+  .undertext { font-size: 10.5px; color: var(--t-mut); display: flex; align-items: center; gap: 4px; }
+  .mid { background: transparent; border: none; border-bottom: 1px dashed var(--div);
+    font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: var(--t-mut); padding: 1px 2px; }
   .mid.bred { width: 100%; min-width: 200px; font-size: 12px; }
   .chips { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 200px; flex-wrap: wrap; }
-  .chip { font-size: 11px; font-weight: 600; background: rgba(255, 255, 255, 0.12); color: #fff;
-    border-radius: 999px; padding: 3px 10px; }
-  .laggmal { font-size: 11px; font-weight: 600; background: transparent; color: rgba(255, 255, 255, 0.55);
-    border: 1px dashed rgba(255, 255, 255, 0.3); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
-  .scorersinput { flex: 1; min-width: 180px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 999px; padding: 4px 12px; color: #fff; font-size: 12px; }
+  .chip { font-size: 11px; font-weight: 600; background: var(--acc-soft); color: var(--t-head);
+    border: 1px solid var(--div3); border-radius: 999px; padding: 3px 10px; }
+  .laggmal { font-size: 11px; font-weight: 600; background: transparent; color: var(--t-mut);
+    border: 1px dashed var(--div); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+  .scorersinput { flex: 1; min-width: 180px; background: var(--panel); border: 1px solid var(--div);
+    border-radius: 999px; padding: 4px 12px; color: var(--ink); font-size: 12px; }
   .klar { font-size: 11px; font-weight: 600; color: var(--acc); background: transparent; border: none; cursor: pointer; }
   .hoger { display: flex; align-items: center; gap: 9px; flex: none; margin-left: auto; }
-  .sparad { font-size: 10.5px; color: #7fb56b; font-weight: 600; }
+  .sparad { font-size: 10.5px; color: var(--ok); font-weight: 600; }
 </style>

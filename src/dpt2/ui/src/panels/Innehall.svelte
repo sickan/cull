@@ -11,11 +11,11 @@
   // Fyra färgkodade typer (DATAMODELL.md). Porträtt är en Event-kategori,
   // inte en egen typ. match = "Sport" utåt; sajtens collection heter matcher.
   const CTYPER = [
-    { id: 'blogg', namn: 'Blog', farg: '#7A8794', sub: 'journal & resor', mapp: 'blogg' },
-    { id: 'match', namn: 'Sport', farg: '#2F7CB0', sub: 'från match', mapp: 'matcher' },
-    { id: 'landskap', namn: 'Landskap', farg: '#C9871F', sub: 'bildserier', mapp: 'landskap' },
-    { id: 'event', namn: 'Event', farg: '#C9657F', sub: 'porträtt, bröllop…', mapp: 'event' },
-    { id: 'pagang', namn: 'På gång', farg: '#A0653B', sub: 'kommande på webben', mapp: 'pagang' },
+    { id: 'blogg', namn: 'Blog', farg: '#7A8794', sub: 'journal & resor', hint: 'Journal, resor & fritext — en fristående bloggpost.', mapp: 'blogg' },
+    { id: 'match', namn: 'Sport', farg: '#2F7CB0', sub: 'från match', hint: 'Matchreferat — hämtar resultat, lag & galleri från Matcher.', mapp: 'matcher' },
+    { id: 'landskap', namn: 'Landskap', farg: '#C9871F', sub: 'bildserier', hint: 'Bildserie — landskap & natur, endast bilder.', mapp: 'landskap' },
+    { id: 'event', namn: 'Event', farg: '#C9657F', sub: 'porträtt, bröllop…', hint: 'Porträtt, bröllop, student & företag.', mapp: 'event' },
+    { id: 'pagang', namn: 'På gång', farg: '#A0653B', sub: 'kommande på webben', hint: 'Kurerad lista som driver webbens Sport → På gång.', mapp: 'pagang' },
   ]
   const STATUSAR = ['kommande', 'pagaende', 'avslutad']
   const STATUS_ETI = { kommande: 'Kommande', pagaende: 'Pågående', avslutad: 'Avslutad' }
@@ -381,22 +381,22 @@
     <span class="sub">Skapa innehåll till hemsidan — frontmatter och bilder blir en färdig .md-fil</span>
   </header>
 
-  <div class="typkort">
+  <div class="cmstabs">
     {#each CTYPER as ct}
-      <button class="tkort" class:on={ctyp === ct.id}
+      <button class="cmstab" class:on={ctyp === ct.id}
         style="--tf:{ct.farg}" on:click={() => bytTyp(ct.id)}>
-        <span class="tik">
+        <span class="cmstik">
           {#if ct.id === 'blogg'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
           {:else if ct.id === 'match'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/></svg>
           {:else if ct.id === 'landskap'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-8 4 6 3-4 6 6"/><circle cx="17.5" cy="7.5" r="1.8"/></svg>
           {:else if ct.id === 'pagang'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="4.5" width="17" height="16" rx="2.4"/><path d="M3.5 9h17M8 3v3M16 3v3"/><path d="M8 13.5l2.5 2.5L16 11"/></svg>
           {:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg>{/if}
         </span>
-        <span class="tnamn scd">{ct.namn}</span>
-        <span class="tsub">{ct.sub}</span>
+        <span class="cmstnamn scd">{ct.namn}</span>
       </button>
     {/each}
   </div>
+  {#if typinfo}<div class="cmssub">{typinfo.hint}</div>{/if}
 
   {#if ctyp === 'pagang'}
     <PaGang on:navigera />
@@ -620,20 +620,18 @@
   h1 { margin: 0; font-size: 25px; font-weight: 700; color: var(--t-head); }
   .sub { font-size: 13px; color: var(--t-mut); }
 
-  /* Fyra färgkodade typkort (Blog · Sport · Landskap · Event) */
-  .typkort { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 16px; }
-  .tkort { display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
-    padding: 12px 14px; border: 1px solid var(--div); border-radius: 12px;
-    background: var(--kort); box-shadow: var(--skugga); text-align: left; }
-  .tkort .tik { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center;
-    justify-content: center; color: var(--tf); background: color-mix(in srgb, var(--tf) 14%, transparent); }
-  .tkort .tik svg { width: 17px; height: 17px; }
-  .tkort .tnamn { font-size: 14.5px; font-weight: 700; color: var(--t-head); }
-  .tkort .tsub { font-size: 10.5px; color: var(--t-mut); }
-  .tkort.on { background: var(--tf); border-color: var(--tf); }
-  .tkort.on .tik { background: rgba(255,255,255,.18); color: #fff; }
-  .tkort.on .tnamn, .tkort.on .tsub { color: #fff; }
-  .tkort:hover:not(.on) { border-color: var(--tf); }
+  /* Kompakt typväljare (segment-rad, aktivt i kategorifärg) */
+  .cmstabs { display: flex; gap: 4px; margin-top: 16px; padding: 4px; border: 1px solid var(--div);
+    border-radius: 12px; background: var(--panel); box-shadow: var(--skugga); }
+  .cmstab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 9px 10px; border: none; border-radius: 9px; background: transparent; color: var(--t-mut);
+    font-size: 13.5px; font-weight: 600; }
+  .cmstab .cmstik { display: inline-flex; align-items: center; justify-content: center; color: currentColor; }
+  .cmstab .cmstik svg { width: 16px; height: 16px; }
+  .cmstab .cmstnamn { font-weight: 700; }
+  .cmstab.on { background: var(--tf); color: #fff; box-shadow: var(--skugga); }
+  .cmstab:hover:not(.on) { color: var(--tf); background: color-mix(in srgb, var(--tf) 10%, transparent); }
+  .cmssub { font-size: 11.5px; color: var(--t-mut); margin: 8px 2px 0; }
 
   .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r); box-shadow: var(--skugga); padding: 16px; margin-top: 14px; }
   .kort.nogap { margin-top: -8px; }

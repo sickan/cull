@@ -322,6 +322,7 @@ CREATE TABLE aktivitet (
   plats       TEXT,
   beskrivning TEXT,                      -- valfri; visas bara i stora "nästa"-kortet
   publicerad  INTEGER NOT NULL DEFAULT 0, -- syns i "På gång" på webben
+  heldag      INTEGER NOT NULL DEFAULT 0, -- heldagsaktivitet: döljer tid, webben visar "Heldag"
   synkad_tid  TEXT,                      -- senast publicerad till content-sync (nätet)
   skapad      TEXT NOT NULL,
   uppdaterad  TEXT NOT NULL
