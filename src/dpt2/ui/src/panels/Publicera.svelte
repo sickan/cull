@@ -328,10 +328,33 @@
     const sett = new Set(); const ut = []
     for (const m of allMaterial) {
       if (m.kind !== 'live' || m.match_id !== match?.id || !m.moment || sett.has(m.moment)) continue
-      sett.add(m.moment); ut.push({ moment: m.moment, tema: m.tema || 'Hav' })
+      sett.add(m.moment); ut.push({ moment: m.moment, tema: m.tema || 'Hav', foto: m.foto || null })
     }
     return ut
   })()
+
+  // Bakgrundsfoto för overlay-omslaget: momentets egna foto, annars första
+  // valda IG-bilden (overlayen ritas ovanpå ett foto).
+  function ovFoto() {
+    const lm = liveMoments.find((x) => x.moment === someCoverOv)
+    return lm?.foto || somePicks.ig[0] || ''
+  }
+  function ovConfig() { return { ...storyConfig(someCoverOv), foto: ovFoto(), format: '4x5' } }
+
+  // Riktig 4:5-förhandsvisning av valt overlay-moment (samma Horisont-render).
+  let ovPreview = ''
+  let ovPreviewLaddar = false
+  let ovPreviewFel = ''
+  let _ovTimer = null
+  async function renderaOvPreview() {
+    if (someCoverKind !== 'overlay' || !someCoverOv) { ovPreview = ''; ovPreviewFel = ''; return }
+    if (!ovFoto()) { ovPreview = ''; ovPreviewFel = 'Overlayen behöver ett foto — välj minst en IG-bild.'; return }
+    ovPreviewLaddar = true; ovPreviewFel = ''
+    const rr = await forhandsgranskaStory(ovConfig())
+    ovPreviewLaddar = false
+    if (rr?.ok && rr.path) { ovPreview = rr.path } else { ovPreview = ''; ovPreviewFel = rr?.fel || 'Kunde inte rendera overlayen.' }
+  }
+  $: if (someCoverKind === 'overlay') { someCoverOv; somePicks.ig; cfg; tema; clearTimeout(_ovTimer); _ovTimer = setTimeout(renderaOvPreview, 400) }
 
   let someLage = 'idle'         // idle | dry | progress | done | delfel | fel
   let someResultat = []         // [{kanal, form, del, av, status, url, fel?}]
@@ -437,12 +460,14 @@
     const chResults = {}
     for (const k of korningar) {
       let bilder = somePicks[k.nyckel]
-      // IG-inlägg med overlay-omslag: rendera valt Live-moment i 4:5 och lägg
-      // först i listan (fan-out tar bilder[0] som omslag).
+      // IG-inlägg med overlay-omslag: rendera valt Live-moment i 4:5 (ovanpå
+      // momentets/första bildens foto) och lägg först i listan — fan-out tar
+      // bilder[0] som omslag. De valda bilderna behålls som karusell efter det.
       if (k.nyckel === 'ig' && someCoverKind === 'overlay' && someCoverOv) {
-        const rr = await forhandsgranskaStory({ ...storyConfig(someCoverOv), format: '4x5' })
-        if (rr?.ok && rr.path) bilder = [rr.path, ...bilder]
-        else someFel = rr?.fel || 'Kunde inte rendera overlay-omslaget.'
+        let ovPath = ovPreview
+        if (!ovPath && ovFoto()) { const rr = await forhandsgranskaStory(ovConfig()); if (rr?.ok) ovPath = rr.path; else someFel = rr?.fel || 'Kunde inte rendera overlay-omslaget.' }
+        if (ovPath) bilder = [ovPath, ...bilder]
+        else someFel = someFel || 'Overlay-omslaget kunde inte renderas — välj minst en IG-bild som foto.'
       }
       const r = await publiceraTillSoMe({ bilder,
         caption: someCaptionResolved, mal: k.mal, match_id: match?.id,
@@ -932,6 +957,23 @@
                   </button>
                 {/each}
               </div>
+              {#if someCoverOv}
+                <div class="ovprev">
+                  <div class="ovprevbild">
+                    {#if ovPreview}<img src={bildUrl(ovPreview)} alt="Overlay-förhandsvisning" />{/if}
+                    {#if ovPreviewLaddar}<span class="ovprevbadge">Renderar…</span>{/if}
+                    {#if !ovPreview && !ovPreviewLaddar}<span class="ovprevtom">{ovPreviewFel || 'Ingen förhandsvisning'}</span>{/if}
+                  </div>
+                  <div class="ovprevtxt">
+                    <b>{someCoverOv}</b> som omslag (4:5).
+                    Dina {somePicks.ig.length} valda bilder följer som karusell efter omslaget — de tas inte bort.
+                  </div>
+                </div>
+              {/if}
+              <div class="ovkarusell">
+                <span class="libmallbl">Karusell efter omslaget:</span>
+                {#each somePicks.ig as p (p)}<span class="ovkbild"><img src={bildUrl(p)} alt="" /></span>{/each}
+              </div>
             {:else}
               <div class="ovtom">Inga Live-moment skapade för matchen än — skapa en story i Live-fliken först.</div>
             {/if}
@@ -1300,6 +1342,18 @@
   .ovformat { font-size: 9px; font-weight: 700; letter-spacing: 0.05em; color: #fff; background: var(--ov);
     border-radius: 4px; padding: 1px 5px; }
   .ovtom { margin-top: 10px; font-size: 11.5px; color: var(--t-help); }
+  .ovprev { display: flex; gap: 12px; align-items: flex-start; margin-top: 10px; }
+  .ovprevbild { position: relative; width: 96px; height: 120px; flex: none; border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--div); background: var(--panel); display: flex; align-items: center; justify-content: center; }
+  .ovprevbild img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ovprevbadge { position: absolute; top: 5px; right: 5px; font-size: 9px; font-weight: 700; color: #fff;
+    background: rgba(0,0,0,.55); border-radius: 4px; padding: 2px 6px; }
+  .ovprevtom { font-size: 10px; color: var(--t-help); text-align: center; padding: 6px; }
+  .ovprevtxt { font-size: 11.5px; color: var(--t-mut); line-height: 1.5; }
+  .ovprevtxt b { color: var(--t-head); }
+  .ovkarusell { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .ovkbild { width: 34px; height: 34px; border-radius: 5px; overflow: hidden; flex: none; border: 1px solid var(--div); }
+  .ovkbild img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .hjalptext { padding: 0 13px 11px; font-size: 11.5px; color: var(--t-help); }
 
   .kanaler { display: flex; flex-direction: column; gap: 10px; }
