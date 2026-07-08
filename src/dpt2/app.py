@@ -1072,14 +1072,18 @@ class Api:
                 self._logg.append({"typ": "fel", "text": f"hero-crop: {e}"})
         if test:
             _fm, _body, slug, md = _innehall_md(data)
-            ut_mapp = testlage.innehall_mapp(_INNEHALL_MAPP.get(typ, "matcher"))
-            ut = AX.skriv_md(md, ut_mapp, slug)
-            # Exportera även den beskurna hero-bilden så man ser den i testläget.
+            md_mapp = testlage.innehall_mapp(_INNEHALL_MAPP.get(typ, "matcher"))
+            AX.skriv_md(md, md_mapp, slug)
+            # Exportera den beskurna hero-bilden så man ser den i testläget — helst
+            # i fan-out:ens DELADE testmapp (config.test_mapp) så webb-bilden ligger
+            # tillsammans med live/ig/fb, annars i .md-mappen.
+            delad = data.get("test_mapp")
+            ut_mapp = delad or md_mapp
             hk, hn = data.get("heroKalla"), data.get("hero")
             if hk and hn and Path(hk).exists():
                 try:
                     import shutil
-                    shutil.copy2(hk, Path(ut_mapp) / hn)
+                    shutil.copy2(hk, Path(ut_mapp) / (f"webb_1_{hn}" if delad else hn))
                 except OSError:
                     pass
             return {"ok": True, "id": None, "path": str(ut_mapp), "test": True}

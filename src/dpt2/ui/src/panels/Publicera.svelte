@@ -241,7 +241,7 @@
             malskyttar: resNu.malskyttar, pixieset: galleriUrl, body: losText(caption, { web: true }),
             figurer: selectedPaths.map((p) => ({ bild: p, alt: '', bildtext: '', src: '' })),
             hero: (coverPath.split('/').pop() || ''), heroKalla: coverPath,
-            heroFormat: ch.webb.fmt, heroFokus: ch.webb.fokus, heroZoom: ch.webb.zoom }, test)
+            heroFormat: ch.webb.fmt, heroFokus: ch.webb.fokus, heroZoom: ch.webb.zoom, test_mapp }, test)
           ut.push({ kanal: k.namn, ok: !!r?.ok, text: r?.fel || (test ? 'Testfil · 1 bild' : 'Publicerad') })
         }
       } catch (e) { ut.push({ kanal: k.namn, ok: false, text: 'Fel: ' + (e?.message || e) }) }
