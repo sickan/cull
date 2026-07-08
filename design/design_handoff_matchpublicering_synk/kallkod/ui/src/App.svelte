@@ -1,0 +1,164 @@
+<script>
+  import { onMount } from 'svelte'
+  import Rail from './lib/Rail.svelte'
+  import Fotojobb from './panels/Fotojobb.svelte'
+  import Matcher from './panels/Matcher.svelte'
+  import Lag from './panels/Lag.svelte'
+  import Gallra from './panels/Gallra.svelte'
+  import Leverera from './panels/Leverera.svelte'
+  import Publicera from './panels/Publicera.svelte'
+  import Innehall from './panels/Innehall.svelte'
+  import Trana from './panels/Trana.svelte'
+  import Logg from './panels/Logg.svelte'
+  import Installningar from './panels/Installningar.svelte'
+  import { erMock, aktivMatch, aktivtUrval, listaMaterial } from './lib/api.js'
+  import { testMode } from './lib/testlage.js'
+
+  const ARMOCK = erMock()
+
+  let aktiv = 'fotojobb'
+  let tema = 'dark'   // mörkt läge är standard (Matchpublicering-designen är mörk)
+  // Speglar temat till <html data-theme> — körs direkt vid init (ingen ljus
+  // blink) och vid varje växling.
+  $: if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', tema)
+  let aktivMatchData = null
+  let aktivM = null            // global aktiv match (topp-widget)
+  let aktivU = null            // globalt aktivt urval (topp-widget)
+  let harDelvis = false        // minst ett material är "Delvis publicerad" (nav-punkt)
+
+  onMount(async () => {
+    ;[aktivM, aktivU] = await Promise.all([aktivMatch(), aktivtUrval()])
+    await uppdateraDelvis()
+  })
+  async function uppdateraDelvis() {
+    const mat = await listaMaterial()
+    harDelvis = mat.some((m) => m.status === 'delvis')
+  }
+
+  async function uppdateraUrval() { aktivU = await aktivtUrval() }
+  const urvalEtikett = (u) => !u ? ''
+    : (u.lag_hemma ? `${u.lag_hemma} – ${u.lag_borta}` : (u.kalla || '').split('/').pop())
+
+  function vaxlaTema() {
+    tema = tema === 'light' ? 'dark' : 'light'   // data-theme sätts av det reaktiva blocket ovan
+  }
+  function aktiveraFranMatcher(m) { aktivMatchData = m; aktivM = m; aktiv = 'gallra' }
+  // §2: matchradens statuschips — samma aktivera-mekanism, valfri destination.
+  function aktiveraFranMatcherTill(m, dest) { aktivMatchData = m; aktivM = m; aktiv = dest }
+</script>
+
+<div class="app">
+  <Rail {aktiv} delvis={harDelvis} on:valj={(e) => (aktiv = e.detail)} />
+
+  <main>
+    <div class="topbar">
+      <button class="widget match" on:click={() => (aktiv = 'matcher')} title="Aktiv match">
+        <span class="dot" class:pa={aktivM}></span>
+        <span class="wtext">
+          <span class="wlbl">Aktiv match</span>
+          <span class="wval scd">{aktivM ? `${aktivM.lag_hemma} – ${aktivM.lag_borta}` : 'Ingen vald'}</span>
+        </span>
+      </button>
+      <button class="widget urval" on:click={() => (aktiv = aktivU ? 'leverera' : 'gallra')}
+        title={aktivU ? 'Aktivt urval — gå till Leverera' : 'Inget urval — gå till Gallra'}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="ic"><path d="M3 7.5A2 2 0 015 5.5h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+        <span class="wtext">
+          {#if aktivU}
+            <span class="wlbl">Aktivt urval · {aktivU.status}</span>
+            <span class="wval scd">{urvalEtikett(aktivU)} · {aktivU.bilder} bilder</span>
+          {:else}
+            <span class="wval scd">Inget urval valt</span>
+            <span class="wlbl">Klicka för att välja</span>
+          {/if}
+        </span>
+      </button>
+      {#if ARMOCK}<span class="mock">mock</span>{/if}
+      <button class="testswitch" class:on={$testMode} on:click={() => ($testMode = !$testMode)}
+        title="Testläge — inget sparas eller postas på riktigt">
+        <span class="tsw-track"><span class="tsw-knob"></span></span>
+        <span class="tsw-label">Testläge</span>
+      </button>
+      <button class="tema" on:click={vaxlaTema} title="Växla tema">{tema === 'light' ? '☾' : '☀'}</button>
+    </div>
+
+    {#if $testMode}
+      <div class="testbanner">
+        <span class="testtag">TESTLÄGE</span>
+        <span>Allt skapas i minnet · exempelfiler skrivs till</span>
+        <span class="testpath mono">~/DPT/test-output/</span>
+        <span>· inget sparas — rensas vid omstart</span>
+      </div>
+    {/if}
+
+    {#if aktiv === 'fotojobb'}
+      <Fotojobb on:navigera={(e) => (aktiv = e.detail)} />
+    {:else if aktiv === 'matcher'}
+      <Matcher on:aktiverad={(e) => aktiveraFranMatcher(e.detail)}
+        on:gaTill={(e) => aktiveraFranMatcherTill(e.detail.match, e.detail.dest)} />
+    {:else if aktiv === 'lag'}
+      <Lag />
+    {:else if aktiv === 'gallra'}
+      <Gallra {aktivMatchData} on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
+    {:else if aktiv === 'leverera'}
+      <Leverera on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
+    {:else if aktiv === 'publicera'}
+      <Publicera on:navigera={(e) => (aktiv = e.detail)} on:materialAndrat={uppdateraDelvis} />
+    {:else if aktiv === 'innehall'}
+      <Innehall on:navigera={(e) => (aktiv = e.detail)} />
+    {:else if aktiv === 'trana'}
+      <Trana />
+    {:else if aktiv === 'logg'}
+      <Logg />
+    {:else if aktiv === 'installningar'}
+      <Installningar />
+    {/if}
+  </main>
+</div>
+
+<style>
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  main { flex: 1; min-width: 0; overflow-y: auto; position: relative; display: flex; flex-direction: column; }
+  .topbar {
+    position: sticky; top: 0; z-index: 5; display: flex; align-items: center;
+    justify-content: flex-end; gap: 10px; min-height: 58px; padding: 10px 22px;
+    background: color-mix(in srgb, var(--sand) 86%, transparent);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--div3); flex: none;
+  }
+  .widget { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 14px;
+    background: var(--kort); border: 1px solid var(--div); border-radius: 20px; color: var(--t-head); }
+  .widget:hover { border-color: var(--acc); }
+  .widget.match { margin-right: auto; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--t-help); flex: none; }
+  .dot.pa { background: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+  .ic { width: 17px; height: 17px; color: var(--t-mut); flex: none; }
+  .wtext { display: flex; flex-direction: column; line-height: 1.1; text-align: left; }
+  .wlbl { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t-mut); font-weight: 600; }
+  .wval { font-size: 13px; font-weight: 700; color: var(--t-head); }
+  .mock { font-size: 10px; color: var(--varn); font-weight: 700;
+    background: color-mix(in srgb, var(--varn) 14%, transparent); padding: 3px 8px; border-radius: 999px; }
+  .tema { width: 40px; height: 40px; border: 1px solid var(--div); border-radius: 20px;
+    background: var(--kort); color: var(--t-head); font-size: 15px; flex: none; }
+  .tema:hover { background: var(--div3); }
+
+  .testswitch { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 14px;
+    background: var(--kort); border: 1px solid var(--div); border-radius: 20px;
+    font-size: 12.5px; font-weight: 600; color: var(--t-mut); flex: none; }
+  .testswitch.on { background: color-mix(in srgb, var(--varn) 13%, transparent);
+    border-color: color-mix(in srgb, var(--varn) 55%, transparent); color: var(--varn); }
+  .tsw-track { width: 30px; height: 17px; border-radius: 999px; background: var(--div3);
+    border: 1px solid var(--div); position: relative; flex: none; transition: background .15s, border-color .15s; }
+  .testswitch.on .tsw-track { background: var(--varn); border-color: var(--varn); }
+  .tsw-knob { position: absolute; top: 1px; left: 1px; width: 13px; height: 13px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: left .15s; }
+  .testswitch.on .tsw-knob { left: 14px; }
+
+  .testbanner { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; flex: none;
+    padding: 7px 22px; font-size: 11.5px; font-weight: 600; color: var(--varn);
+    background: color-mix(in srgb, var(--varn) 10%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--varn) 30%, transparent); }
+  .testbanner .testtag { font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+    border: 1px solid color-mix(in srgb, var(--varn) 55%, transparent); padding: 1px 7px; border-radius: 5px; }
+  .testbanner .testpath { font-family: var(--mono, ui-monospace, monospace); font-size: 11px;
+    background: color-mix(in srgb, var(--varn) 14%, transparent); padding: 1px 7px; border-radius: 5px; }
+  .testbanner .mono { font-family: var(--mono, ui-monospace, monospace); }
+</style>
