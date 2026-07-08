@@ -388,6 +388,7 @@
         <span class="klbl">Katalog</span>
         <input class="mono" bind:value={folderPath} on:change={lasKatalog} placeholder="Lightroom-exportens mapp" />
         <button class="sek" on:click={valjKatalog}>Välj katalog…</button>
+        <button class="sek" on:click={ingestOppna}>Hämta bilder…</button>
       </div>
       {#if laddarBilder}<div class="hint">Läser katalogen…</div>{/if}
       {#if photos.length}
