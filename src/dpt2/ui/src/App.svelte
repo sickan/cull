@@ -17,7 +17,10 @@
   const ARMOCK = erMock()
 
   let aktiv = 'fotojobb'
-  let tema = 'light'
+  let tema = 'dark'   // mörkt läge är standard (Matchpublicering-designen är mörk)
+  // Speglar temat till <html data-theme> — körs direkt vid init (ingen ljus
+  // blink) och vid varje växling.
+  $: if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', tema)
   let aktivMatchData = null
   let aktivM = null            // global aktiv match (topp-widget)
   let aktivU = null            // globalt aktivt urval (topp-widget)
@@ -37,8 +40,7 @@
     : (u.lag_hemma ? `${u.lag_hemma} – ${u.lag_borta}` : (u.kalla || '').split('/').pop())
 
   function vaxlaTema() {
-    tema = tema === 'light' ? 'dark' : 'light'
-    document.documentElement.setAttribute('data-theme', tema)
+    tema = tema === 'light' ? 'dark' : 'light'   // data-theme sätts av det reaktiva blocket ovan
   }
   function aktiveraFranMatcher(m) { aktivMatchData = m; aktivM = m; aktiv = 'gallra' }
   // §2: matchradens statuschips — samma aktivera-mekanism, valfri destination.

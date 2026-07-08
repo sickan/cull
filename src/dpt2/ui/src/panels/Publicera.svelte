@@ -614,7 +614,7 @@
 {/if}
 
 <style>
-  .panel { padding: 22px 28px 20px; max-width: 1060px; }
+  .panel { padding: 22px 30px 20px; }   /* full bredd (designen fyller hela ytan) */
   .topp { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
   .kicker { font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--acc); margin-bottom: 6px; }
   h1 { margin: 0; font-size: 27px; font-weight: 700; color: var(--t-head); }
