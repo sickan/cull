@@ -1052,92 +1052,6 @@ class Api:
             store.satt_synkad(self.conn, iid, datetime.now().isoformat(timespec="seconds"))
         return {"ok": r.get("ok", False), "id": iid, "fel": r.get("fel")}
 
-    # ── På gång (aktivitetslista → content/pagang/*.md) ─────────────────────
-    def lista_aktiviteter(self):
-        return store.lista_aktiviteter(self.conn)
-
-    def spara_aktivitet(self, akt):
-        """Upsert av EN aktivitet (autospar). Returnerar {ok, id}."""
-        aid = store.spara_aktivitet(self.conn, akt or {})
-        return {"ok": True, "id": aid}
-
-    def radera_aktivitet(self, id):
-        """Tar bort posten lokalt och — om den redan publicerats till nätet —
-        raderar den även på content-sync (så den försvinner från sajten direkt
-        vid nästa bygge). Fjärr-raderingen är best-effort med ETT försök: den
-        får aldrig blockera UI-raderingen om nätet är nere (reconciling publish
-        städar bort kvarvarande rader nästa gång man publicerar)."""
-        akt = store.hamta_aktivitet(self.conn, id)
-        store.radera_aktivitet(self.conn, id)
-        if akt and akt.get("synkad_tid"):
-            try:
-                self.innehall_synk.radera("pagang", id, forsok=1)
-            except Exception:
-                pass
-        return {"ok": True}
-
-    def forhandsgranska_aktivitet(self, akt):
-        """Genererar .md (utan att skriva) + filnamn för förhandsvisning."""
-        _fm, _b, slug, md = _aktivitet_md(akt or {})
-        return {"slug": slug, "filnamn": f"content/pagang/{slug}.md", "md": md}
-
-    def exportera_aktiviteter(self, export_dir, test=False):
-        """Skriver en content/pagang/{datum}-{slug}.md per aktivitet med titel
-        (frontmatter bär `publicerad` — webben filtrerar dolda/passerade). Hela
-        den kurerade listan skrivs på en gång; det är den som driver "På gång"-
-        sektionen. Testläge skriver till test-output/content/pagang/ och kräver
-        ingen export-katalog (jfr exportera_innehall)."""
-        poster = [a for a in store.lista_aktiviteter(self.conn) if a.get("titel")]
-        if not test and not export_dir:
-            return {"ok": False, "fel": "Ange en export-katalog."}
-        mal = (testlage.innehall_mapp("pagang") if test else export_dir)
-        skrivna = []
-        for a in poster:
-            _fm, _b, slug, md = _aktivitet_md(a)
-            ut = AX.skriv_md(md, mal, slug)
-            skrivna.append(str(ut))
-        return {"ok": True, "antal": len(skrivna), "path": mal if test else export_dir,
-                "test": test}
-
-    def publicera_aktiviteter_natet(self, test=False):
-        """Publicerar hela den kurerade listan till content-sync-workern (typ
-        'pagang') — en rad per aktivitet med titel. Passerade/dolda poster
-        skickas ändå (frontmatter bär `publicerad`, webben filtrerar) så att
-        avpublicering slår igenom. Testläge skriver bara lokala .md-filer, som
-        exportera_aktiviteter(test=True). Returnerar {ok, antal, fel}."""
-        if test:
-            r = self.exportera_aktiviteter("", test=True)
-            return {"ok": True, "antal": r.get("antal", 0), "path": r.get("path"),
-                    "test": True}
-        poster = [a for a in store.lista_aktiviteter(self.conn) if a.get("titel")]
-        antal, fel = 0, None
-        for a in poster:
-            fm, body, slug, _md = _aktivitet_md(a)
-            r = self.innehall_synk.publicera("pagang", a["id"], slug=slug,
-                                             frontmatter=fm, body=body)
-            if r.get("ok"):
-                store.satt_aktivitet_synkad(
-                    self.conn, a["id"],
-                    datetime.now().isoformat(timespec="seconds"))
-                antal += 1
-            elif fel is None:
-                fel = r.get("fel") or f"Kunde inte publicera (status {r.get('status')})."
-        # Reconciliation: publicering är en full synk av den kurerade listan —
-        # rader som finns kvar på workern men INTE längre lokalt (raderade, eller
-        # en post som fått titeln rensad) städas bort så sajten speglar listan
-        # exakt. Best-effort: en miss här ska inte fälla en i övrigt lyckad
-        # publicering (nästa publicering försöker igen). Hoppas om själva
-        # publiceringen redan failat (då är fjärrlistan opålitlig).
-        borttagna = 0
-        if fel is None:
-            lokala_ids = {a["id"] for a in poster}
-            for rad in self.innehall_synk.lista("pagang"):
-                rid = rad.get("id")
-                if rid and rid not in lokala_ids:
-                    if self.innehall_synk.radera("pagang", rid).get("ok"):
-                        borttagna += 1
-        return {"ok": fel is None, "antal": antal, "borttagna": borttagna, "fel": fel}
-
     # ── På gång (webb) — härledd ur matchlistan (ersätter kuraterad lista) ────
     def _pagang_kommande(self, idag=None):
         """Kommande matcher (inget resultat, datum ≥ idag) sorterade stigande.
@@ -1453,33 +1367,6 @@ def _innehall_md(data, bild_urls=None):
     return fm, body, slug, AX.render_md(fm, body)
 
 
-def _aktivitet_md(akt):
-    """En aktivitet (På gång-post) → (frontmatter-dict, body, slug, komplett
-    .md). Speglar DATAMODELL-PAGANG.md: datum är enda datumkällan (veckodag/
-    månad härleds på webben, lagras aldrig), body = beskrivningen (valfri).
-    slug = {datum}-{slugga(titel)} → filnamnet content/pagang/{slug}.md."""
-    akt = akt or {}
-    titel = akt.get("titel") or ""
-    datum = akt.get("datum") or ""
-    kategori = akt.get("kategori") or "Match"
-    namnslug = AX.slugga(titel) if titel else "ny-aktivitet"
-    slug = f"{datum}-{namnslug}" if datum else namnslug
-    heldag = bool(akt.get("heldag"))
-    fm = {
-        "typ": "aktivitet",
-        "kategori": kategori,
-        "etikett": akt.get("etikett") or None,
-        "titel": titel or None,
-        "datum": datum or None,
-        "tid": None if heldag else (akt.get("tid") or None),  # tom tid vid heldag
-        "plats": akt.get("plats") or None,
-        "publicerad": bool(akt.get("publicerad")),
-        "heldag": heldag,
-    }
-    body = (akt.get("beskrivning") or "").rstrip()
-    return fm, body, slug, AX.render_md(fm, body)
-
-
 # Bildfiltyper som räknas som "bilder" vid minneskort-ingest (RAW + JPEG m.fl.).
 _BILD_EXT = {".jpg", ".jpeg", ".png", ".heic", ".nef", ".dng", ".cr2", ".cr3",
              ".arw", ".raf", ".orf", ".rw2"}
@@ -1497,10 +1384,10 @@ def _ar_skyddad(p):
 
 def _pagang_match_md(m):
     """En kommande match → (frontmatter, body, slug, .md) för webbens 'På gång'.
-    Speglar _aktivitet_md:s frontmatter-form EXAKT (samma pagang-collection på
-    sajten) — kategori 'Match', arena som plats, ligan som etikett. Inga nya
-    frontmatter-nycklar (Astro-schemat är strikt); gren-pricken lever bara i
-    appens vy, inte i den publicerade .md:n."""
+    Frontmattern har samma form som sajtens pagang-collection förväntar sig
+    (`typ: aktivitet`, kategori 'Match', arena som plats, ligan som etikett).
+    Inga nya frontmatter-nycklar (Astro-schemat är strikt); gren-pricken lever
+    bara i appens vy, inte i den publicerade .md:n."""
     m = m or {}
     titel = f"{m.get('lag_hemma', '')} – {m.get('lag_borta', '')}".strip(" –")
     datum = m.get("datum") or ""

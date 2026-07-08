@@ -305,31 +305,6 @@ CREATE TABLE innehall (
   skapad      TEXT
 );
 
--- ── På gång → hemsidans Sport-sida (kurerad aktivitetslista) ─────────────────
-
--- En rad = en aktivitet = en content/pagang/{datum}-{slug}.md på webben.
--- Skild från `innehall` ovan: det här är en PERSISTENT kurerad lista som
--- redigeras löpande (autospar), inte en engångspublicering per formulär.
--- datum (YYYY-MM-DD) är enda datumkällan — veckodag/månad härleds på webben.
-CREATE TABLE aktivitet (
-  id          TEXT PRIMARY KEY,
-  kategori    TEXT NOT NULL DEFAULT 'Match'
-                CHECK (kategori IN ('Match','Uppdrag','Utställning','Övrigt')),
-  etikett     TEXT,                      -- liten rad ovanför titeln (t.ex. "Damallsvenskan · omgång 12")
-  titel       TEXT,
-  datum       TEXT,                      -- YYYY-MM-DD (enda datumkällan)
-  tid         TEXT,                      -- fri text ("Avspark 16:00")
-  plats       TEXT,
-  beskrivning TEXT,                      -- valfri; visas bara i stora "nästa"-kortet
-  publicerad  INTEGER NOT NULL DEFAULT 0, -- syns i "På gång" på webben
-  heldag      INTEGER NOT NULL DEFAULT 0, -- heldagsaktivitet: döljer tid, webben visar "Heldag"
-  synkad_tid  TEXT,                      -- senast publicerad till content-sync (nätet)
-  skapad      TEXT NOT NULL,
-  uppdaterad  TEXT NOT NULL
-);
-
-CREATE INDEX idx_aktivitet_datum ON aktivitet(datum);
-
 -- ── App-inställningar (ersätter settings.json; valfritt) ─────────────────────
 
 CREATE TABLE installning (
