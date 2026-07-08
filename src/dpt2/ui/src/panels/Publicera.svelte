@@ -300,6 +300,25 @@
   let liveTest = false
   let liveFas = 'compose'          // compose | publishing | done
   let liveResultat = null
+  // Live-flödet har sitt EGET bildurval (skilt från Steg 1) — under match vill
+  // man posta senaste bilden ur live-katalogen, inte den kurerade delmängden.
+  let liveFolderPath = ''
+  let livePhotos = []              // sökvägar (egen lista, delar bara thumb-cachen)
+  let liveLaddar = false
+  async function liveLasKatalog() {
+    if (!liveFolderPath) return
+    liveLaddar = true
+    const lista = await listaSomeBilder(liveFolderPath)
+    liveLaddar = false
+    livePhotos = lista || []
+    laddaThumbs(livePhotos)
+    if ((!livePhoto || !livePhotos.includes(livePhoto)) && livePhotos[0]) livePhoto = livePhotos[0]
+    liveRendera()
+  }
+  async function liveValjKatalog() {
+    const r = await valjMapp('Välj katalog för Live-story (senaste bilderna)')
+    if (r?.ok && r.path) { liveFolderPath = r.path; await liveLasKatalog() }
+  }
   $: liveMoms = (() => {
     const l = [{ k: 'start', label: profil.start_moment || 'Avspark' }, { k: 'mid', label: profil.mid_label || 'Halvtid' }]
     if (profil.has_scorers) l.push({ k: 'scorer', label: 'Målgörare' })
@@ -307,7 +326,12 @@
     return l
   })()
   const LIVEMOM = { start: 'avspark', mid: 'halvtid', scorer: 'malgorare', result: 'resultat' }
-  function liveOppna() { liveOpen = true; liveFas = 'compose'; if (!livePhoto && coverPath) livePhoto = coverPath; liveRendera() }
+  function liveOppna() {
+    liveOpen = true; liveFas = 'compose'
+    // Ladda Live-katalogen om den är tom — startpunkt = huvudkatalogen, men egen lista.
+    if (!livePhotos.length) { if (!liveFolderPath) liveFolderPath = folderPath; if (liveFolderPath) liveLasKatalog() }
+    liveRendera()
+  }
   function liveStang() { liveOpen = false }
   function liveSattMoment(k) { liveMoment = k; liveRendera() }
   function liveSattFoto(p) { livePhoto = p; liveRendera() }
@@ -575,13 +599,17 @@
         <div class="slidekropp">
           <div class="scaps">1 · Moment</div>
           <div class="momrad">{#each liveMoms as m}<button class="mom" class:on={liveMoment === m.k} on:click={() => liveSattMoment(m.k)}>{m.label}</button>{/each}</div>
-          <div class="scaps mt">2 · Bild <button class="minilank hb" on:click={ingestOppna}>Hämta / uppdatera ›</button></div>
+          <div class="scaps mt">2 · Bild <button class="minilank hb" on:click={liveLasKatalog}>↻ Uppdatera</button></div>
+          <div class="livekat">
+            <input class="mono" bind:value={liveFolderPath} on:change={liveLasKatalog} placeholder="Live-katalog (senaste bilderna)" />
+            <button class="sek sm" on:click={liveValjKatalog}>Välj…</button>
+          </div>
           <div class="livebilder">
-            {#each photos.filter((p) => p.sel).slice(0, 8) as p, i}
-              <button class="livebild" class:on={livePhoto === p.path} class:tom={!thumbs[p.path]} style={thumbs[p.path] ? `background-image:url(${thumbs[p.path]})` : ''} on:click={() => liveSattFoto(p.path)}>
+            {#each livePhotos.slice(0, 12) as p, i}
+              <button class="livebild" class:on={livePhoto === p} class:tom={!thumbs[p]} style={thumbs[p] ? `background-image:url(${thumbs[p]})` : ''} on:click={() => liveSattFoto(p)}>
                 {#if i === 0}<span class="senast">SENAST</span>{/if}</button>
             {/each}
-            {#if !photos.some((p) => p.sel)}<div class="hint">Välj bilder i Steg 1 eller Hämta bilder.</div>{/if}
+            {#if liveLaddar}<div class="hint">Läser katalogen…</div>{:else if !livePhotos.length}<div class="hint">Välj en Live-katalog eller Hämta bilder.</div>{/if}
           </div>
           <div class="scaps mt">3 · Förhandsvisning</div>
           <div class="liveprevwrap">
@@ -823,6 +851,9 @@
   .momrad { display: flex; gap: 7px; }
   .mom { flex: 1; text-align: center; padding: 9px 6px; border-radius: 9px; font-size: 12px; font-weight: 600; background: var(--kort); border: 1px solid var(--div); color: var(--t-mut); }
   .mom.on { background: var(--acc); color: #100c05; border-color: var(--acc); font-weight: 700; }
+  .livekat { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; }
+  .livekat input { flex: 1; min-width: 0; }
+  .sek.sm { padding: 7px 11px; font-size: 11px; }
   .livebilder { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
   .livebild { position: relative; width: 58px; height: 82px; flex: none; border-radius: 7px; border: 1px solid var(--div); background-size: cover; background-position: center; opacity: 0.6; padding: 0; }
   .livebild.on { outline: 2px solid var(--acc); opacity: 1; }
