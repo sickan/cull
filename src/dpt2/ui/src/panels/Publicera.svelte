@@ -9,7 +9,7 @@
   import { onMount, createEventDispatcher } from 'svelte'
   import {
     listaMatcher, hamtaMatch, aktivMatch, sattAktivMatch, sportprofiler, listaLag,
-    valjMapp, listaSomeBilder,
+    valjMapp, listaSomeBilder, thumbForBild,
     forhandsgranskaStory, publiceraLiveStory, publiceraTillSoMe, nyTestPaketMapp,
     publiceraInnehallNatet, listaMaterial, sparaMaterial,
     listaMinneskort, exporteraSkyddade,
@@ -67,6 +67,19 @@
   let folderPath = ''
   let photos = []                  // {path, sel, cover}
   let laddarBilder = false
+  // Appen laddas från file:// → WKWebView blockerar <img src="file://…"> mot
+  // andra kataloger. Bilder visas därför som base64 data-URI:er via
+  // thumbForBild (samma bevisade mekanism som Innehåll/BildvaljareFokuspunkt).
+  let thumbs = {}                  // sökväg → data-URI (source-foton)
+  async function laddaThumbs(paths) {
+    const jobb = (paths || []).filter((p) => p && !thumbs[p]).map(async (p) => {
+      const t = await thumbForBild(p)
+      if (t?.ok) thumbs[p] = t.data_uri
+    })
+    if (!jobb.length) return
+    await Promise.all(jobb)
+    thumbs = thumbs
+  }
   $: selCount = photos.filter((p) => p.sel).length
   $: coverPath = (photos.find((p) => p.sel && p.cover) || photos.find((p) => p.sel) || {}).path || ''
   $: selectedPaths = photos.filter((p) => p.sel).map((p) => p.path)
@@ -81,6 +94,7 @@
     const lista = await listaSomeBilder(folderPath)
     laddarBilder = false
     photos = (lista || []).map((p, i) => ({ path: p, sel: i < 6, cover: i === 0 }))
+    laddaThumbs(photos.map((p) => p.path))
     scheduleAll()
   }
   function klickaBild(i) {
@@ -144,10 +158,8 @@
     fb: { on: false, fmt: '1x1', fokus: { x: 50, y: 45 }, zoom: 1 },
     webb: { on: true, fmt: '2x1', fokus: { x: 50, y: 40 }, zoom: 1 },
   }
-  let preview = { live: '', ig: '', fb: '', webb: '' }   // renderad fil-sökväg
-  let previewTs = { live: 0, ig: 0, fb: 0, webb: 0 }
+  let preview = { live: '', ig: '', fb: '', webb: '' }   // renderad data-URI per kanal
   let renderar = { live: false, ig: false, fb: false, webb: false }
-  const bildUrl = (p, ts) => (/^(https?|file):/.test(p) ? p : 'file://' + p) + (ts ? `?t=${ts}` : '')
 
   function toggleCh(k) { ch[k].on = !ch[k].on; ch = ch; if (ch[k].on) scheduleRender(k) }
   function sattFmt(k, f) { ch[k].fmt = f; ch = ch; scheduleRender(k) }
@@ -177,7 +189,11 @@
       stallning: match.resultat || '', mellan: match.mellan || '', mal_rad: match.malskyttar || '',
     })
     renderar[k] = false; renderar = renderar
-    if (r?.ok && r.path) { preview[k] = r.path; previewTs[k] = Date.now(); preview = preview; previewTs = previewTs }
+    if (r?.ok && r.path) {
+      const t = await thumbForBild(r.path)   // fil → data-URI (file:// blockeras i WKWebView)
+      preview[k] = t?.ok ? t.data_uri : ''
+      preview = preview
+    }
   }
   // Ny resultatremsa-sparning speglas i previews: läs om matchen + rita om.
   async function uppdateraPreviews() {
@@ -261,7 +277,6 @@
   let liveMoment = 'result'
   let livePhoto = ''
   let livePreview = ''
-  let livePreviewTs = 0
   let liveTest = false
   let liveFas = 'compose'          // compose | publishing | done
   let liveResultat = null
@@ -284,7 +299,7 @@
       const r = await forhandsgranskaStory({ foto: livePhoto, moment: LIVEMOM[liveMoment] || 'resultat',
         match_id: match.id, tema, format: '9x16', preview_slot: 'livenu',
         stallning: match.resultat || '', mellan: match.mellan || '', mal_rad: match.malskyttar || '' })
-      if (r?.ok && r.path) { livePreview = r.path; livePreviewTs = Date.now() }
+      if (r?.ok && r.path) { const t = await thumbForBild(r.path); livePreview = t?.ok ? t.data_uri : '' }
     }, 400)
   }
   async function livePublicera() {
@@ -380,7 +395,7 @@
       {#if photos.length}
         <div class="bildrutnat">
           {#each photos as p, i}
-            <button class="bild" class:sel={p.sel} style="background-image:url({bildUrl(p.path)})" on:click={() => klickaBild(i)}>
+            <button class="bild" class:sel={p.sel} class:tom={!thumbs[p.path]} style={thumbs[p.path] ? `background-image:url(${thumbs[p.path]})` : ''} on:click={() => klickaBild(i)}>
               {#if p.sel}<span class="bock">✓</span>{/if}
               {#if p.cover}<span class="omslag">OMSLAG</span>{/if}
             </button>
@@ -438,7 +453,7 @@
           <div class="prevbox" class:wide={k.wide} style="aspect-ratio:{fmtRatio(ch[k.key].fmt)};border-color:{grenFarg(match?.hem_gren)};box-shadow:0 0 12px {grenFarg(match?.hem_gren)}55"
             on:click={(e) => sattFokus(k.key, e)}>
             {#if preview[k.key]}
-              <img class="previmg" src={bildUrl(preview[k.key], previewTs[k.key])} alt="" />
+              <img class="previmg" src={preview[k.key]} alt="" />
             {:else}
               <div class="prevtom">{ch[k.key].on ? (coverPath ? 'Renderar…' : 'Välj omslag i Steg 1') : 'Avstängd'}</div>
             {/if}
@@ -512,7 +527,7 @@
           <div class="scaps mt">2 · Bild <button class="minilank hb" on:click={ingestOppna}>Hämta / uppdatera ›</button></div>
           <div class="livebilder">
             {#each photos.filter((p) => p.sel).slice(0, 8) as p, i}
-              <button class="livebild" class:on={livePhoto === p.path} style="background-image:url({bildUrl(p.path)})" on:click={() => liveSattFoto(p.path)}>
+              <button class="livebild" class:on={livePhoto === p.path} class:tom={!thumbs[p.path]} style={thumbs[p.path] ? `background-image:url(${thumbs[p.path]})` : ''} on:click={() => liveSattFoto(p.path)}>
                 {#if i === 0}<span class="senast">SENAST</span>{/if}</button>
             {/each}
             {#if !photos.some((p) => p.sel)}<div class="hint">Välj bilder i Steg 1 eller Hämta bilder.</div>{/if}
@@ -520,7 +535,7 @@
           <div class="scaps mt">3 · Förhandsvisning</div>
           <div class="liveprevwrap">
             <div class="liveprev" style="border-color:{grenFarg(match?.hem_gren)};box-shadow:0 0 20px {grenFarg(match?.hem_gren)}66">
-              {#if livePreview}<img src={bildUrl(livePreview, livePreviewTs)} alt="" />{:else}<div class="prevtom">Renderar…</div>{/if}
+              {#if livePreview}<img src={livePreview} alt="" />{:else}<div class="prevtom">Renderar…</div>{/if}
             </div>
           </div>
           <div class="hint c">Riktig 9:16 renderas server-side. Gren-kant + glow följer dam/herr/mixed.</div>
@@ -645,6 +660,7 @@
   .bildrutnat { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
   .bild { position: relative; aspect-ratio: 4/5; border-radius: 6px; border: 1px solid var(--div); background-size: cover; background-position: center; opacity: 0.5; padding: 0; }
   .bild.sel { outline: 2px solid var(--acc); opacity: 1; }
+  .bild.tom, .livebild.tom { background-image: repeating-linear-gradient(135deg, var(--div3), var(--div3) 7px, var(--kort) 7px, var(--kort) 14px); }
   .bock { position: absolute; top: 3px; right: 3px; width: 15px; height: 15px; border-radius: 50%; background: var(--acc); color: #100c05; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; }
   .omslag { position: absolute; bottom: 3px; left: 3px; font-size: 7px; font-weight: 700; background: var(--acc); color: #100c05; border-radius: 3px; padding: 1px 4px; letter-spacing: 0.03em; }
   .tombild { font-size: 12px; color: var(--t-mut); line-height: 1.5; padding: 8px 0; }
