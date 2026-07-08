@@ -10,7 +10,7 @@
   import {
     listaMatcher, hamtaMatch, aktivMatch, sattAktivMatch, sportprofiler, listaLag,
     valjMapp, listaSomeBilder, thumbForBild,
-    forhandsgranskaStory, publiceraLiveStory, publiceraTillSoMe, nyTestPaketMapp,
+    forhandsgranskaStory, publiceraLiveStory, publiceraKanalStory,
     publiceraInnehallNatet, listaMaterial, sparaMaterial,
     listaMinneskort, exporteraSkyddade,
     pagangMatcher, sattPagangVisa, publiceraPagangMatcher,
@@ -230,7 +230,6 @@
     if (!match || !aktiva.length) return
     pubKor = true; pubResultat = []
     const test = $testMode
-    const test_mapp = test ? (await nyTestPaketMapp())?.path : undefined
     const ut = []
     for (const k of aktiva) {
       try {
@@ -240,10 +239,15 @@
             stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar, test })
           ut.push({ kanal: k.namn, ok: !!r?.ok && (r.publicerad !== false), text: r?.fel || (r?.test ? 'Testfil' : 'Story ute') })
         } else if (k.key === 'ig' || k.key === 'fb') {
+          // Renderad Horisont-grafik i kanalens format + beskärning (LÅST:
+          // server-renderad inläggsbild), inte råa foton. FB strippar @/# själv.
+          const c = ch[k.key]
           const mal = k.key === 'ig' ? { ig_inlagg: true } : { fb: true }
-          const r = await publiceraTillSoMe({ bilder: selectedPaths, caption: losText(caption),
-            mal, match_id: match.id, moment: 'resultat', tema, test, test_mapp })
-          ut.push({ kanal: k.namn, ok: !!r?.ok, text: r?.fel || `${r?.sparade ?? (r?.resultat?.length || 0)} post(er)` })
+          const r = await publiceraKanalStory({ foto: coverPath, moment: 'resultat', tema,
+            match_id: match.id, format: c.fmt, fokus: c.fokus, zoom: c.zoom, mal,
+            caption: losText(caption),
+            stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar, test })
+          ut.push({ kanal: k.namn, ok: !!r?.ok && (r.publicerad !== false), text: r?.fel || (r?.test ? 'Testfil' : 'Publicerad') })
         } else if (k.key === 'webb') {
           const r = await publiceraInnehallNatet({
             typ: 'match', match_id: match.id, titel: `${match.lag_hemma} – ${match.lag_borta}`,

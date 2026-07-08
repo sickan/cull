@@ -738,6 +738,55 @@ class Api:
                     if p.get("url")), None)
         return {"ok": True, "path": path, "publicerad": True, "url": url}
 
+    def publicera_kanal_story(self, config):
+        """Matchpublicering Steg 2: renderar EN Horisont-grafik (resultat-overlay
+        på den beskurna omslagsbilden) i kanalens format + fokus/zoom och
+        publicerar den till EN kanal (config['mal'] = {story|ig_inlagg|fb}).
+        Generaliserar publicera_live_story till alla Skicka till-kanaler så att
+        beskärningen (fokus+zoom) driver den SKARPA inläggsbilden, inte bara
+        förhandsvisningen. Returnerar {ok, path, publicerad, url?, fel?, test?}."""
+        config = dict(config or {})
+        if not config.get("foto"):
+            return {"ok": False, "fel": "Välj ett omslag i Steg 1."}
+        mal = config.pop("mal", None) or {"story": True}
+        caption = config.pop("caption", "")
+        config.setdefault("moment", "resultat")
+        config.setdefault("format", "1x1")
+        config.setdefault("match_id",
+                          store.hamta_installning(self.conn, "aktiv_match_id"))
+        test = bool(config.pop("test", False))
+        if test:
+            config["ut_mapp"] = str(testlage.live_mapp())
+        r = self._kor_jobb("story", {"config": config})
+        res = r.get("resultat") or {}
+        path = res.get("path")
+        if not (r["ok"] and path):
+            return {"ok": False, "publicerad": False,
+                    "fel": r.get("fel") or "Kunde inte rendera grafiken."}
+        if test:
+            return {"ok": True, "path": path, "publicerad": True, "test": True}
+        poster = meta_api.fran_env(logg=self._logg.append)
+        if poster is None:
+            return {"ok": True, "path": path, "publicerad": False,
+                    "fel": "Grafiken är renderad och sparad, men inte publicerad "
+                    "— Meta-token saknas (koppla konto i Inställningar)."}
+        upp = bildhosting.ladda_upp([path], logg=self._logg.append)
+        if not upp.get("ok"):
+            return {"ok": True, "path": path, "publicerad": False,
+                    "fel": f"Sparad, men bilduppladdningen föll: {upp.get('fel')}"}
+        pub = publicera_korning.kor_publicering(
+            self.conn, {"bilder": [path], "caption": caption, "mal": mal,
+                        "match_id": config.get("match_id"),
+                        "moment": config.get("moment"),
+                        "tema": config.get("tema")},
+            poster=poster, dry_run=False, logg=self._logg.append)
+        if not pub.get("ok"):
+            return {"ok": True, "path": path, "publicerad": False,
+                    "fel": f"Sparad, men publiceringen föll: {pub.get('fel')}"}
+        url = next((p.get("url") for p in pub.get("resultat", [])
+                    if p.get("url")), None)
+        return {"ok": True, "path": path, "publicerad": True, "url": url}
+
     # ── Publicera till SoMe (fan-out IG story/inlägg + FB) ───────────────────
     def lista_some_bilder(self, mapp):
         """Färdiga JPG:er i en mapp (för bildvalet). Tom lista om mappen saknas."""

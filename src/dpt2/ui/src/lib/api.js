@@ -874,6 +874,19 @@ export async function publiceraLiveStory(config) {
     publicerad: true, url: 'https://exempel/story/1' })
 }
 
+// Matchpublicering Steg 2: rendera + publicera EN kanals Horisont-grafik i dess
+// format + fokus/zoom (mal = {story|ig_inlagg|fb}).
+export async function publiceraKanalStory(config) {
+  const api = brygga()
+  if (api) return api.publicera_kanal_story(config)
+  if (!config?.foto) return wait({ ok: false, fel: 'Välj ett omslag i Steg 1.' })
+  const kanal = Object.keys(config.mal || {}).find((k) => config.mal[k]) || 'story'
+  if (config.test) return wait({ ok: true, publicerad: true, test: true,
+    path: `~/DPT/test-output/2026-01-01/${kanal}_${(config.format || '1x1')}.jpg` })
+  return wait({ ok: true, publicerad: true, url: `https://exempel/${kanal}/1`,
+    path: `~/Dropbox/DPT/${kanal}_${config.format || '1x1'}.jpg` })
+}
+
 // Riktig förhandsvisning (samma Horisont-mall, renderad server-side) — i mock
 // finns ingen PIL-motor, så vi "förhandsvisar" bara den valda källbilden själv.
 export async function forhandsgranskaStory(config) {
