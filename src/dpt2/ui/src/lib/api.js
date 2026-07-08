@@ -942,6 +942,46 @@ export async function nyTestPaketMapp() {
   return wait({ ok: true, path: '~/DPT/test-output/2026-01-01/some_paket_120000' })
 }
 
+// ── Hämta bilder (minneskort → Lightroom → katalog) ──────────────────────────
+export async function listaMinneskort() {
+  const api = brygga()
+  if (api) return api.lista_minneskort()
+  return wait({ ok: true, kort: [
+    { namn: 'NIKON Z 8', path: '/Volumes/NIKON Z 8', skyddade: 142 },
+    { namn: 'EOS_DIGITAL', path: '/Volumes/EOS_DIGITAL', skyddade: 0 }] })
+}
+export async function raknaSkyddade(kortPath) {
+  const api = brygga()
+  if (api) return api.rakna_skyddade(kortPath)
+  return wait({ ok: true, path: kortPath, skyddade: 142 })
+}
+export async function exporteraSkyddade(kortPath, malMapp, oppnaLr = true) {
+  const api = brygga()
+  if (api) return api.exportera_skyddade(kortPath, malMapp, oppnaLr)
+  return wait({ ok: true, antal: 142, path: malMapp || '~/Export/skyddade' })
+}
+
+// ── På gång (webb) — härledd ur matchlistan ──────────────────────────────────
+export async function pagangMatcher() {
+  const api = brygga()
+  if (api) return api.pagang_matcher()
+  return wait({ ok: true, visa: true, matcher: [
+    { id: 'p1', datum: '2026-07-31', tid: '19:00', lag_hemma: 'Malmö FF', lag_borta: 'Piteå IF DFF', liga: 'OBOS Damallsvenskan', hem_gren: 'dam' },
+    { id: 'p2', datum: '2026-08-12', tid: '', lag_hemma: 'Malmö FF', lag_borta: 'Hammarby IF', liga: 'OBOS Damallsvenskan', hem_gren: 'dam' },
+    { id: 'p3', datum: '2026-08-21', tid: '18:30', lag_hemma: 'Sverige', lag_borta: 'Italien', liga: 'EM Volleyboll', hem_gren: 'dam' },
+    { id: 'p4', datum: '2026-09-02', tid: '', lag_hemma: 'Sverige', lag_borta: 'Danmark', liga: 'Landskamp herr', hem_gren: 'herr' }] })
+}
+export async function sattPagangVisa(pa) {
+  const api = brygga()
+  if (api) return api.satt_pagang_visa(pa)
+  return wait({ ok: true, visa: !!pa })
+}
+export async function publiceraPagangMatcher(test = false) {
+  const api = brygga()
+  if (api) return api.publicera_pagang_matcher(test)
+  return wait({ ok: true, antal: 4, borttagna: 0, visa: true, test })
+}
+
 // Sparade material + utkast (Publicera-panelens arbetsyta). Muteras lokalt i mock.
 // Två seedade rader så "Delvis publicerad" + historik-tidslinjen syns direkt i
 // mock-läge (utan pywebview-bryggan): en publicerad med flerfaldig historik,

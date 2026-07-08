@@ -27,8 +27,13 @@ TEMA_LOGG_DIR = ASSETS_DIR / "temaloggor"
 LOGG_DIR    = Path("~/.config/dpt/loggor").expanduser()
 
 CANVAS_W = 1080
-FORMAT_H  = {"9x16": 1920, "4x5": 1350}
-FORMAT_PREFIX = {"9x16": "story", "4x5": "inlagg"}
+# 1080 bred canvas; höjden ger bildförhållandet. story 9:16 · inlägg 4:5 · kvadrat
+# 1:1 · FB-landskap 1.91:1 · webb-hero 2:1 / 16:9. Nya format är rena beskärnings-
+# mål för Skicka till-kanalerna — overlay-blocken skalar efter höjden som förr.
+FORMAT_H  = {"9x16": 1920, "4x5": 1350, "1x1": 1080, "1.91x1": 566,
+             "2x1": 540, "16x9": 608}
+FORMAT_PREFIX = {"9x16": "story", "4x5": "inlagg", "1x1": "kvadrat",
+                 "1.91x1": "fb", "2x1": "hero", "16x9": "hero"}
 
 # Tematabellen: accent + brand-färger (RGBA)
 TEMAN = {
@@ -811,7 +816,7 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                 startelva=None, sport="",
                 tema="Hav", gren="", hem_logga=None, borta_logga=None,
                 ut_path=None, ut_mapp=None,
-                format="9x16", env=None):
+                format="9x16", fokus=None, zoom=1.0, env=None):
     """
     Renderar en JPEG med Horisont-overlay.
 
@@ -849,18 +854,27 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     frame_h = FORMAT_H.get(format, FORMAT_H["9x16"])
     W, H    = CANVAS_W, frame_h
 
-    # 1. Bakgrundsfoto (cover-crop)
+    # 1. Bakgrundsfoto (cover-crop med fokuspunkt + zoom)
+    #    fokus={"x","y"} i procent (0–100) = var beskärningsrutan centreras;
+    #    zoom≥1 krymper rutan (skalar upp motivet) med fokuspunkten som origo.
+    #    Rutan behåller alltid målformatets bildförhållande (W/H) så resize
+    #    aldrig förvränger. Default (fokus mitten, zoom 1) = gamla center-croppen.
     foto = _ladda_foto(bild_path, env)
     foto_w, foto_h = foto.size
-    # Cover-beskärning
-    if foto_w * H >= foto_h * W:
-        ny_w  = foto_h * W // H
-        x0    = (foto_w - ny_w) // 2
-        foto  = foto.crop((x0, 0, x0 + ny_w, foto_h))
-    else:
-        ny_h  = foto_w * H // W
-        y0    = (foto_h - ny_h) // 2
-        foto  = foto.crop((0, y0, foto_w, y0 + ny_h))
+    fx = min(1.0, max(0.0, (fokus or {}).get("x", 50) / 100.0)) if fokus else 0.5
+    fy = min(1.0, max(0.0, (fokus or {}).get("y", 50) / 100.0)) if fokus else 0.5
+    z  = max(1.0, float(zoom or 1.0))
+    if foto_w * H >= foto_h * W:                 # foto bredare än målformatet
+        ny_w = (foto_h * W / H) / z
+        ny_h = foto_h / z
+    else:                                        # foto smalare/högre
+        ny_w = foto_w / z
+        ny_h = (foto_w * H / W) / z
+    ny_w = max(1, min(foto_w, int(round(ny_w))))
+    ny_h = max(1, min(foto_h, int(round(ny_h))))
+    x0 = max(0, min(foto_w - ny_w, int(round(fx * (foto_w - ny_w)))))
+    y0 = max(0, min(foto_h - ny_h, int(round(fy * (foto_h - ny_h)))))
+    foto = foto.crop((x0, y0, x0 + ny_w, y0 + ny_h))
     foto = foto.resize((W, H), Image.LANCZOS)
 
     canvas = foto.convert("RGBA")

@@ -620,6 +620,70 @@ class Api:
                 continue
         return {"ok": False, "fel": "Hittade ingen Lightroom-installation."}
 
+    # ── Hämta bilder (minneskort → Lightroom → katalog) ──────────────────────
+    def _bildfiler(self, rot):
+        """Alla bildfiler under rot (rekursivt)."""
+        for p in Path(rot).rglob("*"):
+            if p.suffix.lower() in _BILD_EXT and p.is_file():
+                yield p
+
+    def lista_minneskort(self):
+        """Monterade volymer som ser ut som kamerakort (har en DCIM-mapp), med
+        antal skyddade (låsta) bilder per kort. OBS: aldrig .strip() på
+        volympaths — Nikon-kort monteras med efterföljande blanksteg
+        ('/Volumes/NIKON Z 8 ') och en strippad sökväg pekar då fel."""
+        ut = []
+        vol = Path("/Volumes")
+        if vol.is_dir():
+            for v in sorted(vol.iterdir()):
+                try:
+                    if not v.is_dir() or not (v / "DCIM").is_dir():
+                        continue
+                    skyddade = sum(1 for p in self._bildfiler(v) if _ar_skyddad(p))
+                    ut.append({"namn": v.name, "path": str(v), "skyddade": skyddade})
+                except OSError:
+                    continue
+        return {"ok": True, "kort": ut}
+
+    def rakna_skyddade(self, kort_path):
+        """Antal skyddade (låsta) bilder på ett kort/en mapp — för stegets
+        återkoppling när ett kort valts."""
+        if not kort_path:
+            return {"ok": False, "fel": "Peka ut kortet."}
+        p = Path(kort_path)          # ingen .strip() (se lista_minneskort)
+        if not p.is_dir():
+            return {"ok": False, "fel": "Kortet/mappen hittades inte."}
+        return {"ok": True, "path": str(p),
+                "skyddade": sum(1 for f in self._bildfiler(p) if _ar_skyddad(f))}
+
+    def exportera_skyddade(self, kort_path, mal_mapp, oppna_lr=True):
+        """Kopierar BARA skyddade (låsta på kameran) bilder från kortet till
+        mal_mapp och öppnar mappen i Lightroom för redigering. De redigerade
+        exporterna (steg 3) blir sedan matchens urval. Returnerar
+        {ok, antal, path} eller {ok:False, fel}."""
+        import shutil
+        if not kort_path:
+            return {"ok": False, "fel": "Peka ut kortet."}
+        if not mal_mapp:
+            return {"ok": False, "fel": "Ange en exportmapp."}
+        kort = Path(kort_path)       # ingen .strip()
+        if not kort.is_dir():
+            return {"ok": False, "fel": "Kortet/mappen hittades inte."}
+        mal = Path(os.path.expanduser(mal_mapp))
+        mal.mkdir(parents=True, exist_ok=True)
+        kopierade = 0
+        for f in self._bildfiler(kort):
+            if not _ar_skyddad(f):
+                continue
+            try:
+                shutil.copy2(f, mal / f.name)
+                kopierade += 1
+            except OSError:
+                continue
+        if oppna_lr and kopierade:
+            self.oppna_i_lightroom(str(mal))
+        return {"ok": True, "antal": kopierade, "path": str(mal)}
+
     def publicera_live_story(self, config):
         """Live-flödets 'Publicera story ›': renderar 9:16-overlayen i workern
         (ut_mapp = Dropbox-mappen, så filen sparas där) och publicerar den som
@@ -1025,6 +1089,67 @@ class Api:
                         borttagna += 1
         return {"ok": fel is None, "antal": antal, "borttagna": borttagna, "fel": fel}
 
+    # ── På gång (webb) — härledd ur matchlistan (ersätter kuraterad lista) ────
+    def _pagang_kommande(self, idag=None):
+        """Kommande matcher (inget resultat, datum ≥ idag) sorterade stigande.
+        Grunden för webbens 'På gång' — härleds live ur matchlistan."""
+        idag = idag or datetime.now().strftime("%Y-%m-%d")
+        ms = [m for m in store.lista_matcher(self.conn)
+              if not (m.get("resultat") or "").strip()
+              and (m.get("datum") or "") >= idag]
+        ms.sort(key=lambda m: ((m.get("datum") or "9999"), (m.get("tid") or "")))
+        return ms
+
+    def pagang_matcher(self):
+        """Panelens 'På gång'-vy: kommande matcher + av/på-flaggan. Ingen
+        kuraterad lista längre — allt kommer ur Matcher."""
+        return {"ok": True, "visa": store.hamta_installning(self.conn, "pagang_visa") != "0",
+                "matcher": self._pagang_kommande()}
+
+    def satt_pagang_visa(self, pa):
+        """Slår på/av 'Visa på sajten' för På gång-widgeten."""
+        store.satt_installning(self.conn, "pagang_visa", "1" if pa else "0")
+        return {"ok": True, "visa": bool(pa)}
+
+    def publicera_pagang_matcher(self, test=False):
+        """Publicerar kommande matcher som webbens 'På gång'-widget (content-sync
+        typ 'pagang'). Match-synk ÄGER hela pagang-samlingen: rader på workern
+        som inte längre motsvarar en kommande match städas bort (reconciliation)
+        så sajten speglar matchlistan exakt — detta ersätter den kuraterade
+        aktivitets-listan för den här ytan. 'Visa på sajten' av → tom lista
+        (allt avpubliceras). Testläge skriver bara lokala .md-filer."""
+        visa = store.hamta_installning(self.conn, "pagang_visa") != "0"
+        kommande = self._pagang_kommande() if visa else []
+        if test:
+            mal = testlage.innehall_mapp("pagang")
+            skrivna = []
+            for m in kommande:
+                _fm, _b, slug, md = _pagang_match_md(m)
+                skrivna.append(str(AX.skriv_md(md, mal, slug)))
+            return {"ok": True, "antal": len(skrivna), "path": str(mal),
+                    "visa": visa, "test": True}
+        antal, fel = 0, None
+        lokala_ids = set()
+        for m in kommande:
+            mid = "match-" + m["id"]
+            lokala_ids.add(mid)
+            fm, body, slug, _md = _pagang_match_md(m)
+            r = self.innehall_synk.publicera("pagang", mid, slug=slug,
+                                             frontmatter=fm, body=body)
+            if r.get("ok"):
+                antal += 1
+            elif fel is None:
+                fel = r.get("fel") or f"Kunde inte publicera (status {r.get('status')})."
+        borttagna = 0
+        if fel is None:
+            for rad in self.innehall_synk.lista("pagang"):
+                rid = rad.get("id")
+                if rid and rid not in lokala_ids:
+                    if self.innehall_synk.radera("pagang", rid).get("ok"):
+                        borttagna += 1
+        return {"ok": fel is None, "antal": antal, "borttagna": borttagna,
+                "visa": visa, "fel": fel}
+
     def thumb_for_bild(self, path):
         """Miniatyr (base64 data-URI) för en vald hero-bild — raw extraheras
         via exiftool, jpg öppnas direkt. Återanvänder dpt v1:s
@@ -1304,6 +1429,46 @@ def _aktivitet_md(akt):
     }
     body = (akt.get("beskrivning") or "").rstrip()
     return fm, body, slug, AX.render_md(fm, body)
+
+
+# Bildfiltyper som räknas som "bilder" vid minneskort-ingest (RAW + JPEG m.fl.).
+_BILD_EXT = {".jpg", ".jpeg", ".png", ".heic", ".nef", ".dng", ".cr2", ".cr3",
+             ".arw", ".raf", ".orf", ".rw2"}
+
+
+def _ar_skyddad(p):
+    """En kameraskyddad (låst) bild = DOS read-only-attributet på FAT/exFAT-
+    kortet, vilket på macOS syns som att ägaren saknar skrivbiten
+    (stat().st_mode & 0o200 == 0). Trasig/oläsbar fil → inte skyddad."""
+    try:
+        return not (p.stat().st_mode & 0o200)
+    except OSError:
+        return False
+
+
+def _pagang_match_md(m):
+    """En kommande match → (frontmatter, body, slug, .md) för webbens 'På gång'.
+    Speglar _aktivitet_md:s frontmatter-form EXAKT (samma pagang-collection på
+    sajten) — kategori 'Match', arena som plats, ligan som etikett. Inga nya
+    frontmatter-nycklar (Astro-schemat är strikt); gren-pricken lever bara i
+    appens vy, inte i den publicerade .md:n."""
+    m = m or {}
+    titel = f"{m.get('lag_hemma', '')} – {m.get('lag_borta', '')}".strip(" –")
+    datum = m.get("datum") or ""
+    namnslug = AX.slugga(titel) if titel else "match"
+    slug = f"{datum}-{namnslug}" if datum else namnslug
+    fm = {
+        "typ": "aktivitet",
+        "kategori": "Match",
+        "etikett": m.get("liga") or None,
+        "titel": titel or None,
+        "datum": datum or None,
+        "tid": m.get("tid") or None,
+        "plats": m.get("arena") or None,
+        "publicerad": True,
+        "heldag": False,
+    }
+    return fm, "", slug, AX.render_md(fm, "")
 
 
 def _hitta_site_rot(fran_dir, djup=6):

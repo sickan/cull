@@ -83,6 +83,7 @@ def _rendera(conn, config, *, ut_path=None, ut_mapp=None, env=None):
         tema=config.get("tema", "Hav"), gren=f["gren"],
         hem_logga=f["hem_logga"], borta_logga=f["borta_logga"],
         format=config.get("format", "9x16"),
+        fokus=config.get("fokus"), zoom=config.get("zoom", 1.0),
         ut_path=ut_path, ut_mapp=ut_mapp, env=env or _env())
     return {"ok": True, "path": str(ut)}
 
