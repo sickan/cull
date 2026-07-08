@@ -108,7 +108,6 @@
   function valjRad(m) { pending = m; bytOpen = false }
   function bekraftaByt() { const id = pending?.id; pending = null; if (id) dispatch('byt', id) }
   function avbrytByt() { pending = null }
-  const bildUrl = (p) => (/^(https?|file):/.test(p) ? p : 'file://' + p)
 </script>
 
 {#if match}

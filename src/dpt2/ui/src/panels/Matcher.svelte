@@ -151,7 +151,6 @@
     return l ? (l.stall_hemma || l.profilfarg) : ''
   }
   function loggaForLag(namn) { return lagAlla.find((x) => x.namn === namn)?.logga || '' }
-  const bildUrl = (p) => (/^(https?|file):/.test(p) ? p : 'file://' + p)
 
   function grupperaLiga(lista) {
     const m = new Map()

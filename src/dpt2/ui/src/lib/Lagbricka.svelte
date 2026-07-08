@@ -2,12 +2,15 @@
   // Rund lagbricka — logga (ljus platta, contain) eller initialer (lumfärgad
   // text). Plattan bakom loggan är medvetet fast ljus (ej temavariabel): lag-
   // loggor är ritade för ljus bakgrund oavsett appens tema.
+  import { loggor, begarLogga } from './loggacache.js'
   export let namn = ''
   export let farg = '#8A8172'
   export let logga = ''
   export let storlek = 34
 
-  const bildUrl = (p) => (/^(https?|file):/.test(p) ? p : 'file://' + p)
+  // Loggan (lokal sökväg) visas som data-URI — file:// blockeras i WKWebView.
+  $: begarLogga(logga)
+  $: loggaUri = !logga ? '' : (/^(data:|https?:)/.test(logga) ? logga : ($loggor[logga] || ''))
 
   function initialer(n) {
     const ord = String(n || '').trim().split(/\s+/).filter(Boolean)
@@ -26,7 +29,7 @@
   }
 
   $: init = initialer(namn)
-  $: harLogga = !!logga
+  $: harLogga = !!loggaUri
   $: fgColor = lum(farg) > 0.6 ? 'rgba(24,22,18,.9)' : '#fff'
   $: initSize = Math.round(storlek * (init.length >= 4 ? 0.26 : 0.34))
 </script>
@@ -34,7 +37,7 @@
 <div class="bricka" title={namn}
   style="width:{storlek}px;height:{storlek}px;background:{harLogga ? '#FBF8F1' : farg}">
   {#if harLogga}
-    <img src={bildUrl(logga)} alt="" style="width:78%;height:78%" />
+    <img src={loggaUri} alt="" style="width:78%;height:78%" />
   {:else}
     <span class="scd" style="color:{fgColor};font-size:{initSize}px">{init}</span>
   {/if}

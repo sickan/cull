@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte'
   import { aktivMatch, listaLag } from './api.js'
+  import { loggor, begarLogga } from './loggacache.js'
 
   const dispatch = createEventDispatcher()
   const bytMatch = () => dispatch('navigera', 'matcher')
@@ -28,7 +29,12 @@
   const brickStil = (f) => `background:${f || '#c9bfa8'};color:${_lum(f || '#c9bfa8') > 0.62 ? 'rgba(35,32,26,.85)' : '#fff'}`
   function fargForLag(namn) { const l = lagAlla.find((x) => x.namn === namn); return l ? (l.stall_hemma || l.profilfarg) : '' }
   function loggaForLag(namn) { return lagAlla.find((x) => x.namn === namn)?.logga || '' }
-  const bildUrl = (p) => (/^(https?|file):/.test(p) ? p : 'file://' + p)
+  // Loggor visas som data-URI ($loggor måste synas i uttrycket för att spåras).
+  $: hemLoggaPath = loggaForLag(match?.lag_hemma)
+  $: bortaLoggaPath = loggaForLag(match?.lag_borta)
+  $: { begarLogga(hemLoggaPath); begarLogga(bortaLoggaPath) }
+  $: hemLoggaUri = !hemLoggaPath ? '' : (/^(data:|https?:)/.test(hemLoggaPath) ? hemLoggaPath : ($loggor[hemLoggaPath] || ''))
+  $: bortaLoggaUri = !bortaLoggaPath ? '' : (/^(data:|https?:)/.test(bortaLoggaPath) ? bortaLoggaPath : ($loggor[bortaLoggaPath] || ''))
 </script>
 
 {#if !laddar}
@@ -36,8 +42,8 @@
     <div class="amrad">
       <span class="amcaps">Aktiv match</span>
       <span class="ambrickor">
-        <span class="ambricka" style={brickStil(fargForLag(match.lag_hemma))}>{#if loggaForLag(match.lag_hemma)}<img src={bildUrl(loggaForLag(match.lag_hemma))} alt="" />{:else}{initialer(match.lag_hemma)}{/if}</span>
-        <span class="ambricka away" style={brickStil(fargForLag(match.lag_borta))}>{#if loggaForLag(match.lag_borta)}<img src={bildUrl(loggaForLag(match.lag_borta))} alt="" />{:else}{initialer(match.lag_borta)}{/if}</span>
+        <span class="ambricka" style={brickStil(fargForLag(match.lag_hemma))}>{#if hemLoggaUri}<img src={hemLoggaUri} alt="" />{:else}{initialer(match.lag_hemma)}{/if}</span>
+        <span class="ambricka away" style={brickStil(fargForLag(match.lag_borta))}>{#if bortaLoggaUri}<img src={bortaLoggaUri} alt="" />{:else}{initialer(match.lag_borta)}{/if}</span>
       </span>
       <div class="aminfo">
         <span class="amfix scd">{match.lag_hemma} – {match.lag_borta}</span>
