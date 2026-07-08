@@ -807,6 +807,53 @@ def _render_malgorare(canvas, accent, lag_hemma, lag_borta,
 
 
 # ---------------------------------------------------------------------------
+# Cover-beskärning (delas av skapa_story + beskar_foto)
+# ---------------------------------------------------------------------------
+
+def _cover_crop(foto, W, H, fokus, zoom, Image=None):
+    """Cover-beskär `foto` till W×H med fokuspunkt (rutans MITT, i procent) +
+    zoom (≥1 krymper rutan / skalar upp motivet). Rutan behåller alltid W/H så
+    resize aldrig förvränger; klampad mot kanterna. fokus None/mitten + zoom 1 =
+    vanlig center-crop. Samma modell som ram-overlayen i UI:ts crop-editor."""
+    if Image is None:
+        Image, _d, _f, _o = _pil()
+    foto_w, foto_h = foto.size
+    fx = min(1.0, max(0.0, (fokus or {}).get("x", 50) / 100.0)) if fokus else 0.5
+    fy = min(1.0, max(0.0, (fokus or {}).get("y", 50) / 100.0)) if fokus else 0.5
+    z = max(1.0, float(zoom or 1.0))
+    if foto_w * H >= foto_h * W:                 # foto bredare än målformatet
+        ny_w = (foto_h * W / H) / z
+        ny_h = foto_h / z
+    else:                                        # foto smalare/högre
+        ny_w = foto_w / z
+        ny_h = (foto_w * H / W) / z
+    ny_w = max(1, min(foto_w, int(round(ny_w))))
+    ny_h = max(1, min(foto_h, int(round(ny_h))))
+    x0 = max(0, min(foto_w - ny_w, int(round(fx * foto_w - ny_w / 2))))
+    y0 = max(0, min(foto_h - ny_h, int(round(fy * foto_h - ny_h / 2))))
+    return foto.crop((x0, y0, x0 + ny_w, y0 + ny_h)).resize((W, H), Image.LANCZOS)
+
+
+def beskar_foto(bild_path, format="1x1", fokus=None, zoom=1.0,
+                ut_path=None, ut_mapp=None, env=None):
+    """Beskär ETT foto till FORMAT (fokus+zoom) UTAN overlay — för karusell-/
+    extra-bilder i Matchpublicering (IG upp till 9, FB upp till 3 efter omslaget).
+    Returnerar Path till den sparade JPEG:en."""
+    Image, _d, _f, _o = _pil()
+    frame_h = FORMAT_H.get(format, FORMAT_H["9x16"])
+    foto = _cover_crop(_ladda_foto(bild_path, env), CANVAS_W, frame_h,
+                       fokus, zoom, Image).convert("RGB")
+    if ut_path:
+        ut = Path(ut_path)
+    else:
+        ut = Path(ut_mapp or (Path.home() / ".config" / "dpt2" / "stories")) \
+            / f"beskuren_{FORMAT_PREFIX.get(format, 'bild')}.jpg"
+    ut.parent.mkdir(parents=True, exist_ok=True)
+    foto.save(ut, "JPEG", quality=92)
+    return ut
+
+
+# ---------------------------------------------------------------------------
 # Huvud-funktion
 # ---------------------------------------------------------------------------
 
@@ -854,30 +901,8 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     frame_h = FORMAT_H.get(format, FORMAT_H["9x16"])
     W, H    = CANVAS_W, frame_h
 
-    # 1. Bakgrundsfoto (cover-crop med fokuspunkt + zoom)
-    #    fokus={"x","y"} i procent (0–100) = var beskärningsrutan centreras;
-    #    zoom≥1 krymper rutan (skalar upp motivet) med fokuspunkten som origo.
-    #    Rutan behåller alltid målformatets bildförhållande (W/H) så resize
-    #    aldrig förvränger. Default (fokus mitten, zoom 1) = gamla center-croppen.
-    foto = _ladda_foto(bild_path, env)
-    foto_w, foto_h = foto.size
-    fx = min(1.0, max(0.0, (fokus or {}).get("x", 50) / 100.0)) if fokus else 0.5
-    fy = min(1.0, max(0.0, (fokus or {}).get("y", 50) / 100.0)) if fokus else 0.5
-    z  = max(1.0, float(zoom or 1.0))
-    if foto_w * H >= foto_h * W:                 # foto bredare än målformatet
-        ny_w = (foto_h * W / H) / z
-        ny_h = foto_h / z
-    else:                                        # foto smalare/högre
-        ny_w = foto_w / z
-        ny_h = (foto_w * H / W) / z
-    ny_w = max(1, min(foto_w, int(round(ny_w))))
-    ny_h = max(1, min(foto_h, int(round(ny_h))))
-    # Fokuspunkten är beskärningsrutans MITT (klampad mot kanterna) — samma modell
-    # som ram-overlayen i UI:t (crop-editorn), så ramen matchar renderingen exakt.
-    x0 = max(0, min(foto_w - ny_w, int(round(fx * foto_w - ny_w / 2))))
-    y0 = max(0, min(foto_h - ny_h, int(round(fy * foto_h - ny_h / 2))))
-    foto = foto.crop((x0, y0, x0 + ny_w, y0 + ny_h))
-    foto = foto.resize((W, H), Image.LANCZOS)
+    # 1. Bakgrundsfoto (cover-crop med fokuspunkt + zoom, se _cover_crop)
+    foto = _cover_crop(_ladda_foto(bild_path, env), W, H, fokus, zoom, Image)
 
     canvas = foto.convert("RGBA")
 

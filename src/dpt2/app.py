@@ -738,54 +738,90 @@ class Api:
                     if p.get("url")), None)
         return {"ok": True, "path": path, "publicerad": True, "url": url}
 
-    def publicera_kanal_story(self, config):
-        """Matchpublicering Steg 2: renderar EN Horisont-grafik (resultat-overlay
-        på den beskurna omslagsbilden) i kanalens format + fokus/zoom och
-        publicerar den till EN kanal (config['mal'] = {story|ig_inlagg|fb}).
-        Generaliserar publicera_live_story till alla Skicka till-kanaler så att
-        beskärningen (fokus+zoom) driver den SKARPA inläggsbilden, inte bara
-        förhandsvisningen. Returnerar {ok, path, publicerad, url?, fel?, test?}."""
+    KANAL_MAX = {"live": 1, "ig": 10, "fb": 4}
+    KANAL_MAL = {"live": {"story": True}, "ig": {"ig_inlagg": True}, "fb": {"fb": True}}
+
+    def _rendera_kanalbilder(self, kanal, bilder, fmt, fokus, zoom, ut_mapp, storyfalt):
+        """Renderar en kanals bildset server-side i FMT med fokus/zoom:
+        FÖRSTA bilden (omslaget) med Horisont-overlay, resten beskurna utan
+        overlay. Skriver till ut_mapp, returnerar listan renderade sökvägar."""
+        from dpt2.motorer import story_overlay
+        renderade = []
+        for i, b in enumerate(bilder):
+            try:
+                if i == 0:                                   # omslag → overlay
+                    cfg = {**storyfalt, "foto": b, "format": fmt,
+                           "fokus": fokus, "zoom": zoom}
+                    r = story_korning._rendera(
+                        self.conn, cfg,
+                        ut_path=Path(ut_mapp) / f"{kanal}_1_overlay.jpg")
+                    if r.get("ok"):
+                        renderade.append(r["path"])
+                else:                                        # extra → beskuren
+                    p = story_overlay.beskar_foto(
+                        b, fmt, fokus, zoom,
+                        ut_path=Path(ut_mapp) / f"{kanal}_{i + 1}.jpg")
+                    renderade.append(str(p))
+            except Exception as e:                           # en trasig bild stoppar inte de andra
+                self._logg.append({"typ": "fel", "text": f"kanalbild {i}: {e}"})
+        return renderade
+
+    def publicera_kanal(self, config):
+        """Matchpublicering Steg 2: renderar + publicerar EN kanal server-side
+        med kanalens beskärning (fokus+zoom+format) applicerad på VARJE bild:
+          live: 1 bild (omslaget) med overlay
+          ig:   omslaget med overlay + upp till 9 beskurna foton (karusell, ≤10)
+          fb:   upp till 4 foton, första med overlay
+        Testläge: alla renderade bilder skrivs till testmappen (config.test_mapp
+        eller en ny) så man ser exakt vad som postas. Skarpt: laddar upp +
+        publicerar via Meta. Returnerar {ok, publicerad, antal, path, bilder, fel?}."""
         config = dict(config or {})
-        if not config.get("foto"):
-            return {"ok": False, "fel": "Välj ett omslag i Steg 1."}
-        mal = config.pop("mal", None) or {"story": True}
-        caption = config.pop("caption", "")
-        config.setdefault("moment", "resultat")
-        config.setdefault("format", "1x1")
-        config.setdefault("match_id",
-                          store.hamta_installning(self.conn, "aktiv_match_id"))
+        kanal = config.get("kanal") or "ig"
+        fmt = config.get("format") or ("9x16" if kanal == "live" else "1x1")
+        fokus = config.get("fokus")
+        zoom = config.get("zoom", 1.0)
+        bilder = [os.path.expanduser(b) for b in (config.get("bilder") or []) if b]
+        bilder = [b for b in bilder if Path(b).exists()][:self.KANAL_MAX.get(kanal, 10)]
+        if not bilder:
+            return {"ok": False, "fel": "Välj minst en bild i Steg 1."}
+        match_id = config.get("match_id") or store.hamta_installning(self.conn, "aktiv_match_id")
+        storyfalt = {"moment": config.get("moment", "resultat"), "match_id": match_id,
+                     "tema": config.get("tema", "Hav"),
+                     "stallning": config.get("stallning", ""), "mellan": config.get("mellan", ""),
+                     "mal_rad": config.get("mal_rad", "")}
         test = bool(config.pop("test", False))
         if test:
-            config["ut_mapp"] = str(testlage.live_mapp())
-        r = self._kor_jobb("story", {"config": config})
-        res = r.get("resultat") or {}
-        path = res.get("path")
-        if not (r["ok"] and path):
-            return {"ok": False, "publicerad": False,
-                    "fel": r.get("fel") or "Kunde inte rendera grafiken."}
+            ut_mapp = Path(config.get("test_mapp") or testlage.ny_some_mapp())
+        else:
+            import tempfile
+            ut_mapp = Path(tempfile.mkdtemp(prefix="dpt2-kanal-"))
+        ut_mapp.mkdir(parents=True, exist_ok=True)
+        renderade = self._rendera_kanalbilder(kanal, bilder, fmt, fokus, zoom, ut_mapp, storyfalt)
+        if not renderade:
+            return {"ok": False, "fel": "Kunde inte rendera bilderna."}
         if test:
-            return {"ok": True, "path": path, "publicerad": True, "test": True}
+            return {"ok": True, "publicerad": True, "test": True,
+                    "antal": len(renderade), "path": str(ut_mapp), "bilder": renderade}
         poster = meta_api.fran_env(logg=self._logg.append)
         if poster is None:
-            return {"ok": True, "path": path, "publicerad": False,
-                    "fel": "Grafiken är renderad och sparad, men inte publicerad "
+            return {"ok": True, "publicerad": False, "antal": len(renderade), "path": str(ut_mapp),
+                    "fel": "Bilderna är renderade och sparade, men inte publicerade "
                     "— Meta-token saknas (koppla konto i Inställningar)."}
-        upp = bildhosting.ladda_upp([path], logg=self._logg.append)
+        upp = bildhosting.ladda_upp(renderade, logg=self._logg.append)
         if not upp.get("ok"):
-            return {"ok": True, "path": path, "publicerad": False,
-                    "fel": f"Sparad, men bilduppladdningen föll: {upp.get('fel')}"}
+            return {"ok": True, "publicerad": False, "antal": len(renderade),
+                    "fel": f"Renderade, men bilduppladdningen föll: {upp.get('fel')}"}
         pub = publicera_korning.kor_publicering(
-            self.conn, {"bilder": [path], "caption": caption, "mal": mal,
-                        "match_id": config.get("match_id"),
-                        "moment": config.get("moment"),
+            self.conn, {"bilder": renderade, "caption": config.get("caption", ""),
+                        "mal": self.KANAL_MAL.get(kanal, {"ig_inlagg": True}),
+                        "match_id": match_id, "moment": config.get("moment"),
                         "tema": config.get("tema")},
             poster=poster, dry_run=False, logg=self._logg.append)
         if not pub.get("ok"):
-            return {"ok": True, "path": path, "publicerad": False,
-                    "fel": f"Sparad, men publiceringen föll: {pub.get('fel')}"}
-        url = next((p.get("url") for p in pub.get("resultat", [])
-                    if p.get("url")), None)
-        return {"ok": True, "path": path, "publicerad": True, "url": url}
+            return {"ok": True, "publicerad": False, "antal": len(renderade),
+                    "fel": f"Renderade, men publiceringen föll: {pub.get('fel')}"}
+        url = next((p.get("url") for p in pub.get("resultat", []) if p.get("url")), None)
+        return {"ok": True, "publicerad": True, "antal": len(renderade), "url": url}
 
     # ── Publicera till SoMe (fan-out IG story/inlägg + FB) ───────────────────
     def lista_some_bilder(self, mapp):
@@ -1015,11 +1051,38 @@ class Api:
         härledda bild-URL:er (rör aldrig sajten eller dess innehåll-DB-rad)."""
         data = data or {}
         typ = data.get("typ", "match")
+        # Matchpublicering webb-kanal: server-crop:a hero-bilden (fokus+zoom+
+        # format) i stället för att luta på sajtens object-position. Sker för
+        # både test och skarp; heroPosition nollas eftersom bilden redan är
+        # beskuren. (Innehåll-panelens blogg/landskap/event skickar ingen
+        # heroFormat → oförändrad väg.)
+        hero_kalla = data.get("heroKalla")
+        if typ == "match" and hero_kalla and data.get("heroFormat") \
+                and Path(os.path.expanduser(hero_kalla)).exists():
+            try:
+                from dpt2.motorer import story_overlay
+                import tempfile
+                beskuren = story_overlay.beskar_foto(
+                    os.path.expanduser(hero_kalla), data.get("heroFormat"),
+                    data.get("heroFokus"), data.get("heroZoom", 1.0),
+                    ut_path=Path(tempfile.mkdtemp(prefix="dpt2-hero-"))
+                    / (data.get("hero") or "hero.jpg"))
+                data = {**data, "heroKalla": str(beskuren), "heroPosition": "center center"}
+            except Exception as e:
+                self._logg.append({"typ": "fel", "text": f"hero-crop: {e}"})
         if test:
             _fm, _body, slug, md = _innehall_md(data)
             ut_mapp = testlage.innehall_mapp(_INNEHALL_MAPP.get(typ, "matcher"))
             ut = AX.skriv_md(md, ut_mapp, slug)
-            return {"ok": True, "id": None, "path": str(ut), "test": True}
+            # Exportera även den beskurna hero-bilden så man ser den i testläget.
+            hk, hn = data.get("heroKalla"), data.get("hero")
+            if hk and hn and Path(hk).exists():
+                try:
+                    import shutil
+                    shutil.copy2(hk, Path(ut_mapp) / hn)
+                except OSError:
+                    pass
+            return {"ok": True, "id": None, "path": str(ut_mapp), "test": True}
         bild_urls = {}
         if typ == "match":
             slug_preliminar = AX.slugga(data.get("titel", ""))

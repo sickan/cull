@@ -10,7 +10,7 @@
   import {
     listaMatcher, hamtaMatch, aktivMatch, sattAktivMatch, sportprofiler, listaLag,
     valjMapp, listaSomeBilder, thumbForBild,
-    forhandsgranskaStory, publiceraLiveStory, publiceraTillSoMe, nyTestPaketMapp,
+    forhandsgranskaStory, publiceraLiveStory, publiceraKanal, nyTestPaketMapp,
     publiceraInnehallNatet, listaMaterial, sparaMaterial,
     listaMinneskort, exporteraSkyddade,
     pagangMatcher, sattPagangVisa, publiceraPagangMatcher,
@@ -217,22 +217,22 @@
     pubKor = true; pubResultat = []
     const test = $testMode
     const test_mapp = test ? (await nyTestPaketMapp())?.path : undefined   // gemensam mapp för hela fan-out:en
+    // Omslaget först, sedan övriga valda — så overlayen alltid hamnar på omslaget.
+    const ordnade = [coverPath, ...selectedPaths.filter((p) => p !== coverPath)].filter(Boolean)
     const ut = []
     for (const k of aktiva) {
       try {
-        if (k.key === 'live') {
-          const r = await publiceraLiveStory({ foto: coverPath, moment: 'resultat', tema,
-            match_id: match.id, fokus: ch.live.fokus, zoom: ch.live.zoom,
-            stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar, test })
-          ut.push({ kanal: k.namn, ok: !!r?.ok && (r.publicerad !== false), text: r?.fel || (r?.test ? 'Testfil' : 'Story ute') })
-        } else if (k.key === 'ig' || k.key === 'fb') {
-          // Postar ALLA valda foton (karusell/story); testläge kopierar hela
-          // setet numrerat. FB strippar @/# själv i planera.
-          const mal = k.key === 'ig' ? { ig_inlagg: true } : { fb: true }
-          const r = await publiceraTillSoMe({ bilder: selectedPaths, caption: losText(caption),
-            mal, match_id: match.id, moment: 'resultat', tema, test, test_mapp })
-          const antal = r?.resultat?.[0]?.antal_bilder ?? r?.sparade ?? (r?.resultat?.length || 0)
-          ut.push({ kanal: k.namn, ok: !!r?.ok, text: r?.fel || (test ? `Testfil · ${antal} bilder` : `${antal} bild(er)`) })
+        if (k.key === 'live' || k.key === 'ig' || k.key === 'fb') {
+          // Server-render per kanal: omslag med overlay + (ig/fb) beskurna extra
+          // foton i kanalens format+fokus+zoom. Testläge exporterar alla.
+          const c = ch[k.key]
+          const bilder = k.key === 'live' ? [coverPath] : ordnade
+          const r = await publiceraKanal({ kanal: k.key, format: c.fmt, fokus: c.fokus, zoom: c.zoom,
+            bilder, moment: 'resultat', tema, match_id: match.id, caption: losText(caption),
+            stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar, test, test_mapp })
+          const antal = r?.antal ?? 0
+          ut.push({ kanal: k.namn, ok: !!r?.ok && (r.publicerad !== false),
+            text: r?.fel || (test ? `Testfil · ${antal} bild${antal === 1 ? '' : 'er'}` : `${antal} bild${antal === 1 ? '' : 'er'}`) })
         } else if (k.key === 'webb') {
           const r = await publiceraInnehallNatet({
             typ: 'match', match_id: match.id, titel: `${match.lag_hemma} – ${match.lag_borta}`,
@@ -241,8 +241,8 @@
             malskyttar: resNu.malskyttar, pixieset: galleriUrl, body: losText(caption, { web: true }),
             figurer: selectedPaths.map((p) => ({ bild: p, alt: '', bildtext: '', src: '' })),
             hero: (coverPath.split('/').pop() || ''), heroKalla: coverPath,
-            heroPosition: `${ch.webb.fokus.x}% ${ch.webb.fokus.y}%` }, test)
-          ut.push({ kanal: k.namn, ok: !!r?.ok, text: r?.fel || (test ? 'Testfil' : 'Publicerad') })
+            heroFormat: ch.webb.fmt, heroFokus: ch.webb.fokus, heroZoom: ch.webb.zoom }, test)
+          ut.push({ kanal: k.namn, ok: !!r?.ok, text: r?.fel || (test ? 'Testfil · 1 bild' : 'Publicerad') })
         }
       } catch (e) { ut.push({ kanal: k.namn, ok: false, text: 'Fel: ' + (e?.message || e) }) }
     }
