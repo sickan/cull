@@ -100,7 +100,8 @@
     laddarBilder = true
     const lista = await listaSomeBilder(folderPath)
     laddarBilder = false
-    photos = (lista || []).map((p, i) => ({ path: p, sel: i < 6, cover: i === 0 }))
+    // Inget förvalt — fotografen väljer själv (första valda blir omslag).
+    photos = (lista || []).map((p) => ({ path: p, sel: false, cover: false }))
     laddaThumbs(photos.map((p) => p.path))
     scheduleAll()
   }
