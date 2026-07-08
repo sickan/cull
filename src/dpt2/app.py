@@ -741,16 +741,18 @@ class Api:
     KANAL_MAX = {"live": 1, "ig": 10, "fb": 4}
     KANAL_MAL = {"live": {"story": True}, "ig": {"ig_inlagg": True}, "fb": {"fb": True}}
 
-    def _rendera_kanalbilder(self, kanal, bilder, fmt, fokus, zoom, ut_mapp, storyfalt):
-        """Renderar en kanals bildset server-side i FMT med fokus/zoom:
-        FÖRSTA bilden (omslaget) med Horisont-overlay, resten beskurna utan
-        overlay. Skriver till ut_mapp, returnerar listan renderade sökvägar."""
+    def _rendera_kanalbilder(self, kanal, bilder, fmt, ut_mapp, storyfalt):
+        """Renderar en kanals bildset server-side i FMT — varje bild med SIN EGEN
+        fokus/zoom (bilder = [{path, fokus, zoom}]). FÖRSTA bilden (omslaget) med
+        Horisont-overlay, resten beskurna utan overlay. Skriver till ut_mapp,
+        returnerar listan renderade sökvägar."""
         from dpt2.motorer import story_overlay
         renderade = []
         for i, b in enumerate(bilder):
+            path, fokus, zoom = b.get("path"), b.get("fokus"), b.get("zoom", 1.0)
             try:
                 if i == 0:                                   # omslag → overlay
-                    cfg = {**storyfalt, "foto": b, "format": fmt,
+                    cfg = {**storyfalt, "foto": path, "format": fmt,
                            "fokus": fokus, "zoom": zoom}
                     r = story_korning._rendera(
                         self.conn, cfg,
@@ -759,7 +761,7 @@ class Api:
                         renderade.append(r["path"])
                 else:                                        # extra → beskuren
                     p = story_overlay.beskar_foto(
-                        b, fmt, fokus, zoom,
+                        path, fmt, fokus, zoom,
                         ut_path=Path(ut_mapp) / f"{kanal}_{i + 1}.jpg")
                     renderade.append(str(p))
             except Exception as e:                           # en trasig bild stoppar inte de andra
@@ -767,8 +769,10 @@ class Api:
         return renderade
 
     def publicera_kanal(self, config):
-        """Matchpublicering Steg 2: renderar + publicerar EN kanal server-side
-        med kanalens beskärning (fokus+zoom+format) applicerad på VARJE bild:
+        """Matchpublicering Steg 2: renderar + publicerar EN kanal server-side.
+        VARJE bild beskärs med SIN EGEN fokus/zoom (satt per foto i Steg 1) i
+        kanalens format. bilder = [{path, fokus:{x,y}, zoom}] (strängar tolkas
+        som {path}).
           live: 1 bild (omslaget) med overlay
           ig:   omslaget med overlay + upp till 9 beskurna foton (karusell, ≤10)
           fb:   upp till 4 foton, första med overlay
@@ -778,11 +782,15 @@ class Api:
         config = dict(config or {})
         kanal = config.get("kanal") or "ig"
         fmt = config.get("format") or ("9x16" if kanal == "live" else "1x1")
-        fokus = config.get("fokus")
-        zoom = config.get("zoom", 1.0)
-        bilder = [os.path.expanduser(b) for b in (config.get("bilder") or []) if b]
-        bilder = [b for b in bilder if Path(b).exists()][:self.KANAL_MAX.get(kanal, 10)]
-        if not bilder:
+        norm = []
+        for b in (config.get("bilder") or []):
+            if isinstance(b, str):
+                b = {"path": b}
+            p = os.path.expanduser(b.get("path") or "")
+            if p and Path(p).exists():
+                norm.append({"path": p, "fokus": b.get("fokus"), "zoom": b.get("zoom", 1.0)})
+        norm = norm[:self.KANAL_MAX.get(kanal, 10)]
+        if not norm:
             return {"ok": False, "fel": "Välj minst en bild i Steg 1."}
         match_id = config.get("match_id") or store.hamta_installning(self.conn, "aktiv_match_id")
         storyfalt = {"moment": config.get("moment", "resultat"), "match_id": match_id,
@@ -796,7 +804,7 @@ class Api:
             import tempfile
             ut_mapp = Path(tempfile.mkdtemp(prefix="dpt2-kanal-"))
         ut_mapp.mkdir(parents=True, exist_ok=True)
-        renderade = self._rendera_kanalbilder(kanal, bilder, fmt, fokus, zoom, ut_mapp, storyfalt)
+        renderade = self._rendera_kanalbilder(kanal, norm, fmt, ut_mapp, storyfalt)
         if not renderade:
             return {"ok": False, "fel": "Kunde inte rendera bilderna."}
         if test:

@@ -71,12 +71,12 @@
 
   // ── Steg 1: Innehåll ───────────────────────────────────────────────────────
   let folderPath = ''
-  let photos = []                  // {path, sel, cover}
+  let photos = []                  // {path, sel, cover, fokus:{x,y}, zoom}
   let laddarBilder = false
   // Appen laddas från file:// → WKWebView blockerar <img src="file://…"> mot
-  // andra kataloger. Bilder visas därför som base64 data-URI:er via
-  // thumbForBild (samma bevisade mekanism som Innehåll/BildvaljareFokuspunkt).
+  // andra kataloger. Bilder visas därför som base64 data-URI:er via thumbForBild.
   let thumbs = {}                  // sökväg → data-URI (source-foton)
+  let ratios = {}                  // sökväg → bredd/höjd (för crop-ramen)
   async function laddaThumbs(paths) {
     const jobb = (paths || []).filter((p) => p && !thumbs[p]).map(async (p) => {
       const t = await thumbForBild(p)
@@ -87,8 +87,15 @@
     thumbs = thumbs
   }
   $: selCount = photos.filter((p) => p.sel).length
-  $: coverPath = (photos.find((p) => p.sel && p.cover) || photos.find((p) => p.sel) || {}).path || ''
-  $: selectedPaths = photos.filter((p) => p.sel).map((p) => p.path)
+  $: selectedPhotos = photos.filter((p) => p.sel)
+  $: coverPhoto = photos.find((p) => p.sel && p.cover) || selectedPhotos[0] || null
+  $: coverPath = coverPhoto?.path || ''
+  $: selectedPaths = selectedPhotos.map((p) => p.path)
+  // Omslaget först, sedan övriga valda — ordningen overlay/karusell får.
+  $: ordnadeFoton = coverPhoto ? [coverPhoto, ...selectedPhotos.filter((p) => p !== coverPhoto)] : []
+
+  let aktivIdx = null              // index i photos för bilden som redigeras i crop-editorn
+  $: aktivFoto = aktivIdx != null ? photos[aktivIdx] : null
 
   async function valjKatalog() {
     const r = await valjMapp('Välj katalog med redigerade bilder (Lightroom-export)')
@@ -99,21 +106,61 @@
     laddarBilder = true
     const lista = await listaSomeBilder(folderPath)
     laddarBilder = false
-    // Inget förvalt — fotografen väljer själv (första valda blir omslag).
-    photos = (lista || []).map((p) => ({ path: p, sel: false, cover: false }))
+    // Inget förvalt — fotografen väljer själv. Varje foto bär sin EGEN crop.
+    photos = (lista || []).map((p) => ({ path: p, sel: false, cover: false, fokus: { x: 50, y: 50 }, zoom: 1 }))
+    aktivIdx = null
     laddaThumbs(photos.map((p) => p.path))
   }
-  function klickaBild(i) {
-    const p = photos[i]
-    if (p.sel && !p.cover) { photos = photos.map((x, j) => ({ ...x, cover: j === i })) }  // vald igen → omslag
-    else {
-      const sel = !p.sel
-      photos[i] = { ...p, sel, cover: sel ? p.cover : false }
-      if (!sel && p.cover) { const f = photos.findIndex((x) => x.sel); if (f >= 0) photos[f].cover = true }
-      if (sel && !photos.some((x, j) => x.sel && x.cover && j !== i)) photos[i].cover = true
+  // Klick på ett foto: markera + gör aktiv i crop-editorn (avmarkera via ×).
+  function valjAktiv(i) {
+    if (!photos[i].sel) {
+      photos[i] = { ...photos[i], sel: true }
+      if (!photos.some((x, j) => x.sel && x.cover && j !== i)) photos[i].cover = true
       photos = photos
     }
+    aktivIdx = i
   }
+  function avvalj(i) {
+    const varCover = photos[i].cover
+    photos[i] = { ...photos[i], sel: false, cover: false }
+    if (varCover) { const f = photos.findIndex((x) => x.sel); if (f >= 0) photos[f].cover = true }
+    photos = photos
+    if (aktivIdx === i) aktivIdx = photos.some((x) => x.sel) ? photos.findIndex((x) => x.sel) : null
+  }
+  function sattOmslag(i) { photos = photos.map((x, j) => ({ ...x, cover: j === i })) }
+  // Stega mellan de valda bilderna i crop-editorn.
+  function stega(delta) {
+    const valda = photos.map((p, j) => (p.sel ? j : -1)).filter((j) => j >= 0)
+    const pos = valda.indexOf(aktivIdx)
+    if (pos < 0) return
+    aktivIdx = valda[(pos + delta + valda.length) % valda.length]
+  }
+
+  // ── Crop-editor (per foto): hel bild + ram (formatets ratio, zoom, fokus,
+  // mörklagt utanför). Fokus/zoom lagras PÅ fotot och följer det till alla
+  // kanaler; ramen omformas per format. ratio skickas som arg så Svelte spårar.
+  const FMT_A = { '9x16': 9 / 16, '4x5': 4 / 5, '1x1': 1, '1.91x1': 1.91, '2x1': 2, '16x9': 16 / 9 }
+  const _klamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+  let previewFmt = '4x5'           // vilket format editorns ram visar (bara preview)
+  function paFotoLast(e, path) { const im = e.currentTarget; if (im.naturalWidth && im.naturalHeight) { ratios[path] = im.naturalWidth / im.naturalHeight; ratios = ratios } }
+  function ramFor(fokus, zoom, fmt, ratio) {
+    const a = FMT_A[fmt] || 1
+    let baseW, baseH
+    if (a >= ratio) { baseW = 100; baseH = (ratio / a) * 100 } else { baseH = 100; baseW = (a / ratio) * 100 }
+    const w = baseW / zoom, h = baseH / zoom
+    return { w, h, l: _klamp(fokus.x - w / 2, 0, 100 - w), t: _klamp(fokus.y - h / 2, 0, 100 - h) }
+  }
+  function sattFokus(i, e) {
+    const r = e.currentTarget.getBoundingClientRect()
+    photos[i].fokus = { x: _klamp(Math.round(((e.clientX - r.left) / r.width) * 100), 0, 100),
+                        y: _klamp(Math.round(((e.clientY - r.top) / r.height) * 100), 0, 100) }
+    photos = photos
+  }
+  function sattFotoZoom(i, v) { photos[i].zoom = parseFloat(v) || 1; photos = photos }
+  let _drar = false
+  function fokusNed(i, e) { try { e.currentTarget.setPointerCapture(e.pointerId) } catch (_) {} _drar = true; sattFokus(i, e) }
+  function fokusRor(i, e) { if (_drar) sattFokus(i, e) }
+  function fokusUpp() { _drar = false }
 
   // Text + tokens
   let caption = 'Stabil hemmaseger på {arena}! {resultat}. Mål: {målskyttar}. {@lag} {#liga} #dalecarliaphoto'
@@ -156,42 +203,16 @@
     { key: 'webb', namn: 'Webbartikel', under: 'Hemsida · Hero', format: ['2x1', '16x9'], wide: true },
   ]
   const fmtEti = (f) => f.replace('x', ':')
-  const FMT_A = { '9x16': 9 / 16, '4x5': 4 / 5, '1x1': 1, '1.91x1': 1.91, '2x1': 2, '16x9': 16 / 9 }
+  // Kanaler bär bara format + på/av — beskärningen (fokus/zoom) sitter på FOTOT
+  // (Steg 1), delas av alla kanaler; kanalens format omformar bara ramen.
   let ch = {
-    live: { on: true, fmt: '9x16', fokus: { x: 50, y: 33 }, zoom: 1 },
-    ig: { on: true, fmt: '4x5', fokus: { x: 50, y: 40 }, zoom: 1 },
-    fb: { on: false, fmt: '1x1', fokus: { x: 50, y: 45 }, zoom: 1 },
-    webb: { on: true, fmt: '2x1', fokus: { x: 50, y: 40 }, zoom: 1 },
+    live: { on: true, fmt: '9x16' },
+    ig: { on: true, fmt: '4x5' },
+    fb: { on: false, fmt: '1x1' },
+    webb: { on: true, fmt: '2x1' },
   }
-  // Crop-editor: HELA omslaget visas + en ram (formatets bildförhållande, storlek
-  // av zoom, centrerad på fokuspunkten, mörklagt utanför) — samma UX som hero-
-  // fokusväljaren. Ramen speglar exakt vad backend beskär (fokus = rutans mitt).
-  // coverRatio (omslagets riktiga bredd/höjd) MÅSTE skickas som arg till ramFor
-  // så Svelte spårar beroendet (annars ritas ramen inte om när bilden lästs in).
-  let coverRatio = 16 / 9
-  const _klamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
-  function paCoverLast(e) { const im = e.currentTarget; if (im.naturalWidth && im.naturalHeight) coverRatio = im.naturalWidth / im.naturalHeight }
-  function ramFor(c, ratio) {
-    const a = FMT_A[c.fmt] || 1
-    let baseW, baseH
-    if (a >= ratio) { baseW = 100; baseH = (ratio / a) * 100 } else { baseH = 100; baseW = (a / ratio) * 100 }
-    const w = baseW / c.zoom, h = baseH / c.zoom
-    return { w, h, l: _klamp(c.fokus.x - w / 2, 0, 100 - w), t: _klamp(c.fokus.y - h / 2, 0, 100 - h) }
-  }
-
   function toggleCh(k) { ch[k].on = !ch[k].on; ch = ch }
   function sattFmt(k, f) { ch[k].fmt = f; ch = ch }
-  function sattZoom(k, v) { ch[k].zoom = parseFloat(v) || 1; ch = ch }
-  function sattFokus(k, e) {
-    const r = e.currentTarget.getBoundingClientRect()
-    ch[k].fokus = { x: _klamp(Math.round(((e.clientX - r.left) / r.width) * 100), 0, 100),
-                    y: _klamp(Math.round(((e.clientY - r.top) / r.height) * 100), 0, 100) }
-    ch = ch
-  }
-  let _drarK = null
-  function fokusNed(k, e) { try { e.currentTarget.setPointerCapture(e.pointerId) } catch (_) {} _drarK = k; sattFokus(k, e) }
-  function fokusRor(k, e) { if (_drarK === k) sattFokus(k, e) }
-  function fokusUpp() { _drarK = null }
 
   // ResultatRemsan sparade → spegla värdet (används vid publicering + token).
   function onResSparat(e) { resNu = e.detail }
@@ -217,17 +238,18 @@
     pubKor = true; pubResultat = []
     const test = $testMode
     const test_mapp = test ? (await nyTestPaketMapp())?.path : undefined   // gemensam mapp för hela fan-out:en
-    // Omslaget först, sedan övriga valda — så overlayen alltid hamnar på omslaget.
-    const ordnade = [coverPath, ...selectedPaths.filter((p) => p !== coverPath)].filter(Boolean)
+    // Varje bild bär sin egen fokus/zoom (satt per foto i Steg 1). Omslaget först.
+    const crop = (p) => ({ path: p.path, fokus: p.fokus, zoom: p.zoom })
     const ut = []
     for (const k of aktiva) {
       try {
         if (k.key === 'live' || k.key === 'ig' || k.key === 'fb') {
           // Server-render per kanal: omslag med overlay + (ig/fb) beskurna extra
-          // foton i kanalens format+fokus+zoom. Testläge exporterar alla.
-          const c = ch[k.key]
-          const bilder = k.key === 'live' ? [coverPath] : ordnade
-          const r = await publiceraKanal({ kanal: k.key, format: c.fmt, fokus: c.fokus, zoom: c.zoom,
+          // foton — var och en med SIN egen fokus/zoom i kanalens format.
+          const bilder = k.key === 'live'
+            ? (coverPhoto ? [crop(coverPhoto)] : [])
+            : ordnadeFoton.map(crop)
+          const r = await publiceraKanal({ kanal: k.key, format: ch[k.key].fmt,
             bilder, moment: 'resultat', tema, match_id: match.id, caption: losText(caption),
             stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar, test, test_mapp })
           const antal = r?.antal ?? 0
@@ -241,7 +263,7 @@
             malskyttar: resNu.malskyttar, pixieset: galleriUrl, body: losText(caption, { web: true }),
             figurer: selectedPaths.map((p) => ({ bild: p, alt: '', bildtext: '', src: '' })),
             hero: (coverPath.split('/').pop() || ''), heroKalla: coverPath,
-            heroFormat: ch.webb.fmt, heroFokus: ch.webb.fokus, heroZoom: ch.webb.zoom, test_mapp }, test)
+            heroFormat: ch.webb.fmt, heroFokus: coverPhoto?.fokus, heroZoom: coverPhoto?.zoom, test_mapp }, test)
           ut.push({ kanal: k.namn, ok: !!r?.ok, text: r?.fel || (test ? 'Testfil · 1 bild' : 'Publicerad') })
         }
       } catch (e) { ut.push({ kanal: k.namn, ok: false, text: 'Fel: ' + (e?.message || e) }) }
@@ -393,13 +415,48 @@
       {#if photos.length}
         <div class="bildrutnat">
           {#each photos as p, i}
-            <button class="bild" class:sel={p.sel} class:tom={!thumbs[p.path]} style={thumbs[p.path] ? `background-image:url(${thumbs[p.path]})` : ''} on:click={() => klickaBild(i)}>
-              {#if p.sel}<span class="bock">✓</span>{/if}
+            <div class="bild" class:sel={p.sel} class:aktiv={aktivIdx === i} class:tom={!thumbs[p.path]}
+              style={thumbs[p.path] ? `background-image:url(${thumbs[p.path]})` : ''}
+              role="button" tabindex="0" on:click={() => valjAktiv(i)} on:keydown={(e) => e.key === 'Enter' && valjAktiv(i)}>
+              {#if p.sel}<button class="bavvalj" title="Ta bort" on:click|stopPropagation={() => avvalj(i)}>✕</button>{/if}
               {#if p.cover}<span class="omslag">OMSLAG</span>{/if}
-            </button>
+            </div>
           {/each}
         </div>
-        <div class="hint">Klicka för att lägga till/ta bort · klicka den valda igen för omslag. Varje utgång beskär till sitt format.</div>
+        <div class="hint">Klicka en bild för att välja + justera dess beskärning nedan · ✕ tar bort · sätt omslag i editorn.</div>
+
+        {#if aktivFoto}
+          <div class="cropeditor">
+            <div class="cehuvud">
+              <span class="cecaps">Beskärning · bild {selectedPhotos.indexOf(aktivFoto) + 1} av {selCount}</span>
+              <div class="cenav">
+                <button class="cebtn" on:click={() => stega(-1)} disabled={selCount < 2} title="Föregående">‹</button>
+                <button class="cebtn" on:click={() => stega(1)} disabled={selCount < 2} title="Nästa">›</button>
+                <button class="ceomslag" class:on={aktivFoto.cover} on:click={() => sattOmslag(aktivIdx)}>{aktivFoto.cover ? '★ Omslag' : '☆ Sätt som omslag'}</button>
+              </div>
+            </div>
+            <div class="cropbox"
+              on:pointerdown={(e) => fokusNed(aktivIdx, e)} on:pointermove={(e) => fokusRor(aktivIdx, e)}
+              on:pointerup={fokusUpp} on:pointerleave={fokusUpp}>
+              {#if thumbs[aktivFoto.path]}
+                <img class="cropimg" src={thumbs[aktivFoto.path]} alt="" draggable="false" on:load={(e) => paFotoLast(e, aktivFoto.path)} />
+                {@const ram = ramFor(aktivFoto.fokus, aktivFoto.zoom, previewFmt, ratios[aktivFoto.path] || 1.5)}
+                <div class="cropram" style="left:{ram.l}%;top:{ram.t}%;width:{ram.w}%;height:{ram.h}%;border-color:{grenFarg(match?.hem_gren)};box-shadow:0 0 14px {grenFarg(match?.hem_gren)}66, 0 0 0 9999px rgba(7,9,12,.6)"></div>
+                <span class="fokusdot" style="left:{aktivFoto.fokus.x}%;top:{aktivFoto.fokus.y}%"></span>
+              {/if}
+            </div>
+            <div class="ceverktyg">
+              <div class="fmtprev"><span class="ftxt">Visa som</span>
+                {#each ['9x16', '4x5', '1x1', '2x1'] as f}<button class="fmtchip" class:on={previewFmt === f} on:click={() => (previewFmt = f)}>{fmtEti(f)}</button>{/each}
+              </div>
+              <div class="zoomrad">
+                <input type="range" min="1" max="2.6" step="0.05" value={aktivFoto.zoom} on:input={(e) => sattFotoZoom(aktivIdx, e.target.value)} />
+                <span class="zoomtxt">Zoom {Math.round(aktivFoto.zoom * 100)}%</span>
+              </div>
+            </div>
+            <div class="crophint">Klicka/dra i bilden för fokus. Fokus + zoom följer bilden till alla kanaler; ramen visar valt format.</div>
+          </div>
+        {/if}
       {:else}
         <div class="tombild">Peka ut Lightroom-exportens katalog för att välja bilder — eller använd <button class="minilank" on:click={ingestOppna}>Hämta bilder</button>.</div>
       {/if}
@@ -434,7 +491,7 @@
 
   <!-- Steg 2: Skicka till -->
   <div class="steg"><span class="stegnr scd">2</span><span class="stegnamn">Skicka till</span>
-    <span class="steghint">— klicka i varje förhandsvisning för fokus, dra reglaget för zoom · gren-kant + glow följer varje utgång</span></div>
+    <span class="steghint">— välj format + på/av per kanal · beskärningen sätts per foto i Steg 1 och följer med hit</span></div>
   <div class="kanaler">
     {#each KANALER as k}
       <div class="kanal" class:av={!ch[k.key].on} class:wide={k.wide}>
@@ -448,23 +505,16 @@
               {#each k.format as f}<button class="fmtchip" class:on={ch[k.key].fmt === f} on:click={() => sattFmt(k.key, f)}>{fmtEti(f)}</button>{/each}
             </div>
           {/if}
-          <div class="cropbox" class:av={!ch[k.key].on}
-            on:pointerdown={(e) => fokusNed(k.key, e)} on:pointermove={(e) => fokusRor(k.key, e)}
-            on:pointerup={fokusUpp} on:pointerleave={fokusUpp}>
-            {#if coverPath && thumbs[coverPath]}
-              <img class="cropimg" src={thumbs[coverPath]} alt="" draggable="false" on:load={paCoverLast} />
-              {@const ram = ramFor(ch[k.key], coverRatio)}
-              <div class="cropram" style="left:{ram.l}%;top:{ram.t}%;width:{ram.w}%;height:{ram.h}%;border-color:{grenFarg(match?.hem_gren)};box-shadow:0 0 14px {grenFarg(match?.hem_gren)}66, 0 0 0 9999px rgba(7,9,12,.62)"></div>
-              <span class="fokusdot" style="left:{ch[k.key].fokus.x}%;top:{ch[k.key].fokus.y}%"></span>
+          <div class="cropbox ro" class:av={!ch[k.key].on}>
+            {#if coverPath && thumbs[coverPath] && coverPhoto}
+              <img class="cropimg" src={thumbs[coverPath]} alt="" on:load={(e) => paFotoLast(e, coverPath)} />
+              {@const ram = ramFor(coverPhoto.fokus, coverPhoto.zoom, ch[k.key].fmt, ratios[coverPath] || 1.5)}
+              <div class="cropram" style="left:{ram.l}%;top:{ram.t}%;width:{ram.w}%;height:{ram.h}%;border-color:{grenFarg(match?.hem_gren)};box-shadow:0 0 12px {grenFarg(match?.hem_gren)}55, 0 0 0 9999px rgba(7,9,12,.55)"></div>
             {:else}
               <div class="prevtom">Välj omslag i Steg 1</div>
             {/if}
           </div>
-          <div class="zoomrad">
-            <input type="range" min="1" max="2.6" step="0.05" value={ch[k.key].zoom} on:input={(e) => sattZoom(k.key, e.target.value)} />
-            <span class="zoomtxt">Zoom {Math.round(ch[k.key].zoom * 100)}%</span>
-          </div>
-          <div class="crophint">Hela bilden visas — ramen är {fmtEti(ch[k.key].fmt)}-utsnittet, klicka/dra för fokus.</div>
+          <div class="crophint">{k.key === 'live' ? 'Omslaget med overlay' : k.key === 'webb' ? 'Omslaget som hero' : 'Omslag + valda foton, var sin crop'} · {fmtEti(ch[k.key].fmt)}</div>
         </div>
       </div>
     {/each}
@@ -659,11 +709,27 @@
   .sek:hover:not(:disabled) { border-color: var(--acc); color: var(--acc); }
   .sek:disabled { opacity: 0.5; }
   .bildrutnat { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-  .bild { position: relative; aspect-ratio: 4/5; border-radius: 6px; border: 1px solid var(--div); background-size: cover; background-position: center; opacity: 0.5; padding: 0; }
+  .bild { position: relative; aspect-ratio: 4/5; border-radius: 6px; border: 1px solid var(--div); background-size: cover; background-position: center; opacity: 0.5; padding: 0; cursor: pointer; }
   .bild.sel { outline: 2px solid var(--acc); opacity: 1; }
+  .bild.aktiv { outline: 3px solid var(--acc); box-shadow: 0 0 0 2px var(--acc-soft); }
   .bild.tom, .livebild.tom { background-image: repeating-linear-gradient(135deg, var(--div3), var(--div3) 7px, var(--kort) 7px, var(--kort) 14px); }
-  .bock { position: absolute; top: 3px; right: 3px; width: 15px; height: 15px; border-radius: 50%; background: var(--acc); color: #100c05; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; }
+  .bavvalj { position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; border-radius: 50%; border: 0; background: rgba(7,9,12,.7); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; cursor: pointer; }
+  .bavvalj:hover { background: #C0453E; }
   .omslag { position: absolute; bottom: 3px; left: 3px; font-size: 7px; font-weight: 700; background: var(--acc); color: #100c05; border-radius: 3px; padding: 1px 4px; letter-spacing: 0.03em; }
+
+  /* Crop-editor (per foto) i Steg 1 */
+  .cropeditor { margin-top: 14px; border: 1px solid var(--div); border-radius: 11px; background: var(--panel); padding: 12px; }
+  .cehuvud { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .cecaps { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--t-caps); }
+  .cenav { display: flex; align-items: center; gap: 6px; }
+  .cebtn { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--div); background: var(--kort); color: var(--t-head); font-size: 15px; font-weight: 700; }
+  .cebtn:disabled { opacity: 0.4; }
+  .ceomslag { border: 1px solid var(--div); background: var(--kort); border-radius: 7px; padding: 5px 11px; font-size: 11.5px; font-weight: 600; color: var(--t-mut); }
+  .ceomslag.on { border-color: var(--acc-border); background: var(--acc-soft); color: var(--acc); }
+  .cropbox.ro { cursor: default; }
+  .ceverktyg { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+  .fmtprev { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .ftxt { font-size: 10.5px; color: var(--t-mut); margin-right: 2px; }
   .tombild { font-size: 12px; color: var(--t-mut); line-height: 1.5; padding: 8px 0; }
   .cap { line-height: 1.5; resize: vertical; }
   .tokrad { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 11px; align-items: center; }
