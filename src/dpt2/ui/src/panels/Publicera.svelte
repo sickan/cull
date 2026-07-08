@@ -55,7 +55,6 @@
     speglaRes(match)
     galleriUrl = match?.galleri || galleriUrl
     hemsidaUrl = match?.sida_url || hemsidaUrl
-    scheduleAll()
   }
 
   // ── Matchväljare ───────────────────────────────────────────────────────────
@@ -103,7 +102,6 @@
     // Inget förvalt — fotografen väljer själv (första valda blir omslag).
     photos = (lista || []).map((p) => ({ path: p, sel: false, cover: false }))
     laddaThumbs(photos.map((p) => p.path))
-    scheduleAll()
   }
   function klickaBild(i) {
     const p = photos[i]
@@ -115,7 +113,6 @@
       if (sel && !photos.some((x, j) => x.sel && x.cover && j !== i)) photos[i].cover = true
       photos = photos
     }
-    scheduleAll()
   }
 
   // Text + tokens
@@ -159,57 +156,45 @@
     { key: 'webb', namn: 'Webbartikel', under: 'Hemsida · Hero', format: ['2x1', '16x9'], wide: true },
   ]
   const fmtEti = (f) => f.replace('x', ':')
-  const fmtRatio = (f) => { const [a, b] = f.split('x'); return `${a}/${b}` }
+  const FMT_A = { '9x16': 9 / 16, '4x5': 4 / 5, '1x1': 1, '1.91x1': 1.91, '2x1': 2, '16x9': 16 / 9 }
   let ch = {
     live: { on: true, fmt: '9x16', fokus: { x: 50, y: 33 }, zoom: 1 },
     ig: { on: true, fmt: '4x5', fokus: { x: 50, y: 40 }, zoom: 1 },
     fb: { on: false, fmt: '1x1', fokus: { x: 50, y: 45 }, zoom: 1 },
     webb: { on: true, fmt: '2x1', fokus: { x: 50, y: 40 }, zoom: 1 },
   }
-  let preview = { live: '', ig: '', fb: '', webb: '' }   // renderad data-URI per kanal
-  let renderar = { live: false, ig: false, fb: false, webb: false }
+  // Crop-editor: HELA omslaget visas + en ram (formatets bildförhållande, storlek
+  // av zoom, centrerad på fokuspunkten, mörklagt utanför) — samma UX som hero-
+  // fokusväljaren. Ramen speglar exakt vad backend beskär (fokus = rutans mitt).
+  // coverRatio (omslagets riktiga bredd/höjd) MÅSTE skickas som arg till ramFor
+  // så Svelte spårar beroendet (annars ritas ramen inte om när bilden lästs in).
+  let coverRatio = 16 / 9
+  const _klamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+  function paCoverLast(e) { const im = e.currentTarget; if (im.naturalWidth && im.naturalHeight) coverRatio = im.naturalWidth / im.naturalHeight }
+  function ramFor(c, ratio) {
+    const a = FMT_A[c.fmt] || 1
+    let baseW, baseH
+    if (a >= ratio) { baseW = 100; baseH = (ratio / a) * 100 } else { baseH = 100; baseW = (a / ratio) * 100 }
+    const w = baseW / c.zoom, h = baseH / c.zoom
+    return { w, h, l: _klamp(c.fokus.x - w / 2, 0, 100 - w), t: _klamp(c.fokus.y - h / 2, 0, 100 - h) }
+  }
 
-  function toggleCh(k) { ch[k].on = !ch[k].on; ch = ch; if (ch[k].on) scheduleRender(k) }
-  function sattFmt(k, f) { ch[k].fmt = f; ch = ch; scheduleRender(k) }
-  function sattZoom(k, v) { ch[k].zoom = parseFloat(v) || 1; ch = ch; scheduleRender(k) }
+  function toggleCh(k) { ch[k].on = !ch[k].on; ch = ch }
+  function sattFmt(k, f) { ch[k].fmt = f; ch = ch }
+  function sattZoom(k, v) { ch[k].zoom = parseFloat(v) || 1; ch = ch }
   function sattFokus(k, e) {
     const r = e.currentTarget.getBoundingClientRect()
-    const x = Math.max(0, Math.min(100, Math.round(((e.clientX - r.left) / r.width) * 100)))
-    const y = Math.max(0, Math.min(100, Math.round(((e.clientY - r.top) / r.height) * 100)))
-    ch[k].fokus = { x, y }; ch = ch; scheduleRender(k)
+    ch[k].fokus = { x: _klamp(Math.round(((e.clientX - r.left) / r.width) * 100), 0, 100),
+                    y: _klamp(Math.round(((e.clientY - r.top) / r.height) * 100), 0, 100) }
+    ch = ch
   }
+  let _drarK = null
+  function fokusNed(k, e) { try { e.currentTarget.setPointerCapture(e.pointerId) } catch (_) {} _drarK = k; sattFokus(k, e) }
+  function fokusRor(k, e) { if (_drarK === k) sattFokus(k, e) }
+  function fokusUpp() { _drarK = null }
 
-  const _rtimers = {}
-  function scheduleRender(k) {
-    if (_rtimers[k]) clearTimeout(_rtimers[k])
-    _rtimers[k] = setTimeout(() => renderChannel(k), 480)
-  }
-  function scheduleAll() { KANALER.forEach((k) => ch[k.key].on && scheduleRender(k.key)) }
-  async function renderChannel(k) {
-    const c = ch[k]
-    if (!c.on) { preview[k] = ''; preview = preview; return }
-    const foto = coverPath
-    if (!foto || !match) { preview[k] = ''; preview = preview; return }
-    renderar[k] = true; renderar = renderar
-    const r = await forhandsgranskaStory({
-      foto, moment: 'resultat', match_id: match.id, tema, format: c.fmt,
-      fokus: c.fokus, zoom: c.zoom, preview_slot: k,
-      stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar,
-    })
-    renderar[k] = false; renderar = renderar
-    if (r?.ok && r.path) {
-      const t = await thumbForBild(r.path)   // fil → data-URI (file:// blockeras i WKWebView)
-      preview[k] = t?.ok ? t.data_uri : ''
-      preview = preview
-    }
-  }
-  // Ny resultatremsa-sparning speglas i previews: läs om matchen + rita om.
-  async function uppdateraPreviews() {
-    if (match?.id) { match = await hamtaMatch(match.id); speglaRes(match) }
-    scheduleAll()
-  }
-  // ResultatRemsan sparade → spegla värdet + rita om previews automatiskt.
-  function onResSparat(e) { resNu = e.detail; scheduleAll() }
+  // ResultatRemsan sparade → spegla värdet (används vid publicering + token).
+  function onResSparat(e) { resNu = e.detail }
 
   // ── Publiceringsrad (fan-out) ───────────────────────────────────────────────
   $: aktiva = KANALER.filter((k) => ch[k.key].on)
@@ -389,8 +374,7 @@
   <!-- Delad resultatremsa -->
   {#if match}
     <ResultatRemsa {match} {profil} {lagAlla} on:sparat={onResSparat} />
-    <div class="remstext">Resultat &amp; målgörare fylls i <b>en gång här</b> — samma värden matas in i story, inlägg och webbartikel (förhandsvisningarna uppdateras automatiskt).
-      <button class="minilank" on:click={uppdateraPreviews}>↻ Uppdatera nu</button></div>
+    <div class="remstext">Resultat &amp; målgörare fylls i <b>en gång här</b> — samma värden matas in i story, inlägg och webbartikel.</div>
   {/if}
 
   <!-- Steg 1: Innehåll -->
@@ -464,20 +448,23 @@
               {#each k.format as f}<button class="fmtchip" class:on={ch[k.key].fmt === f} on:click={() => sattFmt(k.key, f)}>{fmtEti(f)}</button>{/each}
             </div>
           {/if}
-          <div class="prevbox" class:wide={k.wide} style="aspect-ratio:{fmtRatio(ch[k.key].fmt)};border-color:{grenFarg(match?.hem_gren)};box-shadow:0 0 12px {grenFarg(match?.hem_gren)}55"
-            on:click={(e) => sattFokus(k.key, e)}>
-            {#if preview[k.key]}
-              <img class="previmg" src={preview[k.key]} alt="" />
+          <div class="cropbox" class:av={!ch[k.key].on}
+            on:pointerdown={(e) => fokusNed(k.key, e)} on:pointermove={(e) => fokusRor(k.key, e)}
+            on:pointerup={fokusUpp} on:pointerleave={fokusUpp}>
+            {#if coverPath && thumbs[coverPath]}
+              <img class="cropimg" src={thumbs[coverPath]} alt="" draggable="false" on:load={paCoverLast} />
+              {@const ram = ramFor(ch[k.key], coverRatio)}
+              <div class="cropram" style="left:{ram.l}%;top:{ram.t}%;width:{ram.w}%;height:{ram.h}%;border-color:{grenFarg(match?.hem_gren)};box-shadow:0 0 14px {grenFarg(match?.hem_gren)}66, 0 0 0 9999px rgba(7,9,12,.62)"></div>
+              <span class="fokusdot" style="left:{ch[k.key].fokus.x}%;top:{ch[k.key].fokus.y}%"></span>
             {:else}
-              <div class="prevtom">{ch[k.key].on ? (coverPath ? 'Renderar…' : 'Välj omslag i Steg 1') : 'Avstängd'}</div>
+              <div class="prevtom">Välj omslag i Steg 1</div>
             {/if}
-            <span class="fokusdot" style="left:{ch[k.key].fokus.x}%;top:{ch[k.key].fokus.y}%"></span>
-            {#if renderar[k.key]}<span class="renderbadge">Renderar…</span>{/if}
           </div>
           <div class="zoomrad">
             <input type="range" min="1" max="2.6" step="0.05" value={ch[k.key].zoom} on:input={(e) => sattZoom(k.key, e.target.value)} />
-            <span class="zoomtxt">{Math.round(ch[k.key].zoom * 100)}%</span>
+            <span class="zoomtxt">Zoom {Math.round(ch[k.key].zoom * 100)}%</span>
           </div>
+          <div class="crophint">Hela bilden visas — ramen är {fmtEti(ch[k.key].fmt)}-utsnittet, klicka/dra för fokus.</div>
         </div>
       </div>
     {/each}
@@ -709,15 +696,19 @@
   .fmtchips { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
   .fmtchip { padding: 3px 8px; border-radius: 6px; border: 0; font-size: 10px; font-weight: 600; background: var(--panel); color: var(--t-mut); }
   .fmtchip.on { background: var(--acc); color: #100c05; font-weight: 700; }
-  .prevbox { position: relative; width: 118px; border-radius: 8px; overflow: hidden; background: var(--div3); border: 2px solid var(--div); cursor: crosshair; }
-  .prevbox.wide { width: 100%; }
-  .previmg { display: block; width: 100%; height: 100%; object-fit: cover; }
-  .prevtom { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 90px; font-size: 10px; color: var(--t-mut); text-align: center; padding: 8px; }
-  .fokusdot { position: absolute; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.45); pointer-events: none; }
-  .renderbadge { position: absolute; top: 6px; right: 6px; font-size: 8px; font-weight: 700; background: rgba(0,0,0,.6); color: #fff; padding: 2px 6px; border-radius: 5px; }
+  /* Crop-editor: hela omslaget + ram som visar utsnittet (mörklagt utanför) */
+  .cropbox { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: var(--div3);
+    cursor: crosshair; touch-action: none; user-select: none; line-height: 0; }
+  .cropbox.av { pointer-events: none; }
+  .cropimg { display: block; width: 100%; height: auto; -webkit-user-drag: none; user-select: none; }
+  .cropram { position: absolute; border: 2px solid #fff; border-radius: 3px; pointer-events: none;
+    transition: left .08s ease-out, top .08s ease-out, width .08s ease-out, height .08s ease-out; }
+  .prevtom { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 96px; font-size: 10.5px; color: var(--t-mut); text-align: center; padding: 8px; }
+  .fokusdot { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1.5px rgba(0,0,0,.5), 0 1px 4px rgba(0,0,0,.4); background: radial-gradient(circle, rgba(255,255,255,.9) 0 2px, transparent 3px); pointer-events: none; }
   .zoomrad { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: center; }
-  .zoomrad input { width: 60%; accent-color: var(--acc); }
+  .zoomrad input { width: 58%; accent-color: var(--acc); }
   .zoomtxt { font-size: 10px; color: var(--t-mut); }
+  .crophint { font-size: 9.5px; color: var(--t-help); text-align: center; line-height: 1.35; }
 
   .visatoggle { display: flex; align-items: center; gap: 8px; background: none; border: 0; font-size: 11.5px; color: var(--t-mut); font-weight: 600; }
   .pglista { display: flex; flex-direction: column; }

@@ -872,8 +872,10 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         ny_h = (foto_w * H / W) / z
     ny_w = max(1, min(foto_w, int(round(ny_w))))
     ny_h = max(1, min(foto_h, int(round(ny_h))))
-    x0 = max(0, min(foto_w - ny_w, int(round(fx * (foto_w - ny_w)))))
-    y0 = max(0, min(foto_h - ny_h, int(round(fy * (foto_h - ny_h)))))
+    # Fokuspunkten är beskärningsrutans MITT (klampad mot kanterna) — samma modell
+    # som ram-overlayen i UI:t (crop-editorn), så ramen matchar renderingen exakt.
+    x0 = max(0, min(foto_w - ny_w, int(round(fx * foto_w - ny_w / 2))))
+    y0 = max(0, min(foto_h - ny_h, int(round(fy * foto_h - ny_h / 2))))
     foto = foto.crop((x0, y0, x0 + ny_w, y0 + ny_h))
     foto = foto.resize((W, H), Image.LANCZOS)
 
