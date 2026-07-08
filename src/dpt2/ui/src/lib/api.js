@@ -859,7 +859,8 @@ export async function publiceraTillSoMe(config) {
     const [kanal, form] = { story: ['instagram', 'story'], ig_inlagg: ['instagram', 'inlägg'],
       fb: ['facebook', 'inlägg'] }[malnyckel] || ['instagram', 'inlägg']
     return wait({ ok: true, sparade: 0, varningar: [],
-      resultat: [{ kanal, form, del: 1, av: 1, status: 'postad', test: true }],
+      resultat: [{ kanal, form, del: 1, av: 1, status: 'postad', test: true,
+        antal_bilder: (config.bilder || []).length }],   // hela setet kopieras i testläget
       path: config.test_mapp || '~/DPT/test-output/2026-01-01/some_paket_120000' })
   }
   const plan = _mockPlanera(config || {})
