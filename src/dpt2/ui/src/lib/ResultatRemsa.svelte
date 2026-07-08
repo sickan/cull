@@ -5,9 +5,12 @@
   // Design: design_handoff_live_some_webb/Bildval & Resultat-remsa -
   // varianter.dc.html, variant 1e. Ingen egen "Byt match"-knapp — sitter
   // alltid direkt under AktivMatchRad/matchväljaren, som redan har den.
+  import { createEventDispatcher } from 'svelte'
   import { sattResultat } from './api.js'
   import Lagbricka from './Lagbricka.svelte'
   import { grenFarg } from './gren.js'
+
+  const dispatch = createEventDispatcher()
 
   export let match = null       // {id, lag_hemma, lag_borta, liga, resultat, mellan, malskyttar, ...}
   export let profil = { res_label: 'Slutresultat', res_ph: '6–0', mid_label: 'Halvtid',
@@ -48,6 +51,7 @@
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(async () => {
       await sattResultat(match.id, resultat, mellan, malskyttar)
+      dispatch('sparat', { resultat, mellan, malskyttar })   // panelen kan rita om previews
       const d = new Date()
       savedAt = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     }, 500)

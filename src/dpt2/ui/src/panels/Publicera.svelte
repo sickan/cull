@@ -27,6 +27,12 @@
   let profiler = {}
   let match = null                 // fullständig aktiv match
   let materials = []
+  // Färsk resultat/mellan/målskyttar-spegel — matas av ResultatRemsas 'sparat'-
+  // event (den skriver på matchposten, panelen känner annars inte till ändringen)
+  // så previews + publicering använder det inskrivna värdet direkt, inte matchens
+  // gamla, utan att röra remsans interna state.
+  let resNu = { resultat: '', mellan: '', malskyttar: '' }
+  function speglaRes(m) { resNu = { resultat: m?.resultat || '', mellan: m?.mellan || '', malskyttar: m?.malskyttar || '' } }
   const tema = 'Hav'               // Skagen-tema för rendern (gren styr kanten, inte temat)
 
   $: profil = profiler[match?.sport] || profiler.fotboll ||
@@ -46,6 +52,7 @@
 
   async function laddaMatch(id) {
     match = await hamtaMatch(id)
+    speglaRes(match)
     galleriUrl = match?.galleri || galleriUrl
     hemsidaUrl = match?.sida_url || hemsidaUrl
     scheduleAll()
@@ -131,7 +138,7 @@
   function handle(namn) { return (lagAlla.find((x) => x.namn === namn)?.instagram || '').replace(/^@/, '') }
   function losText(text, { web = false } = {}) {
     const vals = {
-      resultat: match?.resultat || '', målskyttar: match?.malskyttar || '',
+      resultat: resNu.resultat, målskyttar: resNu.malskyttar,
       arena: match?.arena || '', motståndare: match?.lag_borta || '',
       '@lag': handle(match?.lag_hemma) ? '@' + handle(match?.lag_hemma) : '',
       '#liga': match?.liga ? '#' + _hashtag(match.liga) : '',
@@ -186,7 +193,7 @@
     const r = await forhandsgranskaStory({
       foto, moment: 'resultat', match_id: match.id, tema, format: c.fmt,
       fokus: c.fokus, zoom: c.zoom, preview_slot: k,
-      stallning: match.resultat || '', mellan: match.mellan || '', mal_rad: match.malskyttar || '',
+      stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar,
     })
     renderar[k] = false; renderar = renderar
     if (r?.ok && r.path) {
@@ -197,9 +204,11 @@
   }
   // Ny resultatremsa-sparning speglas i previews: läs om matchen + rita om.
   async function uppdateraPreviews() {
-    if (match?.id) match = await hamtaMatch(match.id)
+    if (match?.id) { match = await hamtaMatch(match.id); speglaRes(match) }
     scheduleAll()
   }
+  // ResultatRemsan sparade → spegla värdet + rita om previews automatiskt.
+  function onResSparat(e) { resNu = e.detail; scheduleAll() }
 
   // ── Publiceringsrad (fan-out) ───────────────────────────────────────────────
   $: aktiva = KANALER.filter((k) => ch[k.key].on)
@@ -228,7 +237,7 @@
         if (k.key === 'live') {
           const r = await publiceraLiveStory({ foto: coverPath, moment: 'resultat', tema,
             match_id: match.id, fokus: ch.live.fokus, zoom: ch.live.zoom,
-            stallning: match.resultat || '', mellan: match.mellan || '', mal_rad: match.malskyttar || '', test })
+            stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar, test })
           ut.push({ kanal: k.namn, ok: !!r?.ok && (r.publicerad !== false), text: r?.fel || (r?.test ? 'Testfil' : 'Story ute') })
         } else if (k.key === 'ig' || k.key === 'fb') {
           const mal = k.key === 'ig' ? { ig_inlagg: true } : { fb: true }
@@ -239,8 +248,8 @@
           const r = await publiceraInnehallNatet({
             typ: 'match', match_id: match.id, titel: `${match.lag_hemma} – ${match.lag_borta}`,
             hem: match.lag_hemma, borta: match.lag_borta, serie: match.liga, sport: match.sport,
-            datum: match.datum, resultat: match.resultat, mellan: match.mellan, arena: match.arena,
-            malskyttar: match.malskyttar, pixieset: galleriUrl, body: losText(caption, { web: true }),
+            datum: match.datum, resultat: resNu.resultat, mellan: resNu.mellan, arena: match.arena,
+            malskyttar: resNu.malskyttar, pixieset: galleriUrl, body: losText(caption, { web: true }),
             figurer: selectedPaths.map((p) => ({ bild: p, alt: '', bildtext: '', src: '' })),
             hero: (coverPath.split('/').pop() || ''), heroKalla: coverPath,
             heroPosition: `${ch.webb.fokus.x}% ${ch.webb.fokus.y}%` }, test)
@@ -298,7 +307,7 @@
       if (!livePhoto || !match) return
       const r = await forhandsgranskaStory({ foto: livePhoto, moment: LIVEMOM[liveMoment] || 'resultat',
         match_id: match.id, tema, format: '9x16', preview_slot: 'livenu',
-        stallning: match.resultat || '', mellan: match.mellan || '', mal_rad: match.malskyttar || '' })
+        stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar })
       if (r?.ok && r.path) { const t = await thumbForBild(r.path); livePreview = t?.ok ? t.data_uri : '' }
     }, 400)
   }
@@ -374,9 +383,9 @@
 
   <!-- Delad resultatremsa -->
   {#if match}
-    <ResultatRemsa {match} {profil} {lagAlla} />
-    <div class="remstext">Resultat &amp; målgörare fylls i <b>en gång här</b> — samma värden matas in i story, inlägg och webbartikel.
-      <button class="minilank" on:click={uppdateraPreviews}>↻ Uppdatera förhandsvisningar</button></div>
+    <ResultatRemsa {match} {profil} {lagAlla} on:sparat={onResSparat} />
+    <div class="remstext">Resultat &amp; målgörare fylls i <b>en gång här</b> — samma värden matas in i story, inlägg och webbartikel (förhandsvisningarna uppdateras automatiskt).
+      <button class="minilank" on:click={uppdateraPreviews}>↻ Uppdatera nu</button></div>
   {/if}
 
   <!-- Steg 1: Innehåll -->
