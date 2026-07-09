@@ -1116,12 +1116,17 @@ class Api:
                     if url:
                         bild_urls[i] = url
         elif typ in ("event", "landskap", "blogg"):
-            # Samma R2-uppladdning som match för galleribilderna — men utan
-            # separat hero: event/landskap använder första bilden (bilder[0])
-            # som omslag/hero. Utan detta laddades bilderna ALDRIG upp; bara
-            # den lokala källsökvägen (t.ex. en Dropbox-sökväg) hamnade i
-            # brödtexten och sajten fick ingen läsbar bild.
+            # Samma R2-uppladdning som match: separat hero-bild (B4 — hero är
+            # nu skild från galleriet) + galleribilderna. Utan detta hamnade
+            # bara den lokala källsökvägen (t.ex. en Dropbox-sökväg) i
+            # frontmattern och sajten fick ingen läsbar bild.
             slug_preliminar = AX.slugga(data.get("titel", ""))
+            hero_kalla = data.get("heroKalla")
+            hero_namn = data.get("hero")
+            if hero_kalla and hero_namn and Path(hero_kalla).expanduser().exists():
+                url = self.innehall_synk.ladda_upp_bild(typ, slug_preliminar, hero_kalla, hero_namn)
+                if url:
+                    bild_urls["hero"] = url
             for i, f in enumerate(data.get("figurer") or [], 1):
                 kalla = f.get("bild") or f.get("src")
                 if kalla and Path(kalla).expanduser().exists():
