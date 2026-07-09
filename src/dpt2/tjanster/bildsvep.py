@@ -106,8 +106,16 @@ def _klient_eller_skapa(klient, logg):
     return claude.ny_klient()
 
 
+# B2: ton-val i Matchpublicering — styr formuleringen, inte fakta.
+TON_INSTR = {
+    "Neutral": "Håll en neutral, saklig ton.",
+    "Peppig": "Håll en peppig, energisk ton — men trovärdig, överdriv inte.",
+    "Kort": "Håll bildtexten kort och koncis — bara det viktigaste.",
+}
+
+
 def bygg_fraga(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
-               malskyttar="", arena="", datum="", liga=""):
+               malskyttar="", arena="", datum="", liga="", ton=""):
     """Bygger frågesträngen som skickas till Claude — en ren strängoperation,
     inget nätverksanrop. Utbruten ur generera() så UI:t kan visa EXAKT vad som
     kommer skickas (för godkännande) innan det skarpa, ~2 minuter långa
@@ -138,12 +146,14 @@ def bygg_fraga(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
     if kanda:
         fraga += ("\n\nKÄNDA MATCHFAKTA (redan verifierade av fotografen, "
                   "använd rakt av — sök inte efter dessa):\n" + "\n".join(kanda))
+    if ton and ton in TON_INSTR:
+        fraga += "\n\n" + TON_INSTR[ton]
     fraga += "\nSkriv Bildsvepet enligt formatet och svara med JSON."
     return fraga
 
 
 def generera(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
-             malskyttar="", arena="", datum="", liga="", logg=print, klient=None):
+             malskyttar="", arena="", datum="", liga="", ton="", logg=print, klient=None):
     """Returnerar {referat, bildsvep} eller None. matchinfo = matchrad/-sträng;
     övriga kwargs ger kontext/kända matchfakta (se bygg_fraga). Klienten
     injiceras i test."""
@@ -155,7 +165,8 @@ def generera(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
         return None
 
     fraga = bygg_fraga(matchinfo, sport=sport, hemma_farg=hemma_farg, resultat=resultat,
-                       mellan=mellan, malskyttar=malskyttar, arena=arena, datum=datum, liga=liga)
+                       mellan=mellan, malskyttar=malskyttar, arena=arena, datum=datum,
+                       liga=liga, ton=ton)
 
     logg("Hämtar matchfakta och skriver Bildsvepet via Claude (web search)…")
     data = claude.fraga_json(klient, SYSTEM, fraga,

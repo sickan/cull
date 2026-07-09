@@ -11,7 +11,7 @@
     listaMatcher, hamtaMatch, aktivMatch, sattAktivMatch, sportprofiler, listaLag,
     valjMapp, listaSomeBilder, thumbForBild,
     forhandsgranskaStory, publiceraLiveStory, publiceraKanal, nyTestPaketMapp,
-    publiceraInnehallNatet, listaMaterial, sparaMaterial,
+    publiceraInnehallNatet, listaMaterial, sparaMaterial, genereraBildsvep,
     listaMinneskort, exporteraSkyddade,
     pagangMatcher, sattPagangVisa, publiceraPagangMatcher,
   } from '../lib/api.js'
@@ -174,6 +174,31 @@
     if (el) setTimeout(() => { el.focus(); el.selectionStart = el.selectionEnd = s + tok.length }, 0)
   }
 
+  // B2: generera bildtexten med Claude (riktigt anrop via genereraBildsvep →
+  // backend bildsvep.generera). Ton + kända matchfakta (resultat/mellan/
+  // målskyttar/arena/datum/liga) matas in i prompten. ~2 min i skarpt läge.
+  const TONER = ['Neutral', 'Peppig', 'Kort']
+  let ton = 'Neutral'
+  let genererar = false
+  let genFel = ''
+  async function genereraCaption() {
+    if (!match || genererar) return
+    genererar = true; genFel = ''
+    const matchinfo = `${match.lag_hemma} – ${match.lag_borta}` + (resNu.resultat ? ` ${resNu.resultat}` : '')
+    const fakta = {
+      resultat: resNu.resultat, mellan: resNu.mellan, malskyttar: resNu.malskyttar,
+      arena: match.arena || '', datum: match.datum || '', liga: match.liga || '', ton,
+    }
+    try {
+      const r = await genereraBildsvep(matchinfo, match.sport || '', '', fakta)
+      if (r?.ok && r.bildsvep) caption = r.bildsvep
+      else genFel = r?.fel || 'Kunde inte generera texten.'
+    } catch (e) {
+      genFel = 'Kunde inte generera texten.'
+    }
+    genererar = false
+  }
+
   // Länkar
   let galleriUrl = ''
   let hemsidaUrl = ''
@@ -193,6 +218,9 @@
     if (web) ut = ut.replace(/[#@][\p{L}\p{N}_]+/gu, '').replace(/ *\n/g, '\n').trim()
     return ut.replace(/[ \t]{2,}/g, ' ').trim()
   }
+  // B2: realtidsförhandsvisning kopplad till texten (social med @/#, webb utan).
+  $: capSocial = losText(caption)
+  $: capWebb = losText(caption, { web: true })
 
   // ── Steg 2: Skicka till (kanaler + beskärning) ──────────────────────────────
   // Format-koder = backendens (story_overlay.FORMAT_H). Etikett = kod med ':'.
@@ -487,11 +515,33 @@
     </div>
     <!-- Text -->
     <div class="kort">
-      <div class="korthuvud"><span class="caps">Text</span></div>
+      <div class="korthuvud">
+        <span class="caps">Text</span>
+        <div class="genrad">
+          <button class="genbtn" on:click={genereraCaption} disabled={!match || genererar} title="Skriv bildtexten med Claude">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="stjarna"><path d="M12 2.5l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/></svg>
+            {genererar ? 'Genererar…' : 'Generera med Claude'}
+          </button>
+          {#if caption && !genererar}<button class="genigen" on:click={genereraCaption} disabled={!match} title="Generera igen">↻ Igen</button>{/if}
+        </div>
+      </div>
       <textarea class="cap" rows="4" bind:this={capEl} bind:value={caption}></textarea>
       <div class="tokrad"><span class="tlbl">Infoga:</span>
         {#each TOKENS as t}<button class="tok" on:click={() => insertToken(t)}>{t}</button>{/each}</div>
+      <div class="tokrad"><span class="tlbl">Ton:</span>
+        {#each TONER as t}<button class="tonchip" class:on={ton === t} on:click={() => (ton = t)}>{t}</button>{/each}</div>
+      {#if genFel}<div class="genfel">{genFel}</div>{/if}
       <div class="hint">Sociala kanaler får @ och #. <b>Webben får samma text utan @/#</b> (rena namn, inga hashtags).</div>
+      <div class="prevgrid">
+        <div class="prevkol">
+          <div class="prevlbl">Förhandsvisning · sociala</div>
+          <div class="prevtext">{capSocial || '—'}</div>
+        </div>
+        <div class="prevkol">
+          <div class="prevlbl">Förhandsvisning · webb</div>
+          <div class="prevtext">{capWebb || '—'}</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -764,6 +814,24 @@
   .tlbl { font-size: 10.5px; color: var(--t-mut); margin-right: 2px; }
   .tok { font-size: 10.5px; background: var(--acc-soft); border: 1px dashed var(--acc-border); color: var(--acc); border-radius: 6px; padding: 3px 8px; }
   .hint { font-size: 10.5px; color: var(--t-help); margin-top: 10px; line-height: 1.45; }
+
+  /* B2: Generera med Claude + ton */
+  .genrad { display: flex; align-items: center; gap: 8px; }
+  .genbtn { display: inline-flex; align-items: center; gap: 6px; background: var(--acc); color: var(--ink);
+    border: 0; border-radius: 8px; padding: 7px 13px; font-size: 12px; font-weight: 700; }
+  .genbtn:disabled { opacity: 0.5; }
+  .genbtn .stjarna { width: 13px; height: 13px; }
+  .genigen { background: var(--kort); border: 1px solid var(--div); color: var(--t-mut);
+    border-radius: 8px; padding: 7px 11px; font-size: 12px; font-weight: 600; }
+  .genigen:hover { border-color: var(--acc); color: var(--acc); }
+  .tonchip { font-size: 11.5px; font-weight: 600; padding: 3px 11px; border-radius: 999px;
+    border: 1px solid var(--div); background: transparent; color: var(--t-mut); }
+  .tonchip.on { background: var(--acc); border-color: var(--acc); color: var(--ink); }
+  .genfel { font-size: 11.5px; color: var(--rose); font-weight: 600; margin-top: 9px; }
+  .prevgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .prevkol { border: 1px solid var(--div3); border-radius: 9px; background: var(--panel); padding: 10px 12px; min-width: 0; }
+  .prevlbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-caps); margin-bottom: 6px; }
+  .prevtext { font-size: 12px; color: var(--t-body); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
   .hint.c { text-align: center; }
 
   .lankkort .grid2 { margin-bottom: 14px; }

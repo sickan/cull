@@ -1,9 +1,10 @@
 <script>
   import { onMount } from 'svelte'
-  import { forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall, valjMapp, valjFil, thumbForBild, slugga } from '../lib/api.js'
+  import { forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall, valjMapp, valjFil, thumbForBild, slugga, listaInnehall, raderaInnehall } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { testMode } from '../lib/testlage.js'
   import BildvaljareFokuspunkt from '../lib/BildvaljareFokuspunkt.svelte'
+  import Hornmarkor from '../lib/Hornmarkor.svelte'
 
   // Tre match-oberoende webbtyper. Sport (matchreferat) och På gång har
   // flyttat till Matchpublicering — Innehåll äger nu bara Blog/Landskap/Event.
@@ -46,9 +47,79 @@
   $: galText = ctyp !== 'landskap' && ctyp !== 'event'
   $: aktSlug = slugga(akt.titel)
 
-  onMount(async () => { await forhandsgranska() })
+  let editorEl                        // editorns topp (scroll vid "öppna för redigering")
 
-  function bytTyp(id) { ctyp = id; forhandsgranska() }
+  onMount(async () => { lasUtkast(); await Promise.all([forhandsgranska(), laddaOversikt()]) })
+
+  function bytTyp(id) { ctyp = id; draftId = null; forhandsgranska() }
+
+  // ── B5: publicerat & utkast ────────────────────────────────────────────────
+  const TYP_NAMN = { blogg: 'Blogg', event: 'Människor', landskap: 'Landskap' }
+  const TYP_ORDNING = ['blogg', 'event', 'landskap']
+  const DRAFTS_KEY = 'dpt2.drafts.v1'
+  let overviewTab = 'publicerat'
+  let poster = []                     // publicerade poster (DB via listaInnehall)
+  let utkast = []                     // localStorage-utkast
+  let draftId = null                  // id på utkastet som redigeras nu
+  let sparTimer
+
+  async function laddaOversikt() {
+    // Publicerat = lokalt exporterat (publicerad) ELLER publicerat till sajten
+    // (synkad_tid satt) — nätpubliceringen sätter bara synkad_tid, inte publicerad.
+    const alla = await listaInnehall()
+    poster = (alla || []).filter((p) => (p.publicerad || p.synkad_tid) && TYP_NAMN[p.typ])
+  }
+  function lasUtkast() {
+    try { utkast = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '[]') } catch (_) { utkast = [] }
+  }
+  function skrivUtkast() { try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(utkast)) } catch (_) {} }
+
+  // Autospar: sparar aktuell editor löpande (debounce) som ett utkast i
+  // localStorage så man kan påbörja en post och återkomma senare (B5).
+  function autospar() {
+    if (!akt.titel) return            // spara inte tomma utkast
+    if (!draftId) draftId = 'd' + Date.now()
+    const d = { id: draftId, typ: ctyp, titel: akt.titel,
+                sparad: new Date().toISOString(), data: JSON.parse(JSON.stringify(akt)) }
+    utkast = [d, ...utkast.filter((u) => u.id !== draftId)]
+    skrivUtkast()
+  }
+  function schemalaggAutospar() { clearTimeout(sparTimer); sparTimer = setTimeout(autospar, 800) }
+
+  const grupperad = (lista) => TYP_ORDNING
+    .map((t) => ({ typ: t, namn: TYP_NAMN[t], rader: lista.filter((x) => x.typ === t) }))
+    .filter((g) => g.rader.length)
+  $: postGrupper = grupperad(poster)
+  $: utkastGrupper = grupperad(utkast)
+
+  const titelAv = (p) => p.frontmatter?.titel || p.titel || '(utan titel)'
+  function datumText(iso, prefix) {
+    if (!iso) return ''
+    try { return `${prefix} ${new Date(iso).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}` } catch (_) { return '' }
+  }
+
+  function _scrollTop() { setTimeout(() => editorEl?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0) }
+
+  // Klick på rad = öppna för redigering (ingen Ändra-knapp).
+  function laddaPost(p) {
+    const fm = p.frontmatter || {}
+    const bas = { titel: fm.titel || '', ingress: fm.ingress || '',
+                  hero: fm.hero || '', heroPosition: fm.heroPosition || 'center center', heroKalla: '', figurer: [] }
+    if (p.typ === 'event') cmsEvent = { ...cmsEvent, ...bas, kategori: fm.kategori || 'Porträtt', kund: fm.kund || '', datum: fm.datum || '', plats: fm.plats || '' }
+    else if (p.typ === 'landskap') cmsLandskap = { ...cmsLandskap, ...bas, plats: fm.plats || '', period: fm.period || '' }
+    else cmsBlogg = { ...cmsBlogg, ...bas, kategori: fm.kategori || '', datum: fm.datum || '', body: fm.body || '', platser: [] }
+    ctyp = p.typ; draftId = null
+    forhandsgranska(); _scrollTop()
+  }
+  function laddaUtkast(u) {
+    if (u.typ === 'event') cmsEvent = { ...cmsEvent, ...u.data }
+    else if (u.typ === 'landskap') cmsLandskap = { ...cmsLandskap, ...u.data }
+    else cmsBlogg = { ...cmsBlogg, ...u.data }
+    ctyp = u.typ; draftId = u.id
+    forhandsgranska(); _scrollTop()
+  }
+  async function raderaPost(p) { await raderaInnehall(p.id); await laddaOversikt() }
+  function raderaUtkast(id) { utkast = utkast.filter((u) => u.id !== id); skrivUtkast(); if (draftId === id) draftId = null }
 
   // Miniatyrerna (data-URI) bor på figur-objektet som `thumb` men skickas
   // ALDRIG till backend — bara den lokala källsökvägen (`bild`) exporteras.
@@ -62,6 +133,7 @@
   async function forhandsgranska() {
     const r = await forhandsgranskaInnehall(data())
     md = r?.md || ''
+    schemalaggAutospar()
   }
 
   function pinga() { cmsEvent = cmsEvent; cmsLandskap = cmsLandskap; cmsBlogg = cmsBlogg }
@@ -117,8 +189,13 @@
     synkar = false
     synkad = !!r?.ok
     synkadPath = r?.path || ''
-    if (synkad) { publiceradId = r.id; setTimeout(() => (synkad = false), 2600) }
-    else synkFel = r?.fel || 'Kunde inte publicera — kontrollera anslutningen.'
+    if (synkad) {
+      publiceradId = r.id
+      // B5: publicerat → ta bort motsvarande utkast + uppdatera översikten.
+      if (draftId) { raderaUtkast(draftId); draftId = null }
+      if (!$testMode) await laddaOversikt()
+      setTimeout(() => (synkad = false), 2600)
+    } else synkFel = r?.fel || 'Kunde inte publicera — kontrollera anslutningen.'
   }
 
   async function kollaStatus() {
@@ -143,7 +220,62 @@
     <span class="sub">Skapa innehåll till hemsidan — frontmatter och bilder blir en färdig .md-fil</span>
   </header>
 
-  <div class="cmstabs">
+  {#if poster.length || utkast.length}
+    <div class="kort oversikt">
+      <div class="ovhuvud">
+        <span class="caps nomarg">Publicerat &amp; utkast</span>
+        <div class="ovtabs">
+          <button class:on={overviewTab === 'publicerat'} on:click={() => (overviewTab = 'publicerat')}>Publicerat {#if poster.length}<span class="ovn">{poster.length}</span>{/if}</button>
+          <button class:on={overviewTab === 'utkast'} on:click={() => (overviewTab = 'utkast')}>Utkast {#if utkast.length}<span class="ovn ac">{utkast.length}</span>{/if}</button>
+        </div>
+      </div>
+
+      {#if overviewTab === 'publicerat'}
+        {#if postGrupper.length}
+          {#each postGrupper as g}
+            <div class="ovgrupp">
+              <div class="ovtyp">{g.namn} <span class="ovtypn">· {g.rader.length}</span></div>
+              {#each g.rader as p (p.id)}
+                <div class="ovrad" role="button" tabindex="0" title="Klicka för att ändra"
+                  on:click={() => laddaPost(p)} on:keydown={(e) => e.key === 'Enter' && laddaPost(p)}>
+                  <Hornmarkor farg="#6FB35A" r={10} titel="Publicerad" />
+                  <div class="ovthumb"></div>
+                  <div class="ovmitt"><div class="ovtitel">{titelAv(p)}</div><div class="ovmeta">{datumText(p.synkad_tid || p.frontmatter?.datum, 'Publicerad')}</div></div>
+                  <button class="ovx" class:armerad={$armerad === `pub-${p.id}`}
+                    title={$armerad === `pub-${p.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                    on:click|stopPropagation={taBortKlick(`pub-${p.id}`, () => raderaPost(p))}>
+                    {#if $armerad === `pub-${p.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {/each}
+        {:else}<div class="ovtom">Inget publicerat ännu.</div>{/if}
+      {:else}
+        {#if utkastGrupper.length}
+          {#each utkastGrupper as g}
+            <div class="ovgrupp">
+              <div class="ovtyp">{g.namn} <span class="ovtypn">· {g.rader.length}</span></div>
+              {#each g.rader as u (u.id)}
+                <div class="ovrad" role="button" tabindex="0" title="Klicka för att fortsätta"
+                  on:click={() => laddaUtkast(u)} on:keydown={(e) => e.key === 'Enter' && laddaUtkast(u)}>
+                  <div class="ovthumb"></div>
+                  <div class="ovmitt"><div class="ovtitel">{u.titel || '(utan titel)'}</div><div class="ovmeta">{datumText(u.sparad, 'Sparad')}</div></div>
+                  <button class="ovx" class:armerad={$armerad === `utk-${u.id}`}
+                    title={$armerad === `utk-${u.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                    on:click|stopPropagation={taBortKlick(`utk-${u.id}`, () => raderaUtkast(u.id))}>
+                    {#if $armerad === `utk-${u.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {/each}
+        {:else}<div class="ovtom">Inga sparade utkast.</div>{/if}
+      {/if}
+    </div>
+  {/if}
+
+  <div class="cmstabs" bind:this={editorEl}>
     {#each CTYPER as ct}
       <button class="cmstab" class:on={ctyp === ct.id}
         style="--tf:{ct.farg}" on:click={() => bytTyp(ct.id)}>
@@ -301,6 +433,34 @@
   .cmstab.on { background: var(--tf); color: #fff; box-shadow: var(--skugga); }
   .cmstab:hover:not(.on) { color: var(--tf); background: color-mix(in srgb, var(--tf) 10%, transparent); }
   .cmssub { font-size: 11.5px; color: var(--t-mut); margin: 8px 2px 0; }
+
+  /* B5: Publicerat & utkast-översikt */
+  .oversikt { margin-top: 16px; }
+  .ovhuvud { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .ovtabs { display: flex; gap: 3px; background: var(--div3); border-radius: 9px; padding: 3px; }
+  .ovtabs button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border: 0; border-radius: 7px;
+    background: transparent; color: var(--t-mut); font-size: 12px; font-weight: 600; }
+  .ovtabs button.on { background: var(--kort); color: var(--t-head); box-shadow: var(--skugga); }
+  .ovn { font-size: 10px; font-weight: 700; color: var(--t-mut); background: var(--div); border-radius: 999px; padding: 1px 6px; }
+  .ovn.ac { color: var(--ink); background: var(--acc); }
+  .ovgrupp { margin-top: 12px; }
+  .ovgrupp:first-of-type { margin-top: 0; }
+  .ovtyp { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-caps); margin: 0 0 7px 2px; }
+  .ovtypn { color: var(--t-help); }
+  .ovrad { position: relative; overflow: hidden; display: flex; align-items: center; gap: 11px; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--div3); border-radius: 10px; padding: 9px 12px; margin-bottom: 7px; }
+  .ovrad:hover { border-color: var(--acc); }
+  .ovthumb { width: 42px; height: 42px; flex: none; border-radius: 7px;
+    background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 6px, var(--kort) 6px, var(--kort) 12px); }
+  .ovmitt { flex: 1; min-width: 0; }
+  .ovtitel { font-size: 13px; font-weight: 600; color: var(--t-head); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ovmeta { font-size: 11px; color: var(--t-mut); margin-top: 2px; }
+  .ovx { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px;
+    border: 1px solid var(--div); background: var(--kort); color: var(--t-mut); }
+  .ovx svg { width: 14px; height: 14px; }
+  .ovx:hover { border-color: #C0453E; color: #C0453E; }
+  .ovx.armerad { width: auto; padding: 0 10px; background: #C0453E; border-color: #C0453E; color: #fff; font-size: 11px; font-weight: 600; }
+  .ovtom { font-size: 12.5px; color: var(--t-help); padding: 4px 2px; }
 
   .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r); box-shadow: var(--skugga); padding: 16px; margin-top: 14px; }
   .caps { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-caps); margin-bottom: 12px; }
