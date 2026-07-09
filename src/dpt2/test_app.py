@@ -474,13 +474,48 @@ class TestApi(unittest.TestCase):
         self.assertNotIn("DSC_0001.NEF", r["md"])
         self.assertIn('bilder:\n  - "/sport/a-b/1.jpg"', r["md"])
 
-    def test_innehall_md_landskap_behaller_gamla_bildvagen(self):
-        # Landskap/Event rörs inte av sport-fixen — samma /bilder/-fallback
-        # som tidigare (ingen bilder:-frontmatter-array skrivs).
-        r = self.api.forhandsgranska_innehall({
-            "typ": "landskap", "titel": "Grönt", "figurer": [{}]})
-        self.assertIn("/bilder/gront/1.jpg", r["md"])
-        self.assertNotIn("bilder:", r["md"])
+    def test_innehall_md_landskap_event_skriver_bilder_array(self):
+        # Landskap & Event skriver nu (precis som match) en `bilder:`-
+        # frontmatter-array — det är den ENDA bildkällan sajtens landskap/
+        # event-sidor renderar (hero = bilder[0], galleri = resten). Utan den
+        # blev korten/detaljsidorna bildlösa. Referensen är den kanoniska
+        # /bilder/{slug}/{n}.jpg (eller R2-URL vid nätpublicering), ALDRIG den
+        # lokala källfilen.
+        for typ in ("landskap", "event"):
+            r = self.api.forhandsgranska_innehall({
+                "typ": typ, "titel": "Grönt",
+                "figurer": [{"bild": "/Users/stig/Desktop/DSC_0001.NEF"}]})
+            self.assertIn("/bilder/gront/1.jpg", r["md"])
+            self.assertNotIn("DSC_0001.NEF", r["md"])
+            self.assertIn('bilder:\n  - "/bilder/gront/1.jpg"', r["md"])
+
+    def test_publicera_natet_event_laddar_upp_bilder_till_r2(self):
+        # Regression: event-publicering laddade aldrig upp galleribilderna till
+        # R2 och skrev ingen bilder:-array → sajtens kort/detaljsida blev
+        # bildlösa (den lokala källsökvägen hamnade i brödtexten i stället).
+        # Nu laddas varje figur upp och frontmatterns bilder[] pekar på R2.
+        import os, tempfile
+        from unittest import mock
+        d = tempfile.mkdtemp()
+        b1, b2 = os.path.join(d, "a.jpg"), os.path.join(d, "b.jpg")
+        for p in (b1, b2):
+            with open(p, "wb") as fh:
+                fh.write(b"x")
+        fejk = mock.MagicMock()
+        fejk.ladda_upp_bild.side_effect = \
+            lambda typ, slug, kalla, namn, **kw: f"https://r2.example/{typ}/{slug}/{namn}"
+        fejk.publicera.return_value = {"ok": True}
+        self.api.innehall_synk = fejk
+        r = self.api.publicera_innehall_natet({
+            "typ": "event", "titel": "Maya i Lund", "kategori": "Porträtt",
+            "kund": "Maya", "figurer": [{"bild": b1}, {"bild": b2}]})
+        self.assertTrue(r["ok"])
+        self.assertEqual(fejk.ladda_upp_bild.call_count, 2)      # båda uppladdade
+        _, kwargs = fejk.publicera.call_args
+        self.assertEqual(kwargs["frontmatter"]["bilder"],
+                         ["https://r2.example/event/maya-i-lund/1.jpg",
+                          "https://r2.example/event/maya-i-lund/2.jpg"])
+        self.assertNotIn(b1, kwargs["body"])                    # ingen lokal läcka
 
 
     def test_modell_bibliotek_och_vaxling(self):

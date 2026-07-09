@@ -1115,6 +1115,21 @@ class Api:
                         max_bredd=1600, kvalitet=75)
                     if url:
                         bild_urls[i] = url
+        elif typ in ("event", "landskap", "blogg"):
+            # Samma R2-uppladdning som match för galleribilderna — men utan
+            # separat hero: event/landskap använder första bilden (bilder[0])
+            # som omslag/hero. Utan detta laddades bilderna ALDRIG upp; bara
+            # den lokala källsökvägen (t.ex. en Dropbox-sökväg) hamnade i
+            # brödtexten och sajten fick ingen läsbar bild.
+            slug_preliminar = AX.slugga(data.get("titel", ""))
+            for i, f in enumerate(data.get("figurer") or [], 1):
+                kalla = f.get("bild") or f.get("src")
+                if kalla and Path(kalla).expanduser().exists():
+                    url = self.innehall_synk.ladda_upp_bild(
+                        typ, slug_preliminar, kalla, f"{i}.jpg",
+                        max_bredd=1600, kvalitet=75)
+                    if url:
+                        bild_urls[i] = url
         fm, body, slug, _md = _innehall_md(data, bild_urls=bild_urls)
         iid = store.spara_innehall(
             self.conn, typ=typ, match_id=data.get("match_id") or None,
@@ -1425,14 +1440,20 @@ def _innehall_md(data, bild_urls=None):
                     "alt": f.get("alt") or "", "bildtext": f.get("bildtext") or ""}
                    for i, f in enumerate(data.get("figurer") or [], 1)]
     else:
-        figurer = [{"bild": f.get("bild") or f"/bilder/{bildslug}/{i}.jpg",
+        # Referensen ska ALLTID vara R2-URL:en (vid nätpublicering) eller den
+        # kanoniska /bilder/{slug}/{n}.jpg (lokal export) — ALDRIG den lokala
+        # källfilen (f["bild"]), precis som match-grenen ovan. Att luta på
+        # f["bild"] var buggen som skrev lokala Dropbox-sökvägar rakt in i den
+        # publicerade brödtexten så sajten aldrig fick en läsbar bild.
+        figurer = [{"bild": bild_urls.get(i) or f"/bilder/{bildslug}/{i}.jpg",
                     "alt": (f.get("alt") or "") if gal_text else "",
                     "bildtext": (f.get("bildtext") or "") if gal_text else ""}
                    for i, f in enumerate(data.get("figurer") or [], 1)]
-    if typ == "match" and figurer:
-        # sport.astro (listsidan) läser frontmatterns `bilder:`-array direkt
-        # för hero-stripens förhandsvisning — separat från figur-blocken i
-        # brödtexten (som matchsidans egen [slug].astro renderar via <Content/>).
+    if typ in ("match", "event", "landskap") and figurer:
+        # sport/portratt/landskap.astro läser frontmatterns `bilder:`-array
+        # direkt (hero = bilder[0], galleriet = resten). För event & landskap
+        # är detta ENDA bildkällan sajten renderar (brödtexten visas inte som
+        # galleri där) — utan den blir korten och detaljsidorna bildlösa.
         fm["bilder"] = [f["bild"] for f in figurer] or None
     figur_md = AX.figurer_markdown(figurer)
     delar = [(data.get("body") or "").rstrip(), figur_md]
