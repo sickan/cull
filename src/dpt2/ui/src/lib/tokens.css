@@ -6,8 +6,10 @@
   --div: #e6ddca;
   --div3: #efe8d8;
   --ink: #1c1a15;
-  --t-head: #20242a;
+  --t-head: #23201a;
+  --t-body: rgba(28, 26, 21, 0.82);   /* brödtext (A1) */
   --t-mut: #6b6456;
+  --t-label: rgba(28, 26, 21, 0.64);  /* fältetiketter (A1) */
   --t-help: #908872;
   --t-caps: #a99f86;
   --acc: #c9871f;          /* Sol — appens accent (v2.1.0) */
@@ -16,7 +18,7 @@
   --sol: #c9871f;
   --hav: #2f7cb0;          /* Sport-kategorins färg (matchbrickor m.m.) */
   --rose: #c9657f;
-  --ok: #2f9e6e;
+  --ok: #4e8a3e;
   --varn: #c98a2f;
   --skugga: 0 1px 2px rgba(40, 34, 20, 0.06), 0 6px 18px rgba(40, 34, 20, 0.06);
   --r: 12px;
@@ -30,16 +32,22 @@
   --div: #232c36;
   --div3: #1c242c;
   --ink: #f2efe8;
-  --t-head: #eef2f6;
-  --t-mut: #97a3b0;
-  --t-help: #6f7c89;
-  --t-caps: #5c6873;
+  /* A1 · kontrastöversyn — nedtonad text som alfa av rubrikvitt (WCAG AA-golv
+     även på inaktiva/nedtonade poster). Nedtona ALDRIG genom att stapla
+     opacity ovanpå dessa — dämpa ram/accent istället. */
+  --t-head: #f3f5f7;
+  --t-body: rgba(243, 245, 247, 0.84);   /* brödtext */
+  --t-label: rgba(243, 245, 247, 0.66);  /* fältetiketter */
+  --t-mut: rgba(243, 245, 247, 0.62);
+  --t-help: rgba(243, 245, 247, 0.52);
+  --t-caps: rgba(243, 245, 247, 0.55);
   --acc: #f0b45a;
   --acc-soft: rgba(240, 180, 90, 0.15);
   --acc-border: rgba(240, 180, 90, 0.42);
   --sol: #f0b45a;
   --hav: #8fd0e8;
   --rose: #e59cb0;
+  --ok: #6fb35a;
   --skugga: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 

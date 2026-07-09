@@ -3,6 +3,8 @@
   import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher, listaLag } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { grenFarg } from '../lib/gren.js'
+  import Hornmarkor from '../lib/Hornmarkor.svelte'
+  import { synkFarg, jobbSynkStatus } from '../lib/synk.js'
 
   const dispatch = createEventDispatcher()
 
@@ -335,12 +337,12 @@
                 {#if j.all_day}
                   <div class="rad heldag" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
                     on:click={() => oppnaRedigering(j)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j)}>
+                    <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
                     <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
                     {#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}
                     <span class="rtitel">{j.title}</span>
                     <span class="hlbl">Heldag</span>
                     {#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}
-                    <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
                     <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
                       <option value="">Okategoriserat</option>
                       {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
@@ -356,6 +358,7 @@
                 {:else}
                   <div class="rad" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
                     on:click={() => oppnaRedigering(j)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j)}>
+                    <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
                     <div class="datum scd">
                       <div class="d" style="color:{katFarg(j.category)}">{del(j.start_at)[2] || '–'}</div>
                       <div class="wd">{veckodag(j.start_at)}</div>
@@ -364,7 +367,6 @@
                       <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}{#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}</div>
                       <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
                       <div class="undermeta">
-                        <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
                         <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
                           <option value="">Okategoriserat</option>
                           {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
@@ -498,7 +500,11 @@
     letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px;
     background: var(--acc); color: #fff; vertical-align: middle; }
   .rad.idag { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-soft), var(--skugga); }
-  .rad.forfluten, .tlkort.forfluten { opacity: 0.5; }
+  /* A1 · passerade poster: nedtona accenten (datum/heldags-etikett) + ta bort
+     skuggan — men stapla ALDRIG opacity på texten (den håller AA via tokens). */
+  .rad.forfluten, .tlkort.forfluten { box-shadow: none; }
+  .rad.forfluten .datum .d, .rad.forfluten .hrange { opacity: 0.62; }
+  .rad.forfluten { border-left-color: var(--div) !important; }
   .chips { display: flex; gap: 7px; flex-wrap: wrap; }
   .chip { padding: 5px 13px; border: 1px solid var(--div); border-radius: 999px;
     background: var(--kort); color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
@@ -516,7 +522,7 @@
   .manad { font-weight: 700; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--t-mut); margin: 18px 2px 12px; }
   .lista { display: flex; flex-direction: column; gap: 10px; }
-  .rad { display: flex; align-items: center; gap: 16px; background: var(--kort);
+  .rad { position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px; background: var(--kort);
     border: 1px solid var(--div); border-left: 3px solid var(--acc); border-radius: var(--r);
     padding: 12px 16px; box-shadow: var(--skugga); cursor: pointer; }
   .rad:hover { background: var(--div3); }
@@ -543,10 +549,7 @@
   .rad.heldag .rtitel { flex: none; }
   .rad.heldag .synkfel { flex-basis: 100%; }
 
-  .synk { font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
-    background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); flex: none; white-space: nowrap; }
-  .synk.vantar { background: color-mix(in srgb, var(--varn) 16%, transparent); color: var(--varn); }
-  .synk.utkast { background: var(--div3); color: var(--t-mut); }
+  /* A2: den stora synk-etiketten ersatt av <Hornmarkor> (hörnbåge, färgen bär signalen). */
   .katsel { padding: 4px 8px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
     color: var(--t-mut); font-size: 11.5px; font-family: inherit; }
   .synkbtn { border-color: var(--acc); color: var(--acc); font-weight: 600; }

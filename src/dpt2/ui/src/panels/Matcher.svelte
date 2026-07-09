@@ -8,6 +8,8 @@
   } from '../lib/api.js'
   import Combobox from '../lib/Combobox.svelte'
   import Lagbricka from '../lib/Lagbricka.svelte'
+  import Hornmarkor from '../lib/Hornmarkor.svelte'
+  import { synkFarg } from '../lib/synk.js'
   import { grenFarg, grenEtikett } from '../lib/gren.js'
 
   const dispatch = createEventDispatcher()
@@ -87,7 +89,10 @@
   const norm = (s) => (s || '').toLowerCase()
   const matchesSok = (m, q) => !q || [m.lag_hemma, m.lag_borta, m.liga, m.arena].some((v) => norm(v).includes(q))
 
-  $: sportFiltrerade = matcher.filter((m) => sportFilter === 'alla' || m.sport === sportFilter)
+  // Nya utkast (id 'ny-…') saknar datum/sport/lag och skulle annars filtreras
+  // bort av sport-, säsongs- och sökfiltren → "+ Ny match" verkar göra inget.
+  // De passerar därför alltid och sorteras först (se sortDatum).
+  $: sportFiltrerade = matcher.filter((m) => arNy(m) || sportFilter === 'alla' || m.sport === sportFilter)
   $: matchArAlla = [...new Set(matcher.map((m) => (m.datum || '').slice(0, 4)).filter(Boolean))]
   $: aktivAr = matchArAlla.includes(NU_AR) ? NU_AR : ([...matchArAlla].sort().at(-1) || NU_AR)
   $: arkivAr = matchArAlla.filter((a) => a !== aktivAr).sort((a, b) => (a < b ? 1 : -1))
@@ -97,8 +102,8 @@
 
   $: matchSearchQ = norm(matchSearch)
   $: sasongFiltrerade = sportFiltrerade
-    .filter((m) => (m.datum || '').slice(0, 4) === sasong)
-    .filter((m) => matchesSok(m, matchSearchQ))
+    .filter((m) => arNy(m) || (m.datum || '').slice(0, 4) === sasong)
+    .filter((m) => arNy(m) || matchesSok(m, matchSearchQ))
 
   $: { matchSearch; matchSeasonSel; matchShowN = 12 }   // nollställ vid sök/säsongsbyte
 
@@ -168,7 +173,8 @@
 
   // Matcher utan datum sorteras sist (nyckel '9999-99-99' vinner aldrig jämförelsen).
   function sortDatum(lista) {
-    const nyckel = (x) => (x.datum && x.datum.length === 10) ? x.datum : '9999-99-99'
+    // Utkast ('ny-…') först så de alltid ryms i pagineringens första sida.
+    const nyckel = (x) => arNy(x) ? '0000-00-00' : (x.datum && x.datum.length === 10) ? x.datum : '9999-99-99'
     return [...lista].sort((a, b) => (nyckel(a) < nyckel(b) ? -1 : nyckel(a) > nyckel(b) ? 1 : 0))
   }
   function grupperaDatum(lista) {
@@ -460,6 +466,8 @@
             {#each g.matcher as m (m.id)}
               <div class="match"
                 style="border-left:3px {m.hem_gren ? 'solid' : 'dashed'} {grenFarg(m.hem_gren)}">
+                <Hornmarkor farg={m.synk_jobb_id ? synkFarg('synkad') : ''} r={12}
+                  titel={m.synk_jobb_id ? 'Synkad med Google Kalender' : ''} />
                 <div class="rad" role="button" tabindex="0" on:click={() => toggla(m)}
                   on:keydown={(e) => e.key === 'Enter' && toggla(m)}>
                   <div class="datum scd">
@@ -478,12 +486,6 @@
                     <span class="status res scd">{m.resultat}</span>
                   {:else}
                     <span class="status" class:klar={m.trupp_n > 0}>{m.trupp_n > 0 ? 'Roster klar' : 'Planera'}</span>
-                  {/if}
-                  {#if !arNy(m)}
-                    <button class="synkpill" class:pa={!!m.synk_jobb_id} title="Google Calendar-synk"
-                      on:click|stopPropagation={() => togglaSynk(m)}>
-                      <span class="prick"></span>{m.synk_jobb_id ? 'Synkad' : 'Ej synkad'}
-                    </button>
                   {/if}
                   <button class="papperskorg" title="Ta bort match"
                     on:click|stopPropagation={() => (bekraftaId = m.id)}>
@@ -775,7 +777,7 @@
     color: var(--t-mut); background: var(--div3); padding: 3px 9px; border-radius: 6px; flex: none; }
 
   .matcher { display: flex; flex-direction: column; gap: 10px; }
-  .match { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
+  .match { position: relative; background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
     box-shadow: var(--skugga); overflow: hidden; }
   .rad { display: flex; align-items: center; gap: 14px; width: 100%; padding: 8px 12px; border: 0;
     background: transparent; text-align: left; cursor: pointer; }
@@ -792,13 +794,8 @@
   .status { font-size: 13px; font-weight: 600; color: var(--t-mut); flex: none; }
   .status.klar { color: var(--ok); }
   .status.res { font-size: 20px; font-weight: 700; color: var(--t-head); }
-  .synkpill { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 5px 11px;
-    border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
-    font-size: 11.5px; font-weight: 600; color: var(--t-mut); }
-  .synkpill .prick { width: 6px; height: 6px; border-radius: 50%; background: var(--t-help); flex: none; }
-  .synkpill.pa { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--div)); }
-  .synkpill.pa .prick { background: var(--ok); }
-  .synkpill:hover { border-color: var(--acc); }
+  /* A2: kalendersynk visas nu som <Hornmarkor> (hörnbåge) — synkpillen borttagen.
+     Synk togglas i den utfällda editorn ("Lägg i kalender") + Kalender-chippet. */
   .navchips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
   .navchip { display: inline-flex; align-items: center; padding: 6px 12px;
     border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
