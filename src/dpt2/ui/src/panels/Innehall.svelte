@@ -3,6 +3,7 @@
   import { forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall, valjMapp, valjFil, thumbForBild, slugga } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { testMode } from '../lib/testlage.js'
+  import BildvaljareFokuspunkt from '../lib/BildvaljareFokuspunkt.svelte'
 
   // Tre match-oberoende webbtyper. Sport (matchreferat) och På gång har
   // flyttat till Matchpublicering — Innehåll äger nu bara Blog/Landskap/Event.
@@ -14,11 +15,14 @@
   const EVENT_KAT = ['Porträtt', 'Bröllop', 'Student', 'Företag', 'Mode', 'Övrigt']
 
   let ctyp = 'blogg'
+  // A3/B4: hero-bild med fokus (21:9) på alla tre typer. hero=filnamn (frontmatter),
+  // heroPosition=object-position ("x% y%"), heroKalla=lokal källfil (export, aldrig publik).
   let cmsEvent = { kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '',
-    galleri: '', ingress: '', figurer: [] }
-  let cmsLandskap = { titel: '', plats: '', period: '', ingress: '', figurer: [] }
+    galleri: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
+  let cmsLandskap = { titel: '', plats: '', period: '', ingress: '',
+    hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
   let cmsBlogg = { kategori: '', titel: '', datum: '', ingress: '', body: '',
-    platser: [], figurer: [] }
+    hero: '', heroPosition: 'center center', heroKalla: '', platser: [], figurer: [] }
   let md = ''
   let exportDirs = { event: '', landskap: '', blogg: '' }
   let sparad = false
@@ -55,6 +59,9 @@
   }
 
   function pinga() { cmsEvent = cmsEvent; cmsLandskap = cmsLandskap; cmsBlogg = cmsBlogg }
+  // Hero-bild (fokuskomponenten binder in hero/heroPosition/heroKalla i akt) —
+  // uppdatera .md-förhandsvisningen när bild eller fokuspunkt ändras.
+  function heroAndrad() { pinga(); forhandsgranska() }
   function laggBild() { akt.figurer = [...akt.figurer, { bild: '', alt: '', bildtext: '', src: '' }]; pinga(); forhandsgranska() }
   function taBild(i) {
     akt.figurer = akt.figurer.filter((_, j) => j !== i)
@@ -204,6 +211,15 @@
   {/if}
 
   <div class="kort">
+    <div class="caps">Hero-bild <span class="capshint">· 21:9, fokuspunkten styr beskärningen på sajten</span></div>
+    {#key ctyp}
+      <BildvaljareFokuspunkt visaFormatval={false}
+        bind:hero={akt.hero} bind:heroPosition={akt.heroPosition} bind:heroKalla={akt.heroKalla}
+        on:change={heroAndrad} />
+    {/key}
+  </div>
+
+  <div class="kort">
     <div class="galhuvud">
       <span class="caps nomarg">Galleri</span>
     </div>
@@ -278,6 +294,7 @@
 
   .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r); box-shadow: var(--skugga); padding: 16px; margin-top: 14px; }
   .caps { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-caps); margin-bottom: 12px; }
+  .capshint { font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--t-help); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .mt { margin-top: 12px; }
   .f { display: flex; flex-direction: column; gap: 5px; }

@@ -17,6 +17,7 @@
   export let hero = ''                      // filnamn, skrivs till frontmatter
   export let heroPosition = 'center center' // CSS object-position, sparas som heroPosition
   export let heroKalla = ''                 // lokal källfil (för export-kopiering, aldrig publik)
+  export let visaFormatval = true           // false → lås till 21:9 (B4: Innehålls-hero, ingen formatväxlare)
 
   const dispatch = createEventDispatcher()
 
@@ -24,6 +25,7 @@
   let laddar = false
   let fel = ''
   let format = 'hero'                        // hero | kort | story — bara förhandsvisning
+  $: if (!visaFormatval) format = 'hero'     // låst 21:9-vy
   let imgRatio = 16 / 9                      // bildens riktiga bredd/höjd (sätts vid inläsning)
   let drar = false
   let boxEl
@@ -99,7 +101,7 @@
       {laddar ? 'Laddar…' : dataUri ? 'Byt bild' : 'Välj bild'}
     </button>
     {#if hero}<span class="filnamn mono">{hero}</span>{/if}
-    {#if dataUri}
+    {#if dataUri && visaFormatval}
       <div class="chips">
         <button type="button" class:on={format === 'hero'} on:click={() => (format = 'hero')}>Webb-hero 21:9</button>
         <button type="button" class:on={format === 'kort'} on:click={() => (format = 'kort')}>Kort 16:9</button>

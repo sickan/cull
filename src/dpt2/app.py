@@ -1379,6 +1379,9 @@ def _innehall_md(data, bild_urls=None):
             "plats": data.get("plats") or None,
             "galleri": data.get("galleri") or None,
             "ingress": data.get("ingress") or None,
+            # A3/B4: hero-bild + fokus (object-position) — samma kontrakt som match.
+            "hero": bild_urls.get("hero") or data.get("hero") or None,
+            "heroPosition": data.get("heroPosition") or None,
             "status": data.get("status") or None,
         }
     elif typ == "landskap":
@@ -1388,6 +1391,8 @@ def _innehall_md(data, bild_urls=None):
             "plats": data.get("plats") or None,
             "period": data.get("period") or None,
             "ingress": data.get("ingress") or None,
+            "hero": bild_urls.get("hero") or data.get("hero") or None,
+            "heroPosition": data.get("heroPosition") or None,
         }
     elif typ == "blogg":
         fm = {
@@ -1396,6 +1401,8 @@ def _innehall_md(data, bild_urls=None):
             "titel": titel,
             "datum": data.get("datum") or None,
             "ingress": data.get("ingress") or None,
+            "hero": bild_urls.get("hero") or data.get("hero") or None,
+            "heroPosition": data.get("heroPosition") or None,
         }
         if data.get("datum"):
             slug = f"{data['datum']}-{slug}"            # blogg/{datum}-{slug}.md
