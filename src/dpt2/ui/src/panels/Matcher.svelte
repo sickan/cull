@@ -103,6 +103,14 @@
   // Nya utkast (id 'ny-…') saknar datum/sport/lag och skulle annars filtreras
   // bort av sport-, säsongs- och sökfiltren → "+ Ny match" verkar göra inget.
   // De passerar därför alltid och sorteras först (se sortDatum).
+  //
+  // Detsamma måste gälla en SPARAD match utan datum. Säsongsfiltret jämför
+  // datum.slice(0,4) mot årtalet, och '' matchar inget år — så matchen skapades
+  // men försvann ur listan i samma sekund den bytte utkast-id mot ett riktigt.
+  // Symptomet: "listan laddar om och inget har skapats". Den ska synas, så att
+  // man kan sätta datum eller ta bort den.
+  const utanDatum = (m) => !(m.datum || '').trim()
+  const alltidSynlig = (m) => arNy(m) || utanDatum(m)
   $: sportFiltrerade = matcher.filter((m) => arNy(m) || sportFilter === 'alla' || m.sport === sportFilter)
   $: matchArAlla = [...new Set(matcher.map((m) => (m.datum || '').slice(0, 4)).filter(Boolean))]
   $: aktivAr = matchArAlla.includes(NU_AR) ? NU_AR : ([...matchArAlla].sort().at(-1) || NU_AR)
@@ -113,8 +121,8 @@
 
   $: matchSearchQ = norm(matchSearch)
   $: sasongFiltrerade = sportFiltrerade
-    .filter((m) => arNy(m) || (m.datum || '').slice(0, 4) === sasong)
-    .filter((m) => arNy(m) || matchesSok(m, matchSearchQ))
+    .filter((m) => alltidSynlig(m) || (m.datum || '').slice(0, 4) === sasong)
+    .filter((m) => alltidSynlig(m) || matchesSok(m, matchSearchQ))
 
   $: { matchSearch; matchSeasonSel; matchShowN = 12 }   // nollställ vid sök/säsongsbyte
 
@@ -184,8 +192,9 @@
 
   // Matcher utan datum sorteras sist (nyckel '9999-99-99' vinner aldrig jämförelsen).
   function sortDatum(lista) {
-    // Utkast ('ny-…') först så de alltid ryms i pagineringens första sida.
-    const nyckel = (x) => arNy(x) ? '0000-00-00' : (x.datum && x.datum.length === 10) ? x.datum : '9999-99-99'
+    // Utkast ('ny-…') OCH sparade matcher utan datum först — de ryms alltid i
+    // pagineringens första sida och är det man behöver åtgärda.
+    const nyckel = (x) => alltidSynlig(x) ? '0000-00-00' : (x.datum && x.datum.length === 10) ? x.datum : '9999-99-99'
     return [...lista].sort((a, b) => (nyckel(a) < nyckel(b) ? -1 : nyckel(a) > nyckel(b) ? 1 : 0))
   }
   function grupperaDatum(lista) {
@@ -365,7 +374,16 @@
   async function spara() {
     const m = { ...utkast }
     if (typeof m.id === 'string' && m.id.startsWith('ny-')) delete m.id
-    await sparaMatch(m)
+    fel = ''
+    // Resultatet ignorerades tidigare: ett backend-fel blev "listan laddade om
+    // och inget hände", utan förklaring.
+    let r
+    try {
+      r = await sparaMatch(m)
+    } catch (e) {
+      fel = 'Kunde inte spara matchen.'; return
+    }
+    if (r && r.ok === false) { fel = r.fel || 'Kunde inte spara matchen.'; return }
     ;[matcher, lagAlla] = await Promise.all([listaMatcher(), listaLag()])
     oppen = null; utkast = null; lagForTavling = []
   }
