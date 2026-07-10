@@ -329,23 +329,6 @@ class TestApi(unittest.TestCase):
         self.api.radera_material(mid)
         self.assertEqual(self.api.lista_material(), [])
 
-    def test_forsok_igen_material_okant_id(self):
-        r = self.api.forsok_igen_material("finns-inte")
-        self.assertFalse(r["ok"])
-
-    def test_forsok_igen_material_fel_pa_live_material(self):
-        res = self.api.spara_material({"kind": "live", "status": "utkast", "moment": "Avspark"})
-        r = self.api.forsok_igen_material(res["id"])
-        self.assertFalse(r["ok"])
-
-    def test_forsok_igen_material_inga_felkanaler(self):
-        res = self.api.spara_material({
-            "kind": "some", "status": "publicerad", "channels": ["story"],
-            "ch_results": {"story": "ok"}})
-        r = self.api.forsok_igen_material(res["id"])
-        self.assertFalse(r["ok"])
-        self.assertIn("felkanaler", r["fel"])
-
     def test_innehall_spara_forhandsgranska_lista(self):
         # titel skickas fortfarande med (används bara för slug-generering,
         # skrivs inte längre till frontmatter) — hem/borta/serie är sajtens

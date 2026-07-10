@@ -1040,65 +1040,6 @@ class Api:
         store.radera_publicera_material(self.conn, id)
         return {"ok": True}
 
-    def forsok_igen_material(self, material_id):
-        """"Försök igen"-flödet: kör om ENDAST de kanaler som senast föll för
-        ett delvis publicerat SoMe-paket (banor/caption är redan sparade på
-        materialet). Uppdaterar ch_results/status och loggar en ny historikpost.
-        Returnerar {ok, material} eller {ok:False, fel}."""
-        material = next((m for m in store.lista_publicera_material(self.conn)
-                         if m["id"] == material_id), None)
-        if not material:
-            return {"ok": False, "fel": "Materialet hittades inte."}
-        if material["kind"] != "some":
-            return {"ok": False, "fel": "Försök igen gäller bara SoMe-paket."}
-        ch_results = material.get("ch_results") or {}
-        felkanaler = [k for k, v in ch_results.items() if v != "ok"]
-        if not felkanaler:
-            return {"ok": False, "fel": "Inga felkanaler att försöka igen."}
-
-        poster = meta_api.fran_env(logg=self._logg.append)
-        if poster is None:
-            return {"ok": False, "fel": "Skarp publicering saknar Meta-token — "
-                    "sätt META_ACCESS_TOKEN, IG_USER_ID, FB_PAGE_ID och "
-                    "DPT_BILD_BAS_URL i miljön."}
-
-        banor = material.get("banor") or {}
-        nya = dict(ch_results)
-        MAL_NYCKEL = {"story": "story", "ig": "ig_inlagg", "fb": "fb"}
-        for kanal in felkanaler:
-            bilder = (banor.get(kanal) or {}).get("bilder") or []
-            if not bilder:
-                nya[kanal] = "fail"
-                continue
-            upp = bildhosting.ladda_upp(bilder, logg=self._logg.append)
-            if not upp.get("ok"):
-                nya[kanal] = "fail"
-                continue
-            mal = {"story": False, "ig_inlagg": False, "fb": False}
-            mal[MAL_NYCKEL[kanal]] = True
-            r = publicera_korning.kor_publicering(
-                self.conn, {"bilder": bilder, "caption": material.get("caption") or "",
-                            "mal": mal, "match_id": material.get("match_id")},
-                poster=poster, dry_run=False, logg=self._logg.append)
-            nya[kanal] = "ok" if r.get("ok") else "fail"
-
-        CHLABEL = {"story": "IG Story", "ig": "IG-inlägg", "fb": "Facebook"}
-        alla_ok = all(v == "ok" for v in nya.values())
-        nystatus = "publicerad" if alla_ok else "delvis"
-        # Historikposten namnger ALLTID vilka kanaler just detta försök gällde
-        # (felkanaler, inte kvarvarande) — vid framgång ska raden visa t.ex.
-        # "omförsök — Facebook", inte en tom notis (§10-handoffen).
-        kanaler_forsokta = [CHLABEL.get(k, k) for k in felkanaler]
-        note = f"omförsök — {', '.join(kanaler_forsokta)}"
-        store.spara_publicera_material(
-            self.conn, id=material_id, kind="some", status=nystatus,
-            match_id=material.get("match_id"), match_namn=material.get("match_namn"),
-            channels=material.get("channels"), caption=material.get("caption"),
-            banor=banor, ch_results=nya, historik_note=note)
-        uppdaterat = next(m for m in store.lista_publicera_material(self.conn)
-                          if m["id"] == material_id)
-        return {"ok": True, "material": uppdaterat}
-
     # ── Innehåll (CMS → Astro-export) ────────────────────────────────────────
     def lista_innehall(self, typ=None):
         return store.lista_innehall(self.conn, typ)

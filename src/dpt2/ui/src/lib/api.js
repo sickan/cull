@@ -1028,25 +1028,6 @@ export async function raderaMaterial(id) {
   return wait({ ok: true })
 }
 
-// "Försök igen" — kör om ENDAST felkanalerna för ett delvis publicerat
-// SoMe-paket. Mocken lyckas alltid (demo av "vid full framgång"-flödet);
-// riktig backend kan fortsatt gå i väggen (token saknas, nätverksfel …).
-export async function forsokIgenMaterial(id) {
-  const api = brygga()
-  if (api) return api.forsok_igen_material(id)
-  const idx = MOCK_MATERIAL.findIndex((m) => m.id === id)
-  if (idx < 0) return wait({ ok: false, fel: 'Materialet hittades inte.' })
-  const m = MOCK_MATERIAL[idx]
-  if (m.kind !== 'some') return wait({ ok: false, fel: 'Försök igen gäller bara SoMe-paket.' })
-  const felkanaler = Object.keys(m.ch_results || {}).filter((k) => m.ch_results[k] !== 'ok')
-  if (!felkanaler.length) return wait({ ok: false, fel: 'Inga felkanaler att försöka igen.' })
-  const ch_results = { ...m.ch_results }
-  felkanaler.forEach((k) => { ch_results[k] = 'ok' })
-  const uppdaterad = new Date().toISOString()
-  const history = [{ when: uppdaterad, status: 'publicerad', note: '' }, ...(m.history || [])]
-  MOCK_MATERIAL[idx] = { ...m, ch_results, status: 'publicerad', uppdaterad, history }
-  return wait({ ok: true, material: structuredClone(MOCK_MATERIAL[idx]) })
-}
 
 // pywebview injicerar window.pywebview.api ASYNKRONT. VIKTIGT: api-OBJEKTET dyker
 // upp innan alla METODER är påkopplade — så vi måste vänta tills en känd metod
