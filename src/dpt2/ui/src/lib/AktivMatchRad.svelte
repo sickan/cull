@@ -37,31 +37,25 @@
   $: bortaLoggaUri = !bortaLoggaPath ? '' : (/^(data:|https?:)/.test(bortaLoggaPath) ? bortaLoggaPath : ($loggor[bortaLoggaPath] || ''))
 </script>
 
-{#if !laddar}
-  {#if match}
-    <div class="amrad">
-      <span class="amcaps">Aktiv match</span>
-      <span class="ambrickor">
-        <span class="ambricka" style={brickStil(fargForLag(match.lag_hemma))}>{#if hemLoggaUri}<img src={hemLoggaUri} alt="" />{:else}{initialer(match.lag_hemma)}{/if}</span>
-        <span class="ambricka away" style={brickStil(fargForLag(match.lag_borta))}>{#if bortaLoggaUri}<img src={bortaLoggaUri} alt="" />{:else}{initialer(match.lag_borta)}{/if}</span>
-      </span>
-      <div class="aminfo">
-        <span class="amfix scd">{match.lag_hemma} – {match.lag_borta}</span>
-        <span class="amsub">{[match.liga, datumTxt(match.datum), match.resultat].filter(Boolean).join(' · ')}</span>
-      </div>
-      <div class="amknappar">
-        {#if match.galleri}<a class="ampill" href={match.galleri} target="_blank" rel="noreferrer">Pixieset</a>{/if}
-        {#if match.sida_url}<a class="ampill" href={match.sida_url} target="_blank" rel="noreferrer">På hemsidan</a>{/if}
-        <button class="ampill prim" on:click={bytMatch}>Byt match</button>
-      </div>
+<!-- F3: ingen tom-ruta när match saknas — topbarens "Aktiv match"-chip bär kontexten
+     en gång för alla steg, istället för att varje delsteg upprepar samma tomrad. -->
+{#if !laddar && match}
+  <div class="amrad">
+    <span class="amcaps">Aktiv match</span>
+    <span class="ambrickor">
+      <span class="ambricka" style={brickStil(fargForLag(match.lag_hemma))}>{#if hemLoggaUri}<img src={hemLoggaUri} alt="" />{:else}{initialer(match.lag_hemma)}{/if}</span>
+      <span class="ambricka away" style={brickStil(fargForLag(match.lag_borta))}>{#if bortaLoggaUri}<img src={bortaLoggaUri} alt="" />{:else}{initialer(match.lag_borta)}{/if}</span>
+    </span>
+    <div class="aminfo">
+      <span class="amfix scd">{match.lag_hemma} – {match.lag_borta}</span>
+      <span class="amsub">{[match.liga, datumTxt(match.datum), match.resultat].filter(Boolean).join(' · ')}</span>
     </div>
-  {:else}
-    <div class="amtom">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--t-mut)" stroke-width="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
-      <div class="amtomtxt">Ingen aktiv match — stegen fungerar ändå, men koppla en match för genvägar och auto-ifyllnad.</div>
-      <button class="amtombtn" on:click={bytMatch}>Välj match i Matcher ›</button>
+    <div class="amknappar">
+      {#if match.galleri}<a class="ampill" href={match.galleri} target="_blank" rel="noreferrer">Pixieset</a>{/if}
+      {#if match.sida_url}<a class="ampill" href={match.sida_url} target="_blank" rel="noreferrer">På hemsidan</a>{/if}
+      <button class="ampill prim" on:click={bytMatch}>Byt match</button>
     </div>
-  {/if}
+  </div>
 {/if}
 
 <style>
@@ -81,11 +75,4 @@
     background: var(--panel); color: var(--t-mut); font-size: 11px; font-weight: 600; text-decoration: none; }
   .ampill:hover { border-color: var(--acc); color: var(--acc); }
   .ampill.prim { color: var(--acc); border-color: var(--acc-border); background: var(--kort); }
-
-  .amtom { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px dashed var(--div);
-    border-radius: 11px; padding: 10px 14px; margin-bottom: 12px; }
-  .amtom svg { flex: none; }
-  .amtomtxt { flex: 1; min-width: 0; font-size: 12.5px; color: var(--t-mut); }
-  .amtombtn { flex: none; background: var(--acc); color: var(--ink); border: none; border-radius: 7px;
-    padding: 6px 12px; font-size: 12px; font-weight: 600; }
 </style>

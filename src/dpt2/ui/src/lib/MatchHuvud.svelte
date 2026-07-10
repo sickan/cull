@@ -192,13 +192,8 @@
       </div>
     </div>
   </div>
-{:else}
-  <div class="mhtom">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--t-mut)" stroke-width="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
-    <div class="mhtomtxt">Ingen aktiv match — stegen fungerar ändå, men koppla en match för genvägar och auto-ifyllnad.</div>
-    <button class="mhtombtn" on:click={() => dispatch('navigera', 'matcher')}>Välj match i Matcher ›</button>
-  </div>
 {/if}
+<!-- F3: ingen tom-ruta när match saknas — topbarens "Aktiv match"-chip bär kontexten. -->
 
 <style>
   .mh { background: var(--kort); border: 1px solid var(--div); border-left: 5px solid var(--div);
@@ -266,11 +261,4 @@
     background: var(--panel); border: 1px solid var(--div); border-radius: 999px; padding: 2px 9px; }
   .kpill.pub { color: var(--ok); border-color: rgba(47, 158, 110, 0.4); background: rgba(47, 158, 110, 0.1); }
   .kpill.utk { color: var(--varn); border-color: rgba(201, 138, 47, 0.4); background: rgba(201, 138, 47, 0.1); }
-
-  .mhtom { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px dashed var(--div);
-    border-radius: 11px; padding: 10px 14px; margin-bottom: 16px; }
-  .mhtom svg { flex: none; }
-  .mhtomtxt { flex: 1; min-width: 0; font-size: 12.5px; color: var(--t-mut); }
-  .mhtombtn { flex: none; background: var(--acc); color: var(--ink); border: none; border-radius: 7px;
-    padding: 6px 12px; font-size: 12px; font-weight: 600; }
 </style>
