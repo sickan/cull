@@ -4,8 +4,12 @@
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { grenFarg } from '../lib/gren.js'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
+  import KrockPop from '../lib/KrockPop.svelte'
+  import FotojobbVecka from '../lib/FotojobbVecka.svelte'
+  import FotojobbManad from '../lib/FotojobbManad.svelte'
   import { synkFarg, jobbSynkStatus } from '../lib/synk.js'
   import { radTillToppen } from '../lib/scroll.js'
+  import { SEED_KALENDRAR, SEED_PRIVATA, krockKarta, synligaPrivata, kalenderFarg, kalenderEtikett } from '../lib/privat.js'
 
   const dispatch = createEventDispatcher()
 
@@ -14,8 +18,32 @@
   let lagAlla = []
   let status = null            // null = okänd (visa ej offline-banner förrän känd)
   let laddar = true
-  let layout = 'lista'          // lista | tidslinje
+  let layout = 'lista'          // lista | tidslinje | vecka | manad
   let katFilter = 'Alla'
+
+  // ── Privata kalendrar (skrivskyddat tillgänglighetslager) ──────────────────
+  // Steg 1 kör mot seed; steg 2 byter dessa mot hämtning från Google via
+  // tjanster/privat_kalender.py. Ingenting härifrån sparas eller skickas vidare.
+  let kalendrar = SEED_KALENDRAR
+  let privata = SEED_PRIVATA
+  let aktivaKal = new Set(SEED_KALENDRAR.map((k) => k.id))
+  let hoverJobb = null          // jobb-id vars krock-utfällning visas vid hover
+  let pinnadJobb = null         // jobb-id vars utfällning är fäst med klick
+  let vyAnkare = new Date()     // vilken vecka/månad Vecka- och Månadsvyn visar
+
+  function toggleKalender(id) {
+    aktivaKal = new Set(aktivaKal.has(id) ? [...aktivaKal].filter((x) => x !== id) : [...aktivaKal, id])
+  }
+  // Klick på röda hörnet fäster utfällningen — och får ALDRIG öppna redigeringen.
+  function krockKlick(e, id) {
+    e.stopPropagation()
+    pinnadJobb = pinnadJobb === id ? null : id
+  }
+  // Härledd variabel, inte en hjälpfunktion: Svelte spårar bara de variabler som
+  // NÄMNS i malluttrycket. `visaKrock(j.id)` hade läst hoverJobb i sin closure
+  // utan att kompilatorn såg beroendet — utfällningen hade aldrig ritats om.
+  // Fäst post vinner över hover.
+  $: krockVisas = pinnadJobb ?? hoverJobb
   let bodyEl                    // scroll-container (för "Till idag")
   let now = new Date()          // live-klocka
   let klockIv
@@ -136,19 +164,35 @@
   $: filtrerade = jobb.filter((j) =>
     katFilter === 'Alla' ? true
       : katFilter === 'Okategoriserat' ? !j.category : j.category === katFilter)
-  $: grupper = gruppera(filtrerade)
+
+  // Krocken beräknas mot ALLA jobb och ALLA privata poster — aldrig mot de
+  // filtrerade. Att släcka en kalender döljer hennes rader men avvarnar aldrig
+  // jobbet. En gång per ändring, inte en gång per rad och omritning.
+  $: krockar = krockKarta(jobb, privata)
+
+  // Lista + Tidslinje delar gruppering. Privata poster vävs in som egna rader i
+  // Lista; Tidslinje visar bara jobb (en "Upptaget"-post har ingen tidslinjeroll)
+  // men behåller krock-signalen.
+  $: privataSynliga = synligaPrivata(privata, aktivaKal)
+  $: poster = [
+    ...filtrerade.map((j) => ({ typ: 'jobb', id: `j${j.id}`, start: j.start_at, j })),
+    ...privataSynliga.map((p) => ({ typ: 'privat', id: `p${p.id}`, start: p.start, p })),
+  ]
+  $: grupper = gruppera(poster)
 
   function gruppera(lista) {
     // Fallande: senaste aktiviteterna överst (framtid → historik), scroll-till-idag hittar dagens.
-    const sorted = [...lista].sort((a, b) => (b.start_at || '').localeCompare(a.start_at || ''))
+    const sorted = [...lista].sort((a, b) => (b.start || '').localeCompare(a.start || ''))
     const m = new Map()
-    for (const j of sorted) {
-      const k = manadNyckel(j.start_at)
+    for (const post of sorted) {
+      const k = manadNyckel(post.start)
       if (!m.has(k)) m.set(k, [])
-      m.get(k).push(j)
+      m.get(k).push(post)
     }
-    return [...m.entries()].map(([label, jobb]) => ({ label, jobb }))
+    return [...m.entries()].map(([label, poster]) => ({ label, poster, jobb: poster.filter((x) => x.typ === 'jobb') }))
   }
+
+  const privatKlocka = (p) => (p.heldag ? 'Heldag' : `${klocka(p.start)}–${klocka(p.slut)}`)
 
   async function laddaOm() { jobb = await listaFotojobb(); if (!Array.isArray(jobb)) jobb = [] }
 
@@ -167,6 +211,22 @@
     const s = (v || '').slice(0, 16)
     return !s ? '' : s.includes('T') ? s : s + 'T00:00'
   }
+  // Vecka/Månad har ingen rad att fälla ut ett kort under — de redigerar i modalen.
+  // Månad borrar först ner till veckan (drill-down), veckan öppnar modalen.
+  function oppnaModalFor(j) {
+    modal = { ...j, category: j.category || '', match_id: j.match_id || '', notering: j.notering || '',
+      start_at: tillLokal(j.start_at), end_at: tillLokal(j.end_at) }
+  }
+  function visaVeckaFor(dag) { vyAnkare = dag; bytLayout('vecka') }
+
+  // Lista/Tidslinje ankras vid "idag" långt ner i den fallande listan. Vecka och
+  // Månad börjar överst — annars öppnas de mitt i sitt eget rutnät med rubrik och
+  // veckodagsrad utanför skärmen.
+  function bytLayout(ny) {
+    layout = ny
+    if (ny === 'vecka' || ny === 'manad') tick().then(() => bodyEl && (bodyEl.scrollTop = 0))
+  }
+
   // Redigering flyttad in i listan (utfällt kort) — modalen är kvar bara för "＋ Nytt fotojobb".
   // Ingen Ändra-knapp: raden är klickytan. `rad` skickas med så formuläret kan
   // ankras överst i vyn istället för att fällas ut nedanför skärmkanten.
@@ -192,7 +252,8 @@
   }
   function onKeydown(e) {
     if (e.key !== 'Escape') return
-    if (jobEditId != null) stangRedigering()
+    if (pinnadJobb != null) pinnadJobb = null
+    else if (jobEditId != null) stangRedigering()
     else if (modal) modal = null
   }
 
@@ -248,8 +309,10 @@
       </div>
       <div class="hverktyg">
         <div class="seg">
-          <button class:on={layout === 'lista'} on:click={() => (layout = 'lista')}>Lista</button>
-          <button class:on={layout === 'tidslinje'} on:click={() => (layout = 'tidslinje')}>Tidslinje</button>
+          <button class:on={layout === 'lista'} on:click={() => bytLayout('lista')}>Lista</button>
+          <button class:on={layout === 'tidslinje'} on:click={() => bytLayout('tidslinje')}>Tidslinje</button>
+          <button class:on={layout === 'vecka'} on:click={() => bytLayout('vecka')}>Vecka</button>
+          <button class:on={layout === 'manad'} on:click={() => bytLayout('manad')}>Månad</button>
         </div>
         <button class="prim" on:click={nyttJobb}>+ Nytt fotojobb</button>
       </div>
@@ -261,11 +324,24 @@
             style={katFilter === f ? `background:${f === 'Alla' ? 'var(--acc)' : f === 'Okategoriserat' ? NULLKAT : katFarg(f)};border-color:transparent;color:#fff` : ''}
             on:click={() => (katFilter = f)}>{f}</button>
         {/each}
+        <span class="kallrubrik scd">Kalendrar</span>
+        <!-- Jobbkalendern är låst på: DPT äger den och skriver till den. De privata
+             läses skrivskyddat och kan släckas — men krocken varnar ändå. -->
+        <span class="chip kalla last" style="--kf:var(--acc)"><span class="prick"></span>Jobb</span>
+        {#each kalendrar as k (k.id)}
+          <button class="chip kalla" class:on={aktivaKal.has(k.id)} style="--kf:{k.farg}"
+            aria-pressed={aktivaKal.has(k.id)} on:click={() => toggleKalender(k.id)}>
+            <span class="prick"></span>{k.etikett}
+          </button>
+        {/each}
       </div>
-      <div class="hopp">
-        <button class="tillidag" on:click={scrollTopp}>↑ Till toppen</button>
-        <button class="tillidag" on:click={scrollTillIdag}>↓ Till idag</button>
-      </div>
+      <!-- Scroll-hoppen hör till de scrollade vyerna; Vecka/Månad navigerar själva. -->
+      {#if layout === 'lista' || layout === 'tidslinje'}
+        <div class="hopp">
+          <button class="tillidag" on:click={scrollTopp}>↑ Till toppen</button>
+          <button class="tillidag" on:click={scrollTillIdag}>↓ Till idag</button>
+        </div>
+      {/if}
     </div>
   </div>
 
@@ -280,7 +356,13 @@
         </div>
       {/if}
 
-      {#if grupper.length === 0}
+      {#if layout === 'vecka'}
+        <FotojobbVecka bind:ankare={vyAnkare} jobb={filtrerade} privata={privataSynliga}
+          {kalendrar} {krockar} {katFarg} on:redigera={(e) => oppnaModalFor(e.detail)} />
+      {:else if layout === 'manad'}
+        <FotojobbManad bind:ankare={vyAnkare} jobb={filtrerade} privata={privataSynliga}
+          {kalendrar} {krockar} {katFarg} on:visaVecka={(e) => visaVeckaFor(e.detail)} />
+      {:else if grupper.length === 0}
         <div class="empty">
           <div class="etxt">Inga fotojobb i den här vyn.</div>
           <div class="ehelp">Lägg till ett så speglas det till din kalender.</div>
@@ -290,9 +372,11 @@
           <div class="manad scd">{g.label}</div>
           {#if layout === 'tidslinje'}
             <div class="tidslinje">
-              {#each g.jobb as j (j.id)}
+              {#each g.jobb as post (post.id)}
+                {@const j = post.j}
                 {@const gren = grenForJobb(j)}
                 {@const res = resultatForJobb(j)}
+                {@const krock = krockar.get(j.id)}
                 <div class="tlrad" data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)}>
                   <div class="tltid scd">
                     <div class="tlt">{j.all_day ? '–' : klocka(j.start_at)}</div>
@@ -300,9 +384,16 @@
                   </div>
                   <div class="tlspar" style="border-left-color:{katFarg(j.category)}">
                     <span class="tldot" style="background:{katFarg(j.category)}"></span>
+                    <div class="kortwrap">
+                    {#if krock && krockVisas === j.id}<KrockPop krockar={krock} {kalendrar} heldag={j.all_day} />{/if}
                     <div class="tlkort" role="button" tabindex="0" class:forfluten={arForfluten(j)}
+                      on:mouseenter={() => krock && (hoverJobb = j.id)} on:mouseleave={() => (hoverJobb = null)}
                       on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
                       <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
+                      {#if krock}
+                        <Hornmarkor farg="var(--krock)" r={10} horn="nere-hoger" titel="Krockar med privat kalender" />
+                        <button class="krocktapp" aria-label="Visa krock" on:click={(e) => krockKlick(e, j.id)}></button>
+                      {/if}
                       <div class="tlinfo">
                         <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}{#if res}<span class="resultat scd">{res}</span>{/if}</div>
                         <div class="when">{j.all_day ? 'Heldag · ' + heldagText(j) : ''}{j.location ? (j.all_day ? ' · ' : '') + j.location : ''}</div>
@@ -317,6 +408,7 @@
                       <button class="mini kryss" class:armerad={$armerad === `fj-${j.id}`}
                         title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
                         on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Ta bort?' : '×'}</button>
+                    </div>
                     </div>
                     {#if jobEditId === j.id && redigerar}
                       <div class="redigerakort">
@@ -349,14 +441,36 @@
             </div>
           {:else}
             <div class="lista">
-              {#each g.jobb as j (j.id)}
+              {#each g.poster as post (post.id)}
+                {#if post.typ === 'privat'}
+                  {@const p = post.p}
+                  <!-- Skrivskyddad tillgänglighet. Bara "Upptaget" — titeln finns
+                       aldrig i lagret självt, bara i krock-utfällningen. -->
+                  <div class="privatrad" style="--kf:{kalenderFarg(kalendrar, p.kalender_id)}">
+                    <span class="prick"></span>
+                    <span class="upptaget">Upptaget</span>
+                    <span class="pmeta">{kalenderEtikett(kalendrar, p.kalender_id)} · {privatKlocka(p)}</span>
+                  </div>
+                {:else}
+                {@const j = post.j}
                 {@const gren = grenForJobb(j)}
                 {@const res = resultatForJobb(j)}
+                {@const krock = krockar.get(j.id)}
+                <div class="radwrap">
+                {#if krock && krockVisas === j.id}<KrockPop krockar={krock} {kalendrar} heldag={j.all_day} />{/if}
                 {#if j.all_day}
                   <div class="rad heldag" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
+                    on:mouseenter={() => krock && (hoverJobb = j.id)} on:mouseleave={() => (hoverJobb = null)}
                     on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
                     <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
+                    {#if krock}
+                      <Hornmarkor farg="var(--krock)" r={12} horn="nere-hoger" titel="Krockar med privat kalender" />
+                      <button class="krocktapp" aria-label="Visa krock" on:click={(e) => krockKlick(e, j.id)}></button>
+                    {/if}
                     <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
+                    <!-- Heldagsjobb överlappar per definition allt som ligger i dagarna
+                         det spänner över. Antalet är informationen, inte att det finns ett. -->
+                    {#if krock}<button class="krockantal" on:click={(e) => krockKlick(e, j.id)}>⚠ {krock.length} krockar</button>{/if}
                     {#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}
                     <span class="rtitel">{j.title}</span>
                     {#if res}<span class="resultat scd">{res}</span>{/if}
@@ -377,8 +491,13 @@
                   </div>
                 {:else}
                   <div class="rad" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
+                    on:mouseenter={() => krock && (hoverJobb = j.id)} on:mouseleave={() => (hoverJobb = null)}
                     on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
                     <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
+                    {#if krock}
+                      <Hornmarkor farg="var(--krock)" r={12} horn="nere-hoger" titel="Krockar med privat kalender" />
+                      <button class="krocktapp" aria-label="Visa krock" on:click={(e) => krockKlick(e, j.id)}></button>
+                    {/if}
                     <div class="datum scd">
                       <div class="d" style="color:{katFarg(j.category)}">{del(j.start_at)[2] || '–'}</div>
                       <div class="wd">{veckodag(j.start_at)}</div>
@@ -430,6 +549,8 @@
                       <button class="sek" on:click={stangRedigering}>Avbryt</button>
                     </div>
                   </div>
+                {/if}
+                </div>
                 {/if}
               {/each}
             </div>
@@ -585,6 +706,36 @@
     color: var(--t-mut); font-size: 11.5px; font-family: inherit; }
   .synkbtn { border-color: var(--acc); color: var(--acc); font-weight: 600; }
   .synkfel { font-size: 11px; color: var(--rose); }
+
+  /* ── Privata kalendrar ─────────────────────────────────────────────────── */
+  .kallrubrik { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--t-caps); align-self: center; margin-left: 6px; padding-left: 12px;
+    border-left: 1px solid var(--div); }
+  .chip.kalla { display: inline-flex; align-items: center; gap: 7px; }
+  .chip.kalla .prick { width: 8px; height: 8px; border-radius: 2px; background: var(--kf); flex: none; }
+  .chip.kalla.on { border-color: var(--kf); color: var(--t-head); }
+  /* Släckt källa: pricken tappar färgen, inte bara chipet — annars läser den som tänd. */
+  .chip.kalla:not(.on):not(.last) .prick { background: var(--div); }
+  .chip.kalla.last { border-color: var(--kf); color: var(--t-head); cursor: default; }
+
+  /* Radwrap bär popovern. .rad har overflow:hidden (hörnbågarna klipps mot
+     kortet) och kan därför inte hysa den själv. */
+  .radwrap, .kortwrap { position: relative; }
+  .privatrad { display: flex; align-items: center; gap: 10px; padding: 9px 16px;
+    border: 1px dashed var(--kf); border-left-width: 3px; border-left-style: solid;
+    border-radius: var(--r); background: transparent; }
+  .privatrad .prick { width: 8px; height: 8px; border-radius: 2px; background: var(--kf); flex: none; }
+  .privatrad .upptaget { font-size: 13px; font-weight: 600; color: var(--t-mut); }
+  .privatrad .pmeta { font-size: 12px; color: var(--t-help); font-variant-numeric: tabular-nums; }
+
+  /* Klickyta över den röda hörnbågen (som själv har pointer-events:none).
+     Fäster utfällningen — öppnar aldrig redigeringen. */
+  .krocktapp { position: absolute; right: 0; bottom: 0; width: 30px; height: 30px; z-index: 5;
+    border: 0; background: transparent; padding: 0; cursor: pointer; }
+  .krockantal { display: inline-flex; align-items: center; gap: 5px; flex: none;
+    padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+    color: var(--krock); background: var(--krock-soft); border: 1px solid var(--krock);
+    cursor: pointer; }
 
   /* Tidslinje */
   .tidslinje { display: flex; flex-direction: column; }
