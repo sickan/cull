@@ -193,6 +193,14 @@
     else if (modal) modal = null
   }
 
+  // §3: passerade matchjobb visar slutresultatet i raden. Matchen är sanningen
+  // (matchposten bär resultatet), jobbet bara pekar på den. Visas inte för
+  // kommande matcher — där finns inget resultat att visa.
+  function resultatForJobb(j) {
+    if (!j.match_id || !arForfluten(j)) return ''
+    return matcher.find((x) => x.id === j.match_id)?.resultat || ''
+  }
+
   // Gren-markör (DAM/HERR/MIXED) för match-kopplade fotojobb, framför titeln.
   // Riktig matchreferens (match_id → matchens hem_gren) i första hand;
   // titel-parsning ("Match – <hemma> / <borta>" → lag i registret) som fallback.
@@ -281,6 +289,7 @@
             <div class="tidslinje">
               {#each g.jobb as j (j.id)}
                 {@const gren = grenForJobb(j)}
+                {@const res = resultatForJobb(j)}
                 <div class="tlrad" data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)}>
                   <div class="tltid scd">
                     <div class="tlt">{j.all_day ? '–' : klocka(j.start_at)}</div>
@@ -292,7 +301,7 @@
                       on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
                       <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
                       <div class="tlinfo">
-                        <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}</div>
+                        <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}{#if res}<span class="resultat scd">{res}</span>{/if}</div>
                         <div class="when">{j.all_day ? 'Heldag · ' + heldagText(j) : ''}{j.location ? (j.all_day ? ' · ' : '') + j.location : ''}</div>
                         {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                       </div>
@@ -337,6 +346,7 @@
             <div class="lista">
               {#each g.jobb as j (j.id)}
                 {@const gren = grenForJobb(j)}
+                {@const res = resultatForJobb(j)}
                 {#if j.all_day}
                   <div class="rad heldag" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
                     on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
@@ -344,6 +354,7 @@
                     <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
                     {#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}
                     <span class="rtitel">{j.title}</span>
+                    {#if res}<span class="resultat scd">{res}</span>{/if}
                     <span class="hlbl">Heldag</span>
                     {#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}
                     <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
@@ -366,7 +377,7 @@
                       <div class="wd">{veckodag(j.start_at)}</div>
                     </div>
                     <div class="mitt">
-                      <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}{#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}</div>
+                      <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}{#if res}<span class="resultat scd">{res}</span>{/if}{#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}</div>
                       <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
                       <div class="undermeta">
                         <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
@@ -500,6 +511,11 @@
   .idagbricka { display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700;
     letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px;
     background: var(--acc); color: #fff; vertical-align: middle; }
+  /* §3: slutresultat på passerat matchjobb. Passerade rader dämpas, men siffran
+     är själva poängen med raden — den behåller full brödtextkontrast. */
+  .resultat { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 6px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.02em; vertical-align: middle;
+    color: var(--t-head); background: var(--div3); border: 1px solid var(--div); }
   .rad.idag { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-soft), var(--skugga); }
   /* A1 · passerade poster: nedtona accenten (datum/heldags-etikett) + ta bort
      skuggan — men stapla ALDRIG opacity på texten (den håller AA via tokens). */
