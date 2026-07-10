@@ -1,13 +1,64 @@
 <script>
   import { onMount } from 'svelte'
-  import { kalenderStatus, listaFotojobb } from '../lib/api.js'
+  import { kalenderStatus, listaFotojobb,
+    privatStatus, privatKalendrar, privatSattValda, privatLoggaIn, privatLoggaUt, privatSparaKlient } from '../lib/api.js'
 
   let status = { har_nyckel: false, ansluten: false, bas_url: '' }
   let laddar = true
   let synkar = false
   let flash = ''
 
-  onMount(async () => { status = await kalenderStatus(); laddar = false })
+  // ── Privata kalendrar ──────────────────────────────────────────────────────
+  let pstatus = { har_klient: false, inloggad: false, kalendrar_valda: 0 }
+  let pKalendrar = []          // Googles calendarList (för val)
+  let pValda = new Set()       // markerade som privata
+  let clientId = '', clientSecret = ''
+  let pArbetar = ''            // '' | 'sparar' | 'loggar-in' | 'hamtar'
+  let pFlash = ''
+
+  onMount(async () => {
+    status = await kalenderStatus()
+    pstatus = await privatStatus().catch(() => pstatus)
+    if (pstatus.inloggad) await hamtaKalendrar()
+    laddar = false
+  })
+
+  async function hamtaKalendrar() {
+    pArbetar = 'hamtar'
+    const r = await privatKalendrar().catch(() => null)
+    pKalendrar = r?.kalendrar || []
+    pValda = new Set(r?.valda || [])
+    pArbetar = ''
+  }
+  async function sparaKlient() {
+    if (!clientId || !clientSecret) return
+    pArbetar = 'sparar'
+    await privatSparaKlient(clientId, clientSecret)
+    clientSecret = ''            // håll inte hemligheten kvar i fältet
+    pstatus = await privatStatus()
+    pArbetar = ''
+    pBlink('Uppgifter sparade')
+  }
+  async function loggaIn() {
+    pArbetar = 'loggar-in'
+    const r = await privatLoggaIn().catch((e) => ({ ok: false, fel: String(e) }))
+    pArbetar = ''
+    if (r?.ok) { pstatus = await privatStatus(); await hamtaKalendrar(); pBlink('Inloggad') }
+    else pBlink(r?.fel || 'Inloggningen misslyckades', true)
+  }
+  async function loggaUt() {
+    await privatLoggaUt()
+    pKalendrar = []; pValda = new Set()
+    pstatus = await privatStatus()
+    pBlink('Utloggad')
+  }
+  async function toggleValdKalender(id) {
+    pValda = new Set(pValda.has(id) ? [...pValda].filter((x) => x !== id) : [...pValda, id])
+    await privatSattValda([...pValda])
+    pstatus = { ...pstatus, kalendrar_valda: pValda.size }
+  }
+  let pFel = false
+  function pBlink(msg, fel = false) { pFlash = msg; pFel = fel; setTimeout(() => (pFlash = ''), 2600) }
 
   $: ansluten = status.har_nyckel && status.ansluten
   $: pill = ansluten ? { txt: 'Ansluten', f: 'var(--ok)' }
@@ -68,6 +119,60 @@
         {#if flash}<span class="ok">✓ {flash}</span>{/if}
       </div>
     </div>
+
+    <!-- Privata kalendrar: skrivskyddad tillgänglighet, läses DIREKT (aldrig via
+         Workern). Visas som "Upptaget" i Fotojobb; DPT skriver aldrig hit. -->
+    <div class="kort">
+      <div class="krad">
+        <span class="titel scd">Privata kalendrar</span>
+        <span class="pill" style="color:{pstatus.inloggad ? 'var(--ok)' : 'var(--t-mut)'};background:color-mix(in srgb, {pstatus.inloggad ? 'var(--ok)' : 'var(--t-mut)'} 15%, transparent)">
+          {pstatus.inloggad ? 'Inloggad' : pstatus.har_klient ? 'Ej inloggad' : 'Ej konfigurerad'}
+        </span>
+      </div>
+      <p class="not top">Läses skrivskyddat från din Mac för krock-koll mot fotojobb — inget lagras, inget skrivs tillbaka. Fruns delade kalender dyker upp här automatiskt.</p>
+
+      {#if !pstatus.har_klient}
+        <div class="fakta">
+          <p class="not" style="margin-top:0">Skapa en <strong>OAuth-klient av typen Desktop</strong> i Google Cloud Console (API:t Google Calendar, scope <code>calendar.readonly</code>) och klistra in uppgifterna:</p>
+          <label class="flt">Client ID<input bind:value={clientId} placeholder="…apps.googleusercontent.com" /></label>
+          <label class="flt">Client secret<input type="password" bind:value={clientSecret} placeholder="GOCSPX-…" /></label>
+        </div>
+        <div class="knappar">
+          <button class="prim" on:click={sparaKlient} disabled={!clientId || !clientSecret || pArbetar === 'sparar'}>
+            {pArbetar === 'sparar' ? 'Sparar…' : 'Spara uppgifter'}
+          </button>
+          {#if pFlash}<span class="ok" class:felmed={pFel}>{pFel ? '⚠' : '✓'} {pFlash}</span>{/if}
+        </div>
+      {:else if !pstatus.inloggad}
+        <div class="knappar">
+          <button class="prim" on:click={loggaIn} disabled={pArbetar === 'loggar-in'}>
+            {pArbetar === 'loggar-in' ? 'Väntar på Google…' : 'Logga in med Google'}
+          </button>
+          <button class="sek" on:click={() => (pstatus = { ...pstatus, har_klient: false })}>Byt uppgifter</button>
+          {#if pFlash}<span class="ok" class:felmed={pFel}>{pFel ? '⚠' : '✓'} {pFlash}</span>{/if}
+        </div>
+      {:else}
+        <div class="kallista">
+          {#if pArbetar === 'hamtar'}
+            <p class="tom">Hämtar kalendrar…</p>
+          {:else}
+            {#each pKalendrar as k (k.id)}
+              <button class="kalrad" class:vald={pValda.has(k.id)} on:click={() => toggleValdKalender(k.id)}>
+                <span class="chk" class:pa={pValda.has(k.id)}>{pValda.has(k.id) ? '✓' : ''}</span>
+                <span class="prick" style="background:{k.farg}"></span>
+                <span class="knamn">{k.etikett}</span>
+                {#if k.primar}<span class="primartag">Din</span>{/if}
+              </button>
+            {/each}
+            <p class="not">Markera vilka som ska räknas som privata. Bara markerade visas som "Upptaget" och används för krock-koll.</p>
+          {/if}
+        </div>
+        <div class="knappar">
+          <button class="fara" on:click={loggaUt}>Logga ut</button>
+          {#if pFlash}<span class="ok" class:felmed={pFel}>{pFel ? '⚠' : '✓'} {pFlash}</span>{/if}
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>
 
@@ -98,6 +203,29 @@
   .ok { font-size: 12.5px; color: var(--ok); font-weight: 600; }
   .not { margin: 12px 0 0; font-size: 12px; color: var(--t-help); line-height: 1.55; }
   .not.top { margin: 6px 0 14px; font-size: 13px; color: var(--t-mut); }
+
+  /* Privata kalendrar */
+  .flt { display: flex; flex-direction: column; gap: 5px; margin-top: 10px;
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--t-caps); }
+  .flt input { padding: 9px 11px; border: 1px solid var(--div); border-radius: 8px; background: var(--panel);
+    color: var(--t-head); font-size: 13px; font-weight: 400; text-transform: none; letter-spacing: 0; font-family: inherit; }
+  .flt input:focus { border-color: var(--acc); outline: none; }
+  .not code { font-family: var(--mono, ui-monospace, monospace); font-size: 12px;
+    background: var(--panel); padding: 1px 5px; border-radius: 4px; }
+  .felmed { color: var(--krock); }
+  .kallista { margin: 14px 0 4px; display: flex; flex-direction: column; gap: 6px; }
+  .kalrad { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: var(--panel); border: 1px solid var(--div); border-radius: 9px; padding: 9px 12px;
+    font-size: 13.5px; color: var(--t-head); cursor: pointer; }
+  .kalrad:hover { border-color: var(--acc); }
+  .kalrad.vald { border-color: var(--acc); background: var(--acc-soft); }
+  .chk { width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--div); background: var(--kort);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; flex: none; }
+  .chk.pa { background: var(--acc); border-color: var(--acc); }
+  .kalrad .prick { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .knamn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .primartag { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--t-mut); background: var(--div3); padding: 2px 7px; border-radius: 999px; flex: none; }
 
   .flode { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .box { background: var(--panel); border: 1px solid var(--div); border-radius: 8px; padding: 8px 13px; font-weight: 600; font-size: 13px; color: var(--t-head); }
