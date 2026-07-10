@@ -20,6 +20,10 @@
   --rose: #c9657f;
   --ok: #4e8a3e;
   --varn: #c98a2f;
+  /* Fb1: "delvis publicerad" — någon kanal FÖLL och behöver försökas igen.
+     Egen färg: gult (--varn) betyder redan "utkast, ej försökt". Samma röda
+     signal som Rails delvis-prick, så statusen ser likadan ut överallt. */
+  --delvis: #b0483a;
   --skugga: 0 1px 2px rgba(40, 34, 20, 0.06), 0 6px 18px rgba(40, 34, 20, 0.06);
   --r: 12px;
   --font: "Saira", system-ui, -apple-system, sans-serif;
@@ -48,6 +52,7 @@
   --hav: #8fd0e8;
   --rose: #e59cb0;
   --ok: #6fb35a;
+  --delvis: #e07a6e;   /* ljusare i mörkt läge — samma ton som synk.js konflikt */
   --skugga: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 

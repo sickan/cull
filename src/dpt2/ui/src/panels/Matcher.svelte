@@ -59,8 +59,19 @@
       .reduce((s, p) => s + (p.bilder || 0), 0)
     const live = materialAlla.filter((x) => x.match_id === m.id && x.kind === 'live')
     const some = materialAlla.filter((x) => x.match_id === m.id && x.kind === 'some')
-    const tona = (rader) => rader.some((x) => x.status === 'publicerad') ? 'ok'
-      : rader.length ? 'draft' : 'neutral'
+    // Fb1: en post kan ha status 'delvis' (någon kanal föll — se app.py), och
+    // flera poster kan vara olika långt gångna. Förr räckte EN publicerad post
+    // för grönt chip, så raden såg klar ut mitt i en publiceringsomgång.
+    const lage = (rader) => {
+      if (!rader.length) return { tone: 'neutral', suffix: '' }
+      if (rader.some((x) => x.status === 'delvis')) return { tone: 'delvis', suffix: ' · delvis' }
+      const pub = rader.filter((x) => x.status === 'publicerad').length
+      if (pub === rader.length) return { tone: 'ok', suffix: ' · publicerad' }
+      if (pub) return { tone: 'delvis', suffix: ` · ${pub} av ${rader.length}` }
+      return { tone: 'draft', suffix: ' · utkast' }
+    }
+    const liveL = lage(live)
+    const someL = lage(some)
     const inn = innehallAlla.find((x) => x.match_id === m.id)
     const webb = !inn
       ? (m.resultat ? { label: 'Webb saknas · Skapa ›', tone: 'accent' } : { label: 'Webb', tone: 'neutral' })
@@ -70,8 +81,8 @@
     return [
       { key: 'kalender', label: 'Kalender', tone: m.synk_jobb_id ? 'ok' : 'neutral', dest: 'fotojobb' },
       { key: 'gallrat', label: gallrat ? `Gallrat · ${gallrat}` : 'Gallrat', tone: gallrat ? 'ok' : 'neutral', dest: 'gallra' },
-      { key: 'live', label: 'Live', tone: tona(live), dest: 'publicera' },
-      { key: 'some', label: 'SoMe', tone: tona(some), dest: 'publicera' },
+      { key: 'live', label: `Live${liveL.suffix}`, tone: liveL.tone, dest: 'publicera' },
+      { key: 'some', label: `SoMe${someL.suffix}`, tone: someL.tone, dest: 'publicera' },
       { key: 'webb', label: webb.label, tone: webb.tone, dest: 'innehall' },
     ]
   }
@@ -513,6 +524,7 @@
                     <div class="navchips">
                       {#each navChips(utkast) as c (c.key)}
                         <button class="navchip" class:ok={c.tone === 'ok'} class:draft={c.tone === 'draft'}
+                          class:delvis={c.tone === 'delvis'}
                           class:accent={c.tone === 'accent'} on:click={() => goFromMatch(utkast, c.dest)}>{c.label}</button>
                       {/each}
                     </div>
@@ -803,6 +815,8 @@
   .navchip:hover { border-color: var(--acc); color: var(--t-head); }
   .navchip.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--div)); }
   .navchip.draft { color: var(--varn); border-color: color-mix(in srgb, var(--varn) 40%, var(--div)); }
+  .navchip.delvis { color: var(--delvis); border-color: color-mix(in srgb, var(--delvis) 45%, var(--div));
+    background: color-mix(in srgb, var(--delvis) 10%, var(--kort)); }
   .navchip.accent { color: #fff; background: var(--acc); border-color: var(--acc); font-weight: 700; }
   .papperskorg { flex: none; width: 30px; height: 30px; display: inline-flex; align-items: center;
     justify-content: center; border: 1px solid var(--div); border-radius: 7px; background: var(--kort);
