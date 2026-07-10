@@ -8,6 +8,7 @@
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import Lagbricka from '../lib/Lagbricka.svelte'
   import { grenFarg } from '../lib/gren.js'
+  import { radTillToppen } from '../lib/scroll.js'
 
   let lag = []
   let tavlingar = []
@@ -77,18 +78,22 @@
   let lagTab = 'lag'             // 'lag' | 'tavlingar'
   let lagSearch = ''
   let lagGren = 'alla'           // 'alla' | 'dam' | 'herr' | 'mixed'
+  let visaArkiv = false          // B1: växlar listan mellan aktiva och arkiverade
   const norm = (s) => (s || '').toLowerCase()
 
   $: lagSorterad = [...lag].sort((a, b) => (a.namn || '').localeCompare(b.namn || '', 'sv'))
+  // B1: arkiverade lag göms i registret men raderas inte — gamla matcher pekar
+  // fortfarande på dem. Arkivvyn är enda vägen tillbaka.
+  $: aktivaLag = lagSorterad.filter((l) => !l.arkiverad)
+  $: arkiveradeLag = lagSorterad.filter((l) => l.arkiverad)
+  $: basLag = visaArkiv ? arkiveradeLag : aktivaLag
   $: lagGrenCounts = {
-    alla: lag.length,
-    dam: lag.filter((l) => l.gren === 'dam').length,
-    herr: lag.filter((l) => l.gren === 'herr').length,
-    mixed: lag.filter((l) => l.gren === 'mixed').length,
+    alla: basLag.length,
+    dam: basLag.filter((l) => l.gren === 'dam').length,
+    herr: basLag.filter((l) => l.gren === 'herr').length,
+    mixed: basLag.filter((l) => l.gren === 'mixed').length,
   }
-  // B1: arkiv-support + sport-gruppering. Göm arkiverade från huvudlistan.
-  $: lagFiltrerat = lagSorterad
-    .filter((l) => !l.arkiverad)     // B1: dölj arkiverade
+  $: lagFiltrerat = basLag
     .filter((l) => lagGren === 'alla' || l.gren === lagGren)
     .filter((l) => !lagSearch || norm(l.namn).includes(norm(lagSearch)))
 
@@ -126,13 +131,15 @@
   let teamOpen = null            // lag-id vars rad är utfälld
   let compOpen = null            // tävling-id vars rad är utfälld
 
-  function apnaLag(l) {
+  function apnaLag(l, rad = null) {
     if (teamOpen === l.id) { teamOpen = null; return }
     teamOpen = l.id; compOpen = null
+    radTillToppen(rad)
   }
-  function apnaTavling(t) {
+  function apnaTavling(t, rad = null) {
     if (compOpen === t.id) { compOpen = null; return }
     compOpen = t.id; teamOpen = null
+    radTillToppen(rad)
   }
   function stangRad() { teamOpen = null; compOpen = null }
   function onKeydown(e) {
@@ -299,7 +306,7 @@
     <p class="tom">Laddar register…</p>
   {:else}
     <div class="tabs">
-      <button class:on={lagTab === 'lag'} on:click={() => (lagTab = 'lag')}>Lag &amp; utövare · {lag.length}</button>
+      <button class:on={lagTab === 'lag'} on:click={() => (lagTab = 'lag')}>Lag &amp; utövare · {aktivaLag.length}</button>
       <button class:on={lagTab === 'tavlingar'} on:click={() => (lagTab = 'tavlingar')}>Tävlingar · {tavlingar.length}</button>
     </div>
 
@@ -316,10 +323,18 @@
             </button>
           {/each}
         </div>
+        {#if arkiveradeLag.length || visaArkiv}
+          <button class="grenchip arkivchip" class:on={visaArkiv}
+            on:click={() => { visaArkiv = !visaArkiv; teamOpen = null }}>
+            Arkiv · {arkiveradeLag.length}
+          </button>
+        {/if}
+        <!-- 7A: "+ Nytt" ligger i filterraden, utanför scroll-ytan. -->
+        <button class="ny irad" on:click={nyttLag}>+ Nytt lag</button>
       </div>
 
       {#if !lagFiltrerat.length}
-        <p class="tom">Inga lag eller utövare hittades.</p>
+        <p class="tom">{visaArkiv ? 'Inget arkiverat.' : 'Inga lag eller utövare hittades.'}</p>
       {:else}
         <div class="lista">
           {#each lagGrupperat as grupp (grupp.sport)}
@@ -327,8 +342,8 @@
               <div class="sportnamn">{SPORT_ETIKETT[grupp.sport]}</div>
               {#each grupp.lag as l (l.id)}
             <div class="kkort" style={l.gren ? `border-left:3px solid ${grenFarg(l.gren)}` : ''}>
-              <div class="krad" role="button" tabindex="0" on:click={() => apnaLag(l)}
-                on:keydown={(e) => e.key === 'Enter' && apnaLag(l)}>
+              <div class="krad" role="button" tabindex="0" on:click={(e) => apnaLag(l, e.currentTarget)}
+                on:keydown={(e) => e.key === 'Enter' && apnaLag(l, e.currentTarget)}>
                 <button class="logoslot" on:click|stopPropagation={() => valjLoggaLag(l)} title="Välj logga/porträtt">
                   <Lagbricka namn={l.namn} farg={(l.kind === 'individ' ? l.profilfarg : l.stall_hemma) || '#8A8172'} logga={l.logga} storlek={28} />
                 </button>
@@ -340,7 +355,6 @@
                   <div class="kmeta2">{[metaRad(l) || 'Ofullständig post', kopplingsText(l)].filter(Boolean).join(' · ')}</div>
                 </div>
                 {#if sparad === l.id}<span class="flash">✓</span>{/if}
-                <button class="andra2" on:click|stopPropagation={() => apnaLag(l)}>{teamOpen === l.id ? 'Stäng' : 'Ändra'}</button>
                 <button class="x" class:armerad={$armerad === `lag-${l.id}`}
                   title={$armerad === `lag-${l.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
                   on:click|stopPropagation={taBortKlick(`lag-${l.id}`, () => taBortLag(l))}>{$armerad === `lag-${l.id}` ? 'Ta bort?' : '×'}</button>
@@ -374,6 +388,7 @@
                     <label class="arkivrad">
                       <input type="checkbox" bind:checked={l.arkiverad} on:change={() => gerLag(l)} />
                       <span class="lbl">Arkiverat</span>
+                      <span class="help">Göms i registret. Matcher som redan använder laget påverkas inte.</span>
                     </label>
                     <div class="dubbel">
                       <input bind:value={l.hemsida} on:change={() => gerLag(l)} placeholder="Hemsida" />
@@ -473,7 +488,6 @@
           {/each}
         </div>
       {/if}
-      <button class="ny" on:click={nyttLag}>+ Lägg till lag eller utövare</button>
     {:else}
       {#if !tavlingar.length}
         <p class="tom">Inga tävlingar ännu.</p>
@@ -481,8 +495,8 @@
         <div class="lista">
           {#each tavlingar as t (t.id)}
             <div class="kkort" style={t.gren ? `border-left:3px solid ${grenFarg(t.gren)}` : ''}>
-              <div class="krad" role="button" tabindex="0" on:click={() => apnaTavling(t)}
-                on:keydown={(e) => e.key === 'Enter' && apnaTavling(t)}>
+              <div class="krad" role="button" tabindex="0" on:click={(e) => apnaTavling(t, e.currentTarget)}
+                on:keydown={(e) => e.key === 'Enter' && apnaTavling(t, e.currentTarget)}>
                 <button class="logoslot" on:click|stopPropagation={() => valjLoggaTavling(t)} title="Välj logga">
                   <Lagbricka namn={t.namn} farg={'#8A8172'} logga={t.logga} storlek={28} />
                 </button>
@@ -495,7 +509,6 @@
                 </div>
                 {#if t.kalender}<span class="ikalendern">I kalendern</span>{/if}
                 {#if sparad === t.id}<span class="flash">✓</span>{/if}
-                <button class="andra2" on:click|stopPropagation={() => apnaTavling(t)}>{compOpen === t.id ? 'Stäng' : 'Ändra ›'}</button>
                 <button class="x" class:armerad={$armerad === `tavling-${t.id}`}
                   title={$armerad === `tavling-${t.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
                   on:click|stopPropagation={taBortKlick(`tavling-${t.id}`, () => taBortTavling(t))}>{$armerad === `tavling-${t.id}` ? 'Ta bort?' : '×'}</button>
@@ -595,10 +608,6 @@
   .ikalendern { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
     color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); padding: 3px 8px;
     border-radius: 6px; flex: none; }
-  .andra2 { flex: none; border: 1px solid var(--div); border-radius: 7px;
-    background: var(--kort); color: var(--acc); font-size: 12px; font-weight: 600;
-    padding: 6px 12px; }
-  .andra2:hover { border-color: var(--acc); }
 
   .falt { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .rad1 { display: flex; gap: 8px; align-items: center; }
@@ -624,6 +633,7 @@
   .arkivrad { display: flex; align-items: center; gap: 8px; }
   .arkivrad input[type="checkbox"] { flex: none; }
   .arkivrad .lbl { font-size: 13px; }
+  .arkivrad .help { font-size: 11px; color: var(--t-help); }
   .datumf { display: flex; flex-direction: column; gap: 4px; }
   .datumf input { width: 100%; box-sizing: border-box; }
   .kalfot { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 10px 12px;
@@ -720,6 +730,11 @@
     border-radius: var(--r); background: transparent; color: var(--t-mut);
     font-size: 13px; font-weight: 600; }
   .ny:hover { border-color: var(--acc); color: var(--acc); }
+  /* 7A: samma knapp, men kompakt i filterraden. */
+  .ny.irad { margin-top: 0; width: auto; flex: none; margin-left: auto; padding: 8px 14px;
+    border-radius: 999px; font-size: 12.5px; }
+  /* Arkivchipet står för sig — skilt från gren-chipsen det ligger bredvid. */
+  .arkivchip { margin-left: 6px; border-style: dashed; }
 
   /* Utfälld redigering — inline i radens kort (matcher-stil) */
   .inlineform { border-top: 1px solid var(--div3); padding: 16px 14px; }

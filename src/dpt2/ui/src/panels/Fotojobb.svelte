@@ -5,6 +5,7 @@
   import { grenFarg } from '../lib/gren.js'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
   import { synkFarg, jobbSynkStatus } from '../lib/synk.js'
+  import { radTillToppen } from '../lib/scroll.js'
 
   const dispatch = createEventDispatcher()
 
@@ -165,11 +166,14 @@
     return !s ? '' : s.includes('T') ? s : s + 'T00:00'
   }
   // Redigering flyttad in i listan (utfällt kort) — modalen är kvar bara för "＋ Nytt fotojobb".
-  function oppnaRedigering(j) {
-    if (jobEditId === j.id) { stangRedigering(); return }     // klick igen stänger, nytt "Ändra" flyttar kortet
+  // Ingen Ändra-knapp: raden är klickytan. `rad` skickas med så formuläret kan
+  // ankras överst i vyn istället för att fällas ut nedanför skärmkanten.
+  function oppnaRedigering(j, rad = null) {
+    if (jobEditId === j.id) { stangRedigering(); return }     // klick igen stänger
     redigerar = { ...j, category: j.category || '', match_id: j.match_id || '',
       start_at: tillLokal(j.start_at), end_at: tillLokal(j.end_at) }
     jobEditId = j.id
+    radTillToppen(rad)
   }
   function stangRedigering() { jobEditId = null; redigerar = null }
   async function sparaRedigering() {
@@ -285,7 +289,8 @@
                   <div class="tlspar" style="border-left-color:{katFarg(j.category)}">
                     <span class="tldot" style="background:{katFarg(j.category)}"></span>
                     <div class="tlkort" role="button" tabindex="0" class:forfluten={arForfluten(j)}
-                      on:click={() => oppnaRedigering(j)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j)}>
+                      on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
+                      <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
                       <div class="tlinfo">
                         <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}</div>
                         <div class="when">{j.all_day ? 'Heldag · ' + heldagText(j) : ''}{j.location ? (j.all_day ? ' · ' : '') + j.location : ''}</div>
@@ -295,9 +300,7 @@
                         <option value="">Okategoriserat</option>
                         {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
                       </select>
-                      <span class="synk" class:vantar={!synkad(j) && !j.utkast} class:utkast={j.utkast}>{synkText(j)}</span>
                       {#if j.utkast}<button class="mini synkbtn" on:click|stopPropagation={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                      <button class="mini" on:click|stopPropagation={() => oppnaRedigering(j)}>Ändra</button>
                       <button class="mini kryss" class:armerad={$armerad === `fj-${j.id}`}
                         title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
                         on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Ta bort?' : '×'}</button>
@@ -336,7 +339,7 @@
                 {@const gren = grenForJobb(j)}
                 {#if j.all_day}
                   <div class="rad heldag" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
-                    on:click={() => oppnaRedigering(j)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j)}>
+                    on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
                     <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
                     <span class="hrange scd" style="color:{katFarg(j.category)}">{heldagText(j)}</span>
                     {#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}
@@ -349,7 +352,6 @@
                     </select>
                     <span class="spacer"></span>
                     {#if j.utkast}<button class="mini synkbtn" on:click|stopPropagation={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                    <button class="mini" on:click|stopPropagation={() => oppnaRedigering(j)}>Ändra</button>
                     <button class="mini" class:armerad={$armerad === `fj-${j.id}`}
                       title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
                       on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
@@ -357,7 +359,7 @@
                   </div>
                 {:else}
                   <div class="rad" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
-                    on:click={() => oppnaRedigering(j)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j)}>
+                    on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
                     <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
                     <div class="datum scd">
                       <div class="d" style="color:{katFarg(j.category)}">{del(j.start_at)[2] || '–'}</div>
@@ -376,7 +378,6 @@
                     </div>
                     <div class="rknapp">
                       {#if j.utkast}<button class="mini synkbtn" on:click|stopPropagation={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                      <button class="mini" on:click|stopPropagation={() => oppnaRedigering(j)}>Ändra</button>
                       <button class="mini" class:armerad={$armerad === `fj-${j.id}`}
                         title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
                         on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
@@ -564,7 +565,8 @@
   .tlspar { position: relative; border-left: 2px solid var(--div); padding: 0 0 12px 22px; }
   .tldot { position: absolute; left: -6px; top: 20px; width: 10px; height: 10px; border-radius: 50%;
     border: 2px solid var(--kort); }
-  .tlkort { background: var(--kort); border: 1px solid var(--div); border-radius: 10px; box-shadow: var(--skugga);
+  /* position/overflow krävs för att <Hornmarkor> ska ankras och klippas av kortet. */
+  .tlkort { position: relative; overflow: hidden; background: var(--kort); border: 1px solid var(--div); border-radius: 10px; box-shadow: var(--skugga);
     padding: 11px 13px; display: flex; align-items: center; gap: 11px; cursor: pointer; }
   .tlkort:hover { background: var(--div3); }
   .tlinfo { flex: 1; min-width: 0; }

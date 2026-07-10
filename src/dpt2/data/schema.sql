@@ -60,8 +60,10 @@ CREATE TABLE lag (
   stall_tredje TEXT,
   profilfarg   TEXT,                     -- hex-färg (individ: en enda)
   klubb        TEXT,                     -- individ: klubb/land (ersätter trupp)
-  trupp_kalla  TEXT                      -- senaste trupp-inläsningens källa
+  trupp_kalla  TEXT,                     -- senaste trupp-inläsningens källa
                                          --   ('från hemsida'/'CSV'/'bild'/'PDF')
+  arkiverad    INTEGER NOT NULL DEFAULT 0 -- gömt i registret men bevarat: gamla
+                                         -- matcher pekar fortfarande på laget
 );
 
 -- Vilka lag som deltar i en tävling (tävling äger sina lag). Fyller lagväljaren

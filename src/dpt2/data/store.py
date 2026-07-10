@@ -403,7 +403,8 @@ def facit_for_traning(conn):
 # ── Lag & tävlingar (register) ───────────────────────────────────────────────
 def upsert_lag(conn, namn, *, id=None, kind=None, sport=None, gren=None,
                logga=None, instagram=None, hemsida=None, stall_hemma=None,
-               stall_borta=None, stall_tredje=None, profilfarg=None, klubb=None):
+               stall_borta=None, stall_tredje=None, profilfarg=None, klubb=None,
+               arkiverad=None):
     """Skapar/uppdaterar ett lag. Tomma fält rör inte befintliga värden.
     kind = 'team' | 'individ' (lagsport vs utövare).
 
@@ -436,10 +437,11 @@ def upsert_lag(conn, namn, *, id=None, kind=None, sport=None, gren=None,
     if fin is None:
         conn.execute(
             "INSERT INTO lag(id,namn,kind,sport,gren,hemsida,instagram,logga,"
-            "stall_hemma,stall_borta,stall_tredje,profilfarg,klubb) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "stall_hemma,stall_borta,stall_tredje,profilfarg,klubb,arkiverad) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (lid, namn, kind or "team", sport, gren, hemsida, instagram, logga,
-             stall_hemma, stall_borta, stall_tredje, profilfarg, klubb))
+             stall_hemma, stall_borta, stall_tredje, profilfarg, klubb,
+             int(bool(arkiverad))))
     else:
         ny = {"namn": namn, "kind": kind, "sport": sport, "gren": gren,
               "hemsida": hemsida, "instagram": instagram, "logga": logga,
@@ -447,6 +449,10 @@ def upsert_lag(conn, namn, *, id=None, kind=None, sport=None, gren=None,
               "stall_tredje": stall_tredje, "profilfarg": profilfarg,
               "klubb": klubb}
         satt = {k: v for k, v in ny.items() if v not in (None, "")}
+        # arkiverad är en boolean: False betyder "avarkivera", inte "rör inte".
+        # Därför läggs den in efter tom-filtret ovan, som annars skulle äta 0:an.
+        if arkiverad is not None:
+            satt["arkiverad"] = int(bool(arkiverad))
         if satt:
             kol = ", ".join(f"{k}=?" for k in satt)
             conn.execute(f"UPDATE lag SET {kol} WHERE id=?",

@@ -13,7 +13,7 @@ class TestApi(unittest.TestCase):
 
     def test_info(self):
         info = self.api.info()
-        self.assertEqual(info["schemaversion"], 17)
+        self.assertEqual(info["schemaversion"], 18)
 
     def test_match_round_trip_genom_bryggan(self):
         res = self.api.spara_match({

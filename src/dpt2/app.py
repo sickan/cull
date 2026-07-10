@@ -212,7 +212,8 @@ class Api:
             hemsida=lag.get("hemsida"), stall_hemma=lag.get("stall_hemma"),
             stall_borta=lag.get("stall_borta"),
             stall_tredje=lag.get("stall_tredje"),
-            profilfarg=lag.get("profilfarg"), klubb=lag.get("klubb"))
+            profilfarg=lag.get("profilfarg"), klubb=lag.get("klubb"),
+            arkiverad=lag.get("arkiverad"))
         return {"ok": bool(lid), "id": lid}
 
     def spara_tavling(self, tavling):

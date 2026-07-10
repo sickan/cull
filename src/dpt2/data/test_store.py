@@ -238,6 +238,25 @@ class TestLagTavling(unittest.TestCase):
         self.assertEqual(lag["instagram"], "@malmoff")          # bevarat
         self.assertEqual(lag["logga"], "/x.png")                # tillagt
 
+    def test_nytt_lag_ar_inte_arkiverat(self):
+        lid = store.upsert_lag(self.c, "Malmö FF")
+        self.assertEqual(store.hamta_lag(self.c, lid)["arkiverad"], 0)
+
+    def test_arkivera_och_avarkivera_lag(self):
+        lid = store.upsert_lag(self.c, "Malmö FF", instagram="@malmoff")
+        store.upsert_lag(self.c, "Malmö FF", arkiverad=True)
+        self.assertEqual(store.hamta_lag(self.c, lid)["arkiverad"], 1)
+        # arkiverad=False måste kunna nolla flaggan — inte tolkas som "rör inte"
+        store.upsert_lag(self.c, "Malmö FF", arkiverad=False)
+        lag = store.hamta_lag(self.c, lid)
+        self.assertEqual(lag["arkiverad"], 0)
+        self.assertEqual(lag["instagram"], "@malmoff")   # övriga fält orörda
+
+    def test_arkiverad_utelamnad_ror_inte_flaggan(self):
+        lid = store.upsert_lag(self.c, "Malmö FF", arkiverad=True)
+        store.upsert_lag(self.c, "Malmö FF", logga="/x.png")
+        self.assertEqual(store.hamta_lag(self.c, lid)["arkiverad"], 1)
+
     def test_upsert_tavling(self):
         tid = store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll")
         self.assertEqual(tid, "obos-damallsvenskan")
@@ -587,7 +606,7 @@ class TestFotojobbUtkast(unittest.TestCase):
 class TestMigrering(unittest.TestCase):
     def test_fresh_db_ar_v11_med_fotojobb_utkast(self):
         c = db.oppna(":memory:")
-        self.assertEqual(db.schemaversion(c), 17)
+        self.assertEqual(db.schemaversion(c), db.SCHEMA_VERSION)
         self.assertIn("urval_bild", db.tabeller(c))
         self.assertIn("tavling_lag", db.tabeller(c))
         self.assertIn("fotojobb_utkast", db.tabeller(c))
