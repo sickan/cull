@@ -370,6 +370,11 @@
   <header>
     <h1 class="scd">Matcher</h1>
     <span class="sub">Planera kommande matcher och återuppta tidigare projekt</span>
+    <!-- 7A: skapa-knapparna i rubrikraden, utanför den scrollande listan. -->
+    <div class="huvudknappar">
+      <button class="ny sek2" on:click={importVaxla}>Importera spelschema</button>
+      <button class="ny" on:click={nyMatch}>+ Ny match</button>
+    </div>
   </header>
 
   <div class="filterrad">
@@ -645,11 +650,6 @@
         </div>
       {/if}
 
-      <div class="nyrad">
-        <button class="ny" on:click={nyMatch}>+ Ny match</button>
-        <button class="ny sek2" on:click={importVaxla}>Importera spelschema</button>
-      </div>
-
       {#if importOpen}
         <div class="importkort">
           <div class="caps">Importera spelschema</div>
@@ -890,9 +890,10 @@
   .prim { padding: 9px 16px; border: 0; border-radius: 7px; background: var(--acc); color: #fff; font-size: 13px; font-weight: 600; }
   .sek { padding: 9px 14px; border: 1px solid var(--div); border-radius: 7px; background: var(--kort); color: var(--t-head); font-size: 13px; }
 
-  .nyrad { display: flex; gap: 10px; }
-  .ny { padding: 14px; width: 100%; border: 1.5px dashed var(--div); border-radius: var(--r);
-    background: transparent; color: var(--t-mut); font-size: 13px; font-weight: 500; }
+  /* 7A: kompakta rubrikknappar istället för fullbreddsknappar under listan. */
+  .huvudknappar { display: flex; gap: 8px; margin-left: auto; }
+  .ny { padding: 8px 14px; border: 1.5px dashed var(--div); border-radius: 999px;
+    background: transparent; color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
   .ny:hover { border-color: var(--acc); color: var(--acc); }
   .ny.sek2 { border-style: solid; }
 

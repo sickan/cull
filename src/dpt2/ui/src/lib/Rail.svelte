@@ -30,7 +30,7 @@
 <nav>
   <div class="brand">
     <img class="mark" src={logoHast} alt="" />
-    <div class="ord scd">Dalecarlia Photo<span>Photo Tools · v3.0 · Build {buildNr}</span></div>
+    <div class="ord scd">Dalecarlia Photo<span>Photo Tools · v4.0 · Build {buildNr}</span></div>
   </div>
   {#each grupper as g}
     <div class="rubrik">{g.rubrik}</div>
