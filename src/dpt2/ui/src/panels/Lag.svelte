@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import {
     listaLag, listaTavlingar, sparaLag, sparaTavling, raderaLag, raderaTavling,
     valjFil, lasLagTrupp, hamtaLagTrupp, sparaSpelare, raderaSpelare,
@@ -51,6 +51,10 @@
       if (teamOpen === gammalt) teamOpen = res.id
       if (rosterOppen === gammalt) rosterOppen = res.id
       if (truppOppen === gammalt) truppOppen = res.id
+      // Den frysta ordningen pekar på id:n — följ med när utkastet får sitt
+      // riktiga id, annars försvinner raden man just skriver i ur listan.
+      if (frystaGrupper) frystaGrupper = frystaGrupper
+        .map((g) => ({ ...g, ids: g.ids.map((x) => (x === gammalt ? res.id : x)) }))
       lag = lag
     }
     flash(l.id)
@@ -81,7 +85,22 @@
   let visaArkiv = false          // B1: växlar listan mellan aktiva och arkiverade
   const norm = (s) => (s || '').toLowerCase()
 
-  $: lagSorterad = [...lag].sort((a, b) => (a.namn || '').localeCompare(b.namn || '', 'sv'))
+  const sorteraLag = (lista) => [...lista].sort((a, b) => (a.namn || '').localeCompare(b.namn || '', 'sv'))
+  const filtreraLag = (lista) => lista
+    .filter((l) => lagGren === 'alla' || l.gren === lagGren)
+    .filter((l) => !lagSearch || norm(l.namn).includes(norm(lagSearch)))
+  // B1: gruppera efter sport för visning (fotboll/handboll/etc)
+  function grupperaPerSport(lista) {
+    const g = {}
+    lista.forEach((l) => {
+      const s = l.sport || 'fotboll'
+      if (!g[s]) g[s] = []
+      g[s].push(l)
+    })
+    return SPORTER.map((s) => ({ sport: s, lag: g[s] || [] })).filter((x) => x.lag.length)
+  }
+
+  $: lagSorterad = sorteraLag(lag)
   // B1: arkiverade lag göms i registret men raderas inte — gamla matcher pekar
   // fortfarande på dem. Arkivvyn är enda vägen tillbaka.
   $: aktivaLag = lagSorterad.filter((l) => !l.arkiverad)
@@ -93,20 +112,32 @@
     herr: basLag.filter((l) => l.gren === 'herr').length,
     mixed: basLag.filter((l) => l.gren === 'mixed').length,
   }
-  $: lagFiltrerat = basLag
-    .filter((l) => lagGren === 'alla' || l.gren === lagGren)
-    .filter((l) => !lagSearch || norm(l.namn).includes(norm(lagSearch)))
+  $: lagFiltrerat = filtreraLag(basLag)
 
-  // B1: gruppera efter sport för visning (fotboll/handboll/etc)
-  $: lagGrupperat = (() => {
-    const g = {}
-    lagFiltrerat.forEach((l) => {
-      const s = l.sport || 'fotboll'
-      if (!g[s]) g[s] = []
-      g[s].push(l)
-    })
-    return SPORTER.map((s) => ({ sport: s, lag: g[s] || [] })).filter((g) => g.lag.length)
-  })()
+  // Ordningen FRYSES medan en rad redigeras: namn-sortering, sport-gruppering och
+  // arkiv-filter är alla reaktiva på fälten man skriver i, så utan frysning
+  // hoppar posten runt i listan för varje tangenttryck. Strukturen (id per
+  // sportgrupp) fångas när raden öppnas och renderas mot LIVE-objekten; när
+  // redigeringen stängs släpps ordningen och posten scrollas till sin rätta plats.
+  let frystaGrupper = null       // [{sport, ids}] eller null = normal reaktiv ordning
+  $: if (teamOpen == null) frystaGrupper = null    // varje stängningsväg släpper
+
+  function fangaOrdning() {
+    let bas = filtreraLag(sorteraLag(lag).filter((l) => (visaArkiv ? l.arkiverad : !l.arkiverad)))
+    // Raden som öppnas ska alltid med i frysningen — annars göms en nyskapad
+    // post av aktiva gren-/sökfilter innan den ens hunnit få sina fält satta.
+    if (teamOpen != null && !bas.some((l) => l.id === teamOpen)) {
+      const oppen = lag.find((l) => l.id === teamOpen)
+      if (oppen) bas = [...bas, oppen]
+    }
+    frystaGrupper = grupperaPerSport(bas).map((g) => ({ sport: g.sport, ids: g.lag.map((l) => l.id) }))
+  }
+
+  $: lagGrupperat = frystaGrupper
+    ? frystaGrupper
+        .map((fg) => ({ sport: fg.sport, lag: fg.ids.map((id) => lag.find((x) => x.id === id)).filter(Boolean) }))
+        .filter((fg) => fg.lag.length)
+    : grupperaPerSport(lagFiltrerat)
 
   function hexToRgba(hex, a) {
     const n = parseInt((hex || '').replace('#', ''), 16)
@@ -132,16 +163,27 @@
   let compOpen = null            // tävling-id vars rad är utfälld
 
   function apnaLag(l, rad = null) {
-    if (teamOpen === l.id) { teamOpen = null; return }
+    if (teamOpen === l.id) { stangLagRedigering(); return }
     teamOpen = l.id; compOpen = null
+    fangaOrdning()                 // lås listordningen medan raden är öppen
     radTillToppen(rad)
+  }
+  // Stäng + placera: ordningen släpps (posten sorteras/grupperas rätt) och den
+  // nu rätt placerade raden scrollas i synfältet med spara-markeringen som fokus.
+  async function stangLagRedigering() {
+    const id = teamOpen
+    teamOpen = null
+    if (id == null) return
+    await tick()
+    const el = document.querySelector(`[data-lagid="${CSS.escape(String(id))}"]`)
+    if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); flash(id) }
   }
   function apnaTavling(t, rad = null) {
     if (compOpen === t.id) { compOpen = null; return }
     compOpen = t.id; teamOpen = null
     radTillToppen(rad)
   }
-  function stangRad() { teamOpen = null; compOpen = null }
+  function stangRad() { stangLagRedigering(); compOpen = null }
   function onKeydown(e) {
     if (e.key === 'Escape' && (teamOpen != null || compOpen != null)) stangRad()
   }
@@ -182,13 +224,16 @@
     const f = await valjFil('Välj tävlingslogga (bild)', ['*.png', '*.jpg', '*.jpeg', '*.webp'])
     if (f.ok) { t.logga = f.path; tavlingar = tavlingar; gerTavling(t) }
   }
-  function nyttLag() {
+  async function nyttLag() {
     const id = 'nytt-' + Date.now()
     lag = [...lag, { id, namn: '', kind: 'team', sport: 'fotboll', gren: 'dam',
       instagram: '', hemsida: '', logga: null, stall_hemma: '#2f7cb0',
       stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '#2f7cb0',
       klubb: '', comps: [], arkiverad: false }]
     apnaLag({ id })
+    // Direkt in i namnfältet — det är det enda obligatoriska på en ny post.
+    await tick()
+    document.querySelector(`[data-lagid="${id}"] .namn-in`)?.focus()
   }
   function nyTavling() {
     const id = 'ny-' + Date.now()
@@ -333,7 +378,7 @@
         <button class="ny irad" on:click={nyttLag}>+ Nytt lag</button>
       </div>
 
-      {#if !lagFiltrerat.length}
+      {#if !lagGrupperat.length}
         <p class="tom">{visaArkiv ? 'Inget arkiverat.' : 'Inga lag eller utövare hittades.'}</p>
       {:else}
         <div class="lista">
@@ -341,7 +386,7 @@
             <div class="sportgrupp">
               <div class="sportnamn">{SPORT_ETIKETT[grupp.sport]}</div>
               {#each grupp.lag as l (l.id)}
-            <div class="kkort" style={l.gren ? `border-left:3px solid ${grenFarg(l.gren)}` : ''}>
+            <div class="kkort" data-lagid={l.id} style={l.gren ? `border-left:3px solid ${grenFarg(l.gren)}` : ''}>
               <div class="krad" role="button" tabindex="0" on:click={(e) => apnaLag(l, e.currentTarget)}
                 on:keydown={(e) => e.key === 'Enter' && apnaLag(l, e.currentTarget)}>
                 <button class="logoslot" on:click|stopPropagation={() => valjLoggaLag(l)} title="Välj logga/porträtt">
