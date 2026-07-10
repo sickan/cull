@@ -70,13 +70,17 @@ curl -s localhost:8090/health
 
 ## Docker
 
+Cloudflare Containers kör **linux/amd64**. På Apple Silicon måste plattformen
+anges explicit, annars byggs en arm64-image som inte går att köra där.
+
 ```bash
-docker build -f src/dpt2/render_service/Dockerfile -t dpt-render .   # från repots rot
-docker run -p 8080:8080 -e RENDER_API_KEY=hemlig dpt-render
+# från repots rot
+docker build --platform linux/amd64 -f src/dpt2/render_service/Dockerfile -t dpt-render .
+docker run --platform linux/amd64 -p 8080:8080 -e RENDER_API_KEY=hemlig dpt-render
 ```
 
-> Dockerfilen är skriven men **ännu inte byggd** — docker fanns inte i miljön där
-> servicen togs fram. Kör bygget en gång innan den deployas.
+Byggd och verifierad: 223 MB, amd64. En riktig Horisont-story renderas inuti
+containern med typsnitt, temalogga och inskickat klubbmärke.
 
 ## Tester
 

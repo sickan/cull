@@ -1,20 +1,24 @@
 # Molnrender för Horisont-storyn (Mobil Live, Etapp 2).
 #
 # Innehåller ingen egen grafikkod: den kör `dpt2.motorer.story_overlay`,
-# samma renderare som desktop-appen. Enda tredjepartsberoendet är Pillow.
+# samma renderare som desktop-appen.
 #
-# Bygg från REPOTS ROT (contexten behöver src/):
-#   docker build -f src/dpt2/render_service/Dockerfile -t dpt-render .
-#   docker run -p 8080:8080 -e RENDER_API_KEY=... dpt-render
+# Bygg från REPOTS ROT (contexten behöver src/). Cloudflare Containers kör
+# linux/amd64 — på en Apple Silicon-Mac MÅSTE plattformen anges:
+#   docker build --platform linux/amd64 -f src/dpt2/render_service/Dockerfile -t dpt-render .
+#   docker run --platform linux/amd64 -p 8080:8080 -e RENDER_API_KEY=... dpt-render
 #
 # Värd-agnostisk med flit: Cloudflare Containers (kräver wrangler 4.x),
 # Fly, Railway eller en liten server — alla lyssnar bara på $PORT.
 
 FROM python:3.12-slim
 
-# Pillow laddar typsnitt/PNG via inbyggda wheels; inga apt-paket behövs för
-# de format vi använder (JPEG/PNG + FreeType följer med manylinux-wheelen).
-RUN pip install --no-cache-dir "Pillow>=10,<13"
+# Pillow OCH numpy. numpy importeras LAZILY inne i story_overlay (gradient-scrims
+# + de mjuka cirkelmaskerna — PIL har ingen gradient), så en mätning av
+# import-tidens beroenden missar den: containern startade fint och föll först
+# vid FÖRSTA RENDERINGEN med "No module named 'numpy'". Inga apt-paket behövs —
+# JPEG/PNG + FreeType följer med manylinux-wheelsen.
+RUN pip install --no-cache-dir "Pillow>=10,<13" "numpy>=1.26,<3"
 
 WORKDIR /app
 
