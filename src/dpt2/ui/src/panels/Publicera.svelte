@@ -12,6 +12,7 @@
     valjMapp, listaSomeBilder, thumbForBild,
     forhandsgranskaStory, publiceraLiveStory, publiceraKanal, nyTestPaketMapp,
     publiceraInnehallNatet, listaMaterial, sparaMaterial, genereraBildsvep,
+    forhandsgranskaBildsvepFraga,
     listaMinneskort, exporteraSkyddade,
     pagangMatcher, sattPagangVisa, publiceraPagangMatcher, hamtaLive, synkaLivePaket,
   } from '../lib/api.js'
@@ -60,6 +61,9 @@
     // Materialraden följer matchen. Återanvänd matchens senaste SoMe-rad så att
     // spara/publicera uppdaterar den i stället för att lämna dubbletter efter sig.
     materialId = (materials || []).find((m) => m.match_id === id && m.kind === 'some')?.id || null
+    // En öppen prompt-granskning hör till FÖRRA matchen — annars skulle man
+    // godkänna en fråga och skicka en annan.
+    granska = null; genFel = ''
     nollstallLive()
     pollaLive()          // visa mobilens tillstånd direkt vid matchbyte
   }
@@ -91,7 +95,10 @@
     }
   }
 
-  onDestroy(() => { if (livePoll) clearInterval(livePoll) })
+  onDestroy(() => {
+    if (livePoll) clearInterval(livePoll)
+    if (genTimer) clearInterval(genTimer)   // panelen kan lämnas mitt i ett 2-min-anrop
+  })
 
   // ── Matchväljare ───────────────────────────────────────────────────────────
   let matchOpen = false
@@ -213,26 +220,56 @@
   // B2: generera bildtexten med Claude (riktigt anrop via genereraBildsvep →
   // backend bildsvep.generera). Ton + kända matchfakta (resultat/mellan/
   // målskyttar/arena/datum/liga) matas in i prompten. ~2 min i skarpt läge.
+  //
+  // Flödet är TVÅ steg: bygg frågan lokalt (inget nätverk) → låt användaren
+  // granska den → skicka. Det skarpa anropet tar ~2 minuter, så man ska veta
+  // exakt vad som skickas innan man startar det, och se att det pågår.
   const TONER = ['Neutral', 'Peppig', 'Kort']
   let ton = 'Neutral'
   let genererar = false
   let genFel = ''
-  async function genereraCaption() {
-    if (!match || genererar) return
-    genererar = true; genFel = ''
-    const matchinfo = `${match.lag_hemma} – ${match.lag_borta}` + (resNu.resultat ? ` ${resNu.resultat}` : '')
-    const fakta = {
-      resultat: resNu.resultat, mellan: resNu.mellan, malskyttar: resNu.malskyttar,
-      arena: match.arena || '', datum: match.datum || '', liga: match.liga || '', ton,
-    }
+  let granska = null            // frågetexten medan granskningen är öppen
+  let laddarFraga = false
+  let genSek = 0
+  let genTimer = null
+
+  // Delade byggare — granskad fråga och skickad fråga MÅSTE utgå från samma data.
+  const genInfo = () => `${match.lag_hemma} – ${match.lag_borta}` + (resNu.resultat ? ` ${resNu.resultat}` : '')
+  const genFakta = () => ({
+    resultat: resNu.resultat, mellan: resNu.mellan, malskyttar: resNu.malskyttar,
+    arena: match.arena || '', datum: match.datum || '', liga: match.liga || '', ton,
+  })
+
+  async function oppnaGranska() {
+    if (!match || genererar || laddarFraga) return
+    genFel = ''; laddarFraga = true
     try {
-      const r = await genereraBildsvep(matchinfo, match.sport || '', '', fakta)
+      const r = await forhandsgranskaBildsvepFraga(genInfo(), genFakta())
+      if (r?.ok) granska = r.fraga
+      else genFel = r?.fel || 'Kunde inte bygga frågan.'
+    } catch (e) {
+      genFel = 'Kunde inte bygga frågan.'
+    }
+    laddarFraga = false
+  }
+  const avbrytGranska = () => (granska = null)
+
+  async function skickaTillClaude() {
+    if (!match || genererar) return
+    const info = genInfo(), fakta = genFakta()
+    granska = null; genererar = true; genFel = ''; genSek = 0
+    genTimer = setInterval(() => (genSek += 1), 1000)
+    try {
+      const r = await genereraBildsvep(info, match.sport || '', '', fakta)
       if (r?.ok && r.bildsvep) caption = r.bildsvep
       else genFel = r?.fel || 'Kunde inte generera texten.'
     } catch (e) {
       genFel = 'Kunde inte generera texten.'
+    } finally {
+      // finally: knappen får aldrig fastna på "Genererar…" om anropet kastar
+      genererar = false
+      clearInterval(genTimer); genTimer = null
     }
-    genererar = false
   }
 
   // Länkar
@@ -695,13 +732,27 @@
       <div class="korthuvud">
         <span class="caps">Text</span>
         <div class="genrad">
-          <button class="genbtn" on:click={genereraCaption} disabled={!match || genererar} title="Skriv bildtexten med Claude">
+          <button class="genbtn" on:click={oppnaGranska} disabled={!match || genererar || laddarFraga} title="Skriv bildtexten med Claude">
             <svg viewBox="0 0 24 24" fill="currentColor" class="stjarna"><path d="M12 2.5l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/></svg>
-            {genererar ? 'Genererar…' : 'Generera med Claude'}
+            {laddarFraga ? 'Bygger fråga…' : genererar ? 'Genererar…' : 'Generera med Claude'}
           </button>
-          {#if caption && !genererar}<button class="genigen" on:click={genereraCaption} disabled={!match} title="Generera igen">↻ Igen</button>{/if}
+          {#if caption && !genererar && !laddarFraga}<button class="genigen" on:click={oppnaGranska} disabled={!match} title="Generera igen">↻ Igen</button>{/if}
         </div>
       </div>
+      {#if granska}
+        <div class="granska">
+          <div class="granskaTitel">Granska frågan innan den skickas till Claude</div>
+          <div class="granskaHint">Tar cirka 2 minuter — websökning används bara för det som inte redan står här
+            (nästa match, tabellkontext, @-handles).</div>
+          <pre class="granskaFraga">{granska}</pre>
+          <div class="granskaKnappar">
+            <button class="sek" on:click={avbrytGranska}>Avbryt</button>
+            <button class="prim" on:click={skickaTillClaude}>Skicka till Claude ›</button>
+          </div>
+        </div>
+      {:else if genererar}
+        <div class="genprog"><span class="genspin"></span>Genererar… {genSek}s (websöker matchfakta, tar ofta ~2 min)</div>
+      {/if}
       <textarea class="cap" rows="4" bind:this={capEl} bind:value={caption}></textarea>
       <div class="tokrad"><span class="tlbl">Infoga:</span>
         {#each TOKENS as t}<button class="tok" on:click={() => insertToken(t)}>{t}</button>{/each}</div>
@@ -1125,6 +1176,25 @@
     border: 1px solid var(--div); background: transparent; color: var(--t-mut); }
   .tonchip.on { background: var(--acc); border-color: var(--acc); color: var(--ink); }
   .genfel { font-size: 11.5px; color: var(--rose); font-weight: 600; margin-top: 9px; }
+
+  /* Godkänn prompten: exakt frågetexten som skickas, byggd lokalt utan nätanrop. */
+  .granska { border: 1px solid var(--div3); border-radius: 10px; background: var(--panel);
+    padding: 11px 12px; margin: 10px 0 4px; }
+  .granskaTitel { font-size: 12px; font-weight: 700; color: var(--t-head); }
+  .granskaHint { font-size: 11px; color: var(--t-help); margin-top: 3px; line-height: 1.5; }
+  .granskaFraga { margin: 9px 0; padding: 9px 10px; max-height: 190px; overflow: auto;
+    background: var(--kort); border: 1px solid var(--div3); border-radius: 8px;
+    font-size: 11px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+    color: var(--t-mut); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .granskaKnappar { display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* Progress: det skarpa anropet tar ~2 min — utan detta känns knappen trasig. */
+  .genprog { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px;
+    font-size: 11.5px; color: var(--t-mut); }
+  .genspin { width: 12px; height: 12px; flex: none; border-radius: 50%;
+    border: 2px solid var(--div3); border-top-color: var(--acc);
+    animation: gensnurr 0.8s linear infinite; }
+  @keyframes gensnurr { to { transform: rotate(360deg); } }
   .prevgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
   .prevkol { border: 1px solid var(--div3); border-radius: 9px; background: var(--panel); padding: 10px 12px; min-width: 0; }
   .prevlbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-caps); margin-bottom: 6px; }
