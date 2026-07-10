@@ -64,8 +64,19 @@ class TestWorkerMain(unittest.TestCase):
         self.assertEqual(self.rader[-1]["typ"], "fel")
 
     def test_story_utan_moment_ger_fel(self):
-        worker.main(["story", '{"config": {}}'])
+        # db_path MÅSTE anges — utan den öppnade (och migrerade!) det här testet
+        # användarens skarpa ~/.config/dpt2/dpt.db. Se worker._db.
+        worker.main(["story", '{"config": {}, "db_path": ":memory:"}'])
         self.assertEqual(self.rader[-1]["typ"], "fel")
+
+    def test_jobb_utan_db_path_ger_fel_och_ror_aldrig_skarpa_db(self):
+        """Regressionsskydd: ett worker-jobb får ALDRIG falla tillbaka på
+        db.DB_DEFAULT. Gjorde det tidigare → pytest migrerade den skarpa
+        databasen och DPT2 vägrade starta."""
+        from dpt2.data import db as _db_mod
+        worker.main(["story", '{"config": {"moment": "avspark"}}'])   # ingen db_path
+        self.assertEqual(self.rader[-1]["typ"], "fel")
+        self.assertIn("db_path", self.rader[-1]["text"])
 
     def test_ej_implementerat_jobb_ger_fel_event(self):
         worker.main(["gallra", "{}"])

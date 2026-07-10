@@ -40,9 +40,22 @@ def _logg(niva="info"):
 
 
 def _db(args):
+    """Öppnar jobbets databas. `db_path` är OBLIGATORISK.
+
+    Tidigare föll den tillbaka på `db.DB_DEFAULT` — användarens riktiga
+    ~/.config/dpt2/dpt.db. `app.py:_kor_jobb` injicerar alltid db_path, så
+    fallbacken var död i drift men förödande i test: `worker.main(["story", …])`
+    utan db_path öppnade den SKARPA databasen och lät `init_db` MIGRERA den.
+    Det syntes inte förrän en gren hade högre SCHEMA_VERSION än koden appen kör
+    — då vägrade DPT2 starta ("schemaversion nyare än kodens").
+
+    Saknad db_path är alltså ett anropsfel. main() fångar undantaget och skickar
+    ett 'fel'-event, precis som för andra ogiltiga jobbargument."""
     from dpt2.data import db
-    return db.oppna(os.path.expanduser(args["db_path"]) if args.get("db_path")
-                    else db.DB_DEFAULT, check_same_thread=False)
+    p = args.get("db_path")
+    if not p:
+        raise ValueError("db_path saknas i jobbargumenten")
+    return db.oppna(os.path.expanduser(p), check_same_thread=False)
 
 
 def jobb_omrakna(args):
