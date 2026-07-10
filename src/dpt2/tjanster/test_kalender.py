@@ -54,6 +54,17 @@ class TestKalender(unittest.TestCase):
         self.assertEqual(r["jobb"]["id"], "ny")
         self.assertTrue(k.radera_jobb("ny")["ok"])
 
+    def test_hamta_jobb_packar_upp_event(self):
+        # Behövs av match-synken: läs jobbet först så description (fotografens
+        # anteckning) kan bevaras när PUT ersätter hela jobbet.
+        t = FejkTransport({("GET", "/api/events/j1"):
+                           (200, {"event": {"id": "j1", "description": "Kund: Anna"}})})
+        k = Kalender(api_key="x", transport=t)
+        r = k.hamta_jobb("j1")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["jobb"]["description"], "Kund: Anna")
+        self.assertEqual(t.anrop[0]["headers"]["Authorization"], "Bearer x")
+
     def test_fel_status_ger_tom_lista(self):
         t = FejkTransport({("GET", "/api/events"): (401, {"error": "Ogiltig API-nyckel"})})
         k = Kalender(api_key="fel", transport=t)

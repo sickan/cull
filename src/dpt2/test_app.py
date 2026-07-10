@@ -649,6 +649,8 @@ class _FakeKalender:
         self.skapade = []
         self.raderade = []
         self.uppdaterade = []
+        self.beskrivningar = {}      # jobb-id → description hos "tjänsten"
+        self.jobb = []               # svar för lista_jobb
 
     def har_nyckel(self):
         return True
@@ -657,7 +659,11 @@ class _FakeKalender:
         return True
 
     def lista_jobb(self):
-        return []
+        return self.jobb
+
+    def hamta_jobb(self, jid):
+        return {"ok": True, "jobb": {"id": jid,
+                                     "description": self.beskrivningar.get(jid, "")}}
 
     def skapa_jobb(self, jobb):
         self.skapade.append(jobb)
@@ -758,26 +764,47 @@ class TestFotojobbUtkastBridge(unittest.TestCase):
         self.assertEqual(self.api.lista_fotojobb()[0]["notering"], "Kund: Anna")
         self.assertEqual(self.api.kalender.skapade, [])   # rörde aldrig tjänsten
 
-    def test_notering_skickas_aldrig_till_kalendertjansten(self):
-        """Anteckningen är lokal — läcker den till tjänsten kan Google-synken
-        skriva över den. Låser att den inte finns med i det pushade jobbet."""
+    def test_notering_synkas_som_description(self):
+        """Ägarens beslut 2026-07-11: anteckningen synkas till Google igen —
+        som event-description via kalendertjänsten. Den lokala fallback-raden
+        städas när noten väl bor hos tjänsten."""
         self.api.kalender = _FakeKalender()
         r = self.api.spara_fotojobb({"title": "Bröllop – Anna & Erik",
                                      "start_at": "2026-08-08T12:00",
                                      "notering": "Kund: Anna"})
         self.assertTrue(r["ok"])
         pushat = self.api.kalender.skapade[0]
-        self.assertNotIn("notering", pushat)
-        self.assertEqual(pushat["title"], "Bröllop – Anna & Erik")
-        # …men den lokala kopplingen skrevs, på id:t tjänsten gav tillbaka
+        self.assertNotIn("notering", pushat)          # rått fält läcker inte
+        self.assertEqual(pushat["description"], "Kund: Anna")
         self.assertEqual(
-            store.noteringar_for_fotojobb(self.api.conn, ["remote1"]),
-            {"remote1": "Kund: Anna"})
+            store.noteringar_for_fotojobb(self.api.conn, ["remote1"]), {})
+
+    def test_notering_lases_ur_description(self):
+        """Tvåvägs: en not skriven i Google Calendar (description) visas som
+        jobbets notering — och DPT:s resultatblock räknas INTE som not."""
+        fake = _FakeKalender()
+        fake.jobb = [{"id": "remote1", "title": "Match", "start_at": "2026-08-15",
+                      "end_at": "2026-08-15", "all_day": True, "status": "confirmed",
+                      "google_event_id": "g1",
+                      "description": "Ta med 400/2.8\n\nSlutresultat 6–0 (3–0)\nMål: Hansson 2"}]
+        self.api.kalender = fake
+        jobb = self.api.lista_fotojobb()
+        self.assertEqual(jobb[0]["notering"], "Ta med 400/2.8")
+
+    def test_gammal_lokal_notering_visas_som_fallback(self):
+        """Noter skrivna före description-synken (bara i lokala tabellen)
+        ska inte försvinna ur listan innan jobbet sparats om."""
+        fake = _FakeKalender()
+        fake.jobb = [{"id": "remote1", "title": "Bröllop", "start_at": "2026-08-08",
+                      "end_at": "2026-08-08", "all_day": True, "status": "confirmed",
+                      "google_event_id": "g1", "description": ""}]
+        self.api.kalender = fake
+        store.satt_fotojobb_notering(self.api.conn, "remote1", "Kund: Anna")
+        self.assertEqual(self.api.lista_fotojobb()[0]["notering"], "Kund: Anna")
 
     def test_radera_jobb_stadar_noteringen(self):
         self.api.kalender = _FakeKalender()
-        self.api.spara_fotojobb({"title": "Bröllop", "start_at": "2026-08-08T12:00",
-                                 "notering": "Kund: Anna"})
+        store.satt_fotojobb_notering(self.api.conn, "remote1", "Kund: Anna")
         self.api.radera_fotojobb("remote1")
         self.assertEqual(store.noteringar_for_fotojobb(self.api.conn, ["remote1"]), {})
 
@@ -835,6 +862,25 @@ class TestFotojobbUtkastBridge(unittest.TestCase):
         self.assertEqual(fake.skapade[0]["location"], "Eleda Stadion")
         # utkastet är borta lokalt — det som nu finns kommer från tjänsten (lista_jobb)
         self.assertIsNone(store.hamta_fotojobb_utkast(self.api.conn, uid))
+
+    def test_aktivera_synk_tar_med_notering_och_flyttar_matchlank(self):
+        """Noteringen följer med som description och match-kopplingen flyttas
+        till det nya jobbets id — tidigare orphanades båda på utkast-id:t."""
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
+        mid = store.spara_match(self.api.conn, {"lag_hemma": "A", "lag_borta": "B"})
+        self.api.kalender = _FakeKalender()
+        self.api.spara_fotojobb({"id": uid, "utkast": True,
+                                 "notering": "Ackreditering klar", "match_id": mid})
+        r = self.api.aktivera_synk_fotojobb(uid)
+        self.assertTrue(r["ok"])
+        self.assertEqual(self.api.kalender.skapade[0]["description"],
+                         "Ackreditering klar")
+        self.assertEqual(store.matchref_for_fotojobb(self.api.conn, ["remote1"]),
+                         {"remote1": mid})
+        self.assertEqual(store.matchref_for_fotojobb(self.api.conn, [uid]), {})
+        self.assertEqual(store.noteringar_for_fotojobb(self.api.conn, [uid]), {})
 
     def test_aktivera_synk_okant_utkast(self):
         r = self.api.aktivera_synk_fotojobb("finns-ej")
@@ -935,22 +981,44 @@ class TestMatchSynkOchRadering(unittest.TestCase):
         self.api.radera_match(self.mid)
         self.assertIsNone(self.api.aktiv_match())
 
-    def test_redigering_uppdaterar_lankat_jobb_utan_resultat(self):
-        # §9: kalenderjobbet härleds från matchen — redigering (t.ex. ny
-        # arena) ska pusha ett uppdaterat jobb, men resultatet ska ALDRIG
-        # skrivas in där (ingen tredje kopia av "· 6-0").
+    def test_redigering_uppdaterar_lankat_jobb_med_resultatblock(self):
+        # Ägarens beslut 2026-07-11 (upphäver §9-låset): redigering pushar
+        # uppdaterat jobb, och finns ett slutresultat skrivs det som
+        # resultatblock i description — titel/plats hålls fortsatt rena.
         self.api.satt_match_synk(self.mid, True)
         self.assertEqual(self.fake.uppdaterade, [])
         m = store.hamta_match(self.api.conn, self.mid)
         m["arena"] = "Ny arena"
         m["resultat"] = "6-0"
+        m["mellan"] = "3-0"
         self.api.spara_match(m)
         self.assertEqual(len(self.fake.uppdaterade), 1)
         jid, jobb = self.fake.uppdaterade[0]
         self.assertEqual(jid, "remote1")
         self.assertEqual(jobb["location"], "Ny arena")
-        self.assertNotIn("resultat", jobb)
-        self.assertNotIn("6-0", jobb.values())
+        self.assertEqual(jobb["title"], "Malmö FF – FC Rosengård")
+        self.assertEqual(jobb["description"], "Slutresultat 6-0 (3-0)")
+
+    def test_matchsynk_bevarar_notering_i_description(self):
+        # PUT hos tjänsten ersätter hela jobbet — fotografens anteckning i
+        # description måste läsas upp och skrivas tillbaka framför blocket.
+        self.api.satt_match_synk(self.mid, True)
+        self.fake.beskrivningar["remote1"] = "Ta med 400/2.8"
+        r = self.api.satt_resultat(self.mid, "2-1", "1-1", "Berg 55', Ali 78'")
+        self.assertTrue(r["ok"])
+        jid, jobb = self.fake.uppdaterade[-1]
+        self.assertEqual(jid, "remote1")
+        self.assertEqual(jobb["description"],
+                         "Ta med 400/2.8\n\nSlutresultat 2-1 (1-1)\nMål: Berg 55', Ali 78'")
+
+    def test_gammalt_resultatblock_skrivs_om_inte_dubblas(self):
+        # Körs synken två gånger ska blocket ersättas, inte staplas.
+        self.api.satt_match_synk(self.mid, True)
+        self.fake.beskrivningar["remote1"] = ("Ta med 400/2.8\n\n"
+                                              "Slutresultat 1-0")
+        self.api.satt_resultat(self.mid, "2-1", "", "")
+        jid, jobb = self.fake.uppdaterade[-1]
+        self.assertEqual(jobb["description"], "Ta med 400/2.8\n\nSlutresultat 2-1")
 
     def test_spara_utan_lankat_jobb_pushar_inget(self):
         mid = self.api.spara_match({"lag_hemma": "A", "lag_borta": "B",

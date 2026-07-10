@@ -73,6 +73,12 @@ class Kalender:
                 time.sleep(0.6)      # kort backoff, låt Workern vakna
         return []
 
+    def hamta_jobb(self, jobb_id):
+        """Ett enskilt jobb (med description) — behövs när en uppdatering ska
+        bevara fält vi inte äger lokalt (PUT hos tjänsten ersätter HELA jobbet)."""
+        status, data = self._anrop("GET", f"/api/events/{jobb_id}", auth=True)
+        return {"ok": status == 200, "status": status, "jobb": _packa_upp(data)}
+
     def skapa_jobb(self, jobb):
         status, data = self._anrop("POST", "/api/events", body=jobb, auth=True)
         return {"ok": status in (200, 201), "status": status,

@@ -78,6 +78,8 @@ class Api:
         # Spegla ut till Mobil Live (best-effort, i bakgrunden — se _push_live).
         self._push_live(match_id, {"resultat": resultat or "", "mellan": mellan or "",
                                    "malskyttar": malskyttar or ""})
+        # …och till det länkade kalenderjobbet (resultatblock i description).
+        self._synka_kalenderjobb(match_id)
         return {"ok": True}
 
     # ── Mobil Live (mobilen ⇄ desktop via content-sync /api/live) ────────────
@@ -239,10 +241,12 @@ class Api:
         return {"ok": fel is None, "antal": antal, "borttagna": borttagna, "fel": fel}
 
     def _synka_kalenderjobb(self, match_id):
-        """Push:ar matchens aktuella titel/tid/arena/liga till ett redan
-        länkat, RIKTIGT kalenderjobb (utkast räknas inte) — härlett, inte
-        dubblat: resultatet skrivs aldrig in i jobbet (se _match_till_jobbdata).
-        Tyst best-effort — kalendersynk får aldrig blockera matchsparningen."""
+        """Push:ar matchens aktuella titel/tid/arena — och numera även
+        SLUTRESULTATET som beskrivningsblock (ägarens beslut 2026-07-11) — till
+        ett redan länkat, RIKTIGT kalenderjobb (utkast räknas inte). Jobbet
+        hämtas först så fotografens anteckning i description överlever (PUT hos
+        tjänsten ersätter hela jobbet); går det inte att läsa rörs jobbet inte
+        alls. Tyst best-effort — kalendersynk får aldrig blockera sparningen."""
         if not self.kalender.har_nyckel():
             return
         lankade = [j for j in store.fotojobb_for_match(self.conn, match_id)
@@ -252,8 +256,17 @@ class Api:
         m = store.hamta_match(self.conn, match_id)
         if not m or not m.get("datum"):
             return
+        jid = lankade[0]
         try:
-            self.kalender.uppdatera_jobb(lankade[0], _match_till_jobbdata(m))
+            r = self.kalender.hamta_jobb(jid)
+            if not r.get("ok"):
+                return
+            notering, _ = _dela_beskrivning((r.get("jobb") or {}).get("description"))
+            if not notering:
+                notering = store.noteringar_for_fotojobb(self.conn, [jid]).get(jid, "")
+            data = _match_till_jobbdata(m)
+            data["description"] = _bygg_beskrivning(notering, m)
+            self.kalender.uppdatera_jobb(jid, data)
         except Exception:
             pass
 
@@ -552,16 +565,23 @@ class Api:
         noteringar = store.noteringar_for_fotojobb(self.conn, ider)
         for j in alla:
             j["match_id"] = matchref.get(j.get("id"))
-            j["notering"] = noteringar.get(j.get("id"), "")
+            if j.get("utkast"):
+                j["notering"] = noteringar.get(j.get("id"), "")
+            else:
+                # Synkade jobb: anteckningen BOR i Google-description (tvåvägs —
+                # redigeringar i Google Calendar syns här). Resultatblocket är
+                # DPT:s eget och visas separat (resultatForJobb), inte som not.
+                # Lokal rad = fallback för noter skrivna innan description-synken.
+                note, _ = _dela_beskrivning(j.get("description"))
+                j["notering"] = note or noteringar.get(j.get("id"), "")
         return alla
 
     def spara_fotojobb(self, jobb):
         """Skapar (utan id) eller uppdaterar (med id) ett fotojobb. Ett utkast
         (jobb.utkast=True) sparas bara LOKALT — pushas aldrig till tjänsten
         förrän aktivera_synk_fotojobb anropas explicit. match_id ("Koppla till
-        match") och notering (fotografens anteckning) rör aldrig tjänsten —
-        de sparas i lokala tabeller sedan jobbets id är känt (nytt jobb får
-        sitt id från tjänstens svar)."""
+        match") är lokal; notering synkas som Google-description (tvåvägs,
+        ägarens beslut 2026-07-11) med ev. resultatblock från kopplad match."""
         if jobb.get("utkast") and jobb.get("id"):
             store.spara_fotojobb_utkast_falt(self.conn, jobb["id"], jobb)
             if "match_id" in jobb:
@@ -570,11 +590,17 @@ class Api:
                 store.satt_fotojobb_notering(self.conn, jobb["id"], jobb.get("notering"))
             return {"ok": True}
         jid = jobb.get("id")
-        # notering ingår MEDVETET inte — den är lokal och skickas aldrig till
-        # kalendertjänsten (annars skulle Google-synk kunna skriva över den).
         data = {k: jobb.get(k) for k in
                 ("title", "start_at", "end_at", "location", "description",
                  "category", "all_day") if k in jobb}
+        if "notering" in jobb:
+            # description byggs alltid om ur noteringen (+ resultatblock när en
+            # kopplad match har resultat) — den lästa description i `jobb` kan
+            # bära ett gammalt block och får inte vinna över ombygget.
+            match_id = (jobb.get("match_id") if "match_id" in jobb else
+                        store.matchref_for_fotojobb(self.conn, [jid]).get(jid) if jid else None)
+            m = store.hamta_match(self.conn, match_id) if match_id else None
+            data["description"] = _bygg_beskrivning(jobb.get("notering"), m)
         try:
             r = (self.kalender.uppdatera_jobb(jid, data) if jid
                  else self.kalender.skapa_jobb(data))
@@ -586,7 +612,9 @@ class Api:
                 if "match_id" in jobb:
                     store.lanka_fotojobb_match(self.conn, sparat_id, jobb.get("match_id"))
                 if "notering" in jobb:
-                    store.satt_fotojobb_notering(self.conn, sparat_id, jobb.get("notering"))
+                    # Noteringen bor hos tjänsten nu — städa den lokala
+                    # fallback-raden så gamla noter inte spökar efter migrering.
+                    store.satt_fotojobb_notering(self.conn, sparat_id, "")
         return r
 
     def radera_fotojobb(self, jobb_id):
@@ -606,18 +634,32 @@ class Api:
     def aktivera_synk_fotojobb(self, utkast_id):
         """Skickar ett lokalt utkast till Calendar Sync-tjänsten på riktigt
         (som i sin tur speglar det till Google). Tar bort det lokala utkastet
-        vid lyckad synk — annars behålls det så man kan försöka igen."""
+        vid lyckad synk — annars behålls det så man kan försöka igen.
+        Noteringen följer med som description, och match-kopplingen flyttas
+        till det nya jobbets id (tidigare blev båda kvar på utkast-id:t och
+        tappades när utkastet raderades)."""
         u = store.hamta_fotojobb_utkast(self.conn, utkast_id)
         if not u:
             return {"ok": False, "fel": "Utkastet finns inte längre."}
+        notering = store.noteringar_for_fotojobb(
+            self.conn, [utkast_id]).get(utkast_id, "")
+        match_id = store.matchref_for_fotojobb(
+            self.conn, [utkast_id]).get(utkast_id)
+        m = store.hamta_match(self.conn, match_id) if match_id else None
         data = {"title": u["title"], "start_at": u["start_at"],
                 "end_at": u["end_at"], "all_day": bool(u["all_day"]),
-                "location": u.get("location"), "category": u.get("category")}
+                "location": u.get("location"), "category": u.get("category"),
+                "description": _bygg_beskrivning(notering, m)}
         try:
             r = self.kalender.skapa_jobb(data)
         except Exception as e:
             return {"ok": False, "fel": str(e)}
         if r.get("ok"):
+            nytt_id = (r.get("jobb") or {}).get("id")
+            if nytt_id and match_id:
+                store.lanka_fotojobb_match(self.conn, nytt_id, match_id)
+            store.lanka_fotojobb_match(self.conn, utkast_id, None)
+            store.satt_fotojobb_notering(self.conn, utkast_id, "")
             store.radera_fotojobb_utkast(self.conn, utkast_id)
         return r
 
@@ -1498,6 +1540,38 @@ def _match_till_jobbdata(m):
     return {"title": titel, "all_day": True,
             "start_at": m["datum"], "end_at": m["datum"],
             "location": m.get("arena") or "", "category": "Sport"}
+
+
+def _resultat_block(m):
+    """Matchens slutresultat som textblock för kalenderjobbets beskrivning
+    (ägarens beslut 2026-07-11: resultatet SKA synkas till Google — det gamla
+    "härlett, aldrig dubblat"-läget är upphävt). Tom sträng utan resultat."""
+    if not (m and (m.get("resultat") or "").strip()):
+        return ""
+    rad = f"Slutresultat {m['resultat'].strip()}"
+    if (m.get("mellan") or "").strip():
+        rad += f" ({m['mellan'].strip()})"
+    if (m.get("malskyttar") or "").strip():
+        rad += "\nMål: " + m["malskyttar"].strip()
+    return rad
+
+
+def _dela_beskrivning(beskrivning):
+    """Jobbets Google-description → (notering, resultatblock). Resultatblocket
+    känns igen på en rad som börjar "Slutresultat" — allt före är fotografens
+    anteckning, allt från den raden är DPT:s eget block (skrivs alltid om ur
+    matchen, aldrig ur texten)."""
+    rader = (beskrivning or "").splitlines()
+    for i, r in enumerate(rader):
+        if r.startswith("Slutresultat"):
+            return ("\n".join(rader[:i]).strip(), "\n".join(rader[i:]).strip())
+    return ((beskrivning or "").strip(), "")
+
+
+def _bygg_beskrivning(notering, m=None):
+    """Notering + ev. resultatblock → kalenderjobbets description (Google)."""
+    delar = [d for d in ((notering or "").strip(), _resultat_block(m)) if d]
+    return "\n\n".join(delar)
 
 
 def _utkast_till_jobbdict(u):
