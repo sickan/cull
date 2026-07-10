@@ -86,9 +86,22 @@
     herr: lag.filter((l) => l.gren === 'herr').length,
     mixed: lag.filter((l) => l.gren === 'mixed').length,
   }
+  // B1: arkiv-support + sport-gruppering. Göm arkiverade från huvudlistan.
   $: lagFiltrerat = lagSorterad
+    .filter((l) => !l.arkiverad)     // B1: dölj arkiverade
     .filter((l) => lagGren === 'alla' || l.gren === lagGren)
     .filter((l) => !lagSearch || norm(l.namn).includes(norm(lagSearch)))
+
+  // B1: gruppera efter sport för visning (fotboll/handboll/etc)
+  $: lagGrupperat = (() => {
+    const g = {}
+    lagFiltrerat.forEach((l) => {
+      const s = l.sport || 'fotboll'
+      if (!g[s]) g[s] = []
+      g[s].push(l)
+    })
+    return SPORTER.map((s) => ({ sport: s, lag: g[s] || [] })).filter((g) => g.lag.length)
+  })()
 
   function hexToRgba(hex, a) {
     const n = parseInt((hex || '').replace('#', ''), 16)
@@ -167,7 +180,7 @@
     lag = [...lag, { id, namn: '', kind: 'team', sport: 'fotboll', gren: 'dam',
       instagram: '', hemsida: '', logga: null, stall_hemma: '#2f7cb0',
       stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '#2f7cb0',
-      klubb: '', comps: [] }]
+      klubb: '', comps: [], arkiverad: false }]
     apnaLag({ id })
   }
   function nyTavling() {
@@ -309,7 +322,10 @@
         <p class="tom">Inga lag eller utövare hittades.</p>
       {:else}
         <div class="lista">
-          {#each lagFiltrerat as l (l.id)}
+          {#each lagGrupperat as grupp (grupp.sport)}
+            <div class="sportgrupp">
+              <div class="sportnamn">{SPORT_ETIKETT[grupp.sport]}</div>
+              {#each grupp.lag as l (l.id)}
             <div class="kkort" style={l.gren ? `border-left:3px solid ${grenFarg(l.gren)}` : ''}>
               <div class="krad" role="button" tabindex="0" on:click={() => apnaLag(l)}
                 on:keydown={(e) => e.key === 'Enter' && apnaLag(l)}>
@@ -354,6 +370,10 @@
                         <option value={null}>Välj sport…</option>
                         {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
                       </select>
+                    </label>
+                    <label class="arkivrad">
+                      <input type="checkbox" bind:checked={l.arkiverad} on:change={() => gerLag(l)} />
+                      <span class="lbl">Arkiverat</span>
                     </label>
                     <div class="dubbel">
                       <input bind:value={l.hemsida} on:change={() => gerLag(l)} placeholder="Hemsida" />
@@ -447,6 +467,8 @@
                 </div>
                 <div class="formfot"><button class="klart" on:click={stangRad}>Klart</button></div>
               {/if}
+            </div>
+              {/each}
             </div>
           {/each}
         </div>
@@ -552,7 +574,10 @@
   .grenchip.on:first-child { background: var(--acc-soft); color: var(--acc); }
 
   .kmeta { font-size: 12px; color: var(--t-mut); }
-  .lista { display: flex; flex-direction: column; gap: 8px; }
+  .lista { display: flex; flex-direction: column; gap: 12px; }
+
+  .sportgrupp { display: flex; flex-direction: column; gap: 6px; }
+  .sportnamn { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t-label); padding: 0 4px; }
 
   /* Kortskal (rad + ev. utfälld redigering) — matcher-stil */
   .kkort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
@@ -596,6 +621,9 @@
   .chipny:hover { border-color: var(--acc); color: var(--acc); }
   .sportrad { display: flex; align-items: center; gap: 10px; }
   .sportrad select { flex: 1; min-width: 0; }
+  .arkivrad { display: flex; align-items: center; gap: 8px; }
+  .arkivrad input[type="checkbox"] { flex: none; }
+  .arkivrad .lbl { font-size: 13px; }
   .datumf { display: flex; flex-direction: column; gap: 4px; }
   .datumf input { width: 100%; box-sizing: border-box; }
   .kalfot { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 10px 12px;
