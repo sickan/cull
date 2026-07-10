@@ -18,6 +18,7 @@ import threading
 from datetime import datetime
 
 from dpt2.data import db, store, sportprofil
+from dpt2.motorer import story_overlay          # hitta_logga (gamla filkonventionen)
 from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
                            publicera_korning, publicera_some, meta_api,
                            bildhosting, story_korning, testlage)
@@ -78,6 +79,31 @@ class Api:
         return {"ok": True}
 
     # ── Mobil Live (mobilen ⇄ desktop via content-sync /api/live) ────────────
+    def logga_url_for_lag(self, lag):
+        """Lagets publika logga-URL — speglar den till R2 första gången.
+
+        Molnrendern (Etapp 2) kan varken läsa `lag.logga` (lokal filsökväg)
+        eller `~/.config/dpt/loggor`. Utan URL faller den TYST tillbaka på en
+        monogram-badge i stället för klubbmärket. Idempotent: har laget redan en
+        `logga_url` görs inget nätanrop.
+
+        Returnerar "" när laget saknar logga (då ÄR monogram rätt) eller när
+        uppladdningen misslyckas — en logga får aldrig fälla hela synken."""
+        if lag.get("logga_url"):
+            return lag["logga_url"]
+        if not self.innehall_synk.har_nyckel():
+            return ""
+        # lag.logga (uppladdad i Lag & tävlingar) vinner över den gamla
+        # filsystemkonventionen — samma prioritet som story_overlay._valj_logga.
+        kalla = lag.get("logga") or story_overlay.hitta_logga(lag.get("namn"))
+        if not kalla:
+            return ""
+        url = self.innehall_synk.ladda_upp_logga(AX.slugga(lag.get("namn") or ""), kalla)
+        if url:
+            store.satt_lag_logga_url(self.conn, lag["id"], url)
+            lag["logga_url"] = url
+        return url or ""
+
     def _match_till_paket(self, m, lag_index=None):
         """Bygger match-paketet mobilen behöver för att VISA och FÖRA matchen.
         `m` = store.hamta_match-dict (har inline-spelare + hem_gren)."""
@@ -89,6 +115,10 @@ class Api:
             l = lag_index.get(namn) or {}
             return l.get("stall_hemma") or l.get("profilfarg") or ""
 
+        def _logga(namn):
+            l = lag_index.get(namn)
+            return self.logga_url_for_lag(l) if l else ""
+
         pr = sportprofil.profil(m.get("sport") or "") or {}
         datum, tid = (m.get("datum") or ""), (m.get("tid") or "")
         avspark = f"{datum}T{tid or '00:00'}:00" if datum else None
@@ -97,6 +127,10 @@ class Api:
             "lag_borta": m.get("lag_borta") or "",
             "lag_hemma_farg": _farg(m.get("lag_hemma")),
             "lag_borta_farg": _farg(m.get("lag_borta")),
+            # Molnrendern hämtar dessa ur R2 och skickar in dem i skapa_story.
+            # Tom sträng = laget saknar logga → monogram-badge (korrekt).
+            "lag_hemma_logga_url": _logga(m.get("lag_hemma")),
+            "lag_borta_logga_url": _logga(m.get("lag_borta")),
             "arena": m.get("arena") or "",
             "sport": m.get("sport") or "",
             "liga": m.get("liga") or "",

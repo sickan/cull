@@ -55,6 +55,7 @@ CREATE TABLE lag (
   hemsida      TEXT,
   instagram    TEXT,
   logga        TEXT,                     -- filsökväg (logga/porträtt)
+  logga_url    TEXT,                     -- speglad till R2 (molnrendern läser den)
   stall_hemma  TEXT,                     -- hex-färg (team)
   stall_borta  TEXT,
   stall_tredje TEXT,

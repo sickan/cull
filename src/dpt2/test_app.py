@@ -973,6 +973,86 @@ class TestGallringConfig(unittest.TestCase):
         self.assertFalse(g.ai)          # rapport → ai=False
 
 
+class FejkInnehallSynkLogga:
+    """Bara det logga_url_for_lag rör."""
+    def __init__(self, nyckel=True, url="https://x.dev/bilder/lag/malmo-ff/l.png"):
+        self._nyckel, self._url = nyckel, url
+        self.uppladdningar = []          # [(slug, sokvag)]
+
+    def har_nyckel(self):
+        return self._nyckel
+
+    def ladda_upp_logga(self, slug, sokvag, **kw):
+        self.uppladdningar.append((slug, str(sokvag)))
+        return self._url
+
+
+class TestLagLoggaTillR2(unittest.TestCase):
+    """Molnrendern läser laglogotyper ur R2 — utan URL faller den TYST tillbaka
+    på monogram-badge i stället för klubbmärket."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.synk = FejkInnehallSynkLogga()
+        self.api.innehall_synk = self.synk
+
+    def _lag(self, namn="Malmö FF", **extra):
+        lid = store.upsert_lag(self.api.conn, namn, **extra)
+        return next(l for l in store.lista_lag(self.api.conn) if l["id"] == lid)
+
+    def test_laddar_upp_och_sparar_url(self):
+        import tempfile
+        from pathlib import Path as P
+        with tempfile.TemporaryDirectory() as tmp:
+            logga = P(tmp) / "l.png"
+            logga.write_bytes(b"x")
+            lag = self._lag(logga=str(logga))
+            url = self.api.logga_url_for_lag(lag)
+            self.assertEqual(url, self.synk._url)
+            # persisterad → nästa gång görs inget nätanrop
+            farsk = next(l for l in store.lista_lag(self.api.conn) if l["id"] == lag["id"])
+            self.assertEqual(farsk["logga_url"], self.synk._url)
+
+    def test_idempotent_ingen_ny_uppladdning(self):
+        lag = self._lag()
+        lag["logga_url"] = "https://x.dev/redan.png"
+        self.assertEqual(self.api.logga_url_for_lag(lag), "https://x.dev/redan.png")
+        self.assertEqual(self.synk.uppladdningar, [])
+
+    def test_lag_utan_logga_ger_tom_strang(self):
+        # Inget att ladda upp → monogram är RÄTT, inte ett fel.
+        lag = self._lag(namn="Klubb Utan Logga XYZ")
+        self.assertEqual(self.api.logga_url_for_lag(lag), "")
+        self.assertEqual(self.synk.uppladdningar, [])
+
+    def test_utan_nyckel_ingen_uppladdning(self):
+        self.api.innehall_synk = FejkInnehallSynkLogga(nyckel=False)
+        self.assertEqual(self.api.logga_url_for_lag(self._lag()), "")
+
+    def test_misslyckad_uppladdning_faller_inte_synken(self):
+        import tempfile
+        from pathlib import Path as P
+        with tempfile.TemporaryDirectory() as tmp:
+            logga = P(tmp) / "l.png"; logga.write_bytes(b"x")
+            self.synk._url = None                      # uppladdning misslyckas
+            self.assertEqual(self.api.logga_url_for_lag(self._lag(logga=str(logga))), "")
+
+    def test_paket_bar_med_logga_urlarna(self):
+        import tempfile
+        from pathlib import Path as P
+        with tempfile.TemporaryDirectory() as tmp:
+            logga = P(tmp) / "l.png"; logga.write_bytes(b"x")
+            self._lag("Malmö FF", logga=str(logga))
+            self._lag("Testlag Utan Logga ZZZ")        # saknar logga → tom sträng
+            mid = self.api.spara_match({"lag_hemma": "Malmö FF",
+                                        "lag_borta": "Testlag Utan Logga ZZZ",
+                                        "datum": "2099-08-01", "sport": "fotboll"})["id"]
+            m = store.hamta_match(self.api.conn, mid)
+            p = self.api._match_till_paket(m)
+            self.assertEqual(p["lag_hemma_logga_url"], self.synk._url)
+            self.assertEqual(p["lag_borta_logga_url"], "")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 

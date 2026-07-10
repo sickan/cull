@@ -742,6 +742,14 @@ def radera_tavling(conn, tavling_id):
     conn.commit()
 
 
+def satt_lag_logga_url(conn, lag_id, url):
+    """Sparar den publika R2-URL:en till lagets logga. Molnrendern (Mobil Live
+    Etapp 2) kan inte läsa `lag.logga` — det är en lokal filsökväg.
+    Snäv UPDATE, inte `spara_lag`: den kräver ett fullständigt lag-dict."""
+    conn.execute("UPDATE lag SET logga_url=? WHERE id=?", (url or None, lag_id))
+    conn.commit()
+
+
 # ── App-inställningar (key-value, t.ex. aktiv match) ─────────────────────────
 def satt_installning(conn, nyckel, varde):
     conn.execute("INSERT OR REPLACE INTO installning(nyckel,varde) VALUES(?,?)",

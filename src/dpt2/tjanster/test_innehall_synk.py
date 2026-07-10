@@ -190,5 +190,88 @@ class TestListaOchRadera(unittest.TestCase):
         self.assertEqual(len(t.anrop), 2)
 
 
+class TestLaddaUppLogga(unittest.TestCase):
+    """Laglogotyper → R2. Alfakanalen MÅSTE överleva: `ladda_upp_bild` kör
+    optimera() som konverterar till RGB och sparar JPEG, vilket hade lagt
+    klubbmärket på en opak ruta. Därför en egen väg."""
+
+    def _png(self, storlek=800, alpha=0):
+        import io
+        from PIL import Image
+        b = io.BytesIO()
+        # genomskinlig bakgrund + en ogenomskinlig fyrkant = äkta alfakanal
+        im = Image.new("RGBA", (storlek, storlek), (0, 0, 0, alpha))
+        im.paste((200, 30, 40, 255), (storlek // 4, storlek // 4, storlek // 2, storlek // 2))
+        im.save(b, format="PNG")
+        return b.getvalue()
+
+    def _skriv(self, tmp, data, namn="malmö_ff.png"):
+        p = Path(tmp) / namn
+        p.write_bytes(data)
+        return p
+
+    def _synk(self):
+        t = FejkTransport({("PUT", "/api/bilder/lag/malmo-ff/malmö_ff.png"):
+                           (200, {"ok": True, "url": "https://x.dev/bilder/lag/malmo-ff/malmö_ff.png"})})
+        return InnehallSynk(bas_url="https://x.dev", api_key="hemlig", transport=t), t
+
+    def test_laddar_upp_och_returnerar_url(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            k, t = self._synk()
+            url = k.ladda_upp_logga("malmo-ff", self._skriv(tmp, self._png()))
+            self.assertEqual(url, "https://x.dev/bilder/lag/malmo-ff/malmö_ff.png")
+            self.assertEqual(t.anrop[0]["metod"], "PUT")
+            self.assertIn("/api/bilder/lag/malmo-ff/", t.anrop[0]["url"])
+
+    def test_behaller_png_och_alfakanal(self):
+        import io
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as tmp:
+            k, t = self._synk()
+            k.ladda_upp_logga("malmo-ff", self._skriv(tmp, self._png()))
+            skickad = t.anrop[0]["body"]
+            self.assertEqual(t.anrop[0]["headers"]["Content-Type"], "image/png")
+            bild = Image.open(io.BytesIO(skickad))
+            self.assertEqual(bild.format, "PNG")
+            self.assertEqual(bild.mode, "RGBA")
+            # hörnet ska fortfarande vara genomskinligt
+            self.assertEqual(bild.getpixel((0, 0))[3], 0)
+
+    def test_skalas_ned_till_max_bredd(self):
+        import io
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as tmp:
+            k, t = self._synk()
+            k.ladda_upp_logga("malmo-ff", self._skriv(tmp, self._png(800)), max_bredd=512)
+            self.assertEqual(Image.open(io.BytesIO(t.anrop[0]["body"])).width, 512)
+
+    def test_liten_logga_skalas_inte_upp(self):
+        import io
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as tmp:
+            k, t = self._synk()
+            k.ladda_upp_logga("malmo-ff", self._skriv(tmp, self._png(120)), max_bredd=512)
+            self.assertEqual(Image.open(io.BytesIO(t.anrop[0]["body"])).width, 120)
+
+    def test_saknad_fil_ger_none_utan_anrop(self):
+        k, t = self._synk()
+        self.assertIsNone(k.ladda_upp_logga("malmo-ff", "/finns/inte.png"))
+        self.assertEqual(t.anrop, [])
+
+    def test_trasig_bild_ger_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            k, t = self._synk()
+            p = Path(tmp) / "trasig.png"
+            p.write_bytes(b"inte en png")
+            self.assertIsNone(k.ladda_upp_logga("malmo-ff", p))
+            self.assertEqual(t.anrop, [])
+
+    def test_serverfel_ger_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            t = FejkTransport({})            # allt → 404
+            k = InnehallSynk(bas_url="https://x.dev", api_key="hemlig", transport=t)
+            self.assertIsNone(k.ladda_upp_logga("x", self._skriv(tmp, self._png()), forsok=1))
+
+
 if __name__ == "__main__":
     unittest.main()

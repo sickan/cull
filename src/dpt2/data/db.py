@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -485,6 +485,12 @@ def _migrera(conn, fran_version):
           fotojobb_id TEXT PRIMARY KEY,
           notering    TEXT NOT NULL
         )""")
+    if fran_version < 20:
+        # v20: lagets logga speglad till R2 (publik URL). Molnrendern (Mobil
+        # Live Etapp 2) kan inte läsa `lag.logga`/~/.config/dpt/loggor — utan
+        # en URL faller den tyst tillbaka på monogram i stället för klubbmärke.
+        if _har_tabell(conn, "lag") and not _har_kolumn(conn, "lag", "logga_url"):
+            conn.execute("ALTER TABLE lag ADD COLUMN logga_url TEXT;")
 
 
 def _har_kolumn(conn, tabell, kolumn):

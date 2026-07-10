@@ -125,6 +125,50 @@ class InnehallSynk:
                 time.sleep(0.6)
         return None
 
+    def ladda_upp_logga(self, slug, lokal_sokvag, *, max_bredd=512, forsok=3):
+        """Speglar en laglogga till R2 och returnerar den publika URL:en.
+
+        EGEN VÄG, inte `ladda_upp_bild`: den kör `optimera()`, som konverterar
+        till RGB och sparar JPEG. Klubbmärkenas alfakanal hade då förstörts och
+        loggan renderats på en opak ruta. Här behålls PNG + transparens.
+
+        Laddas upp under bild-typen "lag" (workerns bild-namnrymd är bredare än
+        innehållstyperna). Returnerar None vid fel — anroparen faller då tillbaka
+        på renderarens monogram-badge i stället för att fälla hela synken."""
+        p = Path(lokal_sokvag).expanduser() if lokal_sokvag else None
+        if not p or not p.exists():
+            return None
+        try:
+            import io
+            from PIL import Image
+            img = Image.open(p)
+            if img.mode != "RGBA":
+                img = img.convert("RGBA")        # bevarar transparens (även P-läge)
+            if img.width > max_bredd:
+                h = round(img.height * max_bredd / img.width)
+                img = img.resize((max_bredd, h), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, "PNG", optimize=True)
+            data = buf.getvalue()
+        except Exception:
+            return None
+
+        malnamn = p.stem + ".png"
+        headers = {"Authorization": f"Bearer {self.api_key}",
+                   "Content-Type": "image/png"}
+        for i in range(max(1, forsok)):
+            try:
+                status, resp = self._transport(
+                    "PUT", f"{self.bas_url}/api/bilder/lag/{slug}/{malnamn}",
+                    headers=headers, body=data)
+            except Exception:
+                status, resp = 0, None
+            if status in (200, 201) and isinstance(resp, dict) and resp.get("ok"):
+                return resp.get("url")
+            if i < forsok - 1:
+                time.sleep(0.6)
+        return None
+
     # ── radering / reconciliation ───────────────────────────────────────────────
     def lista(self, typ):
         """GET /api/innehall/:typ (skyddad) — alla rader (draft + publicerade)
