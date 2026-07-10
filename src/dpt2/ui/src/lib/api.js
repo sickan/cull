@@ -919,6 +919,23 @@ export async function publiceraPagangMatcher(test = false) {
   return wait({ ok: true, antal: 4, borttagna: 0, visa: true, test })
 }
 
+// ── Mobil Live ──────────────────────────────────────────────────────────────
+// `hamtaLive` pollas av Publicera-panelen och returnerar mobilens live-tillstånd
+// (malskyttar redan serialiserad till appens strängformat, + falt_uppdaterad så
+// panelen kan avgöra vilka fält som är färskare än dess egna).
+// I mock: sätt `window.__MOCK_LIVE` för att driva flödet i preview.
+export async function hamtaLive(matchId) {
+  const api = brygga()
+  if (api) return api.hamta_live(matchId)
+  return wait({ ok: true, live: (typeof window !== 'undefined' && window.__MOCK_LIVE) || null })
+}
+
+export async function synkaLivePaket() {
+  const api = brygga()
+  if (api) return api.synka_live_paket()
+  return wait({ ok: true, antal: 3, borttagna: 0 })
+}
+
 // Sparade material + utkast (Publicera-panelens arbetsyta). Muteras lokalt i mock.
 // Två seedade rader så "Delvis publicerad" + historik-tidslinjen syns direkt i
 // mock-läge (utan pywebview-bryggan): en publicerad med flerfaldig historik,

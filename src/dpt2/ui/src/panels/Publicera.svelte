@@ -6,16 +6,17 @@
   // server-renderad förhandsvisning per kanal (Horisont) med fokus + zoom som
   // matas till skarp rendering. Gren-signalen = färgad kant + glow (låst,
   // ingen textetikett). Design: handoff-matchpublicering (8 jul 2026).
-  import { onMount, createEventDispatcher } from 'svelte'
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte'
   import {
     listaMatcher, hamtaMatch, aktivMatch, sattAktivMatch, sportprofiler, listaLag,
     valjMapp, listaSomeBilder, thumbForBild,
     forhandsgranskaStory, publiceraLiveStory, publiceraKanal, nyTestPaketMapp,
     publiceraInnehallNatet, listaMaterial, sparaMaterial, genereraBildsvep,
     listaMinneskort, exporteraSkyddade,
-    pagangMatcher, sattPagangVisa, publiceraPagangMatcher,
+    pagangMatcher, sattPagangVisa, publiceraPagangMatcher, hamtaLive, synkaLivePaket,
   } from '../lib/api.js'
   import ResultatRemsa from '../lib/ResultatRemsa.svelte'
+  import { farskaFalt } from '../lib/live_merge.js'
   import { grenFarg } from '../lib/gren.js'
   import { testMode } from '../lib/testlage.js'
 
@@ -48,6 +49,7 @@
       if (id) await laddaMatch(id)
     } catch (e) { console.error('Matchpublicering: init', e) }
     laddaPagang()
+    livePoll = setInterval(pollaLive, 10000)     // första hämtningen sker i laddaMatch
   })
 
   async function laddaMatch(id) {
@@ -55,7 +57,38 @@
     speglaRes(match)
     galleriUrl = match?.galleri || galleriUrl
     hemsidaUrl = match?.sida_url || hemsidaUrl
+    nollstallLive()
+    pollaLive()          // visa mobilens tillstånd direkt vid matchbyte
   }
+
+  // ── Mobil Live: poll + fältvis merge in i remsan ────────────────────────────
+  // Mobilen (DPT2 Live-PWA:n) kan föra samma match från läktaren. Vi pollar
+  // workern och tar bara in fält som är FÄRSKARE än vår egen senaste sparning.
+  // Själva regeln bor i lib/live_merge.js (ren + enhetstestad).
+  let liveExtern = null            // fälten som ska in i remsan
+  let liveRev = 0                  // triggerpuls till ResultatRemsa
+  let forsFran = null              // {enhet, tid} → närvaro-pill
+  let senastEgen = ''              // ISO för vår senaste egna sparning
+  let livePoll = null
+
+  function nollstallLive() { liveExtern = null; forsFran = null; senastEgen = '' }
+
+  async function pollaLive() {
+    if (!match?.id) return
+    let r
+    try { r = await hamtaLive(match.id) } catch { return }   // offline → tyst
+    const live = r?.live
+    if (!live) return
+    forsFran = live.fors_fran || null
+    const diff = farskaFalt(live, resNu, senastEgen)
+    if (Object.keys(diff).length) {
+      resNu = { ...resNu, ...diff }    // panelens spegel (previews/tokens)
+      liveExtern = diff
+      liveRev += 1                     // pulsen som får remsan att applicera
+    }
+  }
+
+  onDestroy(() => { if (livePoll) clearInterval(livePoll) })
 
   // ── Matchväljare ───────────────────────────────────────────────────────────
   let matchOpen = false
@@ -243,7 +276,9 @@
   function sattFmt(k, f) { ch[k].fmt = f; ch = ch }
 
   // ResultatRemsan sparade → spegla värdet (används vid publicering + token).
-  function onResSparat(e) { resNu = e.detail }
+  // Stämpla tiden: pollen ska inte dra tillbaka ett äldre mobil-värde ovanpå
+  // det vi just skrev (och backend har redan speglat ut vår ändring).
+  function onResSparat(e) { resNu = e.detail; senastEgen = new Date().toISOString() }
 
   // ── Publiceringsrad (fan-out) ───────────────────────────────────────────────
   $: aktiva = KANALER.filter((k) => ch[k.key].on)
@@ -318,6 +353,22 @@
     pagangKor = false
     pagangFlash = r?.ok ? ($testMode ? '✓ Testfiler skrivna' : `✓ Uppdaterad · ${r.antal} matcher`) : (r?.fel || 'Kunde inte uppdatera')
     setTimeout(() => (pagangFlash = ''), 2600)
+  }
+
+  // Skickar match-paketen (lag, avspark, arena, sportprofil, roster) till DPT2
+  // Live-appen i mobilen. Sker även automatiskt vid "Uppdatera sajten" — den
+  // här knappen finns för att man ska kunna göra det utan att röra sajten,
+  // t.ex. strax innan man åker till matchen.
+  let mobilKor = false
+  let mobilFlash = ''
+  async function synkaMobil() {
+    mobilKor = true; mobilFlash = ''
+    const r = await synkaLivePaket()
+    mobilKor = false
+    mobilFlash = r?.ok
+      ? `✓ ${r.antal} matcher till mobilen${r.borttagna ? ` · ${r.borttagna} borttagna` : ''}`
+      : (r?.fel || 'Kunde inte synka till mobilen')
+    setTimeout(() => (mobilFlash = ''), 3200)
   }
 
   // ── Live nu (snabbflöde) ────────────────────────────────────────────────────
@@ -446,7 +497,8 @@
 
   <!-- Delad resultatremsa -->
   {#if match}
-    <ResultatRemsa {match} {profil} {lagAlla} on:sparat={onResSparat} />
+    <ResultatRemsa {match} {profil} {lagAlla} extern={liveExtern} externRev={liveRev}
+      {forsFran} on:sparat={onResSparat} />
     <div class="remstext">Resultat &amp; målgörare fylls i <b>en gång här</b> — samma värden matas in i story, inlägg och webbartikel.</div>
   {/if}
 
@@ -615,8 +667,14 @@
       {#if !pagang.length}<div class="hint">Inga kommande matcher i Matcher.</div>{/if}
     </div>
     <div class="pgfot">
-      <span class="hint">Synkas automatiskt från Matcher — publiceras som "På gång"-widget på sajten.</span>
+      <span class="hint">Synkas automatiskt från Matcher — publiceras som "På gång"-widget på sajten
+        och skickas till DPT2 Live i mobilen.</span>
+      {#if mobilFlash}<span class="ok">{mobilFlash}</span>{/if}
       {#if pagangFlash}<span class="ok">{pagangFlash}</span>{/if}
+      <button class="sek" on:click={synkaMobil} disabled={mobilKor || $testMode}
+        title={$testMode ? 'Testläge: rör aldrig molnet' : 'Skicka kommande matcher till DPT2 Live i mobilen'}>
+        {mobilKor ? 'Synkar…' : 'Synka till mobilen'}
+      </button>
       <button class="sek" on:click={uppdateraSajten} disabled={pagangKor}>{pagangKor ? 'Uppdaterar…' : 'Uppdatera sajten'}</button>
     </div>
   </div>

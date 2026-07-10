@@ -992,3 +992,164 @@ class TestGallringConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# ── Mobil Live (steg 3: desktop-krokarna) ───────────────────────────────────
+
+class FejkLiveSynk:
+    """Står in för LiveSynk i Api — inget nät, allt observerbart."""
+
+    def __init__(self, nyckel=True, live=None, fjarrlista=None):
+        self._nyckel = nyckel
+        self.live = live                 # svaret från hamta()
+        self.fjarrlista = fjarrlista or []
+        self.pushade_falt = []           # [(match_id, falt)]
+        self.pushade_paket = []          # [(match_id, paket)]
+        self.raderade = []
+
+    def har_nyckel(self):
+        return self._nyckel
+
+    def hamta(self, match_id):
+        return self.live
+
+    def lista(self):
+        return self.fjarrlista
+
+    def push_falt(self, match_id, falt, *, tid=None):
+        self.pushade_falt.append((match_id, falt))
+        return {"ok": True}
+
+    def push_paket(self, match_id, paket):
+        self.pushade_paket.append((match_id, paket))
+        return {"ok": True}
+
+    def radera_paket(self, match_id):
+        self.raderade.append(match_id)
+        return {"ok": True, "borttagen": True}
+
+
+class TestMobilLive(unittest.TestCase):
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.fake = FejkLiveSynk()
+        self.api.live_synk = self.fake
+
+    def _match(self, **extra):
+        m = {"lag_hemma": "Malmö FF", "lag_borta": "Kristianstads DFF",
+             "datum": "2099-08-01", "tid": "18:00", "arena": "Eleda Stadion",
+             "sport": "fotboll"}
+        m.update(extra)
+        return self.api.spara_match(m)["id"]
+
+    # ── paket ────────────────────────────────────────────────────────────────
+    def test_paket_har_sportprofil_och_avspark(self):
+        mid = self._match()
+        m = store.hamta_match(self.api.conn, mid)
+        p = self.api._match_till_paket(m)
+        self.assertEqual(p["lag_hemma"], "Malmö FF")
+        self.assertEqual(p["avspark"], "2099-08-01T18:00:00")
+        self.assertEqual(p["sportprofil"]["start_moment"], "Avspark")
+        self.assertTrue(p["sportprofil"]["has_scorers"])
+
+    def test_paket_for_sport_utan_malskyttar(self):
+        mid = self._match(sport="volleyboll", lag_hemma="Sverige", lag_borta="Italien")
+        m = store.hamta_match(self.api.conn, mid)
+        p = self.api._match_till_paket(m)
+        self.assertFalse(p["sportprofil"]["has_scorers"])
+        self.assertEqual(p["sportprofil"]["mid_label"], "Setsiffror")
+
+    def test_paket_utan_tid_faller_tillbaka_pa_midnatt(self):
+        mid = self._match(tid="")
+        m = store.hamta_match(self.api.conn, mid)
+        self.assertEqual(self.api._match_till_paket(m)["avspark"], "2099-08-01T00:00:00")
+
+    def test_paket_utan_datum_ger_ingen_avspark(self):
+        mid = self._match(datum="", tid="")
+        m = store.hamta_match(self.api.conn, mid)
+        self.assertIsNone(self.api._match_till_paket(m)["avspark"])
+
+    def test_synka_paket_pushar_kommande_och_stadar_bort_ovriga(self):
+        mid = self._match()
+        self.fake.fjarrlista = [{"match_id": mid}, {"match_id": "gammal-match"}]
+        r = self.api.synka_live_paket()
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["antal"], 1)
+        self.assertEqual([m for m, _ in self.fake.pushade_paket], [mid])
+        self.assertEqual(self.fake.raderade, ["gammal-match"])   # reconciliation
+        self.assertEqual(r["borttagna"], 1)
+
+    def test_synka_paket_stadar_inte_nar_push_failade(self):
+        # Fjärrlistan är opålitlig om vår egen push inte gick igenom.
+        self._match()
+        self.fake.push_paket = lambda mid, p: {"ok": False, "fel": "nät nere"}
+        self.fake.fjarrlista = [{"match_id": "gammal-match"}]
+        r = self.api.synka_live_paket()
+        self.assertFalse(r["ok"])
+        self.assertEqual(self.fake.raderade, [])
+
+    def test_synka_paket_utan_nyckel(self):
+        self.api.live_synk = FejkLiveSynk(nyckel=False)
+        self.assertFalse(self.api.synka_live_paket()["ok"])
+
+    # ── hämta (poll) ─────────────────────────────────────────────────────────
+    def test_hamta_live_serialiserar_malskyttar_till_appens_strang(self):
+        self.fake.live = {"resultat": "2-0", "mellan": "1-0", "moment": "Målgörare",
+                          "malskyttar": [{"namn": "Hansson", "minut": 14},
+                                         {"namn": "Berg", "minut": None}],
+                          "fors_fran": {"enhet": "mobil", "tid": "2026-07-10T19:42:00.000Z"},
+                          "falt_uppdaterad": {"resultat": "2026-07-10T19:42:00.000Z"}}
+        r = self.api.hamta_live("m1")
+        self.assertEqual(r["live"]["malskyttar"], "Hansson 14', Berg")
+        self.assertEqual(r["live"]["fors_fran"]["enhet"], "mobil")
+        self.assertIn("resultat", r["live"]["falt_uppdaterad"])
+
+    def test_hamta_live_tomt_state(self):
+        self.fake.live = None
+        self.assertIsNone(self.api.hamta_live("m1")["live"])
+
+    # ── push vid satt_resultat ───────────────────────────────────────────────
+    def _vanta_pa_push(self, n=1, timeout=2.0):
+        import time
+        slut = time.time() + timeout
+        while time.time() < slut and len(self.fake.pushade_falt) < n:
+            time.sleep(0.01)
+
+    def test_satt_resultat_speglar_ut_till_mobil_live(self):
+        mid = self._match()
+        self.api.satt_resultat(mid, "3-1", "1-1", "Hansson 14', Berg")
+        self._vanta_pa_push()
+        self.assertEqual(len(self.fake.pushade_falt), 1)
+        pushad_id, falt = self.fake.pushade_falt[0]
+        self.assertEqual(pushad_id, mid)
+        self.assertEqual(falt["resultat"], "3-1")
+        # strängen översätts till strukturerade poster för molnet
+        self.assertEqual([(p["namn"], p["minut"]) for p in falt["malskyttar"]],
+                         [("Hansson", 14), ("Berg", None)])
+        self.assertEqual(falt["fors_fran"]["enhet"], "desktop")
+
+    def test_satt_resultat_bevarar_lag_och_nr_mobilen_satt(self):
+        mid = self._match()
+        self.fake.live = {"malskyttar": [{"namn": "Hansson", "minut": 14,
+                                          "lag": "hemma", "nr": 7}]}
+        self.api.satt_resultat(mid, "1-0", "", "Hansson 14'")
+        self._vanta_pa_push()
+        _mid, falt = self.fake.pushade_falt[0]
+        self.assertEqual(falt["malskyttar"][0]["nr"], 7)
+        self.assertEqual(falt["malskyttar"][0]["lag"], "hemma")
+
+    def test_satt_resultat_sparar_lokalt_aven_utan_nyckel(self):
+        self.api.live_synk = FejkLiveSynk(nyckel=False)
+        mid = self._match()
+        self.assertTrue(self.api.satt_resultat(mid, "1-0", "", "")["ok"])
+        self.assertEqual(store.hamta_match(self.api.conn, mid)["resultat"], "1-0")
+
+    def test_satt_resultat_svaljer_synkfel(self):
+        # Nätet nere får ALDRIG välta resultat-remsans autospar.
+        class Trasig(FejkLiveSynk):
+            def push_falt(self, *a, **k):
+                raise OSError("nät nere")
+        self.api.live_synk = Trasig()
+        mid = self._match()
+        self.assertTrue(self.api.satt_resultat(mid, "2-0", "", "")["ok"])
+        self.assertEqual(store.hamta_match(self.api.conn, mid)["resultat"], "2-0")

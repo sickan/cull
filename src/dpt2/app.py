@@ -14,6 +14,7 @@ from pathlib import Path
 import json
 import os
 import re
+import threading
 from datetime import datetime
 
 from dpt2.data import db, store, sportprofil
@@ -22,6 +23,8 @@ from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
                            bildhosting, story_korning, testlage)
 from dpt2.tjanster.kalender import Kalender
 from dpt2.tjanster.innehall_synk import InnehallSynk
+from dpt2.tjanster.live_synk import (
+    GREN_FARG, LiveSynk, iso_nu, malskyttar_till_poster, poster_till_malskyttar)
 from dpt2.publicering import astro_export as AX
 
 UI_DIR = Path(__file__).parent / "ui"
@@ -44,6 +47,7 @@ class Api:
         self._logg = []      # buffrade worker-events (Logg-panelen)
         self.kalender = Kalender()   # klient mot deployade Calendar Sync-tjänsten
         self.innehall_synk = InnehallSynk()   # klient mot deployade Content Sync-tjänsten
+        self.live_synk = LiveSynk()  # Mobil Live (samma worker, egna /api/live-rutter)
 
     # ── Sportprofiler ────────────────────────────────────────────────────────
     def sportprofiler(self):
@@ -68,7 +72,117 @@ class Api:
         redigering. Se store.satt_resultat för varför den inte återanvänder
         spara_match."""
         store.satt_resultat(self.conn, match_id, resultat, mellan, malskyttar)
+        # Spegla ut till Mobil Live (best-effort, i bakgrunden — se _push_live).
+        self._push_live(match_id, {"resultat": resultat or "", "mellan": mellan or "",
+                                   "malskyttar": malskyttar or ""})
         return {"ok": True}
+
+    # ── Mobil Live (mobilen ⇄ desktop via content-sync /api/live) ────────────
+    def _match_till_paket(self, m, lag_index=None):
+        """Bygger match-paketet mobilen behöver för att VISA och FÖRA matchen.
+        `m` = store.hamta_match-dict (har inline-spelare + hem_gren)."""
+        if lag_index is None:
+            lag_index = {l["namn"]: l for l in store.lista_lag(self.conn)}
+
+        def _farg(namn):
+            # Speglar ResultatRemsa.fargForLag — samma färg som desktop visar.
+            l = lag_index.get(namn) or {}
+            return l.get("stall_hemma") or l.get("profilfarg") or ""
+
+        pr = sportprofil.profil(m.get("sport") or "") or {}
+        datum, tid = (m.get("datum") or ""), (m.get("tid") or "")
+        avspark = f"{datum}T{tid or '00:00'}:00" if datum else None
+        return {
+            "lag_hemma": m.get("lag_hemma") or "",
+            "lag_borta": m.get("lag_borta") or "",
+            "lag_hemma_farg": _farg(m.get("lag_hemma")),
+            "lag_borta_farg": _farg(m.get("lag_borta")),
+            "arena": m.get("arena") or "",
+            "sport": m.get("sport") or "",
+            "liga": m.get("liga") or "",
+            "avspark": avspark,
+            "gren_farg": GREN_FARG.get(m.get("hem_gren") or "", ""),
+            "sportprofil": {
+                "start_moment": pr.get("start_moment") or "Avspark",
+                "mid_label": pr.get("mid_label") or "Halvtid",
+                "res_label": pr.get("res_label") or "Slutresultat",
+                "has_scorers": bool(pr.get("has_scorers", True)),
+            },
+            # Rostern driver målskytt-väljaren. Tom trupp (matchen inte hämtad
+            # än) är ofarligt — mobilen faller tillbaka på fritext.
+            "roster": [{"nr": s.get("nr") or None, "namn": s.get("namn"),
+                        "lag": s.get("lag")}
+                       for s in (m.get("spelare") or []) if s.get("namn")],
+        }
+
+    def _push_live(self, match_id, falt):
+        """Speglar fält ut till Mobil Live. Körs i BAKGRUNDSTRÅD: en trög eller
+        nedliggande worker får aldrig frysa resultat-remsans autospar (httpx
+        timeout skulle annars låsa bryggan i sekunder vid varje tangenttryck).
+        Tyst best-effort — desktop är ändå redan sparad lokalt."""
+        if not self.live_synk.har_nyckel():
+            return
+
+        def _kor():
+            try:
+                ut = dict(falt)
+                if "malskyttar" in ut:
+                    # Desktop har en STRÄNG; molnet vill ha poster. Hämta
+                    # nuvarande poster först så lag/nr som mobilen satt inte
+                    # tappas när strängen redigeras på datorn.
+                    nuv = (self.live_synk.hamta(match_id) or {}).get("malskyttar") or []
+                    ut["malskyttar"] = malskyttar_till_poster(ut["malskyttar"], nuv)
+                ut["fors_fran"] = {"enhet": "desktop", "tid": iso_nu()}
+                self.live_synk.push_falt(match_id, ut)
+            except Exception:
+                pass   # aldrig upp i UI:t
+
+        threading.Thread(target=_kor, daemon=True).start()
+
+    def hamta_live(self, match_id):
+        """Publicera-panelens poll: mobilens live-tillstånd för en match.
+        `malskyttar` serialiseras tillbaka till appens strängformat, och
+        `falt_uppdaterad` följer med så panelen kan avgöra vilka fält som är
+        FÄRSKARE än dess egna (samma fältvisa LWW som workern gör)."""
+        live = self.live_synk.hamta(match_id)
+        if not live:
+            return {"ok": True, "live": None}
+        return {"ok": True, "live": {
+            "resultat": live.get("resultat") or "",
+            "mellan": live.get("mellan") or "",
+            "malskyttar": poster_till_malskyttar(live.get("malskyttar") or []),
+            "moment": live.get("moment") or "",
+            "fors_fran": live.get("fors_fran"),
+            "falt_uppdaterad": live.get("falt_uppdaterad") or {},
+        }}
+
+    def synka_live_paket(self):
+        """Pushar match-paket för ALLA kommande matcher till Mobil Live och
+        städar bort paket som inte längre är kommande (reconciliation, samma
+        ägarmodell som På gång). Premissen är 'jag är kanske inte vid datorn' —
+        varje kommande match ska finnas redo i mobilen utan förberedelse."""
+        if not self.live_synk.har_nyckel():
+            return {"ok": False, "fel": "CONTENT_SYNC_API_KEY saknas."}
+        lag_index = {l["namn"]: l for l in store.lista_lag(self.conn)}
+        lokala, antal, fel = set(), 0, None
+        for rad in self._pagang_kommande():
+            m = store.hamta_match(self.conn, rad["id"])
+            if not m:
+                continue
+            lokala.add(m["id"])
+            r = self.live_synk.push_paket(m["id"], self._match_till_paket(m, lag_index))
+            if r.get("ok"):
+                antal += 1
+            elif fel is None:
+                fel = r.get("fel") or "Kunde inte pusha match-paket."
+        borttagna = 0
+        if fel is None:   # fjärrlistan är opålitlig om pushen själv failade
+            for rad in self.live_synk.lista():
+                mid = rad.get("match_id")
+                if mid and mid not in lokala:
+                    if self.live_synk.radera_paket(mid).get("ok"):
+                        borttagna += 1
+        return {"ok": fel is None, "antal": antal, "borttagna": borttagna, "fel": fel}
 
     def _synka_kalenderjobb(self, match_id):
         """Push:ar matchens aktuella titel/tid/arena/liga till ett redan
@@ -1219,6 +1333,13 @@ class Api:
                 if rid and rid not in lokala_ids:
                     if self.innehall_synk.radera("pagang", rid).get("ok"):
                         borttagna += 1
+        # Samma tillfälle, samma lista: se till att mobilen har match-paketen
+        # för alla kommande matcher (Mobil Live). Best-effort — får aldrig
+        # påverka utfallet av På gång-publiceringen.
+        try:
+            self.synka_live_paket()
+        except Exception:
+            pass
         return {"ok": fel is None, "antal": antal, "borttagna": borttagna,
                 "visa": visa, "fel": fel}
 
