@@ -228,13 +228,9 @@
 
   async function laddaOm() { jobb = await listaFotojobb(); if (!Array.isArray(jobb)) jobb = [] }
 
-  async function bytKategori(j, val) {
-    await sparaFotojobb({ ...j, category: val || null })
-    await laddaOm()
-  }
   function nyttJobb() {
-    // notering (ej description): anteckningen är LOKAL och skickas aldrig till
-    // kalendertjänsten, så Google-synken kan inte skriva över den.
+    // notering speglas som Google-description av backend (tvåvägs) — UI:t
+    // skickar bara fältet, app.py bygger beskrivningen.
     modal = { title: '', start_at: '', end_at: '', location: '', notering: '', category: '', all_day: false, match_id: '' }
   }
   // datetime-local kräver 'YYYY-MM-DDTHH:mm' — heldagsjobb lagras som rent datum
@@ -432,14 +428,12 @@
                         {#if j.notering}<div class="notering">{j.notering}</div>{/if}
                         {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                       </div>
-                      <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
-                        <option value="">Okategoriserat</option>
-                        {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
-                      </select>
                       {#if j.utkast}<button class="mini synkbtn" on:click|stopPropagation={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                      <button class="mini kryss" class:armerad={$armerad === `fj-${j.id}`}
+                      <button class="mini papperskorg" class:armerad={$armerad === `fj-${j.id}`} aria-label="Ta bort"
                         title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                        on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Ta bort?' : '×'}</button>
+                        on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/></svg>
+                      </button>
                     </div>
                     </div>
                     {#if jobEditId === j.id && redigerar}
@@ -497,15 +491,13 @@
                     {#if j.notering}<span class="notering inline">{j.notering}</span>{/if}
                     <span class="hlbl">Heldag</span>
                     {#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}
-                    <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
-                      <option value="">Okategoriserat</option>
-                      {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
-                    </select>
                     <span class="spacer"></span>
                     {#if j.utkast}<button class="mini synkbtn" on:click|stopPropagation={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                    <button class="mini" class:armerad={$armerad === `fj-${j.id}`}
+                    <button class="mini papperskorg" class:armerad={$armerad === `fj-${j.id}`} aria-label="Ta bort"
                       title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                      on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
+                      on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/></svg>
+                    </button>
                     {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                   </div>
                 {:else}
@@ -525,19 +517,15 @@
                       <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}{#if res}<span class="resultat scd">{res}</span>{/if}{#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}</div>
                       <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
                       {#if j.notering}<div class="notering">{j.notering}</div>{/if}
-                      <div class="undermeta">
-                        <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
-                          <option value="">Okategoriserat</option>
-                          {#each KATEGORIER as k}<option value={k}>{k}</option>{/each}
-                        </select>
-                        {#if synkFelId === j.id}<span class="synkfel">⚠ {synkFelMsg}</span>{/if}
-                      </div>
+                      {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                     </div>
                     <div class="rknapp">
                       {#if j.utkast}<button class="mini synkbtn" on:click|stopPropagation={() => aktiveraSynk(j)}>Aktivera synk ›</button>{/if}
-                      <button class="mini" class:armerad={$armerad === `fj-${j.id}`}
+                      <button class="mini papperskorg" class:armerad={$armerad === `fj-${j.id}`} aria-label="Ta bort"
                         title={$armerad === `fj-${j.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                        on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>{$armerad === `fj-${j.id}` ? 'Säker?' : 'Ta bort'}</button>
+                        on:click|stopPropagation={taBortKlick(`fj-${j.id}`, () => taBort(j))}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/></svg>
+                      </button>
                     </div>
                   </div>
                 {/if}
@@ -705,14 +693,15 @@
   .notering { font-size: 11.5px; color: var(--t-body); margin-top: 3px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .notering.inline { margin-top: 0; max-width: 240px; flex: none; }
-  .undermeta { display: flex; gap: 8px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
   .rknapp { display: flex; gap: 6px; flex: none; }
   .mini { border: 1px solid var(--div); background: var(--kort); border-radius: 7px; padding: 6px 12px;
     font-size: 12.5px; color: var(--t-mut); }
   .mini:hover { border-color: var(--acc); color: var(--acc); }
-  /* Beväpnad tvåstegsknapp: rött varningsläge, andra klicket raderar. */
+  /* §2: papperskorgen är borttagningsknappen överallt — tvåstegs behålls:
+     första klicket armar (röd), andra raderar. Titeln vägleder. */
+  .mini.papperskorg { width: 30px; height: 30px; padding: 0; flex: none;
+    display: inline-flex; align-items: center; justify-content: center; }
   .mini.armerad, .mini.armerad:hover { background: #C0453E; border-color: #C0453E; color: #fff; font-weight: 600; }
-  .mini.kryss.armerad { width: auto; padding: 6px 10px; font-size: 11.5px; }
 
   .rad.heldag { padding: 11px 16px; flex-wrap: wrap; }
   .hrange { font-size: 12px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; flex: none; }
@@ -721,9 +710,9 @@
   .rad.heldag .rtitel { flex: none; }
   .rad.heldag .synkfel { flex-basis: 100%; }
 
-  /* A2: den stora synk-etiketten ersatt av <Hornmarkor> (hörnbåge, färgen bär signalen). */
-  .katsel { padding: 4px 8px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
-    color: var(--t-mut); font-size: 11.5px; font-family: inherit; }
+  /* A2: den stora synk-etiketten ersatt av <Hornmarkor> (hörnbåge, färgen bär signalen).
+     Listjusteringar §1: kategori-dropdownen är borta ur raderna — kategori
+     sätts bara i editorn (segment-knapparna); färgen bär den i listan. */
   .synkbtn { border-color: var(--acc); color: var(--acc); font-weight: 600; }
   .synkfel { font-size: 11px; color: var(--rose); }
 
@@ -763,7 +752,6 @@
     padding: 11px 13px; display: flex; align-items: center; gap: 11px; cursor: pointer; }
   .tlkort:hover { background: var(--div3); }
   .tlinfo { flex: 1; min-width: 0; }
-  .mini.kryss { width: 28px; padding: 6px 0; text-align: center; font-size: 15px; line-height: 1; }
 
   .foot { padding: 10px 30px; border-top: 1px solid var(--div3); font-size: 12px; color: var(--t-help); }
 
@@ -778,7 +766,7 @@
   .dbody { padding: 18px 22px 22px; display: flex; flex-direction: column; gap: 13px; }
   label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--t-caps);
     font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-  input, textarea, .katsel { font-family: inherit; }
+  input, textarea { font-family: inherit; }
   .dbody input, .dbody textarea, .dbody select { padding: 9px 11px; border: 1px solid var(--div); border-radius: 8px;
     background: var(--panel); color: var(--t-head); font-size: 13px; font-weight: 400;
     text-transform: none; letter-spacing: 0; outline: none; }

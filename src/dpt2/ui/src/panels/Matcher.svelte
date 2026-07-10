@@ -512,14 +512,19 @@
                     <div class="fx scd">{m.lag_hemma} – {m.lag_borta}</div>
                     <div class="fmeta">
                       {#if m.hem_gren}<span class="grenlbl scd" style="color:{grenFarg(m.hem_gren)}">{grenEtikett(m.hem_gren)}</span>{/if}
-                      <span>{[SPORT_ETIKETT[m.sport] || '', m.arena, harTid(m.tid) ? m.tid : 'Heldag'].filter(Boolean).join(' · ')}</span>
+                      <!-- Listjusteringar: liga + arena i metaraden (ligan doldes
+                           annars helt när listan grupperas på datum). -->
+                      <span>{[SPORT_ETIKETT[m.sport] || '', m.liga, m.arena, harTid(m.tid) ? m.tid : 'Heldag'].filter(Boolean).join(' · ')}</span>
                       {#if !harTid(m.tid)}<span class="heldagstagg">Heldag</span>{/if}
                     </div>
                   </div>
-                  {#if m.status === 'avslutad' && m.resultat}
+                  <!-- Listjusteringar §3: "Planera"-etiketten borta — radklick öppnar
+                       redigeringen, ingen separat åtgärd behövs. Resultatchip så
+                       fort resultat finns; annars "Roster klar" när truppen är inne. -->
+                  {#if m.resultat}
                     <span class="status res scd">{m.resultat}</span>
-                  {:else}
-                    <span class="status" class:klar={m.trupp_n > 0}>{m.trupp_n > 0 ? 'Roster klar' : 'Planera'}</span>
+                  {:else if m.trupp_n > 0}
+                    <span class="status klar">Roster klar</span>
                   {/if}
                   <button class="papperskorg" title="Ta bort match"
                     on:click|stopPropagation={() => (bekraftaId = m.id)}>
