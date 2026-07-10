@@ -72,6 +72,56 @@ class TestAuth(unittest.TestCase):
         self.assertEqual(json.loads(p.read_text()).get("valda", "BORTA"), "BORTA")
 
 
+class TestLoopback(unittest.TestCase):
+    """Kör hela consent-flödet mot den riktiga loopback-servern, men med en
+    fejkad 'webbläsare' som träffar redirecten. Token-utbytet går via fejk-
+    transport → inget riktigt Google-anrop."""
+    def _fejk_webblasare(self, query):
+        """Returnerar en oppna(url)-callback som i en tråd hämtar redirect-uri:n
+        (utläst ur consent-url:en) med `query` påklistrad — som Google gör."""
+        import threading
+        import urllib.request
+        from urllib.parse import urlparse, parse_qs
+
+        def oppna(url):
+            redirect = parse_qs(urlparse(url).query)["redirect_uri"][0]
+
+            def traffa():
+                for _ in range(50):
+                    try:
+                        urllib.request.urlopen(redirect + "?" + query, timeout=1).read()
+                        return
+                    except Exception:
+                        import time
+                        time.sleep(0.05)
+            threading.Thread(target=traffa, daemon=True).start()
+        return oppna
+
+    def test_lyckad_inloggning_fangar_kod_och_vaxlar(self):
+        t = FejkTransport({("POST", "/token"): (200, {
+            "access_token": "a", "refresh_token": "r", "expires_in": 3600})})
+        d = tempfile.mkdtemp()
+        k = PrivatKalender(config_path=Path(d) / "p.json", transport=t,
+                           config={"client_id": "cid", "client_secret": "sec"})
+        r = k.logga_in_interaktivt(oppna=self._fejk_webblasare("code=testkod"), timeout=10)
+        self.assertTrue(r["ok"])
+        self.assertEqual(t.anrop[0]["form"]["code"], "testkod")   # koden växlades
+
+    def test_avbruten_inloggning_ger_fel(self):
+        k = PrivatKalender(config_path=Path(tempfile.mkdtemp()) / "p.json",
+                           transport=FejkTransport({}),
+                           config={"client_id": "cid", "client_secret": "sec"})
+        r = k.logga_in_interaktivt(oppna=self._fejk_webblasare("error=access_denied"), timeout=10)
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["fel"], "access_denied")
+
+    def test_utan_klientuppgifter_vagrar(self):
+        k = PrivatKalender(config_path=Path(tempfile.mkdtemp()) / "p.json",
+                           transport=FejkTransport({}), config={})
+        r = k.logga_in_interaktivt(oppna=lambda u: None, timeout=1)
+        self.assertFalse(r["ok"])
+
+
 class TestToken(unittest.TestCase):
     def _inloggad(self, svar, tid):
         return _klient(svar, cfg={"client_id": "c", "client_secret": "s",

@@ -245,7 +245,7 @@ class PrivatKalender:
         Loopback (http://127.0.0.1:PORT) är Googles rekommenderade flöde för
         installerade appar — ingen client_secret-hemlighet läcker till en publik
         URL, och inget mellanled ser koden. `oppna` injicerbar för test."""
-        import threading
+        import time as _time
         import webbrowser
         from http.server import BaseHTTPRequestHandler, HTTPServer
         from urllib.parse import urlparse, parse_qs
@@ -258,13 +258,17 @@ class PrivatKalender:
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 q = parse_qs(urlparse(self.path).query)
-                fangad["code"] = (q.get("code") or [None])[0]
-                fangad["error"] = (q.get("error") or [None])[0]
+                # Bara redirecten bär code/error. Ignorera favicon o.dyl. — de
+                # sätter ingenting, så loopen nedan fortsätter vänta på den riktiga.
+                if "code" in q or "error" in q:
+                    fangad["code"] = (q.get("code") or [None])[0]
+                    fangad["error"] = (q.get("error") or [None])[0]
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
+                klar = "code" in fangad or "error" in fangad
                 svar = ("Klart — du kan stänga fliken och gå tillbaka till appen."
-                        if fangad.get("code") else "Inloggningen avbröts.")
+                        if fangad.get("code") else "Inloggningen avbröts." if klar else "…")
                 self.wfile.write(f"<html><body style='font-family:sans-serif;padding:40px'>"
                                  f"<h2>{svar}</h2></body></html>".encode("utf-8"))
 
@@ -275,13 +279,18 @@ class PrivatKalender:
         port = srv.server_address[1]
         redirect_uri = f"http://127.0.0.1:{port}/"
         url = self.auth_url(redirect_uri)
-        srv.timeout = timeout
+        srv.timeout = 1                                  # per-request, för deadline-loopen
         (oppna or webbrowser.open)(url)
-        # En enda request räcker (redirecten). Kör i tråd så timeout kan slå.
-        t = threading.Thread(target=srv.handle_request, daemon=True)
-        t.start()
-        t.join(timeout)
-        srv.server_close()
+        # Loopa tills redirecten kommer (inte första-bästa requesten): favicon-
+        # hämtningar m.m. hanteras och ignoreras tills code/error dyker upp.
+        deadline = _time.monotonic() + timeout
+        try:
+            while "code" not in fangad and "error" not in fangad:
+                if _time.monotonic() > deadline:
+                    break
+                srv.handle_request()                     # blockerar ≤1 s (srv.timeout)
+        finally:
+            srv.server_close()
         if fangad.get("error") or not fangad.get("code"):
             return {"ok": False, "fel": fangad.get("error") or "Ingen kod mottogs (timeout?)."}
         return self.vaxla_kod(fangad["code"], redirect_uri)
