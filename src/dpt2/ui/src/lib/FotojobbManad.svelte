@@ -1,15 +1,12 @@
 <script>
-  // Månadsvy: översikt, inte arbetsyta. Jobb som rader, privata poster som en
-  // färgprick per KÄLLA (inte per post) — cellen ska säga "det finns något här",
-  // inte vad. Krockdagar får röd ram och ett utropstecken, plus en räknare.
-  // Klick på en dag borrar ner i veckovyn.
+  // Månadsvy: översikt, inte arbetsyta. Jobb som rader. Privata poster visas inte
+  // som egna prickar — bara krocken är intressant: krockdagar får röd ram och ett
+  // utropstecken, plus en räknare. Klick på en dag borrar ner i veckovyn.
   import { createEventDispatcher } from 'svelte'
-  import { jobbSpann, privatSpann, kalenderFarg } from './privat.js'
+  import { jobbSpann, privatSpann } from './privat.js'
   import { mandagen, addDagar, midnatt, dygnSpann, overlappar, VECKODAG_KORT, MANAD_NAMN } from './vydatum.js'
 
   export let jobb = []
-  export let privata = []       // källfiltrerade (visning)
-  export let kalendrar = []
   export let krockar = new Map()
   export let katFarg = () => '#888'
   export let ankare = new Date()
@@ -33,10 +30,8 @@
     // en veckolång fotoresa färgat varenda dag röd så fort den krockade en gång.
     const krock = dagJobb.some((j) =>
       (krockar.get(j.id) || []).some((p) => overlappar(...privatSpann(p), ...dygn)))
-    const kallor = [...new Set(privata.filter((p) => overlappar(...privatSpann(p), ...dygn))
-      .map((p) => p.kalender_id))]
     return {
-      dag, dagJobb, krock, kallor,
+      dag, dagJobb, krock,
       iManaden: dag.getMonth() === forsta.getMonth(),
       idag: dag.toDateString() === idagNyckel,
     }
@@ -66,9 +61,6 @@
         <div class="chuvud">
           <span class="cnr">{c.dag.getDate()}</span>
           {#if c.krock}<span class="utrop" title="Krockar med privat kalender">!</span>{/if}
-          <span class="prickar">
-            {#each c.kallor as k (k)}<span class="prick" style="background:{kalenderFarg(kalendrar, k)}"></span>{/each}
-          </span>
         </div>
         {#each c.dagJobb.slice(0, 3) as j (j.id)}
           <div class="jrad" style="--f:{katFarg(j.category)}"><span class="jprick"></span>{j.title}</div>
@@ -109,9 +101,7 @@
 
   .chuvud { display: flex; align-items: center; gap: 5px; }
   .cnr { font-size: 12.5px; font-weight: 600; color: var(--t-head); font-variant-numeric: tabular-nums; }
-  .utrop { font-size: 11px; font-weight: 800; color: var(--krock); line-height: 1; }
-  .prickar { margin-left: auto; display: flex; gap: 3px; }
-  .prick { width: 7px; height: 7px; border-radius: 2px; }
+  .utrop { font-size: 11px; font-weight: 800; color: var(--krock); line-height: 1; margin-left: auto; }
 
   .jrad { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--t-body);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

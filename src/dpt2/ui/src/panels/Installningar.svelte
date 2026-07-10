@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { kalenderStatus, listaFotojobb,
-    privatStatus, privatKalendrar, privatSattValda, privatLoggaIn, privatLoggaUt, privatSparaKlient } from '../lib/api.js'
+    privatStatus, privatKalendrar, privatSattValda, privatSattEtikett, privatLoggaIn, privatLoggaUt, privatSparaKlient } from '../lib/api.js'
 
   let status = { har_nyckel: false, ansluten: false, bas_url: '' }
   let laddar = true
@@ -56,6 +56,28 @@
     pValda = new Set(pValda.has(id) ? [...pValda].filter((x) => x !== id) : [...pValda, id])
     await privatSattValda([...pValda])
     pstatus = { ...pstatus, kalendrar_valda: pValda.size }
+  }
+
+  // ── egen etikett per kalender (lagras lokalt — Googles kalender rörs aldrig) ──
+  let pRedigerar = null        // kalender-id vars namn redigeras just nu
+  let pEtikettUtkast = ''
+  const fokus = (el) => { el.focus(); el.select() }
+
+  function oppnaEtikett(e, k) {
+    e.stopPropagation()        // pennan får inte toggla radens val
+    pRedigerar = k.id
+    pEtikettUtkast = k.etikett
+  }
+  // Sparar på blur/Enter. Esc nollar pRedigerar FÖRE blur — vakten här gör att
+  // den avbrutna redigeringen då aldrig sparas. Tomt namn = återställ Googles.
+  async function sparaEtikett(k) {
+    if (pRedigerar !== k.id) return
+    pRedigerar = null
+    const ny = pEtikettUtkast.trim()
+    if (ny === k.etikett) return
+    await privatSattEtikett(k.id, ny)
+    await hamtaKalendrar()
+    pBlink(ny ? 'Namn sparat' : 'Namn återställt')
   }
   let pFel = false
   function pBlink(msg, fel = false) { pFlash = msg; pFel = fel; setTimeout(() => (pFlash = ''), 2600) }
@@ -157,14 +179,30 @@
             <p class="tom">Hämtar kalendrar…</p>
           {:else}
             {#each pKalendrar as k (k.id)}
-              <button class="kalrad" class:vald={pValda.has(k.id)} on:click={() => toggleValdKalender(k.id)}>
+              <!-- div, inte button: raden hyser pennan/namnfältet (nästlade
+                   interaktiva element är ogiltiga i en <button>). -->
+              <div class="kalrad" class:vald={pValda.has(k.id)} role="button" tabindex="0"
+                on:click={() => pRedigerar !== k.id && toggleValdKalender(k.id)}
+                on:keydown={(e) => e.key === 'Enter' && pRedigerar !== k.id && toggleValdKalender(k.id)}>
                 <span class="chk" class:pa={pValda.has(k.id)}>{pValda.has(k.id) ? '✓' : ''}</span>
                 <span class="prick" style="background:{k.farg}"></span>
-                <span class="knamn">{k.etikett}</span>
-                {#if k.primar}<span class="primartag">Din</span>{/if}
-              </button>
+                {#if pRedigerar === k.id}
+                  <input class="knamninput" use:fokus bind:value={pEtikettUtkast}
+                    on:click|stopPropagation
+                    on:keydown={(e) => {
+                      if (e.key === 'Enter') { e.stopPropagation(); e.target.blur() }
+                      else if (e.key === 'Escape') { e.stopPropagation(); pRedigerar = null }
+                    }}
+                    on:blur={() => sparaEtikett(k)} />
+                {:else}
+                  <span class="knamn">{k.etikett}</span>
+                  {#if k.primar}<span class="primartag">Din</span>{/if}
+                  <button class="penna" title="Byt namn" aria-label="Byt namn på {k.etikett}"
+                    on:click={(e) => oppnaEtikett(e, k)}>✎</button>
+                {/if}
+              </div>
             {/each}
-            <p class="not">Markera vilka som ska räknas som privata. Bara markerade visas som "Upptaget" och används för krock-koll.</p>
+            <p class="not">Markera vilka som ska räknas som privata. Bara markerade används för krock-koll mot fotojobben — de visas aldrig som egna poster, bara som röd krock-markering på jobb de krockar med. Byt namn med pennan (tomt namn återställer Googles) — namnet lagras bara i DPT, kalendern hos Google rörs inte.</p>
           {/if}
         </div>
         <div class="knappar">
@@ -224,6 +262,14 @@
   .chk.pa { background: var(--acc); border-color: var(--acc); }
   .kalrad .prick { width: 10px; height: 10px; border-radius: 3px; flex: none; }
   .knamn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Pennan: tyst tills raden hovras — namnbyte är sekundärt mot valet. */
+  .penna { border: 0; background: transparent; color: var(--t-mut); font-size: 13px;
+    padding: 2px 6px; border-radius: 6px; cursor: pointer; opacity: 0; flex: none; }
+  .kalrad:hover .penna, .penna:focus-visible { opacity: 1; }
+  .penna:hover { color: var(--acc); background: var(--div3); }
+  .knamninput { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--acc);
+    border-radius: 6px; background: var(--kort); color: var(--t-head); font-size: 13.5px;
+    font-family: inherit; outline: none; }
   .primartag { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
     color: var(--t-mut); background: var(--div3); padding: 2px 7px; border-radius: 999px; flex: none; }
 

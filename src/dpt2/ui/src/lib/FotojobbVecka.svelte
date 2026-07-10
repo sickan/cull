@@ -1,17 +1,16 @@
 <script>
-  // Veckovy: jobb som block i kategorifärg, privata poster som dämpade band med
-  // streckad ram i källfärg. Titeln på en privat post visas ALDRIG här — bara
-  // "Upptaget". Den nås via krock-utfällningen på jobbet.
+  // Veckovy: jobb som block i kategorifärg. Privata poster visas inte som egna
+  // band — bara krocken är intressant, och den bärs av det röda hörnet + krock-
+  // utfällningen på jobbet (titel/vem/tid nås där).
   import { createEventDispatcher } from 'svelte'
   import Hornmarkor from './Hornmarkor.svelte'
   import KrockPop from './KrockPop.svelte'
-  import { jobbSpann, privatSpann, kalenderFarg } from './privat.js'
+  import { jobbSpann } from './privat.js'
   import { mandagen, addDagar, dygnSpann, overlappar, VECKODAG_KORT, MANAD_NAMN } from './vydatum.js'
 
   export let jobb = []          // redan kategorifiltrerade
-  export let privata = []       // redan källfiltrerade (visning)
   export let kalendrar = []
-  export let krockar = new Map() // jobb-id → privata poster (oberoende av filter)
+  export let krockar = new Map() // jobb-id → krockande privata poster (styrs av källfiltret)
   export let katFarg = () => '#888'
   export let ankare = new Date() // vilken vecka som visas (drill-down från Månad)
 
@@ -29,10 +28,8 @@
   // Ett fast fönster tappade tysta poster utanför: en soluppgång 04:30 är precis
   // det ett landskapsjobb ser ut som, och den måste synas.
   $: veckoSpann = [veckoStart.getTime(), addDagar(veckoStart, 7).getTime()]
-  $: tider = [
-    ...jobb.filter((j) => !j.all_day).map(jobbSpann),
-    ...privata.filter((p) => !p.heldag).map(privatSpann),
-  ].filter(([s, e]) => overlappar(s, e, ...veckoSpann))
+  $: tider = jobb.filter((j) => !j.all_day).map(jobbSpann)
+    .filter(([s, e]) => overlappar(s, e, ...veckoSpann))
   $: startH = Math.min(6, ...tider.map(([s]) => new Date(s).getHours()))
   $: slutH = Math.max(22, ...tider.map(([, e]) => {
     const d = new Date(e)
@@ -66,9 +63,6 @@
     heldag: jobb.filter((j) => j.all_day && overlappar(...jobbSpann(j), ...dygnSpann(dag))),
     jobbBlock: jobb.filter((j) => !j.all_day)
       .map((j) => ({ j, b: block(jobbSpann(j), dag, startH, GRIDH) })).filter((x) => x.b),
-    privatBlock: privata.filter((p) => !p.heldag)
-      .map((p) => ({ p, b: block(privatSpann(p), dag, startH, GRIDH) })).filter((x) => x.b),
-    privatHeldag: privata.filter((p) => p.heldag && overlappar(...privatSpann(p), ...dygnSpann(dag))),
   }))
 
   const klocka = (iso) => ((iso || '').split('T')[1] || '').slice(0, 5)
@@ -103,30 +97,21 @@
             <button class="hband" style="--f:{katFarg(j.category)}" title={j.title}
               on:click={() => dispatch('redigera', j)}>{j.title}</button>
           {/each}
-          {#each kol.privatHeldag as p (p.id)}
-            <div class="hband privat" style="--f:{kalenderFarg(kalendrar, p.kalender_id)}">Upptaget</div>
-          {/each}
         </div>
 
         <div class="rutor" style="height:{GRIDH}px">
           {#each TIMMAR as t}<div class="ruta" style="height:{PXTIM}px"></div>{/each}
-
-          {#each kol.privatBlock as { p, b } (p.id)}
-            <div class="pband" style="top:{b.top}px;height:{b.hojd}px;--f:{kalenderFarg(kalendrar, p.kalender_id)}">
-              <span>Upptaget</span>
-            </div>
-          {/each}
 
           {#each kol.jobbBlock as { j, b } (j.id)}
             {@const krock = krockar.get(j.id)}
             <div class="jwrap" style="top:{b.top}px;height:{b.hojd}px">
               {#if krock && krockVisas === j.id}<KrockPop krockar={krock} {kalendrar} heldag={false} />{/if}
               <div class="jblock" role="button" tabindex="0" style="--f:{katFarg(j.category)}"
-                on:mouseenter={() => krock && (hoverJobb = j.id)} on:mouseleave={() => (hoverJobb = null)}
                 on:click={() => dispatch('redigera', j)} on:keydown={(e) => e.key === 'Enter' && dispatch('redigera', j)}>
                 {#if krock}
                   <Hornmarkor farg="var(--krock)" r={8} horn="nere-hoger" titel="Krockar med privat kalender" />
-                  <button class="krocktapp" aria-label="Visa krock" on:click={(e) => krockKlick(e, j.id)}></button>
+                  <button class="krocktapp" aria-label="Visa krock" on:click={(e) => krockKlick(e, j.id)}
+                    on:mouseenter={() => (hoverJobb = j.id)} on:mouseleave={() => (hoverJobb = null)}></button>
                 {/if}
                 <div class="jtid scd">{klocka(j.start_at)}</div>
                 <div class="jtitel">{j.title}</div>
@@ -170,23 +155,12 @@
     background: color-mix(in srgb, var(--f) 18%, transparent); color: var(--t-head);
     font-size: 10.5px; font-weight: 600; padding: 3px 5px; border-radius: 4px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-  .hband.privat { border: 1px dashed var(--f); border-left: 3px solid var(--f);
-    background: transparent; color: var(--t-mut); font-weight: 500; cursor: default; }
 
   .rutor { position: relative; }
   .ruta { border-bottom: 1px solid var(--div3); }
 
-  /* Privat = tillgänglighet, inte innehåll: streckad, dämpad, aldrig klickbar.
-     Bandet tar hela kolumnen och jobben dras in från vänster i stället för att
-     läggas ovanpå — annars döljer ett jobb den upptagna tiden det krockar med,
-     vilket är precis den information vyn finns för. */
-  .pband { position: absolute; left: 3px; right: 3px; border: 1px dashed var(--f);
-    border-left: 3px solid var(--f); border-radius: 5px; background: transparent;
-    padding: 2px 5px; overflow: hidden; }
-  .pband span { font-size: 10.5px; color: var(--t-mut); font-weight: 600; }
-
   /* jwrap bär popovern; jblock har overflow:hidden för hörnbågen. */
-  .jwrap { position: absolute; left: 17px; right: 3px; z-index: 2; }
+  .jwrap { position: absolute; left: 3px; right: 3px; z-index: 2; }
   .jblock { position: relative; overflow: hidden; height: 100%; border-radius: 6px;
     border-left: 3px solid var(--f); background: color-mix(in srgb, var(--f) 26%, var(--kort));
     padding: 3px 6px; cursor: pointer; }

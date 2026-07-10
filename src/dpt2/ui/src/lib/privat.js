@@ -15,6 +15,24 @@
  *  Google levererar exklusivt slutdatum — Python-lagret normaliserar innan det
  *  når hit. */
 
+// Kurerad palett för privata källor — medvetet AVMÄTTAD. Appens alla mättade
+// kulörer är redan funktionsfärger (kategorier, gren, accent, synk, krock-rött),
+// så en mättad källfärg skulle både kollidera och pocka på uppmärksamhet. Privat
+// är bakgrundsinformation, inte något att reagera på: gråtonade nyanser skiljer
+// källorna åt utan att konkurrera. Googles råa kalenderfärg (gärna korall =
+// nästan krock-röd) ersätts alltid härifrån, tilldelad stabilt per källa.
+export const KALENDER_PALETT = [
+  '#8C99A6', // dov gråblå
+  '#A28E9C', // dov mauve
+  '#8FA091', // dov salvia
+  '#A59C8A', // dov sand
+  '#93909F', // dov lavendelgrå
+  '#89999B', // dov blågrå
+]
+
+/** Lugn palettfärg för en privat källa, stabil per position i listan. */
+export const kureradFarg = (index) => KALENDER_PALETT[((index % KALENDER_PALETT.length) + KALENDER_PALETT.length) % KALENDER_PALETT.length]
+
 // Steg 1 kör mot seed. Steg 2 byter dessa två mot riktiga hämtningar.
 export const SEED_KALENDRAR = [
   { id: 'jag', etikett: 'Jag', farg: '#5C93C9' },
@@ -63,6 +81,10 @@ export function jobbSpann(j) {
   if (j.all_day) return [tillMs(j.start_at), midnattEfter(j.end_at || j.start_at)]
   const start = tillMs(j.start_at)
   const slut = j.end_at ? tillMs(j.end_at) : NaN
+  // En match utan angiven tid lagras som 00:00–00:00 (slut == start): den saknar
+  // egentlig tidslängd. Då spänner den HELA dygnet vid krock-koll — annars varnar
+  // den aldrig för att dagen redan är fullbokad privat (t.ex. Anna 08:00–22:00).
+  if (Number.isFinite(slut) && slut === start) return [start, midnattEfter(j.start_at)]
   // Saknat eller trasigt slut: räkna jobbet som en timme långt hellre än som
   // nollängd — ett nollängdsspann kan per definition inte överlappa något.
   return [start, Number.isFinite(slut) && slut > start ? slut : start + TIMME_MS]

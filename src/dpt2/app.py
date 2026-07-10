@@ -505,6 +505,11 @@ class Api:
         self.privat.satt_valda(kalender_ids)
         return {"ok": True}
 
+    def privat_satt_etikett(self, kalender_id, etikett):
+        """Egen visningsetikett (lagras lokalt; Googles kalender rörs aldrig)."""
+        self.privat.satt_etikett(kalender_id, etikett)
+        return {"ok": True}
+
     def privat_handelser(self, fran, till):
         """Valda privata kalendrar för [fran, till) — normaliserade Upptaget-poster.
         UI:t anropar per synligt tidsspann (vecka/månad), aldrig allt på en gång."""

@@ -217,6 +217,33 @@ class TestKalendrar(unittest.TestCase):
         k.satt_valda(["me@x", "fru@x"])
         self.assertEqual(json.loads(p.read_text())["valda"], ["me@x", "fru@x"])
 
+    def test_egen_etikett_vinner_over_googles(self):
+        svar = {
+            ("POST", "/token"): (200, {"access_token": "a", "expires_in": 3600}),
+            ("GET", "/users/me/calendarList"): (200, {"items": [
+                {"id": "me@x", "summary": "me@x", "primary": True},
+                {"id": "fru@x", "summaryOverride": "Frun"},
+            ]}),
+        }
+        k = _klient(svar, cfg={"client_id": "c", "client_secret": "s", "refresh_token": "r"})
+        k.satt_etikett("me@x", "Privat")
+        k.satt_etikett("fru@x", "Anna")
+        kal = k.kalendrar()
+        self.assertEqual(kal[0]["etikett"], "Privat")    # egen etikett > Googles namn
+        self.assertEqual(kal[1]["etikett"], "Anna")      # egen etikett > summaryOverride
+        # Tom etikett = tillbaka till Googles namn; config-nyckeln städas bort.
+        k.satt_etikett("me@x", "  ")
+        self.assertEqual(k.kalendrar()[0]["etikett"], "me@x")
+        self.assertNotIn("me@x", json.loads(k.config_path.read_text())["etiketter"])
+
+    def test_etikett_sparas_i_config(self):
+        d = tempfile.mkdtemp()
+        p = Path(d) / "p.json"
+        k = PrivatKalender(config_path=p, transport=FejkTransport({}),
+                           config={"client_id": "c"})
+        k.satt_etikett("fru@x", "Anna")
+        self.assertEqual(json.loads(p.read_text())["etiketter"], {"fru@x": "Anna"})
+
 
 if __name__ == "__main__":
     unittest.main()

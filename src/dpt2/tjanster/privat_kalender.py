@@ -172,17 +172,20 @@ class PrivatKalender:
 
     # ── kalendrar ──────────────────────────────────────────────────────────────
     def kalendrar(self):
-        """Alla kalendrar ägaren når (egna + delade, t.ex. fruns). Etikett/färg
-        som förslag — ägaren döper om och färgsätter i inställningarna."""
+        """Alla kalendrar ägaren når (egna + delade, t.ex. fruns). Googles namn
+        som förslag; en egen etikett satt i inställningarna vinner alltid (lagras
+        lokalt i config — Googles kalender döps aldrig om, läsflödet är read-only)."""
         data = self._api("/users/me/calendarList")
         if not isinstance(data, dict):
             return []
+        etiketter = self._cfg.get("etiketter", {})
         ut = []
         for c in data.get("items", []):
             fid = c.get("colorId")
+            kid = c.get("id")
             ut.append({
-                "id": c.get("id"),
-                "etikett": c.get("summaryOverride") or c.get("summary") or c.get("id"),
+                "id": kid,
+                "etikett": etiketter.get(kid) or c.get("summaryOverride") or c.get("summary") or kid,
                 "farg": c.get("backgroundColor") or GOOGLE_FARGER.get(fid, "#7986CB"),
                 "primar": bool(c.get("primary")),
             })
@@ -194,6 +197,18 @@ class PrivatKalender:
 
     def satt_valda(self, kalender_ids):
         self._cfg["valda"] = list(kalender_ids or [])
+        self._spara_config()
+
+    def satt_etikett(self, kalender_id, etikett):
+        """Egen visningsetikett för en kalender (t.ex. 'Privat' i stället för
+        e-postadressen). Tom sträng tar bort den egna och Googles namn gäller igen."""
+        etiketter = dict(self._cfg.get("etiketter", {}))
+        etikett = (etikett or "").strip()
+        if etikett:
+            etiketter[kalender_id] = etikett
+        else:
+            etiketter.pop(kalender_id, None)
+        self._cfg["etiketter"] = etiketter
         self._spara_config()
 
     # ── händelser ──────────────────────────────────────────────────────────────

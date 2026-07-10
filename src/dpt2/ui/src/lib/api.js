@@ -2,7 +2,7 @@
 // speglar dpt2.data.store). I webbläsaren (Vite-dev) saknas den → mockdata, så
 // panelerna kan utvecklas och verifieras fristående.
 
-import { SEED_KALENDRAR, SEED_PRIVATA } from './privat.js'
+import { SEED_KALENDRAR, SEED_PRIVATA, kureradFarg } from './privat.js'
 
 const brygga = () =>
   (typeof window !== 'undefined' && window.pywebview && window.pywebview.api) || null
@@ -297,15 +297,38 @@ export async function privatStatus() {
   return wait({ har_klient: true, inloggad: true, kalendrar_valda: SEED_KALENDRAR.length })
 }
 
+// Färgen normaliseras till den kurerade paletten (privat.js) oavsett vad Google
+// (eller seed) råkar leverera — rött är reserverat för krock-signalen, så en
+// privat källa får aldrig en röd/korall färg som läser som ett krock-larm.
+// Tilldelas stabilt per position i listan.
+function _palettFarga(r) {
+  const kalendrar = (r?.kalendrar || []).map((k, i) => ({ ...k, farg: kureradFarg(i) }))
+  return { ...r, kalendrar }
+}
+
+// Mock-läget speglar backendens egna etiketter (config-lagrade omdöpningar).
+const _mockEtiketter = {}
+
 export async function privatKalendrar() {
   const api = brygga()
-  if (api) return api.privat_kalendrar()
-  return wait({ kalendrar: structuredClone(SEED_KALENDRAR), valda: SEED_KALENDRAR.map((k) => k.id) })
+  if (api) return _palettFarga(await api.privat_kalendrar())
+  const kalendrar = structuredClone(SEED_KALENDRAR)
+    .map((k) => ({ ...k, etikett: _mockEtiketter[k.id] || k.etikett }))
+  return _palettFarga({ kalendrar, valda: SEED_KALENDRAR.map((k) => k.id) })
 }
 
 export async function privatSattValda(ids) {
   const api = brygga()
   if (api) return api.privat_satt_valda(ids)
+  return wait({ ok: true })
+}
+
+export async function privatSattEtikett(id, etikett) {
+  const api = brygga()
+  if (api) return api.privat_satt_etikett(id, etikett)
+  const e = (etikett || '').trim()
+  if (e) _mockEtiketter[id] = e
+  else delete _mockEtiketter[id]
   return wait({ ok: true })
 }
 
