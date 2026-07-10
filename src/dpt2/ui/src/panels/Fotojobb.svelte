@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte'
-  import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher, listaLag } from '../lib/api.js'
+  import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher, listaLag,
+    privatKalendrar, privatHandelser } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { grenFarg } from '../lib/gren.js'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
@@ -9,7 +10,7 @@
   import FotojobbManad from '../lib/FotojobbManad.svelte'
   import { synkFarg, jobbSynkStatus } from '../lib/synk.js'
   import { radTillToppen } from '../lib/scroll.js'
-  import { SEED_KALENDRAR, SEED_PRIVATA, krockKarta, synligaPrivata, kalenderFarg, kalenderEtikett } from '../lib/privat.js'
+  import { krockKarta, synligaPrivata, kalenderFarg, kalenderEtikett } from '../lib/privat.js'
 
   const dispatch = createEventDispatcher()
 
@@ -22,14 +23,37 @@
   let katFilter = 'Alla'
 
   // ── Privata kalendrar (skrivskyddat tillgänglighetslager) ──────────────────
-  // Steg 1 kör mot seed; steg 2 byter dessa mot hämtning från Google via
-  // tjanster/privat_kalender.py. Ingenting härifrån sparas eller skickas vidare.
-  let kalendrar = SEED_KALENDRAR
-  let privata = SEED_PRIVATA
-  let aktivaKal = new Set(SEED_KALENDRAR.map((k) => k.id))
+  // Hämtas via bryggan → tjanster/privat_kalender.py → Google direkt (mock i
+  // webbläsaren ger seed). Ingenting härifrån sparas eller skickas vidare.
+  let kalendrar = []            // valda privata kalendrar (etikett + färg)
+  let privata = []              // Upptaget-poster för det laddade spannet
+  let aktivaKal = new Set()     // vilka källor som är TÄNDA (styr bara visning)
+  let laddatSpan = null         // [fran, till] vi redan hämtat — undvik omhämtning
   let hoverJobb = null          // jobb-id vars krock-utfällning visas vid hover
   let pinnadJobb = null         // jobb-id vars utfällning är fäst med klick
   let vyAnkare = new Date()     // vilken vecka/månad Vecka- och Månadsvyn visar
+
+  const isoDag = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+  // Navigerar användaren Vecka/Månad utanför det laddade spannet → hämta den
+  // omgivande månaden. Bara i vy-lägena; listan lever på startspannet.
+  $: if ((layout === 'vecka' || layout === 'manad') && vyAnkare) {
+    laddaPrivata(isoDag(new Date(vyAnkare.getFullYear(), vyAnkare.getMonth() - 1, 1)),
+                 isoDag(new Date(vyAnkare.getFullYear(), vyAnkare.getMonth() + 2, 1)))
+  }
+
+  // Hämta privata poster för [fran, till) och väv in dem, dedupat på id. Backend
+  // spannbegränsar (README §4: hämta per synligt tidsspann, inte allt) — vi
+  // vidgar bara laddatSpan när användaren navigerar utanför det redan hämtade.
+  async function laddaPrivata(fran, till) {
+    if (laddatSpan && fran >= laddatSpan[0] && till <= laddatSpan[1]) return
+    const nyFran = laddatSpan ? (fran < laddatSpan[0] ? fran : laddatSpan[0]) : fran
+    const nyTill = laddatSpan ? (till > laddatSpan[1] ? till : laddatSpan[1]) : till
+    const poster = await privatHandelser(nyFran, nyTill).catch(() => [])
+    const seen = new Map(poster.map((p) => [p.id, p]))
+    privata = [...seen.values()]
+    laddatSpan = [nyFran, nyTill]
+  }
 
   function toggleKalender(id) {
     aktivaKal = new Set(aktivaKal.has(id) ? [...aktivaKal].filter((x) => x !== id) : [...aktivaKal, id])
@@ -85,6 +109,15 @@
     }
     // Synk-status i bakgrunden — blockera inte agendan på hälsokollen (kall Worker).
     kalenderStatus().then((s) => (status = s)).catch(() => {})
+    // Privata kalendrar: vilka som valts (etikett/färg) + ett startspann runt idag.
+    // Alla tänds som default; ägaren släcker per källa i filterraden.
+    privatKalendrar().then((r) => {
+      kalendrar = r?.kalendrar || []
+      aktivaKal = new Set((r?.valda?.length ? r.valda : kalendrar.map((k) => k.id)))
+    }).catch(() => {})
+    const idag = new Date()
+    laddaPrivata(isoDag(new Date(idag.getFullYear(), idag.getMonth() - 2, 1)),
+                 isoDag(new Date(idag.getFullYear(), idag.getMonth() + 4, 1)))
     await tick()
     setTimeout(scrollTillIdag, 80)
   })

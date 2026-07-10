@@ -23,6 +23,7 @@ from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
                            publicera_korning, publicera_some, meta_api,
                            bildhosting, story_korning, testlage)
 from dpt2.tjanster.kalender import Kalender
+from dpt2.tjanster.privat_kalender import PrivatKalender
 from dpt2.tjanster.innehall_synk import InnehallSynk
 from dpt2.tjanster.live_synk import (
     GREN_FARG, LiveSynk, iso_nu, malskyttar_till_poster, poster_till_malskyttar)
@@ -47,6 +48,7 @@ class Api:
         self.conn = db.oppna(self.db_path, check_same_thread=False)
         self._logg = []      # buffrade worker-events (Logg-panelen)
         self.kalender = Kalender()   # klient mot deployade Calendar Sync-tjänsten
+        self.privat = PrivatKalender()   # läser privata Google-kalendrar DIREKT (skrivskyddat)
         self.innehall_synk = InnehallSynk()   # klient mot deployade Content Sync-tjänsten
         self.live_synk = LiveSynk()  # Mobil Live (samma worker, egna /api/live-rutter)
 
@@ -476,6 +478,37 @@ class Api:
         har = self.kalender.har_nyckel()
         return {"har_nyckel": har, "ansluten": self.kalender.halsa() if har else False,
                 "bas_url": self.kalender.bas_url}
+
+    # ── Privata kalendrar (skrivskyddad tillgänglighet, läses lokalt) ─────────
+    def privat_status(self):
+        """Redo-läge för Fotojobb/Inställningar: klientuppgifter, inloggning, val."""
+        return self.privat.status()
+
+    def privat_spara_klient(self, client_id, client_secret):
+        """Ägarens Desktop-OAuth-uppgifter (skapas en gång i Google Cloud Console)."""
+        self.privat.spara_klient(client_id, client_secret)
+        return {"ok": True}
+
+    def privat_logga_in(self):
+        """Kör consent-flödet (öppnar webbläsaren). Blockerar tills godkänt."""
+        return self.privat.logga_in_interaktivt()
+
+    def privat_logga_ut(self):
+        self.privat.logga_ut()
+        return {"ok": True}
+
+    def privat_kalendrar(self):
+        """Alla kalendrar ägaren når (för val i inställningarna), + vilka som valts."""
+        return {"kalendrar": self.privat.kalendrar(), "valda": self.privat.valda()}
+
+    def privat_satt_valda(self, kalender_ids):
+        self.privat.satt_valda(kalender_ids)
+        return {"ok": True}
+
+    def privat_handelser(self, fran, till):
+        """Valda privata kalendrar för [fran, till) — normaliserade Upptaget-poster.
+        UI:t anropar per synligt tidsspann (vecka/månad), aldrig allt på en gång."""
+        return self.privat.hamta_span(fran, till)
 
     def lista_fotojobb(self):
         """Lokala utkast (väntar på manuell synk) + riktiga jobb hos tjänsten.

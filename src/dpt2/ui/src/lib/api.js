@@ -2,6 +2,8 @@
 // speglar dpt2.data.store). I webbläsaren (Vite-dev) saknas den → mockdata, så
 // panelerna kan utvecklas och verifieras fristående.
 
+import { SEED_KALENDRAR, SEED_PRIVATA } from './privat.js'
+
 const brygga = () =>
   (typeof window !== 'undefined' && window.pywebview && window.pywebview.api) || null
 
@@ -283,6 +285,53 @@ export async function raderaFotojobb(id) {
     return wait({ ok: true })
   }
   MOCK_FOTOJOBB = MOCK_FOTOJOBB.filter((j) => j.id !== id)
+  return wait({ ok: true })
+}
+
+// ── Privata kalendrar (skrivskyddat tillgänglighetslager, läses lokalt) ───────
+// Mock-läget svarar med seed (samma data UI:t verifierades mot i steg 1). Skarpt
+// läge går via Python-bryggan → tjanster/privat_kalender.py → Google direkt.
+export async function privatStatus() {
+  const api = brygga()
+  if (api) return api.privat_status()
+  return wait({ har_klient: true, inloggad: true, kalendrar_valda: SEED_KALENDRAR.length })
+}
+
+export async function privatKalendrar() {
+  const api = brygga()
+  if (api) return api.privat_kalendrar()
+  return wait({ kalendrar: structuredClone(SEED_KALENDRAR), valda: SEED_KALENDRAR.map((k) => k.id) })
+}
+
+export async function privatSattValda(ids) {
+  const api = brygga()
+  if (api) return api.privat_satt_valda(ids)
+  return wait({ ok: true })
+}
+
+export async function privatHandelser(fran, till) {
+  const api = brygga()
+  if (api) return api.privat_handelser(fran, till)
+  // Mock: filtrera seed till spannet (halvöppet på datumnivå) så vecko-/månadsbyten
+  // beter sig som skarpt läge, där backend redan spannbegränsar.
+  return wait(SEED_PRIVATA.filter((p) => (p.slut || p.start) >= fran && p.start < till + 'T99'))
+}
+
+export async function privatLoggaIn() {
+  const api = brygga()
+  if (api) return api.privat_logga_in()
+  return wait({ ok: false, fel: 'Inloggning kräver den riktiga appen (pywebview).' })
+}
+
+export async function privatLoggaUt() {
+  const api = brygga()
+  if (api) return api.privat_logga_ut()
+  return wait({ ok: true })
+}
+
+export async function privatSparaKlient(clientId, clientSecret) {
+  const api = brygga()
+  if (api) return api.privat_spara_klient(clientId, clientSecret)
   return wait({ ok: true })
 }
 
