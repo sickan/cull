@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -476,6 +476,15 @@ def _migrera(conn, fran_version):
         if _har_tabell(conn, "lag") and not _har_kolumn(conn, "lag", "arkiverad"):
             conn.execute(
                 "ALTER TABLE lag ADD COLUMN arkiverad INTEGER NOT NULL DEFAULT 0;")
+    if fran_version < 19:
+        # v19: fotografens anteckning per fotojobb. Egen tabell, inte en kolumn
+        # på jobbet — jobben bor hos Calendar Sync-tjänsten, bara länkarna är
+        # lokala (jfr fotojobb_match).
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS fotojobb_notering (
+          fotojobb_id TEXT PRIMARY KEY,
+          notering    TEXT NOT NULL
+        )""")
 
 
 def _har_kolumn(conn, tabell, kolumn):

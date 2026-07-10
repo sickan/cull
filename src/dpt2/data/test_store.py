@@ -227,6 +227,30 @@ class TestMatchCRUD(unittest.TestCase):
         self.assertIsNone(store.merge_in_trupp(self.c, "finns-ej", []))
 
 
+class TestFotojobbNotering(unittest.TestCase):
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+
+    def test_skrivs_och_lases_i_batch(self):
+        store.satt_fotojobb_notering(self.c, "jobb1", "Kund: Anna")
+        store.satt_fotojobb_notering(self.c, "jobb2", "Stativ, ND-filter")
+        self.assertEqual(store.noteringar_for_fotojobb(self.c, ["jobb1", "jobb2"]),
+                         {"jobb1": "Kund: Anna", "jobb2": "Stativ, ND-filter"})
+
+    def test_uppdateras_och_raderas(self):
+        store.satt_fotojobb_notering(self.c, "jobb1", "Kund: Anna")
+        store.satt_fotojobb_notering(self.c, "jobb1", "Kund: Anna & Erik")
+        self.assertEqual(store.noteringar_for_fotojobb(self.c, ["jobb1"]),
+                         {"jobb1": "Kund: Anna & Erik"})
+        # tom text raderar raden — inga tomma noteringar lagras
+        store.satt_fotojobb_notering(self.c, "jobb1", "   ")
+        self.assertEqual(store.noteringar_for_fotojobb(self.c, ["jobb1"]), {})
+
+    def test_utan_ider(self):
+        self.assertEqual(store.noteringar_for_fotojobb(self.c, []), {})
+        self.assertEqual(store.noteringar_for_fotojobb(self.c, [None]), {})
+
+
 class TestLagTavling(unittest.TestCase):
     def setUp(self):
         self.c = db.oppna(":memory:")

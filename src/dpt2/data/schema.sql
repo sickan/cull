@@ -118,6 +118,15 @@ CREATE TABLE fotojobb_match (
   match_id    TEXT NOT NULL REFERENCES matchen(id) ON DELETE CASCADE
 );
 
+-- Fotografens egen anteckning per jobb (kund, paket, utrustning). LOKAL —
+-- speglas aldrig till Google Calendars `description`, så synken kan inte
+-- skriva över den och den funkar även för jobb som importerats från Google.
+-- Samma textnyckel-rymd som fotojobb_match (utkast-id eller tjänstens jobb-id).
+CREATE TABLE fotojobb_notering (
+  fotojobb_id TEXT PRIMARY KEY,
+  notering    TEXT NOT NULL
+);
+
 -- Uttagen trupp per match (subset av lagets spelare) + vem som startade.
 CREATE TABLE match_trupp (
   match_id   TEXT NOT NULL REFERENCES matchen(id) ON DELETE CASCADE,

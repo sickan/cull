@@ -3,7 +3,7 @@
 import unittest
 
 from dpt2.app import Api, _gallring_av_config, _hitta_site_rot, _spara_export_bild
-from dpt2.data import store
+from dpt2.data import db, store
 
 
 class TestApi(unittest.TestCase):
@@ -13,7 +13,7 @@ class TestApi(unittest.TestCase):
 
     def test_info(self):
         info = self.api.info()
-        self.assertEqual(info["schemaversion"], 18)
+        self.assertEqual(info["schemaversion"], db.SCHEMA_VERSION)
 
     def test_match_round_trip_genom_bryggan(self):
         res = self.api.spara_match({
@@ -765,6 +765,38 @@ class TestFotojobbUtkastBridge(unittest.TestCase):
                                  "match_id": mid})
         jobb = self.api.lista_fotojobb()
         self.assertEqual(jobb[0]["match_id"], mid)
+
+    def test_notering_pa_utkast_sparas_lokalt(self):
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
+        self.api.kalender = _FakeKalender()
+        self.api.spara_fotojobb({"id": uid, "utkast": True, "notering": "Kund: Anna"})
+        self.assertEqual(self.api.lista_fotojobb()[0]["notering"], "Kund: Anna")
+        self.assertEqual(self.api.kalender.skapade, [])   # rörde aldrig tjänsten
+
+    def test_notering_skickas_aldrig_till_kalendertjansten(self):
+        """Anteckningen är lokal — läcker den till tjänsten kan Google-synken
+        skriva över den. Låser att den inte finns med i det pushade jobbet."""
+        self.api.kalender = _FakeKalender()
+        r = self.api.spara_fotojobb({"title": "Bröllop – Anna & Erik",
+                                     "start_at": "2026-08-08T12:00",
+                                     "notering": "Kund: Anna"})
+        self.assertTrue(r["ok"])
+        pushat = self.api.kalender.skapade[0]
+        self.assertNotIn("notering", pushat)
+        self.assertEqual(pushat["title"], "Bröllop – Anna & Erik")
+        # …men den lokala kopplingen skrevs, på id:t tjänsten gav tillbaka
+        self.assertEqual(
+            store.noteringar_for_fotojobb(self.api.conn, ["remote1"]),
+            {"remote1": "Kund: Anna"})
+
+    def test_radera_jobb_stadar_noteringen(self):
+        self.api.kalender = _FakeKalender()
+        self.api.spara_fotojobb({"title": "Bröllop", "start_at": "2026-08-08T12:00",
+                                 "notering": "Kund: Anna"})
+        self.api.radera_fotojobb("remote1")
+        self.assertEqual(store.noteringar_for_fotojobb(self.api.conn, ["remote1"]), {})
 
     def test_koppla_bort_match_satter_none(self):
         self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",

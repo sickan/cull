@@ -343,23 +343,31 @@ class Api:
         except Exception:
             jobb = []
         alla = utkast + jobb
-        matchref = store.matchref_for_fotojobb(self.conn, [j.get("id") for j in alla])
+        ider = [j.get("id") for j in alla]
+        matchref = store.matchref_for_fotojobb(self.conn, ider)
+        noteringar = store.noteringar_for_fotojobb(self.conn, ider)
         for j in alla:
             j["match_id"] = matchref.get(j.get("id"))
+            j["notering"] = noteringar.get(j.get("id"), "")
         return alla
 
     def spara_fotojobb(self, jobb):
         """Skapar (utan id) eller uppdaterar (med id) ett fotojobb. Ett utkast
         (jobb.utkast=True) sparas bara LOKALT — pushas aldrig till tjänsten
         förrän aktivera_synk_fotojobb anropas explicit. match_id ("Koppla till
-        match") rör aldrig tjänsten — sparas i den lokala länktabellen sedan
-        jobbets id är känt (nytt jobb får sitt id från tjänstens svar)."""
+        match") och notering (fotografens anteckning) rör aldrig tjänsten —
+        de sparas i lokala tabeller sedan jobbets id är känt (nytt jobb får
+        sitt id från tjänstens svar)."""
         if jobb.get("utkast") and jobb.get("id"):
             store.spara_fotojobb_utkast_falt(self.conn, jobb["id"], jobb)
             if "match_id" in jobb:
                 store.lanka_fotojobb_match(self.conn, jobb["id"], jobb.get("match_id"))
+            if "notering" in jobb:
+                store.satt_fotojobb_notering(self.conn, jobb["id"], jobb.get("notering"))
             return {"ok": True}
         jid = jobb.get("id")
+        # notering ingår MEDVETET inte — den är lokal och skickas aldrig till
+        # kalendertjänsten (annars skulle Google-synk kunna skriva över den).
         data = {k: jobb.get(k) for k in
                 ("title", "start_at", "end_at", "location", "description",
                  "category", "all_day") if k in jobb}
@@ -368,16 +376,21 @@ class Api:
                  else self.kalender.skapa_jobb(data))
         except Exception as e:
             return {"ok": False, "fel": str(e)}
-        if r.get("ok") and "match_id" in jobb:
+        if r.get("ok"):
             sparat_id = jid or (r.get("jobb") or {}).get("id")
             if sparat_id:
-                store.lanka_fotojobb_match(self.conn, sparat_id, jobb.get("match_id"))
+                if "match_id" in jobb:
+                    store.lanka_fotojobb_match(self.conn, sparat_id, jobb.get("match_id"))
+                if "notering" in jobb:
+                    store.satt_fotojobb_notering(self.conn, sparat_id, jobb.get("notering"))
         return r
 
     def radera_fotojobb(self, jobb_id):
         """Raderar ett utkast lokalt om id:t pekar på ett, annars ett riktigt
-        jobb hos tjänsten. Städar alltid bort en ev. lokal match-koppling."""
+        jobb hos tjänsten. Städar alltid bort lokal match-koppling + anteckning
+        (de har inga främmandenycklar mot jobbet — det bor hos tjänsten)."""
         store.lanka_fotojobb_match(self.conn, jobb_id, None)
+        store.satt_fotojobb_notering(self.conn, jobb_id, "")
         if store.hamta_fotojobb_utkast(self.conn, jobb_id):
             store.radera_fotojobb_utkast(self.conn, jobb_id)
             return {"ok": True}

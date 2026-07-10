@@ -157,7 +157,9 @@
     await laddaOm()
   }
   function nyttJobb() {
-    modal = { title: '', start_at: '', end_at: '', location: '', description: '', category: '', all_day: false, match_id: '' }
+    // notering (ej description): anteckningen är LOKAL och skickas aldrig till
+    // kalendertjänsten, så Google-synken kan inte skriva över den.
+    modal = { title: '', start_at: '', end_at: '', location: '', notering: '', category: '', all_day: false, match_id: '' }
   }
   // datetime-local kräver 'YYYY-MM-DDTHH:mm' — heldagsjobb lagras som rent datum
   // ('2026-10-24') och skulle annars lämna fältet tomt (placeholder).
@@ -171,6 +173,7 @@
   function oppnaRedigering(j, rad = null) {
     if (jobEditId === j.id) { stangRedigering(); return }     // klick igen stänger
     redigerar = { ...j, category: j.category || '', match_id: j.match_id || '',
+      notering: j.notering || '',
       start_at: tillLokal(j.start_at), end_at: tillLokal(j.end_at) }
     jobEditId = j.id
     radTillToppen(rad)
@@ -303,6 +306,7 @@
                       <div class="tlinfo">
                         <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}{#if res}<span class="resultat scd">{res}</span>{/if}</div>
                         <div class="when">{j.all_day ? 'Heldag · ' + heldagText(j) : ''}{j.location ? (j.all_day ? ' · ' : '') + j.location : ''}</div>
+                        {#if j.notering}<div class="notering">{j.notering}</div>{/if}
                         {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                       </div>
                       <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
@@ -322,6 +326,7 @@
                           <label>Slut<input type="datetime-local" bind:value={redigerar.end_at} /></label>
                         </div>
                         <label class="full">Plats<input bind:value={redigerar.location} placeholder="t.ex. Rättvik" /></label>
+                        <label class="full">Anteckning<textarea bind:value={redigerar.notering} rows="2" placeholder="Kund, paket, övrigt…"></textarea></label>
                         <div class="katblock">
                           <span class="lbl">Kategori</span>
                           <div class="katseg">
@@ -355,6 +360,8 @@
                     {#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}
                     <span class="rtitel">{j.title}</span>
                     {#if res}<span class="resultat scd">{res}</span>{/if}
+                    <!-- heldagsraden är enradig: noteringen inline istället för egen rad -->
+                    {#if j.notering}<span class="notering inline">{j.notering}</span>{/if}
                     <span class="hlbl">Heldag</span>
                     {#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}
                     <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
@@ -379,6 +386,7 @@
                     <div class="mitt">
                       <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}{#if res}<span class="resultat scd">{res}</span>{/if}{#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}</div>
                       <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
+                      {#if j.notering}<div class="notering">{j.notering}</div>{/if}
                       <div class="undermeta">
                         <select class="katsel" value={j.category || ''} on:click|stopPropagation on:change={(e) => bytKategori(j, e.target.value)}>
                           <option value="">Okategoriserat</option>
@@ -403,6 +411,7 @@
                       <label>Slut<input type="datetime-local" bind:value={redigerar.end_at} /></label>
                     </div>
                     <label class="full">Plats<input bind:value={redigerar.location} placeholder="t.ex. Rättvik" /></label>
+                    <label class="full">Anteckning<textarea bind:value={redigerar.notering} rows="2" placeholder="Kund, paket, övrigt…"></textarea></label>
                     <div class="katblock">
                       <span class="lbl">Kategori</span>
                       <div class="katseg">
@@ -472,7 +481,7 @@
           </label>
           <label class="vaxa">Plats<input bind:value={modal.location} placeholder="t.ex. Rättvik" /></label>
         </div>
-        <label class="full">Anteckning<textarea bind:value={modal.description} rows="2" placeholder="Kund, paket, övrigt…"></textarea></label>
+        <label class="full">Anteckning<textarea bind:value={modal.notering} rows="2" placeholder="Kund, paket, övrigt…"></textarea></label>
         <div class="dfoot">
           <button class="prim" on:click={sparaModal} disabled={!modal.title || !modal.start_at}>
             {modal.id ? 'Spara ändringar' : 'Lägg till fotojobb'}
@@ -550,6 +559,11 @@
   .rtitel { font-size: 13.5px; font-weight: 600; color: var(--t-head); }
   .rtitel.stor { font-size: 15px; }
   .when { font-size: 12.5px; color: var(--t-mut); margin-top: 2px; }
+  /* §3 p.2: fotografens anteckning (kund/paket/utrustning). Egen rad under
+     tid+plats, avkortad — den kan vara godtyckligt lång och får inte bryta raden. */
+  .notering { font-size: 11.5px; color: var(--t-body); margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .notering.inline { margin-top: 0; max-width: 240px; flex: none; }
   .undermeta { display: flex; gap: 8px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
   .rknapp { display: flex; gap: 6px; flex: none; }
   .mini { border: 1px solid var(--div); background: var(--kort); border-radius: 7px; padding: 6px 12px;
@@ -578,7 +592,9 @@
   .tltid { text-align: right; padding-top: 14px; }
   .tlt { font-size: 13px; font-weight: 700; color: var(--t-head); font-variant-numeric: tabular-nums; }
   .tld { font-size: 10px; color: var(--t-mut); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
-  .tlspar { position: relative; border-left: 2px solid var(--div); padding: 0 0 12px 22px; }
+  /* min-width:0 — grid-items har min-width:auto och skulle annars växa förbi sitt
+     spår istället för att låta noteringen avkortas (spränger tidslinjen i sidled). */
+  .tlspar { position: relative; min-width: 0; border-left: 2px solid var(--div); padding: 0 0 12px 22px; }
   .tldot { position: absolute; left: -6px; top: 20px; width: 10px; height: 10px; border-radius: 50%;
     border: 2px solid var(--kort); }
   /* position/overflow krävs för att <Hornmarkor> ska ankras och klippas av kortet. */
@@ -610,10 +626,11 @@
   /* Redigeringskort — utfällt direkt under raden (Fotojobb: Lista + Tidslinje) */
   .redigerakort { display: flex; flex-direction: column; gap: 10px; margin-top: 10px;
     border: 1.5px solid var(--acc-border); border-radius: 10px; padding: 12px; background: var(--kort); }
-  .redigerakort input { padding: 9px 11px; border: 1px solid var(--div); border-radius: 8px;
+  .redigerakort input, .redigerakort textarea { padding: 9px 11px; border: 1px solid var(--div); border-radius: 8px;
     background: var(--panel); color: var(--t-head); font-size: 13px; font-weight: 400;
     text-transform: none; letter-spacing: 0; outline: none; }
-  .redigerakort input:focus { border-color: var(--acc); }
+  .redigerakort textarea { resize: vertical; width: 100%; box-sizing: border-box; }
+  .redigerakort input:focus, .redigerakort textarea:focus { border-color: var(--acc); }
   .rkfoot { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
   .grenlbl3 { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-right: 8px; }
 

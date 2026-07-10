@@ -674,6 +674,32 @@ def fotojobb_for_match(conn, match_id):
         (match_id,)).fetchall()]
 
 
+# ── Fotojobb → anteckning (fotografens egen, lokal) ──────────────────────────
+def satt_fotojobb_notering(conn, fotojobb_id, notering):
+    """Skriver (eller raderar, om texten är tom) jobbets anteckning. Lokal —
+    rör aldrig kalendertjänsten. Tom text raderar raden istället för att lagra
+    en tom sträng, så `noteringar_for_fotojobb` bara returnerar riktiga noter."""
+    text = (notering or "").strip()
+    conn.execute("DELETE FROM fotojobb_notering WHERE fotojobb_id=?", (fotojobb_id,))
+    if text:
+        conn.execute(
+            "INSERT INTO fotojobb_notering(fotojobb_id,notering) VALUES(?,?)",
+            (fotojobb_id, text))
+    conn.commit()
+
+
+def noteringar_for_fotojobb(conn, fotojobb_ider):
+    """Batch-uppslag: {fotojobb_id: notering} för given lista av id:n."""
+    ider = [i for i in fotojobb_ider if i]
+    if not ider:
+        return {}
+    platshallare = ",".join("?" * len(ider))
+    rader = conn.execute(
+        f"SELECT fotojobb_id, notering FROM fotojobb_notering "
+        f"WHERE fotojobb_id IN ({platshallare})", ider).fetchall()
+    return {r["fotojobb_id"]: r["notering"] for r in rader}
+
+
 # ── Tävling ↔ lag (tävling äger sina deltagande lag) ─────────────────────────
 def koppla_lag_till_tavling(conn, tavling_id, lag_id):
     """Registrerar att laget deltar i tävlingen (idempotent)."""
