@@ -135,6 +135,7 @@ class Api:
             "sport": m.get("sport") or "",
             "liga": m.get("liga") or "",
             "avspark": avspark,
+            "gren": m.get("hem_gren") or "",      # molnrendern vill ha grenen, inte färgen
             "gren_farg": GREN_FARG.get(m.get("hem_gren") or "", ""),
             "sportprofil": {
                 "start_moment": pr.get("start_moment") or "Avspark",
