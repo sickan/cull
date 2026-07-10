@@ -57,6 +57,9 @@
     speglaRes(match)
     galleriUrl = match?.galleri || galleriUrl
     hemsidaUrl = match?.sida_url || hemsidaUrl
+    // Materialraden följer matchen. Återanvänd matchens senaste SoMe-rad så att
+    // spara/publicera uppdaterar den i stället för att lämna dubbletter efter sig.
+    materialId = (materials || []).find((m) => m.match_id === id && m.kind === 'some')?.id || null
     nollstallLive()
     pollaLive()          // visa mobilens tillstånd direkt vid matchbyte
   }
@@ -286,14 +289,84 @@
   let pubResultat = []             // [{kanal, ok, text}]
   let pubFlash = false
 
+  let materialId = null            // raden vi skriver utkast/utfall till för aktuell match
+  $: fixtur = match ? `${match.lag_hemma} – ${match.lag_borta}` : ''
+
   async function spara() {
     if (!match) return
-    await sparaMaterial({ kind: 'some', status: 'utkast', match_id: match.id,
-      match_namn: `${match.lag_hemma} – ${match.lag_borta}`, caption,
-      channels: JSON.stringify(Object.fromEntries(KANALER.map((k) => [k.key, ch[k.key]]))),
-      foto: coverPath })
+    // channels lagras som ren array — store json-kodar själv (JSON.stringify här
+    // gav en json-sträng inuti en json-sträng).
+    const r = await sparaMaterial({ id: materialId || undefined,
+      kind: 'some', status: 'utkast', match_id: match.id,
+      match_namn: fixtur, caption, channels: aktiva.map((k) => k.key), foto: coverPath })
+    if (r?.ok) materialId = r.id
     materials = await listaMaterial()
     pubFlash = true; setTimeout(() => (pubFlash = false), 1800)
+  }
+
+  // ── Ett kanalanrop, byggt som ÅTERKÖRBAR config ────────────────────────────
+  // "Försök igen" måste rendera exakt samma bilder som första försöket. Därför
+  // byggs varje kanals anrop som ett rent data-objekt som sparas på materialet,
+  // och körs av EN funktion — både vid publicering och vid omförsök.
+  const _crop = (p) => ({ path: p.path, fokus: p.fokus, zoom: p.zoom })
+  function kanalConfig(key) {
+    if (key === 'webb') {
+      return { typ: 'webb', payload: {
+        typ: 'match', match_id: match.id, titel: fixtur,
+        hem: match.lag_hemma, borta: match.lag_borta, serie: match.liga, sport: match.sport,
+        datum: match.datum, resultat: resNu.resultat, mellan: resNu.mellan, arena: match.arena,
+        malskyttar: resNu.malskyttar, pixieset: galleriUrl, body: losText(caption, { web: true }),
+        figurer: selectedPaths.map((p) => ({ bild: p, alt: '', bildtext: '', src: '' })),
+        hero: (coverPath.split('/').pop() || ''), heroKalla: coverPath,
+        heroFormat: ch.webb.fmt, heroFokus: coverPhoto?.fokus, heroZoom: coverPhoto?.zoom } }
+    }
+    const bilder = key === 'live'
+      ? (coverPhoto ? [_crop(coverPhoto)] : [])
+      : ordnadeFoton.map(_crop)
+    return { typ: 'kanal', payload: { kanal: key, format: ch[key].fmt, bilder,
+      moment: 'resultat', tema, match_id: match.id, caption: losText(caption),
+      stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar } }
+  }
+
+  // Legacy-rader (sparade före den här formen) saknar `typ`/payload och går inte
+  // att köra om — deras bildvägar pekar på ett annat renderflöde.
+  const kanKoraOm = (cfg) => !!cfg && (cfg.typ === 'webb' || cfg.typ === 'kanal')
+
+  async function korKanal(key, cfg, test, test_mapp) {
+    try {
+      if (cfg.typ === 'webb') {
+        const r = await publiceraInnehallNatet({ ...cfg.payload, test_mapp }, test)
+        return { ok: !!r?.ok, text: r?.fel || (test ? 'Testfil · 1 bild' : 'Publicerad') }
+      }
+      const r = await publiceraKanal({ ...cfg.payload, test, test_mapp })
+      const antal = r?.antal ?? 0
+      return { ok: !!r?.ok && (r.publicerad !== false),
+        text: r?.fel || (test ? `Testfil · ${antal} bild${antal === 1 ? '' : 'er'}`
+                              : `${antal} bild${antal === 1 ? '' : 'er'}`) }
+    } catch (e) {
+      return { ok: false, text: 'Fel: ' + (e?.message || e) }
+    }
+  }
+
+  // 'story' är den gamla nyckeln för Live-storyn — legacy-rader bär den ännu.
+  const KANALNAMN = { ...Object.fromEntries(KANALER.map((k) => [k.key, k.namn])), story: 'IG Story' }
+  const felKanaler = (chRes) => Object.keys(chRes).filter((k) => chRes[k] !== 'ok')
+
+  // Skriver utfallet på materialraden: status + per-kanal-resultat + configen
+  // som krävs för ett omförsök. Utan den här raden kan Rails "delvis"-prick
+  // aldrig tändas och "Försök igen" har inget att köra om.
+  // `bas` bär radens IDENTITET (id/match/bildtext) — ett omförsök kan gälla ett
+  // material för en annan match än den som är öppen, och får inte skriva om den.
+  async function sparaUtfall(bas, chRes, cfgs, note) {
+    const fel = felKanaler(chRes)
+    const r = await sparaMaterial({ ...bas, kind: 'some',
+      status: fel.length ? 'delvis' : 'publicerad',
+      channels: Object.keys(chRes), banor: cfgs, ch_results: chRes,
+      historik_note: note !== undefined ? note
+        : (fel.length ? `${fel.map((k) => KANALNAMN[k] || k).join(', ')} föll` : '') })
+    materials = await listaMaterial()
+    dispatch('materialAndrat')
+    return r
   }
 
   async function publicera() {
@@ -301,40 +374,92 @@
     pubKor = true; pubResultat = []
     const test = $testMode
     const test_mapp = test ? (await nyTestPaketMapp())?.path : undefined   // gemensam mapp för hela fan-out:en
-    // Varje bild bär sin egen fokus/zoom (satt per foto i Steg 1). Omslaget först.
-    const crop = (p) => ({ path: p.path, fokus: p.fokus, zoom: p.zoom })
+    const cfgs = {}
+    const chRes = {}
     const ut = []
     for (const k of aktiva) {
-      try {
-        if (k.key === 'live' || k.key === 'ig' || k.key === 'fb') {
-          // Server-render per kanal: omslag med overlay + (ig/fb) beskurna extra
-          // foton — var och en med SIN egen fokus/zoom i kanalens format.
-          const bilder = k.key === 'live'
-            ? (coverPhoto ? [crop(coverPhoto)] : [])
-            : ordnadeFoton.map(crop)
-          const r = await publiceraKanal({ kanal: k.key, format: ch[k.key].fmt,
-            bilder, moment: 'resultat', tema, match_id: match.id, caption: losText(caption),
-            stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar, test, test_mapp })
-          const antal = r?.antal ?? 0
-          ut.push({ kanal: k.namn, ok: !!r?.ok && (r.publicerad !== false),
-            text: r?.fel || (test ? `Testfil · ${antal} bild${antal === 1 ? '' : 'er'}` : `${antal} bild${antal === 1 ? '' : 'er'}`) })
-        } else if (k.key === 'webb') {
-          const r = await publiceraInnehallNatet({
-            typ: 'match', match_id: match.id, titel: `${match.lag_hemma} – ${match.lag_borta}`,
-            hem: match.lag_hemma, borta: match.lag_borta, serie: match.liga, sport: match.sport,
-            datum: match.datum, resultat: resNu.resultat, mellan: resNu.mellan, arena: match.arena,
-            malskyttar: resNu.malskyttar, pixieset: galleriUrl, body: losText(caption, { web: true }),
-            figurer: selectedPaths.map((p) => ({ bild: p, alt: '', bildtext: '', src: '' })),
-            hero: (coverPath.split('/').pop() || ''), heroKalla: coverPath,
-            heroFormat: ch.webb.fmt, heroFokus: coverPhoto?.fokus, heroZoom: coverPhoto?.zoom, test_mapp }, test)
-          ut.push({ kanal: k.namn, ok: !!r?.ok, text: r?.fel || (test ? 'Testfil · 1 bild' : 'Publicerad') })
-        }
-      } catch (e) { ut.push({ kanal: k.namn, ok: false, text: 'Fel: ' + (e?.message || e) }) }
+      const cfg = kanalConfig(k.key)
+      cfgs[k.key] = cfg
+      const r = await korKanal(k.key, cfg, test, test_mapp)
+      chRes[k.key] = r.ok ? 'ok' : 'fail'
+      ut.push({ kanal: k.namn, ok: r.ok, text: r.text })
     }
     pubResultat = ut
     pubKor = false
-    materials = await listaMaterial()
-    dispatch('materialAndrat')
+    // Testläge persisterar aldrig material (samma kontrakt som lib/testlage.js).
+    if (!test) {
+      const r = await sparaUtfall({ id: materialId || undefined, match_id: match.id,
+        match_namn: fixtur, caption, foto: coverPath }, chRes, cfgs)
+      if (r?.ok) materialId = r.id
+    }
+  }
+
+  // ── Materiallistan ────────────────────────────────────────────────────────
+  // Visar vad som faktiskt gick ut. Utan den pekar Rails "delvis"-prick på tomma
+  // luften och en fallen kanal går inte att försöka om.
+  let matFilter = 'alla'
+  let historikOppen = {}
+  const toggleHistorik = (id) => (historikOppen = { ...historikOppen, [id]: !historikOppen[id] })
+
+  const MKR = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+  function nartext(iso) {
+    const [datum, tid] = (iso || '').replace(' ', 'T').split('T')
+    const [, m, d] = (datum || '').split('-').map(Number)
+    return d ? `${d} ${MKR[m - 1]} ${(tid || '').slice(0, 5)}` : (iso || '')
+  }
+
+  $: matSorterat = [...(materials || [])]
+    .sort((a, b) => (b.uppdaterad || '').localeCompare(a.uppdaterad || ''))
+  $: matFiltrerat = matSorterat.filter((m) => matFilter === 'alla' || m.status === matFilter)
+  $: matVy = matFiltrerat.map((m) => {
+    const chRes = m.ch_results || {}
+    const cfgs = m.banor || {}
+    const fel = felKanaler(chRes)
+    return { ...m,
+      titel: m.kind === 'live' ? `${m.moment || 'Story'}-story` : 'SoMe-paket',
+      nar: nartext(m.uppdaterad),
+      kanaler: m.channels || Object.keys(chRes),
+      chRes, fel,
+      // En legacy-rad har sparat bildvägar för ett annat renderflöde — att köra
+      // om den skulle posta andra bilder än första försöket gjorde.
+      omkorbara: fel.filter((k) => kanKoraOm(cfgs[k])),
+      historik: (m.history || []).map((h) => ({ ...h, nar: nartext(h.when) })) }
+  })
+  $: matAntal = {
+    alla: matSorterat.length,
+    utkast: matSorterat.filter((m) => m.status === 'utkast').length,
+    publicerad: matSorterat.filter((m) => m.status === 'publicerad').length,
+    delvis: matSorterat.filter((m) => m.status === 'delvis').length,
+  }
+  const STATUSTEXT = { utkast: 'Utkast', publicerad: 'Publicerad', delvis: 'Delvis publicerad' }
+
+  // ── Försök igen: kör om ENDAST felkanalerna, med sparad config ─────────────
+  let retryId = null
+  let retryKlar = null
+  async function forsokIgen(mt) {
+    // Testläget får inte röra en persisterad materialrad — och ett omförsök är
+    // per definition en skrivning på den. Knappen är avstängd i testläge.
+    if (retryId || $testMode) return
+    const cfgs = mt.banor || {}
+    const fel = felKanaler(mt.ch_results || {}).filter((k) => kanKoraOm(cfgs[k]))
+    if (!fel.length) return
+    retryId = mt.id; retryKlar = null
+    const test = false
+    const test_mapp = undefined
+    const nya = { ...mt.ch_results }
+    for (const key of fel) {
+      const r = await korKanal(key, cfgs[key], test, test_mapp)
+      nya[key] = r.ok ? 'ok' : 'fail'
+    }
+    // Historiken namnger vilka kanaler DETTA försök gällde — inte de som är kvar.
+    await sparaUtfall({ id: mt.id, match_id: mt.match_id, match_namn: mt.match_namn,
+      caption: mt.caption, foto: mt.foto }, nya, cfgs,
+      `omförsök — ${fel.map((k) => KANALNAMN[k] || k).join(', ')}`)
+    retryId = null
+    if (!felKanaler(nya).length) {
+      retryKlar = mt.id
+      setTimeout(() => (retryKlar = retryKlar === mt.id ? null : retryKlar), 2600)
+    }
   }
 
   // ── På gång (webb) — härledd ur matchlistan ─────────────────────────────────
@@ -678,6 +803,80 @@
       <button class="sek" on:click={uppdateraSajten} disabled={pagangKor}>{pagangKor ? 'Uppdaterar…' : 'Uppdatera sajten'}</button>
     </div>
   </div>
+
+  <!-- Material: vad som faktiskt gick ut, och vägen tillbaka när en kanal föll -->
+  <div class="kort">
+    <div class="korthuvud">
+      <span class="caps">Material · {matAntal.alla} st</span>
+      <div class="matfilter">
+        {#each [['alla', 'Alla'], ['utkast', 'Utkast'], ['publicerad', 'Publicerade'], ['delvis', 'Delvis']] as [v, etikett] (v)}
+          <button class="matchip" class:on={matFilter === v} on:click={() => (matFilter = v)}>
+            {etikett} · {matAntal[v]}
+          </button>
+        {/each}
+      </div>
+    </div>
+
+    {#if !matVy.length}
+      <div class="hint">{matFilter === 'alla' ? 'Inget material än — spara ett utkast eller publicera.' : 'Inget material i det läget.'}</div>
+    {:else}
+      <div class="matlista">
+        {#each matVy as mt (mt.id)}
+          <div class="matrad">
+            <div class="matrad1">
+              <span class="matnamn">{mt.titel}</span>
+              <span class="matstatus" class:pub={mt.status === 'publicerad'} class:delvis={mt.status === 'delvis'}>
+                {STATUSTEXT[mt.status] || mt.status}
+              </span>
+              {#if mt.historik.length > 1}
+                <button class="histchip" on:click={() => toggleHistorik(mt.id)}>
+                  {mt.historik.length} publiceringar {historikOppen[mt.id] ? '▴' : '▾'}
+                </button>
+              {/if}
+              <span class="matnar">{mt.nar}</span>
+            </div>
+            <div class="matsub">{mt.match_namn || '—'}</div>
+
+            {#if mt.status === 'delvis'}
+              <div class="chrad">
+                {#each mt.kanaler as k (k)}
+                  <span class="chchip" class:ok={mt.chRes[k] === 'ok'}
+                    class:kor={retryId === mt.id && mt.chRes[k] !== 'ok'}>
+                    {KANALNAMN[k] || k}
+                    {retryId === mt.id && mt.chRes[k] !== 'ok' ? '↻' : (mt.chRes[k] === 'ok' ? '✓' : '✗')}
+                  </span>
+                {/each}
+                {#if mt.omkorbara.length}
+                  <button class="retrybtn" disabled={!!retryId || $testMode}
+                    title={$testMode ? 'Testläge: publicerar aldrig skarpt' : 'Kör om enbart de kanaler som föll'}
+                    on:click={() => forsokIgen(mt)}>
+                    {retryId === mt.id ? 'Publicerar…'
+                      : `Försök igen — ${mt.omkorbara.map((k) => KANALNAMN[k] || k).join(', ')} ›`}
+                  </button>
+                {:else}
+                  <span class="matvarn">Sparad före uppdateringen — publicera om för att kunna försöka igen</span>
+                {/if}
+              </div>
+            {:else if retryKlar === mt.id}
+              <div class="retryklar">✓ Alla kanaler publicerade</div>
+            {/if}
+
+            {#if historikOppen[mt.id] && mt.historik.length > 1}
+              <div class="histlista">
+                {#each mt.historik as h, i}
+                  <div class="histrad">
+                    <span class="histnar">{h.nar}</span>
+                    <span class="histstatus" class:pub={h.status === 'publicerad'}>{STATUSTEXT[h.status] || h.status}</span>
+                    <span class="histnote">{[h.note, i === 0 ? 'senaste' : ''].filter(Boolean).join(' · ')}</span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </div>
 </div>
 
 <!-- Publiceringsrad -->
@@ -872,6 +1071,46 @@
   .tlbl { font-size: 10.5px; color: var(--t-mut); margin-right: 2px; }
   .tok { font-size: 10.5px; background: var(--acc-soft); border: 1px dashed var(--acc-border); color: var(--acc); border-radius: 6px; padding: 3px 8px; }
   .hint { font-size: 10.5px; color: var(--t-help); margin-top: 10px; line-height: 1.45; }
+
+  /* ── Materiallistan ─────────────────────────────────────────────────────── */
+  .matfilter { display: flex; gap: 6px; flex-wrap: wrap; }
+  .matchip { border: 1px solid var(--div); background: var(--panel); color: var(--t-mut);
+    border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .matchip.on { background: var(--acc); border-color: var(--acc); color: var(--kort); }
+  .matlista { display: flex; flex-direction: column; gap: 9px; margin-top: 12px; }
+  .matrad { background: var(--panel); border: 1px solid var(--div); border-radius: 11px; padding: 11px 13px; }
+  .matrad1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .matnamn { font-size: 13px; font-weight: 600; color: var(--t-head); }
+  .matnar { margin-left: auto; font-size: 10.5px; color: var(--t-help); }
+  .matsub { font-size: 11.5px; color: var(--t-mut); margin-top: 2px; }
+  .matstatus { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 6px; flex: none;
+    color: var(--varn); background: color-mix(in srgb, var(--varn) 13%, transparent); }
+  .matstatus.pub { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
+  .matstatus.delvis { color: var(--delvis); background: color-mix(in srgb, var(--delvis) 13%, transparent); }
+  .histchip { border: 1px solid var(--div); background: transparent; color: var(--t-mut);
+    border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 600; cursor: pointer; }
+
+  .chrad { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 9px; }
+  .chchip { font-size: 10.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--delvis) 40%, var(--div));
+    color: var(--delvis); background: color-mix(in srgb, var(--delvis) 8%, transparent); }
+  .chchip.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--div));
+    background: color-mix(in srgb, var(--ok) 8%, transparent); }
+  .chchip.kor { color: var(--t-mut); border-color: var(--div); background: var(--kort); }
+  .retrybtn { margin-left: auto; border: 1px solid var(--acc-border); background: var(--acc-soft);
+    color: var(--acc); border-radius: 8px; padding: 5px 11px; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+  .retrybtn:disabled { opacity: 0.55; cursor: default; }
+  .matvarn { margin-left: auto; font-size: 10.5px; color: var(--t-help); }
+  .retryklar { margin-top: 8px; font-size: 11.5px; font-weight: 600; color: var(--ok); }
+
+  .histlista { margin-top: 9px; border-top: 1px solid var(--div3); padding-top: 8px;
+    display: flex; flex-direction: column; gap: 5px; }
+  .histrad { display: flex; align-items: center; gap: 9px; font-size: 10.5px; }
+  .histnar { color: var(--t-help); min-width: 84px; }
+  .histstatus { font-weight: 700; color: var(--delvis); }
+  .histstatus.pub { color: var(--ok); }
+  .histnote { color: var(--t-mut); }
 
   /* B2: Generera med Claude + ton */
   .genrad { display: flex; align-items: center; gap: 8px; }

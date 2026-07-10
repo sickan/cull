@@ -966,6 +966,33 @@ let MOCK_MATERIAL = [
     uppdaterad: '2026-06-27T15:41:00',
     history: [{ when: '2026-06-27T15:41:00', status: 'delvis', note: 'Facebook föll' }],
   },
+  // Delvis publicerat med NYA formen på banor: varje kanal bär hela sitt
+  // återkörbara anrop (typ + payload), så "Försök igen" renderar identiska
+  // bilder. mat_seed_2 ovan behålls i den GAMLA formen — den ska visa
+  // "sparad före uppdateringen" i stället för en knapp som postar fel bilder.
+  {
+    id: 'mat_seed_3', kind: 'some', status: 'delvis',
+    match_id: 'a1b2c3d4e5f6', match_namn: 'Malmö FF – Kristianstads DFF',
+    channels: ['live', 'ig', 'fb'], caption: 'Slutresultat 6–0 ⚽ #malmoff',
+    foto: '/bilder/resultat/bild_01.jpg',
+    banor: {
+      live: { typ: 'kanal', payload: { kanal: 'live', format: '9x16', tema: 'Hav',
+        bilder: [{ path: '/bilder/resultat/bild_01.jpg', fokus: { x: 0.5, y: 0.4 }, zoom: 1 }],
+        moment: 'resultat', match_id: 'a1b2c3d4e5f6', caption: 'Slutresultat 6–0',
+        stallning: '6-0', mellan: '3-0', mal_rad: '' } },
+      ig: { typ: 'kanal', payload: { kanal: 'ig', format: '4x5', tema: 'Hav',
+        bilder: [{ path: '/bilder/resultat/bild_01.jpg', fokus: { x: 0.5, y: 0.4 }, zoom: 1 }],
+        moment: 'resultat', match_id: 'a1b2c3d4e5f6', caption: 'Slutresultat 6–0',
+        stallning: '6-0', mellan: '3-0', mal_rad: '' } },
+      fb: { typ: 'kanal', payload: { kanal: 'fb', format: '1x1', tema: 'Hav',
+        bilder: [{ path: '/bilder/resultat/bild_01.jpg', fokus: { x: 0.5, y: 0.4 }, zoom: 1 }],
+        moment: 'resultat', match_id: 'a1b2c3d4e5f6', caption: 'Slutresultat 6–0',
+        stallning: '6-0', mellan: '3-0', mal_rad: '' } },
+    },
+    ch_results: { live: 'ok', ig: 'ok', fb: 'fail' },
+    uppdaterad: '2026-06-27T16:20:00',
+    history: [{ when: '2026-06-27T16:20:00', status: 'delvis', note: 'Facebook föll' }],
+  },
 ]
 let _matSeq = 2
 
