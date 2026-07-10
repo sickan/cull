@@ -145,12 +145,29 @@ class Api:
                 "res_label": pr.get("res_label") or "Slutresultat",
                 "has_scorers": bool(pr.get("has_scorers", True)),
             },
-            # Rostern driver målskytt-väljaren. Tom trupp (matchen inte hämtad
-            # än) är ofarligt — mobilen faller tillbaka på fritext.
-            "roster": [{"nr": s.get("nr") or None, "namn": s.get("namn"),
-                        "lag": s.get("lag")}
-                       for s in (m.get("spelare") or []) if s.get("namn")],
+            # Rostern driver målskytt-väljaren.
+            "roster": self._paket_roster(m, lag_index),
         }
+
+    def _paket_roster(self, m, lag_index):
+        """Roster till match-paketet: matchtruppen om den finns (den bär
+        matchspecifika inhopp/nummer), annars LAGENS egna trupper — matchtruppen
+        skapas först vid "Hämta match", och målskytt-väljaren i mobilen ska ha
+        spelarna även för matcher som inte förberetts vid datorn."""
+        roster = [{"nr": s.get("nr") or None, "namn": s.get("namn"),
+                   "lag": s.get("lag")}
+                  for s in (m.get("spelare") or []) if s.get("namn")]
+        if roster:
+            return roster
+        for sida in ("hemma", "borta"):
+            l = lag_index.get(m.get(f"lag_{sida}") or "")
+            if not l or not l.get("id"):
+                continue
+            for s in store.lag_trupp(self.conn, l["id"]):
+                if s.get("namn"):
+                    roster.append({"nr": s.get("nr") or None, "namn": s["namn"],
+                                   "lag": sida})
+        return roster
 
     def _push_live(self, match_id, falt):
         """Speglar fält ut till Mobil Live. Körs i BAKGRUNDSTRÅD: en trög eller

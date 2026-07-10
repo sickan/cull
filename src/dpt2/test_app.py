@@ -1132,6 +1132,32 @@ class TestMobilLive(unittest.TestCase):
         m = store.hamta_match(self.api.conn, mid)
         self.assertIsNone(self.api._match_till_paket(m)["avspark"])
 
+    def test_paket_roster_faller_tillbaka_pa_lagens_trupper(self):
+        """Utan matchtrupp (skapas först vid "Hämta match") ska paketet bära
+        LAGENS egna trupper — målskytt-väljaren i mobilen ska ha spelarna
+        även för matcher som inte förberetts vid datorn."""
+        hemma = self.api.spara_lag({"namn": "Malmö FF", "kind": "team", "sport": "fotboll"})["id"]
+        self.api.spara_spelare(hemma, {"nr": "7", "namn": "Hansson", "position": ""})
+        self.api.spara_spelare(hemma, {"nr": "9", "namn": "Berg", "position": ""})
+        borta = self.api.spara_lag({"namn": "Kristianstads DFF", "kind": "team", "sport": "fotboll"})["id"]
+        self.api.spara_spelare(borta, {"nr": "11", "namn": "Ali", "position": ""})
+        mid = self._match()
+        m = store.hamta_match(self.api.conn, mid)
+        self.assertFalse(m.get("spelare"))          # premiss: ingen matchtrupp
+        roster = self.api._match_till_paket(m)["roster"]
+        self.assertEqual({(r["namn"], r["lag"]) for r in roster},
+                         {("Hansson", "hemma"), ("Berg", "hemma"), ("Ali", "borta")})
+
+    def test_paket_roster_foredrar_matchtruppen(self):
+        hemma = self.api.spara_lag({"namn": "Malmö FF", "kind": "team", "sport": "fotboll"})["id"]
+        self.api.spara_spelare(hemma, {"nr": "7", "namn": "Hansson", "position": ""})
+        mid = self._match()
+        store.merge_in_trupp(self.api.conn, mid,
+                             [{"nr": "10", "namn": "Ivanovic", "lag": "hemma"}])
+        m = store.hamta_match(self.api.conn, mid)
+        roster = self.api._match_till_paket(m)["roster"]
+        self.assertEqual([r["namn"] for r in roster], ["Ivanovic"])   # inte lagtruppen
+
     def test_synka_paket_pushar_kommande_och_stadar_bort_ovriga(self):
         mid = self._match()
         self.fake.fjarrlista = [{"match_id": mid}, {"match_id": "gammal-match"}]
