@@ -14,6 +14,7 @@ from pathlib import Path
 import json
 import os
 import re
+import stat
 import threading
 from datetime import datetime, timedelta
 
@@ -1099,54 +1100,11 @@ class Api:
         uid = store.spara_urval(self.conn, kalla=mapp, bilder=len(filer))
         return self.leverera_urval(uid, config)
 
-    def lista_minneskort(self):
-        """Sök upp monterade minneskort och räkna kameralåsta (protected) bilder på varje.
-        Läser protect-flaggan från EXIF-data (Nikon sparar den där, inte som file-attribut).
-        Returnerar {ok, kort: [{namn, path, skyddade}, ...]}."""
-        import subprocess
-        import json
-        from pathlib import Path
-
-        kort = []
-        volumes = Path("/Volumes")
-        if not volumes.exists():
-            return {"ok": True, "kort": []}
-
-        # Sök monterade DCIM-mappar (typisk SD/CF-struktur)
-        for vol in volumes.iterdir():
-            if not vol.is_dir():
-                continue
-            dcim = vol / "DCIM"
-            if not dcim.exists():
-                continue
-
-            # Räkna skyddade bilder (läs EXIF protect-flag)
-            skyddade = 0
-            try:
-                for f in dcim.rglob("*"):
-                    if f.is_file() and f.suffix.lower() in {".nef", ".jpg", ".cr3", ".cr2", ".arw", ".dng", ".raf", ".rw2", ".orf"}:
-                        try:
-                            # exiftool: -Protection returnerar "Protected" eller "Unprotected"
-                            result = subprocess.run(
-                                ["exiftool", "-Protection", "-s", "-n", str(f)],
-                                capture_output=True, timeout=1, text=True, check=False
-                            )
-                            if "1" in result.stdout or "Protected" in result.stdout:
-                                skyddade += 1
-                        except (OSError, subprocess.TimeoutExpired):
-                            pass
-            except (OSError, PermissionError):
-                continue
-
-            kort.append({"namn": vol.name, "path": str(vol), "skyddade": skyddade})
-
-        return {"ok": True, "kort": kort}
-
     def snabbplock_kortrot(self, kort_path, ut_mapp=None, oppna_lr=True):
         """Snabbplock: kopierar ENBART kameralåsta (protect/uchg) bildfiler från
         kortet utan AI eller scoring. Fristående snabbväg för paus-fotografering.
         Returnerar {ok, antal, path} eller {ok:False, fel}."""
-        import shutil, stat
+        import shutil
         if not kort_path:
             return {"ok": False, "fel": "Peka ut kortet/mappen."}
         kort = Path(kort_path)
@@ -1158,14 +1116,8 @@ class Api:
         if not filer:
             return {"ok": False, "fel": "Inga bildfiler på kortet."}
 
-        # Filtrera till bara kameralåsta
-        skyddade = []
-        for f in filer:
-            try:
-                if f.stat().st_flags & stat.UF_IMMUTABLE:
-                    skyddade.append(f)
-            except (OSError, AttributeError):
-                pass
+        # Filtrera till bara kameralåsta (skrivbit ELLER uchg — se _ar_skyddad)
+        skyddade = [f for f in filer if _ar_skyddad(f)]
 
         if not skyddade:
             return {"ok": False, "fel": f"Inga kameralåsta bilder. Lås bilderna i kameran först."}
@@ -2222,10 +2174,14 @@ _BILD_EXT = {".jpg", ".jpeg", ".png", ".heic", ".nef", ".dng", ".cr2", ".cr3",
 
 def _ar_skyddad(p):
     """En kameraskyddad (låst) bild = DOS read-only-attributet på FAT/exFAT-
-    kortet, vilket på macOS syns som att ägaren saknar skrivbiten
-    (stat().st_mode & 0o200 == 0). Trasig/oläsbar fil → inte skyddad."""
+    kortet. macOS exponerar det olika beroende på mount: som saknad skrivbit
+    (st_mode & 0o200 == 0) ELLER som uchg/UF_IMMUTABLE i st_flags (verifierat
+    på Z 8-kort; v1 använde uchg-varianten). Kolla båda.
+    Trasig/oläsbar fil → inte skyddad."""
     try:
-        return not (p.stat().st_mode & 0o200)
+        st = p.stat()
+        return (not (st.st_mode & 0o200)
+                or bool(getattr(st, "st_flags", 0) & stat.UF_IMMUTABLE))
     except OSError:
         return False
 
