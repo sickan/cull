@@ -11,20 +11,34 @@ fullt enhetstestbar utan torch/Vision.
 torch) som workern — eller en lätt körning — kan koppla in som `vinkel_for`.
 """
 
+import os
 from pathlib import Path
 
 from dpt2.motorer import xmp_writer
 from dpt2.motorer.filtyper import BILD_SUFFIX, RAW_SUFFIX
 
+# Mappnamn som aldrig scannas som källa (appens/v1:s egna utdata) — samma
+# lista som dpt.core._HOPPA_MAPP så mappar som gått genom v1 funkar.
+_HOPPA_MAPP = {"story", "snabbplock", "urval", "instagram"}
+
 
 def lista_bilder(katalog):
-    """Bildfiler i en mapp (raw + jpg), exkl. AppleDouble-rester (._namn)."""
-    try:
-        return sorted(p for p in Path(katalog).iterdir()
-                      if p.suffix.lower() in BILD_SUFFIX
-                      and not p.name.startswith("._"))
-    except (FileNotFoundError, NotADirectoryError):
-        return []
+    """Bildfiler (raw + jpg) under en mapp, rekursivt — så ett minneskorts rot
+    (bilderna ligger i DCIM/171D5_01/…) fungerar som källa, inte bara den
+    innersta mappen. Hoppar dolda mappar/filer (._AppleDouble på exFAT) och
+    kända utdatamappar. Speglar dpt.core.lista_bildfiler."""
+    def _ok(p):
+        return p.suffix.lower() in BILD_SUFFIX and not p.name.startswith(".")
+
+    traffar = []
+    for d, dirs, files in os.walk(katalog):
+        dirs[:] = [x for x in dirs
+                   if not x.startswith(".")
+                   and x.lower() not in _HOPPA_MAPP
+                   and not x.lower().startswith("_leverans")]
+        dp = Path(d)
+        traffar += [dp / f for f in files if _ok(dp / f)]
+    return sorted(traffar)
 
 
 def hough_vinkel(jpg_path):
