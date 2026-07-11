@@ -229,7 +229,7 @@
     lag = [...lag, { id, namn: '', kind: 'team', sport: 'fotboll', gren: 'dam',
       instagram: '', hemsida: '', logga: null, stall_hemma: '#2f7cb0',
       stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '#2f7cb0',
-      klubb: '', comps: [], arkiverad: false }]
+      klubb: '', comps: [], arkiverad: false, press_email: '', ackr_dagar: null }]
     apnaLag({ id })
     // Direkt in i namnfältet — det är det enda obligatoriska på en ny post.
     await tick()
@@ -439,6 +439,15 @@
                       <input bind:value={l.hemsida} on:change={() => gerLag(l)} placeholder="Hemsida" />
                       <input bind:value={l.instagram} on:change={() => gerLag(l)} placeholder="@instagram" />
                     </div>
+                    {#if l.kind !== 'individ'}
+                      <!-- Ackreditering: i seriespel äger HEMMAKLUBBEN processen för
+                           sina hemmamatcher — klubbens fält vinner över tävlingens
+                           (som är fallback för mästerskap/turneringar). -->
+                      <div class="dubbel">
+                        <input bind:value={l.press_email} on:change={() => gerLag(l)} placeholder="Pressadress (ackreditering hemmamatcher)" />
+                        <input bind:value={l.ackr_dagar} on:change={() => gerLag(l)} inputmode="numeric" placeholder="Ackr: dagar före match" />
+                      </div>
+                    {/if}
 
                     {#if l.kind === 'individ'}
                       <div class="stall">

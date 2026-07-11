@@ -65,8 +65,12 @@ CREATE TABLE lag (
   klubb        TEXT,                     -- individ: klubb/land (ersätter trupp)
   trupp_kalla  TEXT,                     -- senaste trupp-inläsningens källa
                                          --   ('från hemsida'/'CSV'/'bild'/'PDF')
-  arkiverad    INTEGER NOT NULL DEFAULT 0 -- gömt i registret men bevarat: gamla
+  arkiverad    INTEGER NOT NULL DEFAULT 0, -- gömt i registret men bevarat: gamla
                                          -- matcher pekar fortfarande på laget
+  press_email  TEXT,                     -- klubbens press/ackrediteringsadress
+                                         -- (hemmaklubben äger seriematcherna;
+                                         -- vinner över tävlingens fält)
+  ackr_dagar   INTEGER                   -- klubbens "begär senast"-dagar
 );
 
 -- Vilka lag som deltar i en tävling (tävling äger sina lag). Fyller lagväljaren

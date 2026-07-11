@@ -408,7 +408,9 @@ class Api:
             stall_borta=lag.get("stall_borta"),
             stall_tredje=lag.get("stall_tredje"),
             profilfarg=lag.get("profilfarg"), klubb=lag.get("klubb"),
-            arkiverad=lag.get("arkiverad"))
+            arkiverad=lag.get("arkiverad"),
+            press_email=lag.get("press_email"),
+            ackr_dagar=lag.get("ackr_dagar"))
         return {"ok": bool(lid), "id": lid}
 
     def spara_tavling(self, tavling):
@@ -712,22 +714,27 @@ class Api:
         store.radera_ackreditering(self.conn, jobb_id)
 
     def _ackr_regel(self, match_id):
-        """(begär_senast, press_email) ur den kopplade matchens arrangörsregel:
-        tavling.ackr_dagar före matchdatumet (default 10 när arrangören saknar
-        regel) + tavling.press_email. Utan match/datum finns inget att härleda
-        → (None, "")."""
+        """(begär_senast, press_email) för den kopplade matchen. I seriespel
+        hanterar HEMMAKLUBBEN ackrediteringen för sina hemmamatcher — lagets
+        fält vinner; tävlingens är fallback (mästerskap/turneringar där
+        arrangören äger processen); sist ACKR_DEFAULT_DAGAR. Fälten faller
+        tillbaka VAR FÖR SIG (klubben kan ha adress men sakna dagregel).
+        Utan match/datum finns inget att härleda → (None, "")."""
         if not match_id:
             return None, ""
         m = store.hamta_match(self.conn, match_id)
         if not m:
             return None, ""
+        lag = (store.hamta_lag(self.conn, m.get("lag_hemma_id"))
+               if m.get("lag_hemma_id") else None) or {}
         t = (store.hamta_tavling(self.conn, m.get("tavling_id"))
              if m.get("tavling_id") else None) or {}
-        press = t.get("press_email") or ""
+        press = lag.get("press_email") or t.get("press_email") or ""
         senast = None
         if m.get("datum"):
             try:
-                dagar = int(t.get("ackr_dagar") or ACKR_DEFAULT_DAGAR)
+                dagar = int(lag.get("ackr_dagar") or t.get("ackr_dagar")
+                            or ACKR_DEFAULT_DAGAR)
                 senast = (datetime.strptime(m["datum"], "%Y-%m-%d")
                           - timedelta(days=dagar)).strftime("%Y-%m-%d")
             except ValueError:

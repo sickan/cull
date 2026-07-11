@@ -1441,6 +1441,28 @@ class TestAckreditering(unittest.TestCase):
         j = next(x for x in self.api.lista_fotojobb() if x["id"] == jid)
         self.assertEqual(j["begar_senast"], "2026-07-09")
 
+    def test_hemmaklubben_vinner_over_tavlingens_regel(self):
+        # Seriespel: hemmaklubben hanterar ackrediteringen för sina
+        # hemmamatcher — klubbens fält vinner över tävlingens.
+        self.api.spara_lag({"namn": "Malmö FF", "sport": "fotboll",
+                            "press_email": "press@mff.se", "ackr_dagar": 7})
+        jid = self._matchjobb(ackr_dagar=14, press="press@obos.se",
+                              datum="2026-07-19")
+        j = next(x for x in self.api.lista_fotojobb() if x["id"] == jid)
+        self.assertEqual(j["press_email"], "press@mff.se")
+        self.assertEqual(j["begar_senast"], "2026-07-12")   # 7 dagar, inte 14
+
+    def test_faltvis_fallback_klubb_utan_dagregel(self):
+        # Klubben har adress men ingen dagregel → adressen från klubben,
+        # dagarna från tävlingen (fälten faller tillbaka var för sig).
+        self.api.spara_lag({"namn": "Malmö FF", "sport": "fotboll",
+                            "press_email": "press@mff.se"})
+        jid = self._matchjobb(ackr_dagar=14, press="press@obos.se",
+                              datum="2026-07-19")
+        j = next(x for x in self.api.lista_fotojobb() if x["id"] == jid)
+        self.assertEqual(j["press_email"], "press@mff.se")
+        self.assertEqual(j["begar_senast"], "2026-07-05")   # tävlingens 14
+
     def test_radera_fotojobb_stadar_ackreditering(self):
         jid = self._matchjobb()
         pam_id = store.hamta_ackreditering(

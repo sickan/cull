@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -509,6 +509,17 @@ def _migrera(conn, fran_version):
                 ("ackr_dagar", "ALTER TABLE tavling ADD COLUMN ackr_dagar INTEGER"),
             ):
                 if not _har_kolumn(conn, "tavling", kol):
+                    conn.execute(ddl)
+    if fran_version < 22:
+        # v22: i seriespel hanterar HEMMAKLUBBEN ackrediteringen för sina
+        # hemmamatcher — samma regelfält på laget. Tävlingens fält blir
+        # fallback (mästerskap/turneringar där arrangören äger processen).
+        if _har_tabell(conn, "lag"):
+            for kol, ddl in (
+                ("press_email", "ALTER TABLE lag ADD COLUMN press_email TEXT"),
+                ("ackr_dagar", "ALTER TABLE lag ADD COLUMN ackr_dagar INTEGER"),
+            ):
+                if not _har_kolumn(conn, "lag", kol):
                     conn.execute(ddl)
 
 

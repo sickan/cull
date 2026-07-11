@@ -353,6 +353,20 @@ class TestLagTavling(unittest.TestCase):
         t = store.lista_tavlingar(self.c)[0]
         self.assertEqual(t["hemsida"], "damallsvenskan.se")   # bevarat
 
+    def test_upsert_lag_ackrediteringsregler(self):
+        # Klubben äger ackrediteringen för sina hemmamatcher (seriespel) —
+        # samma fältkontrakt som på tävling: None rör inte, tom sträng rensar.
+        lid = store.upsert_lag(self.c, "Malmö FF",
+                               press_email="press@mff.se", ackr_dagar=7)
+        store.upsert_lag(self.c, "Malmö FF", logga="/x.png")   # rör ej
+        lag = store.hamta_lag(self.c, lid)
+        self.assertEqual(lag["press_email"], "press@mff.se")
+        self.assertEqual(lag["ackr_dagar"], 7)
+        store.upsert_lag(self.c, "Malmö FF", press_email="", ackr_dagar="")
+        lag = store.hamta_lag(self.c, lid)
+        self.assertIsNone(lag["press_email"])
+        self.assertIsNone(lag["ackr_dagar"])
+
     def test_upsert_tavling_ackrediteringsregler(self):
         store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll",
                              press_email="press@obos.se", ackr_dagar=14)
