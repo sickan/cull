@@ -394,11 +394,11 @@
 
 <div class="panel">
   <div class="topp">
+    <!-- 6a: enrads-huvud — ingen kicker, ingen stor "Kommande". -->
     <div class="head">
-      <div>
-        <span class="kicker">Fotojobb</span>
-        <h1 class="scd">Kommande</h1>
-        <div class="livedate">{liveDate}</div>
+      <div class="headtitel">
+        <h1 class="scd">Fotojobb</h1>
+        <span class="livedate">{liveDate}</span>
       </div>
       <div class="hverktyg">
         <div class="seg">
@@ -437,9 +437,10 @@
       </div>
       <!-- Scroll-hoppen hör till de scrollade vyerna; Vecka/Månad navigerar själva. -->
       {#if layout === 'lista' || layout === 'tidslinje'}
+        <!-- 6a: scroll-hoppen som små ikonknappar. -->
         <div class="hopp">
-          <button class="tillidag" on:click={scrollTopp}>↑ Till toppen</button>
-          <button class="tillidag" on:click={scrollTillIdag}>↓ Till idag</button>
+          <button class="tillidag ikon" on:click={scrollTopp} title="Till toppen" aria-label="Till toppen">↑</button>
+          <button class="tillidag ikon" on:click={scrollTillIdag} title="Till idag" aria-label="Till idag">↓</button>
         </div>
       {/if}
     </div>
@@ -760,9 +761,9 @@
 <style>
   .panel { display: flex; flex-direction: column; height: 100%; }
   .topp { padding: 26px 30px 14px; border-bottom: 1px solid var(--div3); }
-  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-  .kicker { font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--acc); font-weight: 600; }
-  h1 { margin: 2px 0 0; font-size: 25px; font-weight: 700; color: var(--t-head); }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .headtitel { display: flex; align-items: baseline; gap: 10px; }
+  h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--t-head); }   /* 6a: paneltitel 20px */
   .hverktyg { display: flex; align-items: center; gap: 10px; }
   .seg { display: flex; background: var(--div3); border-radius: 9px; padding: 3px; gap: 3px; }
   .seg button { padding: 7px 14px; border: 0; border-radius: 7px; background: transparent;
@@ -773,13 +774,14 @@
   .prim.liten { padding: 7px 13px; font-size: 12.5px; }
   .prim:disabled { opacity: 0.5; }
 
-  .livedate { font-size: 12px; color: var(--t-mut); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .livedate { font-size: 12px; color: var(--t-mut); font-variant-numeric: tabular-nums; }
   .filterrad { margin-top: 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .hopp { display: flex; gap: 7px; flex: none; }
   .tillidag { display: inline-flex; align-items: center; gap: 6px; background: var(--kort);
     border: 1px solid var(--div); border-radius: 999px; padding: 6px 13px; font-size: 12.5px;
     font-weight: 600; color: var(--t-mut); flex: none; }
   .tillidag:hover { border-color: var(--acc); color: var(--acc); }
+  .tillidag.ikon { width: 30px; height: 30px; padding: 0; justify-content: center; font-size: 14px; }
   .idagbricka { display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700;
     letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px;
     background: var(--acc); color: #fff; vertical-align: middle; }

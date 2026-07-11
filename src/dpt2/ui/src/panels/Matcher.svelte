@@ -29,6 +29,9 @@
   let matchSearch = ''
   let matchSeasonSel = null      // null = aktiv säsong (se aktivAr nedan)
   let matchShowN = 12
+  // §6 (Skala UX 5a+5b): statusflikar — spelad = har ifyllt resultat.
+  let matchStatus = 'kommande'   // 'kommande' | 'spelade'
+  let matchFilterOpen = false    // ⚙ Filter-popover (sport + säsong)
 
   const SPORTER = ['alla', 'fotboll', 'handboll', 'innebandy', 'volleyboll', 'beachvolley', 'tennis']
   const SPORT_ETIKETT = { fotboll: 'Fotboll', handboll: 'Handboll', innebandy: 'Innebandy', volleyboll: 'Volleyboll', beachvolley: 'Beachvolley', tennis: 'Tennis' }
@@ -124,11 +127,25 @@
     .filter((m) => alltidSynlig(m) || (m.datum || '').slice(0, 4) === sasong)
     .filter((m) => alltidSynlig(m) || matchesSok(m, matchSearchQ))
 
-  $: { matchSearch; matchSeasonSel; matchShowN = 12 }   // nollställ vid sök/säsongsbyte
+  $: { matchSearch; matchSeasonSel; matchStatus; matchShowN = 12 }   // nollställ vid sök/säsongs-/statusbyte
 
-  $: datumSorterade = sortDatum(sasongFiltrerade)
+  // Spelad = har ifyllt resultat (prototypens regel). Nya utkast och matcher
+  // utan datum hör alltid hemma under Kommande — det är där de åtgärdas.
+  $: nKommande = sasongFiltrerade.filter((m) => alltidSynlig(m) || !m.resultat).length
+  $: nSpelade = sasongFiltrerade.filter((m) => !alltidSynlig(m) && !!m.resultat).length
+  $: statusFiltrerade = sasongFiltrerade.filter((m) => matchStatus === 'spelade'
+    ? (!alltidSynlig(m) && !!m.resultat)
+    : (alltidSynlig(m) || !m.resultat))
+
+  // Kommande: närmast först. Spelade: senast spelad först.
+  $: datumSorterade = matchStatus === 'spelade' ? sortDatum(statusFiltrerade).reverse() : sortDatum(statusFiltrerade)
   $: datumSynliga = datumSorterade.slice(0, matchShowN)
-  $: grupper = matchGroupBy === 'liga' ? grupperaLiga(sasongFiltrerade) : grupperaDatum(datumSynliga)
+  $: grupper = matchGroupBy === 'liga' ? grupperaLiga(statusFiltrerade)
+    : matchGroupBy === 'sport' ? grupperaSport(statusFiltrerade)
+    : grupperaDatum(datumSynliga)
+
+  // ⚙ Filter-räknare: antal aktiva sällanfilter (sport + säsong).
+  $: filterAntal = (sportFilter !== 'alla' ? 1 : 0) + (iAktivSasong ? 0 : 1)
 
   $: arkivLista = iAktivSasong ? [] : [...sasongFiltrerade].sort((a, b) => (a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : 0))
 
@@ -208,6 +225,15 @@
     }
     return [...m.values()].map((g) => ({ ...g, rich: false }))
   }
+  function grupperaSport(lista) {
+    const m = new Map()
+    for (const x of lista) {
+      const key = x.sport || 'ovrig'
+      if (!m.has(key)) m.set(key, { key, namn: SPORT_ETIKETT[x.sport] || 'Övrig sport', matcher: [] })
+      m.get(key).matcher.push(x)
+    }
+    return [...m.values()].map((g) => ({ ...g, rich: false }))
+  }
 
   async function toggla(m) {
     if (oppen === m.id) { oppen = null; utkast = null; lagForTavling = []; return }
@@ -224,6 +250,7 @@
   function nyMatch() {
     const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '' }
     matcher = [{ ...tmp, trupp_n: 0 }, ...matcher]
+    matchStatus = 'kommande'                 // nya utkast bor under Kommande
     oppen = tmp.id; utkast = { ...tmp, spelare: [] }; lagForTavling = []
     slutFran(utkast)
   }
@@ -406,34 +433,43 @@
     </div>
   </header>
 
-  <div class="filterrad">
-    <div class="filterleft">
-      <div class="caps">Kommande</div>
-      <div class="grupptoggle">
-        <span class="grupplbl">Gruppera</span>
-        <div class="seg">
-          <button class:on={matchGroupBy === 'datum'} on:click={() => (matchGroupBy = 'datum')}>Datum</button>
-          <button class:on={matchGroupBy === 'liga'} on:click={() => (matchGroupBy = 'liga')}>Liga/Tävling</button>
-        </div>
-      </div>
-    </div>
-    <div class="chips">
-      {#each SPORTER as s}
-        <button class="chip" class:on={sportFilter === s} on:click={() => (sportFilter = s)}>{s === 'alla' ? 'Alla' : SPORT_ETIKETT[s]}</button>
-      {/each}
-    </div>
-  </div>
-
+  <!-- 6a: EN verktygsrad — statusflikar + gruppering + sök; sällanfilter
+       (sport + säsong) bakom ⚙ Filter med räknare. -->
   <div class="toolrad">
+    <div class="seg statusseg">
+      <button class:on={matchStatus === 'kommande'} on:click={() => (matchStatus = 'kommande')}>Kommande · {nKommande}</button>
+      <button class:on={matchStatus === 'spelade'} on:click={() => (matchStatus = 'spelade')}>Spelade · {nSpelade}</button>
+    </div>
+    <div class="seg">
+      <button class:on={matchGroupBy === 'datum'} on:click={() => (matchGroupBy = 'datum')}>Datum</button>
+      <button class:on={matchGroupBy === 'liga'} on:click={() => (matchGroupBy = 'liga')}>Liga/Tävling</button>
+      <button class:on={matchGroupBy === 'sport'} on:click={() => (matchGroupBy = 'sport')}>Sport</button>
+    </div>
     <div class="sokbox">
       <svg class="sokik" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input bind:value={matchSearch} placeholder="Sök lag, liga eller arena…" />
     </div>
-    <div class="sasongchips">
-      <button class="sasong" class:on={iAktivSasong} on:click={() => (matchSeasonSel = null)}>{aktivAr} · {aktivSasongCount}</button>
-      {#each arkivAr as ar (ar)}
-        <button class="sasong arkiv" class:on={sasong === ar} on:click={() => (matchSeasonSel = ar)}>{ar}</button>
-      {/each}
+    <div class="filterwrap">
+      <button class="filterbtn" class:aktivt={filterAntal > 0}
+        on:click={() => (matchFilterOpen = !matchFilterOpen)}>⚙ Filter{filterAntal ? ` · ${filterAntal}` : ''}</button>
+      {#if matchFilterOpen}
+        <button class="popskarm" on:click={() => (matchFilterOpen = false)} aria-label="stäng"></button>
+        <div class="filterpop">
+          <div class="fpcaps">Sport</div>
+          <div class="chips">
+            {#each SPORTER as s}
+              <button class="chip" class:on={sportFilter === s} on:click={() => (sportFilter = s)}>{s === 'alla' ? 'Alla' : SPORT_ETIKETT[s]}</button>
+            {/each}
+          </div>
+          <div class="fpcaps">Säsong</div>
+          <div class="sasongchips">
+            <button class="sasong" class:on={iAktivSasong} on:click={() => (matchSeasonSel = null)}>{aktivAr} · {aktivSasongCount}</button>
+            {#each arkivAr as ar (ar)}
+              <button class="sasong arkiv" class:on={sasong === ar} on:click={() => (matchSeasonSel = ar)}>{ar}</button>
+            {/each}
+          </div>
+        </div>
+      {/if}
     </div>
   </div>
 
@@ -748,15 +784,11 @@
 <style>
   .panel { padding: 22px 26px 48px; max-width: 920px; }
   header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  h1 { margin: 0; font-size: 25px; font-weight: 700; color: var(--t-head); }
+  h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--t-head); }   /* 6a: paneltitel 20px */
   .sub { font-size: 13px; color: var(--t-mut); }
   .tom { color: var(--t-help); font-size: 13px; }
 
-  .filterrad { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 20px 2px 12px; }
-  .filterleft { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .caps { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--t-caps); }
-  .grupptoggle { display: flex; align-items: center; gap: 7px; }
-  .grupplbl { font-size: 11px; color: var(--t-help); }
   .seg { display: flex; background: var(--div3); border-radius: 9px; padding: 3px; gap: 3px; }
   .seg button { padding: 7px 14px; border: 0; border-radius: 7px; background: transparent;
     color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
@@ -766,8 +798,21 @@
     color: var(--t-mut); font-size: 12.5px; }
   .chip.on { background: var(--acc); border-color: var(--acc); color: #fff; font-weight: 600; }
 
-  /* Verktygsrad: sök + säsongsarkiv */
-  .toolrad { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 2px 16px; }
+  /* 6a: EN verktygsrad — statusflikar + gruppering + sök + ⚙ Filter */
+  .toolrad { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 18px 2px 16px; }
+  .statusseg button.on { color: var(--acc); }
+  .filterwrap { position: relative; flex: none; }
+  .filterbtn { padding: 8px 14px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
+    color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
+  .filterbtn:hover { border-color: var(--acc); color: var(--acc); }
+  .filterbtn.aktivt { background: var(--acc-soft); border-color: var(--acc-border); color: var(--acc); }
+  .popskarm { position: fixed; inset: 0; z-index: 30; background: transparent; border: 0; }
+  .filterpop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 31; width: 340px;
+    background: var(--kort); border: 1px solid var(--div); border-radius: 12px; box-shadow: var(--skugga); padding: 14px; }
+  .fpcaps { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--t-caps); margin: 0 0 8px; }
+  .fpcaps:not(:first-child) { margin-top: 14px; }
+  .filterpop .chips, .filterpop .sasongchips { flex-wrap: wrap; }
   .sokbox { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 8px;
     border: 1px solid var(--div); border-radius: 999px; background: var(--kort); padding: 8px 14px; }
   .sokik { width: 15px; height: 15px; color: var(--t-help); flex: none; }

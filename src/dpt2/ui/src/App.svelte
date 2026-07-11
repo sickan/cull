@@ -124,33 +124,33 @@
 <style>
   .app { display: flex; height: 100vh; overflow: hidden; }
   main { flex: 1; min-width: 0; overflow-y: auto; position: relative; display: flex; flex-direction: column; }
+  /* 6a: global topp = TUNN statusrad — prick + text / ikon + text, inga pills. */
   .topbar {
     position: sticky; top: 0; z-index: 5; display: flex; align-items: center;
-    justify-content: flex-end; gap: 10px; min-height: 58px; padding: 10px 22px;
+    justify-content: flex-end; gap: 18px; min-height: 42px; padding: 6px 22px;
     background: color-mix(in srgb, var(--sand) 86%, transparent);
     backdrop-filter: blur(8px); border-bottom: 1px solid var(--div3); flex: none;
   }
-  .widget { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 14px;
-    background: var(--kort); border: 1px solid var(--div); border-radius: 20px; color: var(--t-head); }
-  .widget:hover { border-color: var(--acc); }
+  .widget { display: flex; align-items: center; gap: 8px; padding: 4px 2px;
+    background: transparent; border: 0; color: var(--t-head); }
+  .widget:hover .wval { color: var(--acc); }
   .widget.match { margin-right: auto; }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--t-help); flex: none; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--t-help); flex: none; }
   .dot.pa { background: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
-  .ic { width: 17px; height: 17px; color: var(--t-mut); flex: none; }
+  .ic { width: 15px; height: 15px; color: var(--t-mut); flex: none; }
   .wtext { display: flex; flex-direction: column; line-height: 1.1; text-align: left; }
-  .wlbl { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t-mut); font-weight: 600; }
-  .wval { font-size: 13px; font-weight: 700; color: var(--t-head); }
+  .wlbl { font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t-mut); font-weight: 600; }
+  .wval { font-size: 12.5px; font-weight: 700; color: var(--t-head); }
   .mock { font-size: 10px; color: var(--varn); font-weight: 700;
     background: color-mix(in srgb, var(--varn) 14%, transparent); padding: 3px 8px; border-radius: 999px; }
-  .tema { width: 40px; height: 40px; border: 1px solid var(--div); border-radius: 20px;
-    background: var(--kort); color: var(--t-head); font-size: 15px; flex: none; }
+  .tema { width: 30px; height: 30px; border: 0; border-radius: 50%;
+    background: transparent; color: var(--t-head); font-size: 14px; flex: none; }
   .tema:hover { background: var(--div3); }
 
-  .testswitch { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 14px;
-    background: var(--kort); border: 1px solid var(--div); border-radius: 20px;
-    font-size: 12.5px; font-weight: 600; color: var(--t-mut); flex: none; }
-  .testswitch.on { background: color-mix(in srgb, var(--varn) 13%, transparent);
-    border-color: color-mix(in srgb, var(--varn) 55%, transparent); color: var(--varn); }
+  .testswitch { display: flex; align-items: center; gap: 8px; padding: 4px 2px;
+    background: transparent; border: 0;
+    font-size: 12px; font-weight: 600; color: var(--t-mut); flex: none; }
+  .testswitch.on { color: var(--varn); }
   .tsw-track { width: 30px; height: 17px; border-radius: 999px; background: var(--div3);
     border: 1px solid var(--div); position: relative; flex: none; transition: background .15s, border-color .15s; }
   .testswitch.on .tsw-track { background: var(--varn); border-color: var(--varn); }

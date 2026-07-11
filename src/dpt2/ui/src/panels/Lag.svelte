@@ -139,6 +139,18 @@
         .filter((fg) => fg.lag.length)
     : grupperaPerSport(lagFiltrerat)
 
+  // §7 (Skala UX): hopfällbara sport-sektioner. En öppen redigering pinnar upp
+  // sin sektion — annars försvinner formuläret man skriver i när man fäller.
+  let lagCollapsed = {}          // sport → true (hopfälld)
+  function toggleLagSport(sport) { lagCollapsed = { ...lagCollapsed, [sport]: !lagCollapsed[sport] } }
+  const sektionOppen = (grupp) => !lagCollapsed[grupp.sport]
+    || (teamOpen != null && grupp.lag.some((l) => l.id === teamOpen))
+
+  // Tydlig tom-status: gren-filtret kan träffa 0 aktiva men N arkiverade
+  // (upplevdes som en bugg — laget fanns, men bara i arkivet).
+  $: arkivTraff = filtreraLag(arkiveradeLag).length
+  $: aktivTraff = filtreraLag(aktivaLag).length
+
   function hexToRgba(hex, a) {
     const n = parseInt((hex || '').replace('#', ''), 16)
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`
@@ -379,12 +391,22 @@
       </div>
 
       {#if !lagGrupperat.length}
-        <p class="tom">{visaArkiv ? 'Inget arkiverat.' : 'Inga lag eller utövare hittades.'}</p>
+        {#if !visaArkiv && arkivTraff}
+          <p class="tom">{aktivTraff} aktiva · {arkivTraff} arkiverade —
+            <button class="tomlank" on:click={() => { visaArkiv = true; teamOpen = null }}>visa arkivet ›</button></p>
+        {:else}
+          <p class="tom">{visaArkiv ? 'Inget arkiverat.' : 'Inga lag eller utövare hittades.'}</p>
+        {/if}
       {:else}
         <div class="lista">
           {#each lagGrupperat as grupp (grupp.sport)}
             <div class="sportgrupp">
-              <div class="sportnamn">{SPORT_ETIKETT[grupp.sport]}</div>
+              <button class="sportnamn" on:click={() => toggleLagSport(grupp.sport)}
+                title={sektionOppen(grupp) ? 'Fäll ihop' : 'Fäll ut'}>
+                <span class="sportchev">{sektionOppen(grupp) ? '▾' : '▸'}</span>
+                {SPORT_ETIKETT[grupp.sport]} <span class="sportantal">· {grupp.lag.length}</span>
+              </button>
+              {#if sektionOppen(grupp)}
               {#each grupp.lag as l (l.id)}
             <div class="kkort" data-lagid={l.id} style={l.gren ? `border-left:3px solid ${grenFarg(l.gren)}` : ''}>
               <div class="krad" role="button" tabindex="0" on:click={(e) => apnaLag(l, e.currentTarget)}
@@ -538,6 +560,7 @@
               {/if}
             </div>
               {/each}
+              {/if}
             </div>
           {/each}
         </div>
@@ -626,7 +649,7 @@
 <style>
   .panel { padding: 22px 26px 48px; max-width: 900px; }
   header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  h1 { margin: 0; font-size: 25px; font-weight: 700; color: var(--t-head); }
+  h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--t-head); }   /* 6a: paneltitel 20px */
   .sub { font-size: 13px; color: var(--t-mut); }
   .tom { color: var(--t-help); font-size: 13px; }
 
@@ -650,7 +673,12 @@
   .lista { display: flex; flex-direction: column; gap: 12px; }
 
   .sportgrupp { display: flex; flex-direction: column; gap: 6px; }
-  .sportnamn { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t-label); padding: 0 4px; }
+  .sportnamn { display: flex; align-items: center; gap: 6px; border: 0; background: transparent; text-align: left;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t-label); padding: 0 4px; cursor: pointer; }
+  .sportnamn:hover { color: var(--t-head); }
+  .sportchev { font-size: 10px; color: var(--t-help); width: 11px; flex: none; }
+  .sportantal { font-weight: 600; color: var(--t-help); letter-spacing: 0; }
+  .tomlank { border: 0; background: none; color: var(--acc); font-weight: 600; font-size: inherit; padding: 0; cursor: pointer; }
 
   /* Kortskal (rad + ev. utfälld redigering) — matcher-stil */
   .kkort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
