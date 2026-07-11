@@ -948,7 +948,15 @@ class Api:
 
         if export_rot:
             rot = Path(export_rot).expanduser()
-            match_namn = _sanera(urval.get("match_namn") or kalla.parent.name or kalla.name)
+            # Slå upp matchens namn via match_id (hemma – borta), eller mappen som fallback
+            match_namn = None
+            if urval.get("match_id"):
+                match = store.hamta_match(self.conn, urval["match_id"])
+                if match:
+                    match_namn = f"{match.get('lag_hemma', '')} – {match.get('lag_borta', '')}".strip(" –").strip()
+            if not match_namn:
+                match_namn = kalla.parent.name or kalla.name
+            match_namn = _sanera(match_namn)
             ut_dir = rot / match_namn
             if ut_dir.exists():
                 if overskriv:
