@@ -111,6 +111,24 @@ class TestListaOchHough(unittest.TestCase):
         namn = [p.name for p in leverera.lista_bilder(d)]
         self.assertEqual(namn, ["a.jpg", "b.nef"])     # sorterat, ._/txt bort
 
+    def test_lista_bilder_kortrot_rekursivt(self):
+        # Ett minneskorts rot som källa: bilderna ligger i DCIM/171D5_01/.
+        # Dolda mappar och utdatamappar (Story m.fl.) ska inte scannas.
+        from dpt2.tjanster import leverera
+        kort = Path(tempfile.mkdtemp())
+        dcim = kort / "DCIM" / "171D5_01"
+        dcim.mkdir(parents=True)
+        (dcim / "DSC_0001.NEF").write_bytes(b"")
+        (dcim / "DSC_0002.NEF").write_bytes(b"")
+        (kort / "DCIM" / ".Trashes").mkdir()
+        (kort / "DCIM" / ".Trashes" / "DSC_9999.NEF").write_bytes(b"")
+        (kort / "Story").mkdir()
+        (kort / "Story" / "story.jpg").write_bytes(b"")
+        (kort / "_leverans_x").mkdir()
+        (kort / "_leverans_x" / "a.jpg").write_bytes(b"")
+        namn = [p.name for p in leverera.lista_bilder(kort)]
+        self.assertEqual(namn, ["DSC_0001.NEF", "DSC_0002.NEF"])
+
     def test_lista_bilder_saknad_mapp(self):
         from dpt2.tjanster import leverera
         self.assertEqual(leverera.lista_bilder("/finns/verkligen/inte"), [])
