@@ -1,33 +1,61 @@
 <script>
   import { onMount } from 'svelte'
-  import { forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall, valjMapp, valjFil, thumbForBild, slugga, listaInnehall, raderaInnehall } from '../lib/api.js'
+  import {
+    forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall,
+    valjMapp, valjFil, thumbForBild, slugga, listaInnehall, raderaInnehall, sparaInnehall,
+    listaMatcher, hamtaMatch, aktivMatch, sportprofiler, listaLag, listaMaterial,
+    listaFotojobb, urvalHojdpunkter, genereraBildsvep, forhandsgranskaBildsvepFraga,
+    pagangMatcher, sattPagangVisa, publiceraPagangMatcher, sportTopp, sattSportTopp,
+  } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { testMode } from '../lib/testlage.js'
+  import { grenFarg } from '../lib/gren.js'
+  import { losText, tokenVals, strippaSocialt } from '../lib/webtext.js'
   import BildvaljareFokuspunkt from '../lib/BildvaljareFokuspunkt.svelte'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
+  import ResultatRemsa from '../lib/ResultatRemsa.svelte'
 
-  // Tre match-oberoende webbtyper. Sport (matchreferat) och På gång har
-  // flyttat till Matchpublicering — Innehåll äger nu bara Blog/Landskap/Event.
-  // B4: "Event" heter numera "Människor" (personikon). Interna nyckeln/mappen
-  // är kvar som 'event' (sajtens content-collection-kontrakt orört).
-  const CTYPER = [
-    { id: 'blogg', namn: 'Blog', farg: '#7A8794', sub: 'journal & resor', hint: 'Journal, resor & fritext — en fristående bloggpost.', mapp: 'blogg' },
-    { id: 'landskap', namn: 'Landskap', farg: '#C9871F', sub: 'bildserier', hint: 'Bildserie — landskap & natur, endast bilder.', mapp: 'landskap' },
-    { id: 'event', namn: 'Människor', farg: '#C9657F', sub: 'porträtt, bröllop…', hint: 'Porträtt, bröllop, student & företag.', mapp: 'event' },
+  // ── Handoff "sportsidor & menyer" (11 jul 2026) ─────────────────────────────
+  // Innehåll är ett BIBLIOTEK (typ-nav Sport · Landskap · Människor · Blogg, en
+  // typ i taget) som öppnar en FOKUSERAD editor. Sport-vyn ÄR startside-
+  // kureringen (hero-val, artikelkort, På gång). Matchartikeln byggs HÄR —
+  // Matchpublicering gör Live/SoMe och producerar referatet vi hämtar (§4).
+  const LIBTYPER = [
+    { id: 'sport', namn: 'Sport', farg: '#2F7CB0', hint: 'Startsidan för sport — hero, matchartiklar, event & På gång.' },
+    { id: 'landskap', namn: 'Landskap', farg: '#C9871F', hint: 'Bildserie — landskap & natur, endast bilder.' },
+    { id: 'event', namn: 'Människor', farg: '#C9657F', hint: 'Porträtt, bröllop, student & företag.' },
+    { id: 'blogg', namn: 'Blogg', farg: '#7A8794', hint: 'Journal, resor & fritext — en fristående bloggpost.' },
   ]
   const EVENT_KAT = ['Porträtt', 'Bröllop', 'Student', 'Företag', 'Mode', 'Övrigt']
+  // Editor-typ → export-mapp (content-collection). 'match' = matcher.
+  const EDITOR_MAPP = { match: 'matcher', sportevent: 'sportevent', blogg: 'blogg', landskap: 'landskap', event: 'event' }
 
-  let ctyp = 'blogg'
-  // A3/B4: hero-bild med fokus (21:9) på alla tre typer. hero=filnamn (frontmatter),
-  // heroPosition=object-position ("x% y%"), heroKalla=lokal källfil (export, aldrig publik).
+  let libType = 'sport'               // bibliotekets typ-nav
+  let editorMode = false              // false = bibliotek, true = fokuserad editor
+  let ctyp = 'match'                  // editorns typ: match|sportevent|blogg|landskap|event
+
+  // ── Editor-state per typ ────────────────────────────────────────────────────
   let cmsEvent = { kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '',
     ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
   let cmsLandskap = { titel: '', plats: '', period: '', ingress: '',
     hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
   let cmsBlogg = { kategori: '', titel: '', datum: '', ingress: '', body: '',
     hero: '', heroPosition: 'center center', heroKalla: '', platser: [], figurer: [] }
+  // Matchartikeln: fälten är KOPPLADE till matchen tills man skriver eget
+  // (own[f]=true bryter kopplingen; "↺ Hämta" återkopplar) — prototypens cmsOwn.
+  const tomMatchArt = () => ({ innehallId: null, hem: '', borta: '', resultat: '',
+    mellan: '', datum: '', serie: '', arena: '', pixieset: '', malskyttar: '',
+    svep: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [], own: {} })
+  let cmsMatch = tomMatchArt()
+  let artMatchId = null               // vald match (cmsPick)
+  let artMatch = null                 // fullständig matchpost (ResultatRemsa)
+  const tomSportevent = () => ({ innehallId: null, fotojobbId: '', titel: '', period: '',
+    plats: '', datum: '', ingress: '', hero: '', heroPosition: 'center center',
+    heroKalla: '', figurer: [], underartiklar: [] })
+  let cmsSportevent = tomSportevent()
+
   let md = ''
-  let exportDirs = { event: '', landskap: '', blogg: '' }
+  let exportDirs = { event: '', landskap: '', blogg: '', match: '', sportevent: '' }
   let sparad = false
   let sparadPath = ''
   let synkar = false
@@ -38,95 +66,403 @@
   let statusInfo = null
   let statusLaddar = false
 
+  // ── Grunddata ───────────────────────────────────────────────────────────────
+  let matcher = []
+  let lagAlla = []
+  let profiler = {}
+  let materials = []
+  let fotojobb = []
+
   $: akt = ctyp === 'event' ? cmsEvent
-    : ctyp === 'landskap' ? cmsLandskap : cmsBlogg
-  $: typinfo = CTYPER.find((t) => t.id === ctyp)
-  // Landskap & Människor = bild-only-galleri (härledd /bilder/{slug}/{n}.jpg-ref,
-  // ingen alt/bildtext) — speglar _innehall_md. Blog har bildtext per bild.
-  // (Bildtext för Människor kräver bilder[]-objekt + sajt-render → Fas 3b.)
-  $: galText = ctyp !== 'landskap' && ctyp !== 'event'
-  $: aktSlug = slugga(akt.titel)
+    : ctyp === 'landskap' ? cmsLandskap
+    : ctyp === 'match' ? cmsMatch
+    : ctyp === 'sportevent' ? cmsSportevent : cmsBlogg
+  $: libinfo = LIBTYPER.find((t) => t.id === libType)
+  // Bildtext per bild: match & blogg. Landskap/Människor/Sportevent = bild-only
+  // (speglar _innehall_md:s gal_text).
+  $: galText = ctyp === 'match' || ctyp === 'blogg'
+  $: aktTitel = ctyp === 'match' ? `${cmsMatch.hem} – ${cmsMatch.borta}` : (akt.titel || '')
+  $: aktSlug = slugga(aktTitel)
+  $: profil = profiler[artMatch?.sport] || profiler.fotboll ||
+    { res_label: 'Slutresultat', res_ph: '6–0', mid_label: 'Halvtid', mid_ph: '3–0',
+      has_scorers: true, scorers_label: 'Målskyttar', start_moment: 'Avspark' }
 
-  let editorEl                        // editorns topp (scroll vid "öppna för redigering")
+  let editorEl                        // editorns topp (scroll vid öppning)
 
-  onMount(async () => { lasUtkast(); await Promise.all([forhandsgranska(), laddaOversikt()]) })
+  onMount(async () => {
+    lasUtkast()
+    ;[matcher, lagAlla, profiler, materials, fotojobb] = await Promise.all(
+      [listaMatcher(), listaLag(), sportprofiler(), listaMaterial(), listaFotojobb()])
+    await Promise.all([laddaOversikt(), laddaPagang(), laddaTopp()])
+    // Matchartikeln utgår från aktiv match tills man byter (README §3).
+    const am = await aktivMatch()
+    if (am?.id) artMatchId = am.id
+  })
 
-  function bytTyp(id) { ctyp = id; draftId = null; forhandsgranska() }
+  function setLibType(t) { libType = t }
+  function oppnaEditor(typ) {
+    ctyp = typ
+    editorMode = true
+    forhandsgranska()
+    _scrollTop()
+  }
+  function stangEditor() { editorMode = false; laddaOversikt() }
 
-  // ── B5: publicerat & utkast ────────────────────────────────────────────────
-  const TYP_NAMN = { blogg: 'Blogg', event: 'Människor', landskap: 'Landskap' }
-  const TYP_ORDNING = ['blogg', 'event', 'landskap']
+  // ── Bibliotek: publicerat & utkast ─────────────────────────────────────────
+  const TYP_NAMN = { match: 'Matchartikel', sportevent: 'Event/mästerskap',
+    blogg: 'Blogg', event: 'Människor', landskap: 'Landskap' }
   const DRAFTS_KEY = 'dpt2.drafts.v1'
   let overviewTab = 'publicerat'
-  let poster = []                     // publicerade poster (DB via listaInnehall)
+  let poster = []                     // alla innehåll-rader (DB via listaInnehall)
   let utkast = []                     // localStorage-utkast
   let draftId = null                  // id på utkastet som redigeras nu
   let sparTimer
 
-  async function laddaOversikt() {
-    // Publicerat = lokalt exporterat (publicerad) ELLER publicerat till sajten
-    // (synkad_tid satt) — nätpubliceringen sätter bara synkad_tid, inte publicerad.
-    const alla = await listaInnehall()
-    poster = (alla || []).filter((p) => (p.publicerad || p.synkad_tid) && TYP_NAMN[p.typ])
-  }
+  async function laddaOversikt() { poster = (await listaInnehall()) || [] }
   function lasUtkast() {
     try { utkast = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '[]') } catch (_) { utkast = [] }
   }
   function skrivUtkast() { try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(utkast)) } catch (_) {} }
 
-  // Autospar: sparar aktuell editor löpande (debounce) som ett utkast i
-  // localStorage så man kan påbörja en post och återkomma senare (B5).
-  function autospar() {
-    if (!akt.titel) return            // spara inte tomma utkast
-    if (!draftId) draftId = 'd' + Date.now()
-    const d = { id: draftId, typ: ctyp, titel: akt.titel,
-                sparad: new Date().toISOString(), data: JSON.parse(JSON.stringify(akt)) }
-    utkast = [d, ...utkast.filter((u) => u.id !== draftId)]
-    skrivUtkast()
-  }
-  function schemalaggAutospar() { clearTimeout(sparTimer); sparTimer = setTimeout(autospar, 800) }
-
-  const grupperad = (lista) => TYP_ORDNING
-    .map((t) => ({ typ: t, namn: TYP_NAMN[t], rader: lista.filter((x) => x.typ === t) }))
-    .filter((g) => g.rader.length)
-  $: postGrupper = grupperad(poster)
-  $: utkastGrupper = grupperad(utkast)
-
-  const titelAv = (p) => p.frontmatter?.titel || p.titel || '(utan titel)'
+  const publiceradPost = (p) => !!(p.publicerad || p.synkad_tid)
+  const titelAv = (p) => p.frontmatter?.titel
+    || (p.frontmatter?.hem ? `${p.frontmatter.hem} – ${p.frontmatter.borta}` : '')
+    || p.titel || '(utan titel)'
   function datumText(iso, prefix) {
     if (!iso) return ''
     try { return `${prefix} ${new Date(iso).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}` } catch (_) { return '' }
   }
 
+  // Enkeltyps-vyer (Landskap/Människor/Blogg): rader av vald typ.
+  $: libPoster = poster.filter((p) => p.typ === libType && publiceradPost(p))
+  $: libUtkastDb = poster.filter((p) => p.typ === libType && !publiceradPost(p))
+  $: libUtkast = utkast.filter((u) => u.typ === libType)
+
+  // Autospar (debounce) → localStorage, så en påbörjad post överlever omstart.
+  function autospar() {
+    if (!editorMode) return
+    const titel = ctyp === 'match' ? (cmsMatch.hem && aktTitel) : akt.titel
+    if (!titel) return              // spara inte tomma utkast
+    if (!draftId) draftId = 'd' + Date.now()
+    const extra = ctyp === 'match' ? { matchId: artMatchId } : {}
+    const d = { id: draftId, typ: ctyp, titel,
+                sparad: new Date().toISOString(), ...extra,
+                data: JSON.parse(JSON.stringify(akt)) }
+    utkast = [d, ...utkast.filter((u) => u.id !== draftId)]
+    skrivUtkast()
+  }
+  function schemalaggAutospar() { clearTimeout(sparTimer); sparTimer = setTimeout(autospar, 800) }
+
   function _scrollTop() { setTimeout(() => editorEl?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0) }
 
-  // Klick på rad = öppna för redigering (ingen Ändra-knapp).
+  // Klick på rad/kort = öppna för redigering.
   function laddaPost(p) {
     const fm = p.frontmatter || {}
+    if (p.typ === 'match') { laddaMatchPost(p); return }
+    if (p.typ === 'sportevent') {
+      cmsSportevent = { ...tomSportevent(), innehallId: p.id, titel: fm.titel || '',
+        period: fm.period || '', plats: fm.plats || '', datum: fm.datum || '',
+        ingress: fm.ingress || '', hero: fm.hero || '',
+        heroPosition: fm.heroPosition || 'center center',
+        underartiklar: (fm.underartiklar || []).map((u) => ({ ...u })) }
+      draftId = null; oppnaEditor('sportevent'); return
+    }
     const bas = { titel: fm.titel || '', ingress: fm.ingress || '',
                   hero: fm.hero || '', heroPosition: fm.heroPosition || 'center center', heroKalla: '', figurer: [] }
     if (p.typ === 'event') cmsEvent = { ...cmsEvent, ...bas, kategori: fm.kategori || 'Porträtt', kund: fm.kund || '', datum: fm.datum || '', plats: fm.plats || '' }
     else if (p.typ === 'landskap') cmsLandskap = { ...cmsLandskap, ...bas, plats: fm.plats || '', period: fm.period || '' }
-    else cmsBlogg = { ...cmsBlogg, ...bas, kategori: fm.kategori || '', datum: fm.datum || '', body: fm.body || '', platser: [] }
-    ctyp = p.typ; draftId = null
-    forhandsgranska(); _scrollTop()
+    else cmsBlogg = { ...cmsBlogg, ...bas, kategori: fm.kategori || '', datum: fm.datum || '', body: fm.body || p.body || '', platser: [] }
+    draftId = null
+    oppnaEditor(p.typ)
   }
   function laddaUtkast(u) {
     if (u.typ === 'event') cmsEvent = { ...cmsEvent, ...u.data }
     else if (u.typ === 'landskap') cmsLandskap = { ...cmsLandskap, ...u.data }
-    else cmsBlogg = { ...cmsBlogg, ...u.data }
-    ctyp = u.typ; draftId = u.id
-    forhandsgranska(); _scrollTop()
+    else if (u.typ === 'blogg') cmsBlogg = { ...cmsBlogg, ...u.data }
+    else if (u.typ === 'sportevent') cmsSportevent = { ...tomSportevent(), ...u.data }
+    else if (u.typ === 'match') { cmsMatch = { ...tomMatchArt(), ...u.data }; artMatchId = u.matchId || artMatchId; laddaArtMatch(false) }
+    draftId = u.id
+    oppnaEditor(u.typ)
   }
   async function raderaPost(p) { await raderaInnehall(p.id); await laddaOversikt() }
   function raderaUtkast(id) { utkast = utkast.filter((u) => u.id !== id); skrivUtkast(); if (draftId === id) draftId = null }
 
-  // Miniatyrerna (data-URI) bor på figur-objektet som `thumb` men skickas
-  // ALDRIG till backend — bara den lokala källsökvägen (`bild`) exporteras.
+  // ── Sport-startsidan (bibliotekets sport-vy) ────────────────────────────────
+  // Kort = DB-rader (matchartiklar + sportevent), publicerade OCH utkast.
+  const fmDatum = (p) => p.frontmatter?.datum || p.skapad || ''
+  $: sportKort = poster
+    .filter((p) => p.typ === 'match' || p.typ === 'sportevent')
+    .sort((a, b) => (fmDatum(b) < fmDatum(a) ? -1 : fmDatum(b) > fmDatum(a) ? 1 : 0))
+
+  // Topp-väljare: 'senaste' (härledd) | 'valj' (kurerad topp-flagga på sajten).
+  // 'Kommande' kräver hero utan matchbild på sajten — finns inte ännu (avstängd).
+  let toppLage = 'senaste'
+  let toppValId = null
+  let toppSparar = false
+  let toppFlash = ''
+  let toppFel = ''
+  async function laddaTopp() {
+    const r = await sportTopp()
+    if (r?.ok) { toppLage = r.lage || 'senaste'; toppValId = r.innehall_id || null }
+  }
+  $: toppKandidater = sportKort.filter((p) => p.typ === 'match' && publiceradPost(p))
+  async function valjTopp(lage, id = null) {
+    toppLage = lage; toppValId = id; toppFel = ''; toppFlash = ''
+    toppSparar = true
+    const r = await sattSportTopp(lage, id, $testMode)
+    toppSparar = false
+    if (r?.ok) {
+      toppFlash = r.test ? '✓ Sparat (testläge — sajten orörd)'
+        : lage === 'valj' ? '✓ Vald som topp på sport-sidan' : '✓ Sajten härleder senaste matchen'
+      setTimeout(() => (toppFlash = ''), 3000)
+    } else toppFel = r?.fel || 'Kunde inte uppdatera kureringen.'
+  }
+  $: heroPost = (toppLage === 'valj' && toppValId && sportKort.find((p) => p.id === toppValId))
+    || sportKort.find((p) => p.typ === 'match' && publiceradPost(p) && p.frontmatter?.resultat)
+    || sportKort[0] || null
+  const heroBildUrl = (p) => /^https?:\/\//.test(p?.frontmatter?.hero || '') ? p.frontmatter.hero : ''
+
+  // "Öppna matchartikel för match X" — från sportevent-underartiklar & kort.
+  async function oppnaMatchArtikel(matchId = null, post = null) {
+    if (post) { laddaMatchPost(post); return }
+    artMatchId = matchId || artMatchId || matcher[0]?.id || null
+    cmsMatch = tomMatchArt(); draftId = null
+    await laddaArtMatch(true)
+    oppnaEditor('match')
+  }
+
+  // ── På gång (kurering — samma härledda modell som Matchpublicering) ────────
+  let pagang = []
+  let pagangVisa = true
+  let pagangOppen = false
+  let pagangKor = false
+  let pagangFlash = ''
+  async function laddaPagang() {
+    const r = await pagangMatcher()
+    if (r?.ok) { pagang = r.matcher || []; pagangVisa = r.visa }
+  }
+  async function togglePagangVisa() { pagangVisa = !pagangVisa; await sattPagangVisa(pagangVisa) }
+  async function pagangUppdatera() {
+    pagangKor = true; pagangFlash = ''
+    const r = await publiceraPagangMatcher($testMode)
+    pagangKor = false
+    pagangFlash = r?.ok ? ($testMode ? '✓ Testfiler skrivna' : `✓ Uppdaterad · ${r.antal} matcher`) : (r?.fel || 'Kunde inte uppdatera')
+    setTimeout(() => (pagangFlash = ''), 2600)
+  }
+  const MK = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+  const datumKort = (iso) => { const d = (iso || '').split('-').map(Number); return d.length === 3 ? `${d[2]} ${MK[d[1] - 1]}` : '' }
+
+  // ── Matchartikel-editorn ────────────────────────────────────────────────────
+  // "Artikel för match": väljaren byter källmatch; kopplade fält fylls om.
+  const MATCHFALT = ['hem', 'borta', 'resultat', 'mellan', 'datum', 'serie', 'arena', 'pixieset', 'malskyttar']
+  const falt_fran_match = (m) => ({ hem: m?.lag_hemma || '', borta: m?.lag_borta || '',
+    resultat: m?.resultat || '', mellan: m?.mellan || '', datum: m?.datum || '',
+    serie: m?.liga || '', arena: m?.arena || '', pixieset: m?.galleri || '',
+    malskyttar: m?.malskyttar || '' })
+
+  async function laddaArtMatch(fyllFalt) {
+    artMatch = artMatchId ? await hamtaMatch(artMatchId) : null
+    if (!artMatch) return
+    if (fyllFalt) {
+      // Befintlig artikelrad för matchen? Återuppta den i stället för att börja om.
+      const rad = poster.find((p) => p.typ === 'match' && p.match_id === artMatchId)
+      cmsMatch = { ...tomMatchArt(), ...falt_fran_match(artMatch) }
+      if (rad) {
+        const fm = rad.frontmatter || {}
+        cmsMatch.innehallId = rad.id
+        cmsMatch.heroPosition = fm.heroPosition || 'center center'
+        if (fm.pixieset) cmsMatch.pixieset = fm.pixieset
+        // Referatet bor i body — utan galleri-markdownen (![…]-raderna).
+        cmsMatch.svep = (rad.body || '').split('\n')
+          .filter((l) => !l.trim().startsWith('![')).join('\n').trim()
+      }
+      cmsMatch = cmsMatch
+    }
+    forhandsgranska()
+  }
+  function laddaMatchPost(p) {
+    artMatchId = p.match_id || artMatchId
+    draftId = null
+    const fm = p.frontmatter || {}
+    cmsMatch = { ...tomMatchArt(), innehallId: p.id,
+      hem: fm.hem || '', borta: fm.borta || '', resultat: fm.resultat || '',
+      mellan: fm.halvtid || fm.set || fm.perioder || '', datum: fm.datum || '',
+      serie: fm.serie || '', arena: fm.arena || '', pixieset: fm.pixieset || '',
+      malskyttar: Array.isArray(fm.malskyttar) ? fm.malskyttar.join(', ') : (fm.malskyttar || ''),
+      heroPosition: fm.heroPosition || 'center center',
+      svep: (p.body || '').split('\n').filter((l) => !l.trim().startsWith('![')).join('\n').trim() }
+    laddaArtMatch(false)
+    oppnaEditor('match')
+  }
+  async function cmsPick(e) {
+    artMatchId = e.target.value || null
+    cmsMatch = tomMatchArt(); draftId = null
+    await laddaArtMatch(true)
+  }
+  // Skriva i ett kopplat fält = eget värde (bryter kopplingen).
+  function sattEget(f, v) { cmsMatch[f] = v; cmsMatch.own = { ...cmsMatch.own, [f]: true }; forhandsgranska() }
+  function hamtaFalt(f) {
+    cmsMatch[f] = falt_fran_match(artMatch)[f]
+    cmsMatch.own = { ...cmsMatch.own, [f]: false }
+    forhandsgranska()
+  }
+  function hamtaAllt() {
+    cmsMatch = { ...cmsMatch, ...falt_fran_match(artMatch), own: {} }
+    forhandsgranska()
+  }
+  // ResultatRemsan skriver på matchen → spegla in i icke-egna fält.
+  function onResSparat(e) {
+    const d = e.detail || {}
+    artMatch = { ...artMatch, ...d }
+    for (const f of ['resultat', 'mellan', 'malskyttar']) {
+      if (!cmsMatch.own[f] && f in d) cmsMatch[f] = d[f] || ''
+    }
+    cmsMatch = cmsMatch
+    forhandsgranska()
+  }
+
+  // Referat: hämta från Matchpublicering (§4 — panelen PRODUCERAR, vi hämtar).
+  let svepFlash = ''
+  $: artMaterial = (materials || []).find((m) => m.match_id === artMatchId && m.kind === 'some' && m.caption)
+  function handle(namn) { return (lagAlla.find((x) => x.namn === namn)?.instagram || '').replace(/^@/, '') }
+  function pullFromSome() {
+    if (!artMaterial) return
+    cmsMatch.svep = losText(artMaterial.caption,
+      tokenVals({ match: artMatch, res: cmsMatch, handle: handle(artMatch?.lag_hemma),
+        galleriUrl: cmsMatch.pixieset, hemsidaUrl: '', web: true }), { web: true })
+    cmsMatch = cmsMatch
+    svepFlash = '✓ Hämtat från Matchpublicering'
+    setTimeout(() => (svepFlash = ''), 2400)
+    forhandsgranska()
+  }
+  $: svepWebb = strippaSocialt(cmsMatch.svep) || '—'
+
+  // Regenerera med Claude — samma tvåstegsflöde som Matchpublicering
+  // (granska frågan → skicka; skarpt anrop tar ~2 min).
+  let genererar = false
+  let genFel = ''
+  let granska = null
+  let laddarFraga = false
+  let genSek = 0
+  let genTimer = null
+  const genInfo = () => `${cmsMatch.hem} – ${cmsMatch.borta}` + (cmsMatch.resultat ? ` ${cmsMatch.resultat}` : '')
+  const genFakta = () => ({ resultat: cmsMatch.resultat, mellan: cmsMatch.mellan,
+    malskyttar: cmsMatch.malskyttar, arena: cmsMatch.arena, datum: cmsMatch.datum,
+    liga: cmsMatch.serie, ton: 'Neutral' })
+  async function oppnaGranska() {
+    if (genererar || laddarFraga) return
+    genFel = ''; laddarFraga = true
+    try {
+      const r = await forhandsgranskaBildsvepFraga(genInfo(), genFakta())
+      if (r?.ok) granska = r.fraga
+      else genFel = r?.fel || 'Kunde inte bygga frågan.'
+    } catch (_) { genFel = 'Kunde inte bygga frågan.' }
+    laddarFraga = false
+  }
+  async function skickaTillClaude() {
+    const info = genInfo(), fakta = genFakta()
+    granska = null; genererar = true; genFel = ''; genSek = 0
+    genTimer = setInterval(() => (genSek += 1), 1000)
+    try {
+      const r = await genereraBildsvep(info, artMatch?.sport || '', '', fakta)
+      if (r?.ok && r.bildsvep) { cmsMatch.svep = r.bildsvep; cmsMatch = cmsMatch }
+      else genFel = r?.fel || 'Kunde inte generera texten.'
+    } catch (_) { genFel = 'Kunde inte generera texten.' } finally {
+      genererar = false
+      clearInterval(genTimer); genTimer = null
+      forhandsgranska()
+    }
+  }
+
+  // Höjdpunkter från aktivt urval → galleriet (riktig källa, inte mock).
+  let hpFel = ''
+  async function pullHighlights() {
+    hpFel = ''
+    const r = await urvalHojdpunkter(6)
+    if (!r?.ok) { hpFel = r?.fel || 'Inget aktivt urval.'; setTimeout(() => (hpFel = ''), 3200); return }
+    const nya = []
+    for (const [i, p] of (r.sokvagar || []).entries()) {
+      const t = await thumbForBild(p)
+      nya.push({ bild: p, alt: '', bildtext: '', src: r.filer?.[i] || '', thumb: t?.ok ? t.data_uri : '' })
+    }
+    akt.figurer = [...akt.figurer, ...nya]
+    pinga(); forhandsgranska()
+  }
+
+  // ── Sportevent-editorn ──────────────────────────────────────────────────────
+  // Skapas från en HELDAGSAKTIVITET i Fotojobb (skiss 1e) — kopplingen
+  // förifyller titel/period/plats.
+  $: heldagsJobb = (fotojobb || []).filter((j) => j.all_day)
+  function valjSporteventJobb(e) {
+    const id = e.target.value
+    cmsSportevent.fotojobbId = id
+    const j = heldagsJobb.find((x) => x.id === id)
+    if (j) {
+      if (!cmsSportevent.titel) cmsSportevent.titel = j.title || ''
+      if (!cmsSportevent.plats) cmsSportevent.plats = j.location || ''
+      if (!cmsSportevent.datum) cmsSportevent.datum = (j.start_at || '').slice(0, 10)
+      if (!cmsSportevent.period) {
+        const a = (j.start_at || '').slice(0, 10), b = (j.end_at || '').slice(0, 10)
+        cmsSportevent.period = a && b && a !== b ? `${datumKort(a)} – ${datumKort(b)}` : datumKort(a)
+      }
+      cmsSportevent = cmsSportevent
+    }
+    forhandsgranska()
+  }
+  let subValOppen = false
+  function laggUnderartikel(m) {
+    const titel = `${m.lag_hemma} – ${m.lag_borta}`
+    if (cmsSportevent.underartiklar.some((u) => u.match_id === m.id)) { subValOppen = false; return }
+    cmsSportevent.underartiklar = [...cmsSportevent.underartiklar,
+      { match_id: m.id, titel, slug: slugga(titel) }]
+    subValOppen = false
+    forhandsgranska()
+  }
+  function taUnderartikel(i) {
+    cmsSportevent.underartiklar = cmsSportevent.underartiklar.filter((_, j) => j !== i)
+    forhandsgranska()
+  }
+  // Grön prick = matchartikeln finns (egen artikel), annars "vald, ej skapad".
+  const subArtikel = (u) => poster.find((p) => p.typ === 'match' && p.match_id === u.match_id)
+  async function oppnaUnderartikel(u) {
+    autospar()
+    await oppnaMatchArtikel(u.match_id, subArtikel(u) || null)
+  }
+  async function sparaUtkastDb() {
+    const r = await sparaInnehall(data())
+    if (r?.ok) {
+      if (ctyp === 'match') cmsMatch.innehallId = r.id
+      else if (ctyp === 'sportevent') cmsSportevent.innehallId = r.id
+      sparadDb = true; setTimeout(() => (sparadDb = false), 2400)
+      await laddaOversikt()
+    }
+  }
+  let sparadDb = false
+
+  // ── Gemensam editor-mekanik (befintlig) ────────────────────────────────────
   const utanThumb = (arr) => (arr || []).map(({ thumb, ...r }) => r)
   function data() {
     if (ctyp === 'event') return { typ: 'event', ...cmsEvent, figurer: utanThumb(cmsEvent.figurer) }
     if (ctyp === 'landskap') return { typ: 'landskap', ...cmsLandskap, figurer: utanThumb(cmsLandskap.figurer) }
+    if (ctyp === 'match') {
+      const c = cmsMatch
+      return { typ: 'match', id: c.innehallId || undefined, match_id: artMatchId || null,
+        titel: `${c.hem} – ${c.borta}`, hem: c.hem, borta: c.borta, serie: c.serie,
+        sport: artMatch?.sport || '', datum: c.datum, arena: c.arena,
+        resultat: c.resultat, mellan: c.mellan, malskyttar: c.malskyttar,
+        status: c.resultat ? 'avslutad' : 'kommande', pixieset: c.pixieset,
+        body: strippaSocialt(c.svep),                     // webben får texten utan @/#
+        hero: c.hero, heroPosition: c.heroPosition, heroKalla: c.heroKalla,
+        figurer: utanThumb(c.figurer) }
+    }
+    if (ctyp === 'sportevent') {
+      const c = cmsSportevent
+      return { typ: 'sportevent', id: c.innehallId || undefined,
+        titel: c.titel, period: c.period, plats: c.plats, datum: c.datum,
+        ingress: c.ingress, hero: c.hero, heroPosition: c.heroPosition,
+        heroKalla: c.heroKalla, figurer: utanThumb(c.figurer),
+        underartiklar: c.underartiklar }
+    }
     return { typ: 'blogg', ...cmsBlogg, figurer: utanThumb(cmsBlogg.figurer) }
   }
 
@@ -136,9 +472,7 @@
     schemalaggAutospar()
   }
 
-  function pinga() { cmsEvent = cmsEvent; cmsLandskap = cmsLandskap; cmsBlogg = cmsBlogg }
-  // Hero-bild (fokuskomponenten binder in hero/heroPosition/heroKalla i akt) —
-  // uppdatera .md-förhandsvisningen när bild eller fokuspunkt ändras.
+  function pinga() { cmsEvent = cmsEvent; cmsLandskap = cmsLandskap; cmsBlogg = cmsBlogg; cmsMatch = cmsMatch; cmsSportevent = cmsSportevent }
   function heroAndrad() { pinga(); forhandsgranska() }
   function laggBild() { akt.figurer = [...akt.figurer, { bild: '', alt: '', bildtext: '', src: '', thumb: '' }]; pinga(); forhandsgranska() }
   function taBild(i) { akt.figurer = akt.figurer.filter((_, j) => j !== i); pinga(); forhandsgranska() }
@@ -151,8 +485,6 @@
     pinga(); forhandsgranska()
   }
 
-  // B3/B4: dra för att ordna om galleriet. Miniatyren följer objektet, så
-  // omordning är en ren array-flytt (ingen index→thumb-remappning).
   let dragIdx = null
   function dragStart(i) { dragIdx = i }
   function dragOver(i, e) { e.preventDefault() }
@@ -169,10 +501,8 @@
   function taPlats(i) { cmsBlogg.platser = cmsBlogg.platser.filter((_, j) => j !== i); forhandsgranska() }
 
   async function spara() {
-    // Testläge: skriver till test-output/content/ i stället — kräver ingen
-    // export-katalog, så prompten för att välja en hoppas helt över.
     if (!$testMode && !exportDirs[ctyp]) {
-      const r = await valjMapp(`Välj content/${typinfo.mapp}-katalog`)
+      const r = await valjMapp(`Välj content/${EDITOR_MAPP[ctyp]}-katalog`)
       if (r.ok) exportDirs[ctyp] = r.path; else return
     }
     const r = await exporteraInnehall(data(), exportDirs[ctyp], $testMode)
@@ -191,7 +521,7 @@
     synkadPath = r?.path || ''
     if (synkad) {
       publiceradId = r.id
-      // B5: publicerat → ta bort motsvarande utkast + uppdatera översikten.
+      if (ctyp === 'match' && r.id) cmsMatch.innehallId = r.id
       if (draftId) { raderaUtkast(draftId); draftId = null }
       if (!$testMode) await laddaOversikt()
       setTimeout(() => (synkad = false), 2600)
@@ -201,7 +531,7 @@
   async function kollaStatus() {
     if (!publiceradId) return
     statusLaddar = true
-    statusInfo = await statusInnehall(ctyp, publiceradId)
+    statusInfo = await statusInnehall(ctyp === 'match' ? 'match' : ctyp, publiceradId)
     statusLaddar = false
   }
 
@@ -214,215 +544,483 @@
     : statusInfo ? 'Ingen deploy-status tillgänglig (CF-nycklar ej satta i workern)' : ''
 </script>
 
-<div class="panel">
-  <header>
-    <h1 class="scd">Innehåll</h1>
-    <span class="sub">Skapa innehåll till hemsidan — frontmatter och bilder blir en färdig .md-fil</span>
-  </header>
+<div class="panel" bind:this={editorEl}>
+  {#if !editorMode}
+    <!-- ══ BIBLIOTEKET ══ -->
+    <header>
+      <h1 class="scd">Innehåll</h1>
+      <span class="sub">Biblioteket för hemsidan — en typ i taget, klick öppnar editorn</span>
+    </header>
 
-  {#if poster.length || utkast.length}
-    <div class="kort oversikt">
-      <div class="ovhuvud">
-        <span class="caps nomarg">Publicerat &amp; utkast</span>
-        <div class="ovtabs">
-          <button class:on={overviewTab === 'publicerat'} on:click={() => (overviewTab = 'publicerat')}>Publicerat {#if poster.length}<span class="ovn">{poster.length}</span>{/if}</button>
-          <button class:on={overviewTab === 'utkast'} on:click={() => (overviewTab = 'utkast')}>Utkast {#if utkast.length}<span class="ovn ac">{utkast.length}</span>{/if}</button>
-        </div>
+    <!-- Typ-nav: fyra jämbördiga val + Skapa nytt (Sport-artiklar skapas från match/event) -->
+    <div class="libnav">
+      <div class="cmstabs">
+        {#each LIBTYPER as lt}
+          <button class="cmstab" class:on={libType === lt.id} style="--tf:{lt.farg}" on:click={() => setLibType(lt.id)}>
+            <span class="cmstik">
+              {#if lt.id === 'sport'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v5l4.3 3.1-1.6 5H9.3l-1.6-5L12 8.5"/></svg>
+              {:else if lt.id === 'landskap'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-8 4 6 3-4 6 6"/><circle cx="17.5" cy="7.5" r="1.8"/></svg>
+              {:else if lt.id === 'event'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.5 3.1-5.5 7-5.5s7 2 7 5.5"/></svg>
+              {:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>{/if}
+            </span>
+            <span class="cmstnamn scd">{lt.namn}</span>
+          </button>
+        {/each}
       </div>
-
-      {#if overviewTab === 'publicerat'}
-        {#if postGrupper.length}
-          {#each postGrupper as g}
-            <div class="ovgrupp">
-              <div class="ovtyp">{g.namn} <span class="ovtypn">· {g.rader.length}</span></div>
-              {#each g.rader as p (p.id)}
-                <div class="ovrad" role="button" tabindex="0" title="Klicka för att ändra"
-                  on:click={() => laddaPost(p)} on:keydown={(e) => e.key === 'Enter' && laddaPost(p)}>
-                  <Hornmarkor farg="#6FB35A" r={10} titel="Publicerad" />
-                  <div class="ovthumb"></div>
-                  <div class="ovmitt"><div class="ovtitel">{titelAv(p)}</div><div class="ovmeta">{datumText(p.synkad_tid || p.frontmatter?.datum, 'Publicerad')}</div></div>
-                  <button class="ovx" class:armerad={$armerad === `pub-${p.id}`}
-                    title={$armerad === `pub-${p.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                    on:click|stopPropagation={taBortKlick(`pub-${p.id}`, () => raderaPost(p))}>
-                    {#if $armerad === `pub-${p.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
-                  </button>
-                </div>
-              {/each}
-            </div>
-          {/each}
-        {:else}<div class="ovtom">Inget publicerat ännu.</div>{/if}
-      {:else}
-        {#if utkastGrupper.length}
-          {#each utkastGrupper as g}
-            <div class="ovgrupp">
-              <div class="ovtyp">{g.namn} <span class="ovtypn">· {g.rader.length}</span></div>
-              {#each g.rader as u (u.id)}
-                <div class="ovrad" role="button" tabindex="0" title="Klicka för att fortsätta"
-                  on:click={() => laddaUtkast(u)} on:keydown={(e) => e.key === 'Enter' && laddaUtkast(u)}>
-                  <div class="ovthumb"></div>
-                  <div class="ovmitt"><div class="ovtitel">{u.titel || '(utan titel)'}</div><div class="ovmeta">{datumText(u.sparad, 'Sparad')}</div></div>
-                  <button class="ovx" class:armerad={$armerad === `utk-${u.id}`}
-                    title={$armerad === `utk-${u.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                    on:click|stopPropagation={taBortKlick(`utk-${u.id}`, () => raderaUtkast(u.id))}>
-                    {#if $armerad === `utk-${u.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
-                  </button>
-                </div>
-              {/each}
-            </div>
-          {/each}
-        {:else}<div class="ovtom">Inga sparade utkast.</div>{/if}
+      {#if libType !== 'sport'}
+        <button class="nyknapp" on:click={() => {
+          if (libType === 'blogg') cmsBlogg = { kategori: '', titel: '', datum: '', ingress: '', body: '', hero: '', heroPosition: 'center center', heroKalla: '', platser: [], figurer: [] }
+          else if (libType === 'landskap') cmsLandskap = { titel: '', plats: '', period: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
+          else cmsEvent = { kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
+          draftId = null
+          oppnaEditor(libType)
+        }}>+ Ny {libType === 'blogg' ? 'blogg' : libType === 'landskap' ? 'landskap' : 'människa'}</button>
       {/if}
     </div>
-  {/if}
-
-  <div class="cmstabs" bind:this={editorEl}>
-    {#each CTYPER as ct}
-      <button class="cmstab" class:on={ctyp === ct.id}
-        style="--tf:{ct.farg}" on:click={() => bytTyp(ct.id)}>
-        <span class="cmstik">
-          {#if ct.id === 'blogg'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-          {:else if ct.id === 'landskap'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-8 4 6 3-4 6 6"/><circle cx="17.5" cy="7.5" r="1.8"/></svg>
-          {:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.5 3.1-5.5 7-5.5s7 2 7 5.5"/></svg>{/if}
-        </span>
-        <span class="cmstnamn scd">{ct.namn}</span>
-      </button>
-    {/each}
-  </div>
-  {#if typinfo}<div class="cmssub">{typinfo.hint}</div>{/if}
-
-  {#if ctyp === 'event'}
-    <div class="kort">
-      <div class="caps">Fotouppdrag — ej match-relaterat</div>
-      <div class="grid2">
-        <div class="f"><label>Titel</label><input bind:value={cmsEvent.titel} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Kategori</label>
-          <select bind:value={cmsEvent.kategori} on:change={forhandsgranska}>
-            {#each EVENT_KAT as k}<option value={k}>{k}</option>{/each}
-          </select>
-        </div>
-        <div class="f"><label>Kund</label><input bind:value={cmsEvent.kund} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Datum</label><input type="date" bind:value={cmsEvent.datum} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Plats</label><input bind:value={cmsEvent.plats} on:change={forhandsgranska} /></div>
-      </div>
-      <div class="f mt"><label>Ingress</label><textarea rows="3" bind:value={cmsEvent.ingress} on:change={forhandsgranska}></textarea></div>
+    <div class="cmssub">{libinfo?.hint}
+      {#if libType === 'sport'}<span class="cmshint2">Matchartiklar skapas från en match · event/mästerskap från en heldagsaktivitet i Fotojobb.</span>{/if}
     </div>
-  {:else if ctyp === 'landskap'}
-    <div class="kort">
-      <div class="caps">Bildserie</div>
-      <div class="grid2">
-        <div class="f"><label>Titel</label><input bind:value={cmsLandskap.titel} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Tema</label>
-          <div class="temalast" title="Temat härleds ur innehållstypen — Landskap är alltid Sol">
-            <span class="temaprick"></span><span class="temanamn">Sol</span>
-            <span class="temainfo">· låst för Landskap</span>
+
+    {#if libType === 'sport'}
+      <!-- ── Sport = startsidan (4a) ── -->
+      <div class="kort sportstart">
+        <div class="ovhuvud">
+          <span class="caps nomarg">Sport-startsidan</span>
+          <div class="toppval">
+            <span class="tvlbl">Topp:</span>
+            <button class="tvchip" class:on={toppLage === 'senaste'} disabled={toppSparar}
+              on:click={() => valjTopp('senaste')}>Senaste matchen</button>
+            <button class="tvchip" disabled title="Kräver sajtstöd för hero utan matchbild — inte byggt ännu">Kommande</button>
+            <button class="tvchip" class:on={toppLage === 'valj'} disabled={toppSparar || !toppKandidater.length}
+              title={toppKandidater.length ? 'Välj en publicerad matchartikel som topp' : 'Publicera en matchartikel först'}
+              on:click={() => (toppLage === 'valj' ? null : valjTopp('valj', toppKandidater[0]?.id))}>Välj själv…</button>
+            {#if toppLage === 'valj'}
+              <select class="tvselect" value={toppValId} on:change={(e) => valjTopp('valj', e.target.value)}>
+                {#each toppKandidater as p (p.id)}<option value={p.id}>{titelAv(p)}</option>{/each}
+              </select>
+            {/if}
           </div>
         </div>
-        <div class="f"><label>Plats</label><input bind:value={cmsLandskap.plats} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Period</label><input bind:value={cmsLandskap.period} on:change={forhandsgranska} placeholder="t.ex. sep–okt 2026" /></div>
+        {#if toppFlash}<div class="ok sm">{toppFlash}</div>{/if}
+        {#if toppFel}<div class="synkfel">{toppFel}</div>{/if}
+
+        {#if heroPost}
+          <button class="herokort" on:click={() => laddaPost(heroPost)} title="Öppna för redigering">
+            {#if heroBildUrl(heroPost)}<img class="herobild" src={heroBildUrl(heroPost)} alt="" />{:else}<div class="herobild platt"></div>{/if}
+            <div class="herotext">
+              <div class="herokicker">{[heroPost.frontmatter?.serie, datumKort(heroPost.frontmatter?.datum)].filter(Boolean).join(' · ')}</div>
+              <div class="herotitel scd">{titelAv(heroPost)}{#if heroPost.frontmatter?.resultat}&nbsp; {heroPost.frontmatter.resultat}{/if}</div>
+            </div>
+            {#if toppLage === 'valj' && heroPost.id === toppValId}<span class="toppbadge">Topp</span>{/if}
+          </button>
+        {/if}
+
+        <div class="ovhuvud mt14"><span class="caps nomarg">Matcher &amp; tävlingar</span></div>
+        <div class="sportgrid">
+          {#each sportKort as p (p.id)}
+            <button class="sportkort" on:click={() => laddaPost(p)} title="Öppna för redigering">
+              {#if publiceradPost(p)}<Hornmarkor farg="#6FB35A" r={10} titel="Publicerad" />{/if}
+              {#if p.typ === 'sportevent'}<span class="tavlingbadge">Tävling</span>{/if}
+              <div class="skthumb"></div>
+              <div class="sktitel">{titelAv(p)}</div>
+              <div class="skmeta">{[p.frontmatter?.resultat, datumKort(p.frontmatter?.datum),
+                publiceradPost(p) ? '' : 'utkast'].filter(Boolean).join(' · ') || '—'}</div>
+            </button>
+          {/each}
+          <button class="sportkort nyartikel" on:click={() => oppnaMatchArtikel()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+            <span>+ Ny artikel</span>
+          </button>
+          <button class="sportkort nyartikel" on:click={() => { cmsSportevent = tomSportevent(); draftId = null; oppnaEditor('sportevent') }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+            <span>+ Nytt event/mästerskap</span>
+          </button>
+        </div>
+
+        {#if libUtkast.length || utkast.some((u) => u.typ === 'match' || u.typ === 'sportevent')}
+          <div class="ovhuvud mt14"><span class="caps nomarg">Påbörjade utkast</span></div>
+          {#each utkast.filter((u) => u.typ === 'match' || u.typ === 'sportevent') as u (u.id)}
+            <div class="ovrad" role="button" tabindex="0" on:click={() => laddaUtkast(u)}
+              on:keydown={(e) => e.key === 'Enter' && laddaUtkast(u)}>
+              <div class="ovthumb"></div>
+              <div class="ovmitt"><div class="ovtitel">{u.titel || '(utan titel)'}</div>
+                <div class="ovmeta">{TYP_NAMN[u.typ]} · {datumText(u.sparad, 'sparad')}</div></div>
+              <button class="ovx" class:armerad={$armerad === `utk-${u.id}`}
+                on:click|stopPropagation={taBortKlick(`utk-${u.id}`, () => raderaUtkast(u.id))}>
+                {#if $armerad === `utk-${u.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
+              </button>
+            </div>
+          {/each}
+        {/if}
+
+        <!-- På gång — bara sport, härlett ur Matcher. "Ordna ›" öppnar kureringen. -->
+        <div class="ovhuvud mt14">
+          <span class="caps nomarg">På gång <span class="capshint">· kommande matcher &amp; tävlingar</span></span>
+          <button class="ordna" on:click={() => (pagangOppen = !pagangOppen)}>{pagangOppen ? 'Stäng' : 'Ordna ›'}</button>
+        </div>
+        <div class="pgrad2">
+          {#each pagang.slice(0, pagangOppen ? 99 : 4) as m (m.id)}
+            <div class="pgkort">
+              <div class="pgdatum"><span class="pgdag scd">{(m.datum || '').split('-')[2] || '–'}</span>
+                <span class="pgmon">{MK[(Number((m.datum || '').split('-')[1]) || 1) - 1]?.toUpperCase()}</span></div>
+              <span class="grendot" style="background:{grenFarg(m.hem_gren)}"></span>
+              <div class="pgi"><div class="pgf">{m.lag_hemma} – {m.lag_borta}</div><div class="pgl">{m.liga || ''}</div></div>
+            </div>
+          {/each}
+          {#if !pagang.length}<div class="ovtom">Inga kommande matcher i Matcher.</div>{/if}
+        </div>
+        {#if pagangOppen}
+          <div class="pgfot">
+            <button class="visatoggle" on:click={togglePagangVisa}>
+              <span class="chk" class:pa={pagangVisa}>{pagangVisa ? '✓' : ''}</span>Visa på sajten</button>
+            <span class="pghint">Ordningen följer matchdatum (från Matcher) — lägg till/ta bort matcher där.</span>
+            {#if pagangFlash}<span class="ok sm">{pagangFlash}</span>{/if}
+            <button class="statusbtn" on:click={pagangUppdatera} disabled={pagangKor}>{pagangKor ? 'Uppdaterar…' : 'Uppdatera sajten'}</button>
+          </div>
+        {/if}
       </div>
-      <div class="f mt"><label>Ingress</label><textarea rows="3" bind:value={cmsLandskap.ingress} on:change={forhandsgranska}></textarea></div>
-    </div>
+    {:else}
+      <!-- ── Enkeltyps-bibliotek (Landskap / Människor / Blogg) ── -->
+      <div class="kort oversikt">
+        <div class="ovhuvud">
+          <span class="caps nomarg">Publicerat &amp; utkast</span>
+          <div class="ovtabs">
+            <button class:on={overviewTab === 'publicerat'} on:click={() => (overviewTab = 'publicerat')}>Publicerat {#if libPoster.length}<span class="ovn">{libPoster.length}</span>{/if}</button>
+            <button class:on={overviewTab === 'utkast'} on:click={() => (overviewTab = 'utkast')}>Utkast {#if libUtkast.length + libUtkastDb.length}<span class="ovn ac">{libUtkast.length + libUtkastDb.length}</span>{/if}</button>
+          </div>
+        </div>
+
+        {#if overviewTab === 'publicerat'}
+          {#each libPoster as p (p.id)}
+            <div class="ovrad" role="button" tabindex="0" title="Klicka för att ändra"
+              on:click={() => laddaPost(p)} on:keydown={(e) => e.key === 'Enter' && laddaPost(p)}>
+              <Hornmarkor farg="#6FB35A" r={10} titel="Publicerad" />
+              <div class="ovthumb"></div>
+              <div class="ovmitt"><div class="ovtitel">{titelAv(p)}</div><div class="ovmeta">{datumText(p.synkad_tid || p.frontmatter?.datum, 'Publicerad')}</div></div>
+              <button class="ovx" class:armerad={$armerad === `pub-${p.id}`}
+                title={$armerad === `pub-${p.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                on:click|stopPropagation={taBortKlick(`pub-${p.id}`, () => raderaPost(p))}>
+                {#if $armerad === `pub-${p.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
+              </button>
+            </div>
+          {:else}<div class="ovtom">Inget publicerat ännu.</div>{/each}
+        {:else}
+          {#each libUtkast as u (u.id)}
+            <div class="ovrad" role="button" tabindex="0" title="Klicka för att fortsätta"
+              on:click={() => laddaUtkast(u)} on:keydown={(e) => e.key === 'Enter' && laddaUtkast(u)}>
+              <div class="ovthumb"></div>
+              <div class="ovmitt"><div class="ovtitel">{u.titel || '(utan titel)'}</div><div class="ovmeta">{datumText(u.sparad, 'Sparad')}</div></div>
+              <button class="ovx" class:armerad={$armerad === `utk-${u.id}`}
+                title={$armerad === `utk-${u.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                on:click|stopPropagation={taBortKlick(`utk-${u.id}`, () => raderaUtkast(u.id))}>
+                {#if $armerad === `utk-${u.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
+              </button>
+            </div>
+          {/each}
+          {#each libUtkastDb as p (p.id)}
+            <div class="ovrad" role="button" tabindex="0" title="Klicka för att fortsätta"
+              on:click={() => laddaPost(p)} on:keydown={(e) => e.key === 'Enter' && laddaPost(p)}>
+              <div class="ovthumb"></div>
+              <div class="ovmitt"><div class="ovtitel">{titelAv(p)}</div><div class="ovmeta">{datumText(p.skapad, 'Skapad')} · utkast</div></div>
+              <button class="ovx" class:armerad={$armerad === `pub-${p.id}`}
+                on:click|stopPropagation={taBortKlick(`pub-${p.id}`, () => raderaPost(p))}>
+                {#if $armerad === `pub-${p.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
+              </button>
+            </div>
+          {/each}
+          {#if !libUtkast.length && !libUtkastDb.length}<div class="ovtom">Inga sparade utkast.</div>{/if}
+        {/if}
+        <div class="ovfot">Status = grön hörnmarkering (publicerad) · klick på raden öppnar för ändring · utkast sparas löpande.</div>
+      </div>
+    {/if}
   {:else}
-    <div class="kort">
-      <div class="caps">Journal / reseberättelse</div>
-      <div class="grid2">
-        <div class="f"><label>Titel</label><input bind:value={cmsBlogg.titel} on:change={forhandsgranska} /></div>
-        <div class="f"><label>Kategori</label><input bind:value={cmsBlogg.kategori} on:change={forhandsgranska} placeholder="t.ex. Resor" /></div>
-        <div class="f"><label>Datum</label><input type="date" bind:value={cmsBlogg.datum} on:change={forhandsgranska} /></div>
-      </div>
-      <div class="f mt"><label>Ingress</label><textarea rows="2" bind:value={cmsBlogg.ingress} on:change={forhandsgranska}></textarea></div>
-      <div class="f mt"><label>Brödtext (markdown)</label><textarea rows="6" bind:value={cmsBlogg.body} on:change={forhandsgranska}></textarea></div>
+    <!-- ══ FOKUSERAD EDITOR ══ -->
+    <div class="returrad">
+      <button class="retur" on:click={stangEditor}>‹ Biblioteket</button>
+      <span class="retursub">Redigerar {TYP_NAMN[ctyp]?.toLowerCase() || ctyp} · utkast sparas löpande</span>
     </div>
 
-    <div class="kort">
-      <div class="caps">Platser &amp; tips</div>
-      <div class="figurer">
-        {#each cmsBlogg.platser as p, i}
-          <div class="platsrad">
-            <input class="pl" bind:value={p.plats} on:change={forhandsgranska} placeholder="Plats" />
-            <input class="pt" bind:value={p.tips} on:change={forhandsgranska} placeholder="Tips" />
-            <button class="figx" class:armerad={$armerad === `plats-${i}`}
-              title={$armerad === `plats-${i}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-              on:click={taBortKlick(`plats-${i}`, () => taPlats(i))}>{$armerad === `plats-${i}` ? 'Ta bort?' : '×'}</button>
+    {#if ctyp === 'match'}
+      <!-- ── Matchartikel (4b) ── -->
+      <div class="kort">
+        <div class="caps">Artikel för match</div>
+        <select class="artval" value={artMatchId} on:change={cmsPick}>
+          {#each matcher as m (m.id)}
+            <option value={m.id}>{m.lag_hemma} – {m.lag_borta} · {datumKort(m.datum) || 'utan datum'}{m.resultat ? ` · ${m.resultat}` : ''}</option>
+          {/each}
+        </select>
+      </div>
+
+      {#if artMatch}
+        <ResultatRemsa match={artMatch} {profil} {lagAlla} on:sparat={onResSparat} />
+        <div class="remstext">Delad matchdata — samma värden som Live &amp; SoMe. Etikett: Live · SoMe · Webb.</div>
+      {/if}
+
+      <div class="kort">
+        <div class="korthuvud"><span class="caps nomarg">Publicera till hemsidan</span>
+          <button class="minilank" on:click={hamtaAllt} title="Återkoppla alla fält till matchen">↺ Hämta allt</button>
+        </div>
+        <div class="grid2">
+          {#each [
+            { f: 'hem', lbl: 'Hemmalag' }, { f: 'borta', lbl: 'Bortalag' },
+            { f: 'resultat', lbl: profil.res_label || 'Slutresultat' },
+            { f: 'mellan', lbl: profil.mid_label || 'Halvtid' },
+            { f: 'datum', lbl: 'Datum', typ: 'date' }, { f: 'serie', lbl: 'Serie' },
+            { f: 'arena', lbl: 'Arena' }, { f: 'pixieset', lbl: 'Galleri-URL (Pixieset)' },
+            ...(profil.has_scorers ? [{ f: 'malskyttar', lbl: profil.scorers_label || 'Målskyttar' }] : []),
+          ] as falt (falt.f)}
+            <div class="f">
+              <label>{falt.lbl}
+                {#if cmsMatch.own[falt.f]}
+                  <button class="fkoppel egen" on:click={() => hamtaFalt(falt.f)} title="Egen text — klicka för att hämta från matchen">egen · ↺</button>
+                {:else if artMatch}
+                  <span class="fkoppel" title="Kopplat till matchen">⛓</span>
+                {/if}
+              </label>
+              {#if falt.typ === 'date'}
+                <input type="date" value={cmsMatch[falt.f]} on:input={(e) => sattEget(falt.f, e.target.value)} />
+              {:else}
+                <input value={cmsMatch[falt.f]} on:input={(e) => sattEget(falt.f, e.target.value)} />
+              {/if}
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      <div class="kort">
+        <div class="korthuvud">
+          <span class="caps nomarg">Referat</span>
+          <div class="genrad">
+            <button class="statusbtn" on:click={pullFromSome} disabled={!artMaterial}
+              title={artMaterial ? 'Hämta texten Matchpublicering producerade' : 'Inget material för matchen i Matchpublicering ännu'}>
+              ↓ Hämta från Matchpublicering</button>
+            <button class="genbtn" on:click={oppnaGranska} disabled={genererar || laddarFraga} title="Skriv referatet med Claude">
+              <svg viewBox="0 0 24 24" fill="currentColor" class="stjarna"><path d="M12 2.5l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/></svg>
+              {laddarFraga ? 'Bygger fråga…' : genererar ? 'Genererar…' : 'Regenerera'}
+            </button>
+          </div>
+        </div>
+        {#if granska}
+          <div class="granska">
+            <div class="granskaTitel">Granska frågan innan den skickas till Claude</div>
+            <pre class="granskaFraga">{granska}</pre>
+            <div class="granskaKnappar">
+              <button class="statusbtn" on:click={() => (granska = null)}>Avbryt</button>
+              <button class="prim" on:click={skickaTillClaude}>Skicka till Claude ›</button>
+            </div>
+          </div>
+        {:else if genererar}
+          <div class="genprog"><span class="genspin"></span>Genererar… {genSek}s (websöker matchfakta, tar ofta ~2 min)</div>
+        {/if}
+        {#if genFel}<div class="synkfel">{genFel}</div>{/if}
+        {#if svepFlash}<div class="ok sm">{svepFlash}</div>{/if}
+        <textarea rows="5" value={cmsMatch.svep} on:input={(e) => { cmsMatch.svep = e.target.value; forhandsgranska() }}></textarea>
+        <div class="webprev">
+          <div class="prevlbl">Så publiceras texten (utan # / @)</div>
+          <div class="prevtext">{svepWebb}</div>
+        </div>
+      </div>
+    {:else if ctyp === 'sportevent'}
+      <!-- ── Event/mästerskap (1e) ── -->
+      <div class="kort">
+        <div class="korthuvud"><span class="caps nomarg">Kopplad till heldagsaktivitet</span>
+          <span class="capshint">skapas från Fotojobb</span></div>
+        <select class="artval" value={cmsSportevent.fotojobbId} on:change={valjSporteventJobb}>
+          <option value="">— Välj heldagsaktivitet…</option>
+          {#each heldagsJobb as j (j.id)}
+            <option value={j.id}>{j.title} · {(j.start_at || '').slice(0, 10)}</option>
+          {/each}
+        </select>
+        {#if !heldagsJobb.length}<div class="ovtom">Inga heldagsaktiviteter i Fotojobb — skapa en där först.</div>{/if}
+      </div>
+      <div class="kort">
+        <div class="caps">Event/mästerskap</div>
+        <div class="grid2">
+          <div class="f"><label>Titel</label><input bind:value={cmsSportevent.titel} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Period</label><input bind:value={cmsSportevent.period} on:change={forhandsgranska} placeholder="t.ex. 29 jun – 5 jul" /></div>
+          <div class="f"><label>Plats</label><input bind:value={cmsSportevent.plats} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Datum</label><input type="date" bind:value={cmsSportevent.datum} on:change={forhandsgranska} /></div>
+        </div>
+        <div class="f mt"><label>Ingress</label><textarea rows="3" bind:value={cmsSportevent.ingress} on:change={forhandsgranska}></textarea></div>
+      </div>
+      <div class="kort">
+        <div class="korthuvud"><span class="caps nomarg">Underartiklar</span>
+          <span class="capshint">manuellt valda matcher — egna artiklar, egna gallerier</span></div>
+        {#each cmsSportevent.underartiklar as u, i (u.match_id)}
+          {@const art = subArtikel(u)}
+          <div class="subrad">
+            <span class="subprick" class:klar={!!art}></span>
+            <div class="submitt">
+              <div class="subtitel">{u.titel}</div>
+              <div class="submeta">{art ? `egen artikel${art.frontmatter?.resultat ? ' · ' + art.frontmatter.resultat : ''}` : 'vald, ej skapad'}</div>
+            </div>
+            <button class="statusbtn sm" on:click={() => oppnaUnderartikel(u)}>{art ? 'Öppna artikel ›' : 'Skapa artikel ›'}</button>
+            <button class="ovx" class:armerad={$armerad === `sub-${i}`}
+              on:click={taBortKlick(`sub-${i}`, () => taUnderartikel(i))}>{$armerad === `sub-${i}` ? 'Ta bort?' : '×'}</button>
           </div>
         {/each}
-        <button class="figadd" on:click={laggPlats}>+ Lägg till plats</button>
+        <div class="subval">
+          <button class="figadd" on:click={() => (subValOppen = !subValOppen)}>+ Lägg till match</button>
+          {#if subValOppen}
+            <div class="sublista">
+              {#each matcher.filter((m) => !cmsSportevent.underartiklar.some((u) => u.match_id === m.id)) as m (m.id)}
+                <button class="subvalrad" on:click={() => laggUnderartikel(m)}>
+                  <span class="grendot" style="background:{grenFarg(m.hem_gren)}"></span>
+                  {m.lag_hemma} – {m.lag_borta} <span class="submeta">· {datumKort(m.datum)}{m.resultat ? ` · ${m.resultat}` : ''}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+        <div class="ovfot">Underartiklarna länkas från eventsidan på sajten (kräver sajtstöd — kommer).</div>
+      </div>
+    {:else if ctyp === 'event'}
+      <div class="kort">
+        <div class="caps">Fotouppdrag — ej match-relaterat</div>
+        <div class="grid2">
+          <div class="f"><label>Titel</label><input bind:value={cmsEvent.titel} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Kategori</label>
+            <select bind:value={cmsEvent.kategori} on:change={forhandsgranska}>
+              {#each EVENT_KAT as k}<option value={k}>{k}</option>{/each}
+            </select>
+          </div>
+          <div class="f"><label>Kund</label><input bind:value={cmsEvent.kund} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Datum</label><input type="date" bind:value={cmsEvent.datum} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Plats</label><input bind:value={cmsEvent.plats} on:change={forhandsgranska} /></div>
+        </div>
+        <div class="f mt"><label>Ingress</label><textarea rows="3" bind:value={cmsEvent.ingress} on:change={forhandsgranska}></textarea></div>
+      </div>
+    {:else if ctyp === 'landskap'}
+      <div class="kort">
+        <div class="caps">Bildserie</div>
+        <div class="grid2">
+          <div class="f"><label>Titel</label><input bind:value={cmsLandskap.titel} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Tema</label>
+            <div class="temalast" title="Temat härleds ur innehållstypen — Landskap är alltid Sol">
+              <span class="temaprick"></span><span class="temanamn">Sol</span>
+              <span class="temainfo">· låst för Landskap</span>
+            </div>
+          </div>
+          <div class="f"><label>Plats</label><input bind:value={cmsLandskap.plats} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Period</label><input bind:value={cmsLandskap.period} on:change={forhandsgranska} placeholder="t.ex. sep–okt 2026" /></div>
+        </div>
+        <div class="f mt"><label>Ingress</label><textarea rows="3" bind:value={cmsLandskap.ingress} on:change={forhandsgranska}></textarea></div>
+      </div>
+    {:else}
+      <div class="kort">
+        <div class="caps">Journal / reseberättelse</div>
+        <div class="grid2">
+          <div class="f"><label>Titel</label><input bind:value={cmsBlogg.titel} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Kategori</label><input bind:value={cmsBlogg.kategori} on:change={forhandsgranska} placeholder="t.ex. Resor" /></div>
+          <div class="f"><label>Datum</label><input type="date" bind:value={cmsBlogg.datum} on:change={forhandsgranska} /></div>
+        </div>
+        <div class="f mt"><label>Ingress</label><textarea rows="2" bind:value={cmsBlogg.ingress} on:change={forhandsgranska}></textarea></div>
+        <div class="f mt"><label>Brödtext (markdown)</label><textarea rows="6" bind:value={cmsBlogg.body} on:change={forhandsgranska}></textarea></div>
+      </div>
+
+      <div class="kort">
+        <div class="caps">Platser &amp; tips</div>
+        <div class="figurer">
+          {#each cmsBlogg.platser as p, i}
+            <div class="platsrad">
+              <input class="pl" bind:value={p.plats} on:change={forhandsgranska} placeholder="Plats" />
+              <input class="pt" bind:value={p.tips} on:change={forhandsgranska} placeholder="Tips" />
+              <button class="figx" class:armerad={$armerad === `plats-${i}`}
+                title={$armerad === `plats-${i}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+                on:click={taBortKlick(`plats-${i}`, () => taPlats(i))}>{$armerad === `plats-${i}` ? 'Ta bort?' : '×'}</button>
+            </div>
+          {/each}
+          <button class="figadd" on:click={laggPlats}>+ Lägg till plats</button>
+        </div>
+      </div>
+    {/if}
+
+    <div class="kort">
+      <div class="caps">Hero-bild <span class="capshint">· 21:9, fokuspunkten styr beskärningen på sajten</span></div>
+      {#key ctyp}
+        <BildvaljareFokuspunkt visaFormatval={false}
+          bind:hero={akt.hero} bind:heroPosition={akt.heroPosition} bind:heroKalla={akt.heroKalla}
+          on:change={heroAndrad} />
+      {/key}
+    </div>
+
+    <div class="kort">
+      <div class="galhuvud">
+        <span class="caps nomarg">Galleri</span>
+        <div class="genrad">
+          {#if ctyp === 'match'}
+            <button class="statusbtn sm" on:click={pullHighlights} title="Fyll galleriet med toppbilder ur det aktiva urvalet (Gallra)">Hämta höjdpunkter</button>
+          {/if}
+          <span class="galhint">{galText ? 'dra för att ordna om · bildtext per bild' : 'dra för att ordna om · endast bild'}</span>
+        </div>
+      </div>
+      {#if hpFel}<div class="synkfel">{hpFel}</div>{/if}
+      <div class="galgrid">
+        {#each akt.figurer as b, i (b)}
+          <div class="figtile" class:drar={dragIdx === i} draggable="true"
+            on:dragstart={() => dragStart(i)} on:dragover={(e) => dragOver(i, e)} on:drop={() => slapp(i)} on:dragend={() => (dragIdx = null)}>
+            <button type="button" class="figthumb" class:has={!!b.thumb}
+              on:click={() => valjFigurBild(i)} title="Välj bild">
+              {#if b.thumb}<img src={b.thumb} alt="" draggable="false" />{:else}<span>+ bild {i + 1}</span>{/if}
+            </button>
+            <button class="figx" class:armerad={$armerad === `fig-${i}`}
+              title={$armerad === `fig-${i}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+              on:click={taBortKlick(`fig-${i}`, () => taBild(i))}>{$armerad === `fig-${i}` ? 'Ta bort?' : '×'}</button>
+            {#if galText}
+              {#if b.src}<div class="figsrc">från urval · {b.src}</div>{/if}
+              <input class="figcap" bind:value={b.bildtext} on:change={forhandsgranska} placeholder="Bildtext…" />
+              <input class="figalt" bind:value={b.alt} on:change={forhandsgranska} placeholder="Alt-text (tillgänglighet)" />
+            {:else}
+              <div class="figref">/bilder/{aktSlug}/{i + 1}.jpg</div>
+            {/if}
+          </div>
+        {/each}
+        <button class="figaddtile" on:click={laggBild}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+          <span>Lägg till</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="kort">
+      <div class="mdhuvud"><span class="caps">Markdown · förhandsvisning</span></div>
+      <pre>{md}</pre>
+      <div class="mdfot">
+        {#if ctyp === 'match' || ctyp === 'sportevent'}
+          <button class="statusbtn" on:click={sparaUtkastDb}>Spara utkast</button>
+          {#if sparadDb}<span class="ok">✓ Utkast sparat</span>{/if}
+        {/if}
+        <button class="prim" on:click={spara}>Spara .md-fil</button>
+        {#if sparad}
+          {#if $testMode}<span class="ok testhint">✓ Test — exempelfil: <span class="testpath">{sparadPath}</span> · rensas vid omstart</span>
+          {:else}<span class="ok">✓ Sparad till content/{EDITOR_MAPP[ctyp]}/</span>{/if}
+        {/if}
+        <button class="prim" on:click={publicera} disabled={synkar || ctyp === 'sportevent'}
+          title={ctyp === 'sportevent' ? 'Sajten saknar sportevent-stöd ännu — spara/exportera lokalt så länge' : ''}>
+          {synkar ? 'Publicerar…' : 'Publicera till hemsidan'}</button>
+        {#if synkad}
+          {#if $testMode}<span class="ok testhint">✓ Test — exempelfil: <span class="testpath">{synkadPath}</span> · rensas vid omstart</span>
+          {:else}<span class="ok">✓ Publicerad</span>{/if}
+        {/if}
+        {#if synkFel}<span class="synkfel">{synkFel}</span>{/if}
+        {#if publiceradId}
+          <button class="statusbtn" on:click={kollaStatus} disabled={statusLaddar}>{statusLaddar ? 'Kollar…' : 'Kolla status'}</button>
+          {#if deployText}<span class="deploystatus">{deployText}</span>{/if}
+        {/if}
       </div>
     </div>
   {/if}
-
-  <div class="kort">
-    <div class="caps">Hero-bild <span class="capshint">· 21:9, fokuspunkten styr beskärningen på sajten</span></div>
-    {#key ctyp}
-      <BildvaljareFokuspunkt visaFormatval={false}
-        bind:hero={akt.hero} bind:heroPosition={akt.heroPosition} bind:heroKalla={akt.heroKalla}
-        on:change={heroAndrad} />
-    {/key}
-  </div>
-
-  <div class="kort">
-    <div class="galhuvud">
-      <span class="caps nomarg">Galleri</span>
-      <span class="galhint">{galText ? 'Bilderna visas i sitt eget format · dra för att ordna om · bildtext per bild' : 'Bilderna visas i sitt eget format · dra för att ordna om'}</span>
-    </div>
-    <div class="galgrid">
-      {#each akt.figurer as b, i (b)}
-        <div class="figtile" class:drar={dragIdx === i} draggable="true"
-          on:dragstart={() => dragStart(i)} on:dragover={(e) => dragOver(i, e)} on:drop={() => slapp(i)} on:dragend={() => (dragIdx = null)}>
-          <button type="button" class="figthumb" class:has={!!b.thumb}
-            on:click={() => valjFigurBild(i)} title="Välj bild">
-            {#if b.thumb}<img src={b.thumb} alt="" draggable="false" />{:else}<span>+ bild {i + 1}</span>{/if}
-          </button>
-          <button class="figx" class:armerad={$armerad === `fig-${i}`}
-            title={$armerad === `fig-${i}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-            on:click={taBortKlick(`fig-${i}`, () => taBild(i))}>{$armerad === `fig-${i}` ? 'Ta bort?' : '×'}</button>
-          {#if galText}
-            {#if b.src}<div class="figsrc">från urval · {b.src}</div>{/if}
-            <input class="figcap" bind:value={b.bildtext} on:change={forhandsgranska} placeholder="Bildtext…" />
-            <input class="figalt" bind:value={b.alt} on:change={forhandsgranska} placeholder="Alt-text (tillgänglighet)" />
-          {:else}
-            <div class="figref">/bilder/{aktSlug}/{i + 1}.jpg</div>
-          {/if}
-        </div>
-      {/each}
-      <button class="figaddtile" on:click={laggBild}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
-        <span>Lägg till</span>
-      </button>
-    </div>
-  </div>
-
-  <div class="kort">
-    <div class="mdhuvud"><span class="caps">Markdown · förhandsvisning</span></div>
-    <pre>{md}</pre>
-    <div class="mdfot">
-      <button class="prim" on:click={spara}>Spara .md-fil</button>
-      {#if sparad}
-        {#if $testMode}<span class="ok testhint">✓ Test — exempelfil: <span class="testpath">{sparadPath}</span> · rensas vid omstart</span>
-        {:else}<span class="ok">✓ Sparad till content/{typinfo.mapp}/</span>{/if}
-      {/if}
-      <button class="prim" on:click={publicera} disabled={synkar}>{synkar ? 'Publicerar…' : 'Publicera till hemsidan'}</button>
-      {#if synkad}
-        {#if $testMode}<span class="ok testhint">✓ Test — exempelfil: <span class="testpath">{synkadPath}</span> · rensas vid omstart</span>
-        {:else}<span class="ok">✓ Publicerad</span>{/if}
-      {/if}
-      {#if synkFel}<span class="synkfel">{synkFel}</span>{/if}
-      {#if publiceradId}
-        <button class="statusbtn" on:click={kollaStatus} disabled={statusLaddar}>{statusLaddar ? 'Kollar…' : 'Kolla status'}</button>
-        {#if deployText}<span class="deploystatus">{deployText}</span>{/if}
-      {/if}
-    </div>
-  </div>
 </div>
 
 <style>
   .panel { padding: 22px 24px 40px; max-width: 760px; }
   header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  h1 { margin: 0; font-size: 25px; font-weight: 700; color: var(--t-head); }
+  h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--t-head); }   /* 6a: paneltitel 20px */
   .sub { font-size: 13px; color: var(--t-mut); }
 
-  /* Kompakt typväljare (segment-rad, aktivt i kategorifärg) */
-  .cmstabs { display: flex; gap: 4px; margin-top: 16px; padding: 4px; border: 1px solid var(--div);
+  /* Typ-nav (bibliotek) + Skapa nytt */
+  .libnav { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+  .cmstabs { flex: 1; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--div);
     border-radius: 12px; background: var(--panel); box-shadow: var(--skugga); }
   .cmstab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     padding: 9px 10px; border: none; border-radius: 9px; background: transparent; color: var(--t-mut);
@@ -432,21 +1030,21 @@
   .cmstab .cmstnamn { font-weight: 700; }
   .cmstab.on { background: var(--tf); color: #fff; box-shadow: var(--skugga); }
   .cmstab:hover:not(.on) { color: var(--tf); background: color-mix(in srgb, var(--tf) 10%, transparent); }
+  .nyknapp { flex: none; background: var(--acc); color: #fff; border: 0; border-radius: 9px;
+    padding: 10px 15px; font-size: 12.5px; font-weight: 600; }
   .cmssub { font-size: 11.5px; color: var(--t-mut); margin: 8px 2px 0; }
+  .cmshint2 { color: var(--t-help); }
 
-  /* B5: Publicerat & utkast-översikt */
-  .oversikt { margin-top: 16px; }
-  .ovhuvud { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  /* Bibliotekets rader (publicerat & utkast) */
+  .oversikt { margin-top: 14px; }
+  .ovhuvud { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .ovhuvud.mt14 { margin-top: 18px; }
   .ovtabs { display: flex; gap: 3px; background: var(--div3); border-radius: 9px; padding: 3px; }
   .ovtabs button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border: 0; border-radius: 7px;
     background: transparent; color: var(--t-mut); font-size: 12px; font-weight: 600; }
   .ovtabs button.on { background: var(--kort); color: var(--t-head); box-shadow: var(--skugga); }
   .ovn { font-size: 10px; font-weight: 700; color: var(--t-mut); background: var(--div); border-radius: 999px; padding: 1px 6px; }
   .ovn.ac { color: var(--ink); background: var(--acc); }
-  .ovgrupp { margin-top: 12px; }
-  .ovgrupp:first-of-type { margin-top: 0; }
-  .ovtyp { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-caps); margin: 0 0 7px 2px; }
-  .ovtypn { color: var(--t-help); }
   .ovrad { position: relative; overflow: hidden; display: flex; align-items: center; gap: 11px; cursor: pointer;
     background: var(--panel); border: 1px solid var(--div3); border-radius: 10px; padding: 9px 12px; margin-bottom: 7px; }
   .ovrad:hover { border-color: var(--acc); }
@@ -461,20 +1059,125 @@
   .ovx:hover { border-color: #C0453E; color: #C0453E; }
   .ovx.armerad { width: auto; padding: 0 10px; background: #C0453E; border-color: #C0453E; color: #fff; font-size: 11px; font-weight: 600; }
   .ovtom { font-size: 12.5px; color: var(--t-help); padding: 4px 2px; }
+  .ovfot { font-size: 11px; color: var(--t-help); margin-top: 10px; }
+
+  /* Sport-startsidan */
+  .sportstart { margin-top: 14px; }
+  .toppval { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .tvlbl { font-size: 11px; color: var(--t-mut); }
+  .tvchip { padding: 6px 12px; border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
+    color: var(--t-mut); font-size: 11.5px; font-weight: 600; }
+  .tvchip.on { background: var(--acc-soft); border-color: var(--acc-border); color: var(--acc); }
+  .tvchip:disabled { opacity: 0.45; }
+  .tvselect { width: auto; font-size: 12px; padding: 6px 8px; }
+  .herokort { position: relative; display: block; width: 100%; border: 1px solid var(--div); border-radius: 12px;
+    overflow: hidden; padding: 0; background: var(--panel); text-align: left; cursor: pointer; }
+  .herokort:hover { border-color: var(--acc); }
+  .herobild { display: block; width: 100%; aspect-ratio: 16/6; object-fit: cover; }
+  .herobild.platt { background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 10px, var(--kort) 10px, var(--kort) 20px); }
+  .herotext { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 16px 12px;
+    background: linear-gradient(transparent, rgba(7, 9, 12, 0.78)); }
+  .herokicker { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #E8E4DC; }
+  .herotitel { font-size: 19px; font-weight: 700; color: #fff; }
+  .toppbadge { position: absolute; top: 10px; right: 10px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; background: var(--acc); color: #fff; padding: 3px 9px; border-radius: 999px; }
+  .sportgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .sportkort { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 6px; text-align: left;
+    border: 1px solid var(--div3); border-radius: 10px; background: var(--panel); padding: 10px; cursor: pointer; }
+  .sportkort:hover { border-color: var(--acc); }
+  .skthumb { width: 100%; aspect-ratio: 4/3; border-radius: 7px;
+    background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 7px, var(--kort) 7px, var(--kort) 14px); }
+  .sktitel { font-size: 12.5px; font-weight: 700; color: var(--t-head); }
+  .skmeta { font-size: 10.5px; color: var(--t-mut); }
+  .tavlingbadge { position: absolute; top: 16px; left: 16px; z-index: 2; font-size: 9px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase; background: #C9871F; color: #fff; padding: 2px 8px; border-radius: 999px; }
+  .sportkort.nyartikel { align-items: center; justify-content: center; gap: 8px; border-style: dashed;
+    color: var(--t-mut); font-size: 12px; font-weight: 600; min-height: 130px; }
+  .sportkort.nyartikel svg { width: 18px; height: 18px; }
+  .sportkort.nyartikel:hover { color: var(--acc); }
+
+  /* På gång */
+  .ordna { border: 1px solid var(--div); background: var(--kort); border-radius: 999px; padding: 5px 12px;
+    font-size: 11.5px; font-weight: 600; color: var(--t-mut); }
+  .ordna:hover { border-color: var(--acc); color: var(--acc); }
+  .pgrad2 { display: flex; flex-direction: column; gap: 6px; }
+  .pgkort { display: flex; align-items: center; gap: 11px; border: 1px solid var(--div3); border-radius: 9px;
+    background: var(--panel); padding: 7px 11px; }
+  .pgdatum { width: 34px; text-align: center; flex: none; }
+  .pgdag { display: block; font-size: 15px; font-weight: 700; color: var(--t-head); line-height: 1; }
+  .pgmon { font-size: 8.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--t-help); }
+  .grendot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+  .pgi { flex: 1; min-width: 0; }
+  .pgf { font-size: 12px; font-weight: 600; color: var(--t-head); }
+  .pgl { font-size: 10.5px; color: var(--t-mut); }
+  .pgfot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .pghint { flex: 1; font-size: 11px; color: var(--t-help); min-width: 160px; }
+  .visatoggle { display: inline-flex; align-items: center; gap: 7px; border: 0; background: none;
+    font-size: 12px; font-weight: 600; color: var(--t-head); }
+  .chk { width: 16px; height: 16px; border-radius: 5px; border: 1px solid var(--div); display: inline-flex;
+    align-items: center; justify-content: center; font-size: 10px; color: #fff; flex: none; }
+  .chk.pa { background: var(--acc); border-color: var(--acc); }
+
+  /* Fokuserad editor: retur-rad */
+  .returrad { display: flex; align-items: center; gap: 12px; }
+  .retur { border: 1px solid var(--div); background: var(--kort); border-radius: 999px; padding: 8px 15px;
+    font-size: 12.5px; font-weight: 600; color: var(--t-head); }
+  .retur:hover { border-color: var(--acc); color: var(--acc); }
+  .retursub { font-size: 11.5px; color: var(--t-mut); }
+
+  /* Matchartikel */
+  .artval { width: 100%; }
+  .remstext { font-size: 11px; color: var(--t-mut); margin: 6px 0 0 2px; }
+  .fkoppel { margin-left: 6px; font-size: 9.5px; color: var(--t-help); border: 0; background: none; padding: 0; }
+  .fkoppel.egen { color: var(--acc); font-weight: 700; cursor: pointer; }
+  .korthuvud { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .minilank { border: 0; background: none; color: var(--acc); font-weight: 600; font-size: 11.5px; padding: 0; cursor: pointer; }
+  .genrad { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .genbtn { display: inline-flex; align-items: center; gap: 7px; background: var(--acc-soft);
+    border: 1px solid var(--acc-border); color: var(--t-head); border-radius: 8px; padding: 7px 12px;
+    font-size: 12px; font-weight: 600; }
+  .genbtn:disabled { opacity: 0.55; }
+  .stjarna { width: 13px; height: 13px; color: var(--acc); }
+  .granska { border: 1px solid var(--acc-border); border-radius: 10px; padding: 12px; margin-bottom: 12px; background: var(--panel); }
+  .granskaTitel { font-size: 12.5px; font-weight: 700; color: var(--t-head); margin-bottom: 8px; }
+  .granskaFraga { max-height: 180px; }
+  .granskaKnappar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+  .genprog { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--t-mut); margin-bottom: 10px; }
+  .genspin { width: 13px; height: 13px; border: 2px solid var(--div); border-top-color: var(--acc);
+    border-radius: 50%; animation: snurr 0.8s linear infinite; flex: none; }
+  @keyframes snurr { to { transform: rotate(360deg); } }
+  .webprev { margin-top: 10px; border-top: 1px dashed var(--div); padding-top: 10px; }
+  .prevlbl { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-caps); margin-bottom: 5px; }
+  .prevtext { font-size: 12.5px; color: var(--t-head); white-space: pre-wrap; line-height: 1.55; }
+
+  /* Sportevent: underartiklar */
+  .subrad { display: flex; align-items: center; gap: 10px; border: 1px solid var(--div3); border-radius: 9px;
+    background: var(--panel); padding: 8px 11px; margin-bottom: 7px; }
+  .subprick { width: 9px; height: 9px; border-radius: 50%; background: #C9871F; flex: none; }
+  .subprick.klar { background: #6FB35A; }
+  .submitt { flex: 1; min-width: 0; }
+  .subtitel { font-size: 12.5px; font-weight: 600; color: var(--t-head); }
+  .submeta { font-size: 10.5px; color: var(--t-mut); }
+  .subval { position: relative; }
+  .sublista { margin-top: 8px; border: 1px solid var(--div); border-radius: 10px; background: var(--kort);
+    max-height: 240px; overflow-y: auto; padding: 5px; }
+  .subvalrad { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; border: 0;
+    background: transparent; border-radius: 7px; padding: 8px 10px; font-size: 12.5px; color: var(--t-head); }
+  .subvalrad:hover { background: var(--acc-soft); }
 
   .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r); box-shadow: var(--skugga); padding: 16px; margin-top: 14px; }
   .caps { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-caps); margin-bottom: 12px; }
+  .caps.nomarg { margin-bottom: 0; }
   .capshint { font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--t-help); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .mt { margin-top: 12px; }
   .f { display: flex; flex-direction: column; gap: 5px; }
-  label { font-size: 11px; color: var(--t-mut); }
+  label { font-size: 11px; color: var(--t-mut); display: flex; align-items: center; }
   input, select, textarea { font-family: inherit; width: 100%; background: var(--panel); border: 1px solid var(--div);
     border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--t-head); outline: none; }
   input:focus, select:focus, textarea:focus { border-color: var(--acc); }
   textarea { line-height: 1.55; resize: vertical; }
 
-  /* Låst tema-indikator (temat härleds ur typen; Landskap = Sol) */
   .temalast { display: inline-flex; align-items: center; gap: 9px; background: var(--panel);
     border: 1px solid var(--div); border-radius: 8px; padding: 8px 12px; align-self: flex-start; }
   .temaprick { width: 9px; height: 9px; border-radius: 50%; background: #C9871F; flex: none; }
@@ -482,11 +1185,8 @@
   .temainfo { font-size: 11px; color: var(--t-mut); }
 
   .galhuvud { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-  .caps.nomarg { margin-bottom: 0; }
   .galhint { font-size: 11px; color: var(--t-help); }
 
-  /* B3/B4: galleri som rutnät — bilderna i sitt eget format (ingen beskärning),
-     dra för att ordna om, bildtext per bild (blogg + Människor). */
   .galgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; align-items: start; }
   .figtile { position: relative; display: flex; flex-direction: column; gap: 7px;
     border: 1px solid var(--div3); border-radius: 10px; padding: 8px; background: var(--panel); }
@@ -511,9 +1211,8 @@
   .figaddtile svg { width: 20px; height: 20px; }
   .figaddtile:hover { border-color: var(--acc); color: var(--acc); }
 
-  /* Platser & tips (blogg) — kvar som lista */
   .figurer { display: flex; flex-direction: column; gap: 10px; }
-  .figadd { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px dashed var(--div); border-radius: 10px; padding: 11px; color: var(--t-mut); font-size: 13px; font-weight: 500; background: transparent; }
+  .figadd { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px dashed var(--div); border-radius: 10px; padding: 11px; color: var(--t-mut); font-size: 13px; font-weight: 500; background: transparent; width: 100%; }
   .figadd:hover { border-color: var(--acc); color: var(--acc); }
 
   .platsrad { display: flex; gap: 8px; align-items: center; }
@@ -524,15 +1223,17 @@
   pre { margin: 0; background: var(--panel); border: 1px solid var(--div3); border-radius: 8px; padding: 14px;
     font-family: var(--mono, ui-monospace, monospace); font-size: 12px; line-height: 1.6; color: var(--t-head);
     white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; }
-  .mdfot { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  .mdfot { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
   .prim { background: var(--acc); color: #fff; border: 0; border-radius: 7px; padding: 9px 16px; font-size: 13px; font-weight: 600; flex: none; }
   .prim:disabled { opacity: 0.5; }
   .ok { font-size: 12.5px; color: var(--ok); font-weight: 600; }
+  .ok.sm { font-size: 11.5px; margin-bottom: 8px; display: inline-block; }
   .testhint { color: var(--varn); }
   .testpath { font-family: var(--mono, ui-monospace, monospace); font-size: 11.5px; }
   .synkfel { font-size: 12.5px; color: #C0453E; font-weight: 600; }
   .statusbtn { border: 1px solid var(--div); background: var(--panel); border-radius: 7px;
     padding: 8px 14px; font-size: 12.5px; font-weight: 600; color: var(--t-head); flex: none; }
   .statusbtn:disabled { opacity: 0.5; }
+  .statusbtn.sm { padding: 6px 11px; font-size: 11.5px; }
   .deploystatus { font-size: 12.5px; color: var(--t-mut); font-weight: 600; }
 </style>

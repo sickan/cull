@@ -1034,6 +1034,18 @@ export async function publiceraPagangMatcher(test = false) {
   return wait({ ok: true, antal: 4, borttagna: 0, visa: true, test })
 }
 
+// ── Sport-startsidan: hero-kurering (topp-flaggan i publicerad frontmatter) ──
+export async function sportTopp() {
+  const api = brygga()
+  if (api) return api.sport_topp()
+  return wait({ ok: true, lage: 'senaste', innehall_id: null })
+}
+export async function sattSportTopp(lage, innehallId = null, test = false) {
+  const api = brygga()
+  if (api) return api.satt_sport_topp(lage, innehallId, test)
+  return wait({ ok: true, andrade: lage === 'valj' ? 1 : 0, test })
+}
+
 // ── Mobil Live ──────────────────────────────────────────────────────────────
 // `hamtaLive` pollas av Publicera-panelen och returnerar mobilens live-tillstånd
 // (malskyttar redan serialiserad till appens strängformat, + falt_uppdaterad så

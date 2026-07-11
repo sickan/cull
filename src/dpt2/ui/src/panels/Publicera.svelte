@@ -17,6 +17,7 @@
     pagangMatcher, sattPagangVisa, publiceraPagangMatcher, hamtaLive, synkaLivePaket,
   } from '../lib/api.js'
   import ResultatRemsa from '../lib/ResultatRemsa.svelte'
+  import { losText as losTextDelad, tokenVals } from '../lib/webtext.js'
   import { farskaFalt } from '../lib/live_merge.js'
   import { grenFarg } from '../lib/gren.js'
   import { testMode } from '../lib/testlage.js'
@@ -276,20 +277,13 @@
   let galleriUrl = ''
   let hemsidaUrl = ''
 
-  // Token-upplösning (samma modell som Innehåll/SoMe-bildtexten)
-  const _hashtag = (s) => (s || '').replace(/[^\p{L}\p{N}]/gu, '')
+  // Token-upplösning — delad modell i lib/webtext.js (Innehåll läser samma
+  // referat till matchartikeln och måste tolka texten exakt lika).
   function handle(namn) { return (lagAlla.find((x) => x.namn === namn)?.instagram || '').replace(/^@/, '') }
   function losText(text, { web = false } = {}) {
-    const vals = {
-      resultat: resNu.resultat, målskyttar: resNu.malskyttar,
-      arena: match?.arena || '', motståndare: match?.lag_borta || '',
-      '@lag': handle(match?.lag_hemma) ? '@' + handle(match?.lag_hemma) : '',
-      '#liga': match?.liga ? '#' + _hashtag(match.liga) : '',
-      galleri: galleriUrl || '', hemsida: web ? '' : (hemsidaUrl || ''),  // webben självlänkar inte
-    }
-    let ut = (text || '').replace(/\{([^{}]+)\}/g, (whole, key) => (key in vals ? vals[key] : whole))
-    if (web) ut = ut.replace(/[#@][\p{L}\p{N}_]+/gu, '').replace(/ *\n/g, '\n').trim()
-    return ut.replace(/[ \t]{2,}/g, ' ').trim()
+    return losTextDelad(text,
+      tokenVals({ match, res: resNu, handle: handle(match?.lag_hemma), galleriUrl, hemsidaUrl, web }),
+      { web })
   }
   // B2: realtidsförhandsvisning kopplad till texten (social med @/#, webb utan).
   $: capSocial = losText(caption)
@@ -297,11 +291,13 @@
 
   // ── Steg 2: Skicka till (kanaler + beskärning) ──────────────────────────────
   // Format-koder = backendens (story_overlay.FORMAT_H). Etikett = kod med ':'.
+  // §4 (handoff 11 jul): Webbartikel-kanalen borttagen — webbartikeln byggs i
+  // Innehåll (matchartikel-editorn). Matchpublicering gör Live/SoMe och
+  // PRODUCERAR referatet/materialet som Innehåll hämtar.
   const KANALER = [
     { key: 'live', namn: 'Live-story', under: 'Instagram Story', format: ['9x16'], wide: false },
     { key: 'ig', namn: 'IG-inlägg', under: 'Instagram · karusell', format: ['4x5', '1x1'], wide: false },
     { key: 'fb', namn: 'Facebook', under: 'Facebook-sida', format: ['1x1', '4x5', '1.91x1'], wide: false },
-    { key: 'webb', namn: 'Webbartikel', under: 'Hemsida · Hero', format: ['2x1', '16x9'], wide: true },
   ]
   const fmtEti = (f) => f.replace('x', ':')
   // Kanaler bär bara format + på/av — beskärningen (fokus/zoom) sitter på FOTOT
@@ -310,7 +306,6 @@
     live: { on: true, fmt: '9x16' },
     ig: { on: true, fmt: '4x5' },
     fb: { on: false, fmt: '1x1' },
-    webb: { on: true, fmt: '2x1' },
   }
   function toggleCh(k) { ch[k].on = !ch[k].on; ch = ch }
   function sattFmt(k, f) { ch[k].fmt = f; ch = ch }
@@ -347,16 +342,6 @@
   // och körs av EN funktion — både vid publicering och vid omförsök.
   const _crop = (p) => ({ path: p.path, fokus: p.fokus, zoom: p.zoom })
   function kanalConfig(key) {
-    if (key === 'webb') {
-      return { typ: 'webb', payload: {
-        typ: 'match', match_id: match.id, titel: fixtur,
-        hem: match.lag_hemma, borta: match.lag_borta, serie: match.liga, sport: match.sport,
-        datum: match.datum, resultat: resNu.resultat, mellan: resNu.mellan, arena: match.arena,
-        malskyttar: resNu.malskyttar, pixieset: galleriUrl, body: losText(caption, { web: true }),
-        figurer: selectedPaths.map((p) => ({ bild: p, alt: '', bildtext: '', src: '' })),
-        hero: (coverPath.split('/').pop() || ''), heroKalla: coverPath,
-        heroFormat: ch.webb.fmt, heroFokus: coverPhoto?.fokus, heroZoom: coverPhoto?.zoom } }
-    }
     const bilder = key === 'live'
       ? (coverPhoto ? [_crop(coverPhoto)] : [])
       : ordnadeFoton.map(_crop)
@@ -371,6 +356,8 @@
 
   async function korKanal(key, cfg, test, test_mapp) {
     try {
+      // 'webb' skapas inte längre här (§4) — grenen finns kvar för "Försök
+      // igen" på material sparade FÖRE borttagningen (config bor på raden).
       if (cfg.typ === 'webb') {
         const r = await publiceraInnehallNatet({ ...cfg.payload, test_mapp }, test)
         return { ok: !!r?.ok, text: r?.fel || (test ? 'Testfil · 1 bild' : 'Publicerad') }
@@ -386,7 +373,10 @@
   }
 
   // 'story' är den gamla nyckeln för Live-storyn — legacy-rader bär den ännu.
-  const KANALNAMN = { ...Object.fromEntries(KANALER.map((k) => [k.key, k.namn])), story: 'IG Story' }
+  // 'webb' likaså: kanalen är borta ur "Skicka till" (§4) men gamla material-
+  // rader kan bära den och måste kunna visas + köras om.
+  const KANALNAMN = { ...Object.fromEntries(KANALER.map((k) => [k.key, k.namn])),
+    story: 'IG Story', webb: 'Webbartikel' }
   const felKanaler = (chRes) => Object.keys(chRes).filter((k) => chRes[k] !== 'ok')
 
   // Skriver utfallet på materialraden: status + per-kanal-resultat + configen
@@ -622,11 +612,11 @@
 </script>
 
 <div class="panel">
-  <!-- Huvud -->
+  <!-- Huvud — 6a: enrads, ingen kicker; primär åtgärd till höger. -->
   <div class="topp">
-    <div>
-      <div class="kicker">Skapa en gång · publicera överallt</div>
+    <div class="topptitel">
       <h1 class="scd">Matchpublicering</h1>
+      <span class="toppsub">Skapa en gång · publicera överallt</span>
     </div>
     <button class="livenu" on:click={liveOppna}><span class="ldot"></span>Live nu — story direkt</button>
   </div>
@@ -713,7 +703,7 @@
             </div>
             <div class="ceverktyg">
               <div class="fmtprev"><span class="ftxt">Visa som</span>
-                {#each ['9x16', '4x5', '1x1', '2x1'] as f}<button class="fmtchip" class:on={previewFmt === f} on:click={() => (previewFmt = f)}>{fmtEti(f)}</button>{/each}
+                {#each ['9x16', '4x5', '1x1'] as f}<button class="fmtchip" class:on={previewFmt === f} on:click={() => (previewFmt = f)}>{fmtEti(f)}</button>{/each}
               </div>
               <div class="zoomrad">
                 <input type="range" min="1" max="2.6" step="0.05" value={aktivFoto.zoom} on:input={(e) => sattFotoZoom(aktivIdx, e.target.value)} />
@@ -759,7 +749,8 @@
       <div class="tokrad"><span class="tlbl">Ton:</span>
         {#each TONER as t}<button class="tonchip" class:on={ton === t} on:click={() => (ton = t)}>{t}</button>{/each}</div>
       {#if genFel}<div class="genfel">{genFel}</div>{/if}
-      <div class="hint">Sociala kanaler får @ och #. <b>Webben får samma text utan @/#</b> (rena namn, inga hashtags).</div>
+      <div class="hint">Sociala kanaler får @ och #. <b>Webben får samma text utan @/#</b> (rena namn, inga hashtags)
+        — webbartikeln byggs i <b>Innehåll</b>, som hämtar referatet härifrån.</div>
       <div class="prevgrid">
         <div class="prevkol">
           <div class="prevlbl">Förhandsvisning · sociala</div>
@@ -782,12 +773,12 @@
       <div class="f"><label>Hemsida <span class="lmut">— matchreferat</span></label>
         <input class="mono" bind:value={hemsidaUrl} placeholder="dalecarliaphoto.se/matcher/…" /></div>
     </div>
+    <!-- §4: webb-placeringschipet borta — webbartikeln byggs i Innehåll. -->
     <div class="placering">
       <span class="pcaps">Så placeras de:</span>
       <span class="pchip">Live-story · länk-sticker</span>
       <span class="pchip">IG · bio + första kommentar</span>
       <span class="pchip">Facebook · i inlägget</span>
-      <span class="pchip">Webb · galleri i texten (ingen hemsida-länk)</span>
     </div>
   </div>
 
@@ -816,7 +807,7 @@
               <div class="prevtom">Välj omslag i Steg 1</div>
             {/if}
           </div>
-          <div class="crophint">{k.key === 'live' ? 'Omslaget med overlay' : k.key === 'webb' ? 'Omslaget som hero' : 'Omslag + valda foton, var sin crop'} · {fmtEti(ch[k.key].fmt)}</div>
+          <div class="crophint">{k.key === 'live' ? 'Omslaget med overlay' : 'Omslag + valda foton, var sin crop'} · {fmtEti(ch[k.key].fmt)}</div>
         </div>
       </div>
     {/each}
@@ -1039,9 +1030,10 @@
 
 <style>
   .panel { padding: 22px 30px 20px; }   /* full bredd (designen fyller hela ytan) */
-  .topp { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-  .kicker { font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--acc); margin-bottom: 6px; }
-  h1 { margin: 0; font-size: 27px; font-weight: 700; color: var(--t-head); }
+  .topp { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+  .topptitel { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .toppsub { font-size: 12.5px; color: var(--t-mut); }
+  h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--t-head); }   /* 6a: paneltitel 20px */
   .livenu { display: inline-flex; align-items: center; gap: 8px; background: var(--acc-soft); border: 1px solid var(--acc-border);
     color: var(--t-head); border-radius: 10px; padding: 9px 14px; font-size: 12.5px; font-weight: 600; }
   .ldot { width: 7px; height: 7px; border-radius: 50%; background: #E0607F; box-shadow: 0 0 8px #E0607F; flex: none; }
