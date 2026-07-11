@@ -647,6 +647,13 @@ export async function listaMinnesKort() {
   ]})
 }
 
+export async function rataUppMapp(mapp) {
+  const api = brygga()
+  if (api) return api.rata_upp_mapp(mapp)
+  return wait({ ok: true, n_raw: 247, n_skriv: 247,
+    meddelande: 'XMP-sidecars skrivna för 247/247 raw-filer.' })
+}
+
 // fakta = redan kända matchfakta ({resultat, mellan, malskyttar, arena, datum,
 // liga}) — vävs in i Claude-frågan så websökning inte behöver leta upp sånt
 // appen redan vet (se tjanster/bildsvep.py:bygg_fraga).
