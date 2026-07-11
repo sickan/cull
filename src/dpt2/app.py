@@ -1099,6 +1099,42 @@ class Api:
         uid = store.spara_urval(self.conn, kalla=mapp, bilder=len(filer))
         return self.leverera_urval(uid, config)
 
+    def lista_minneskort(self):
+        """Sök upp monterade minneskort och räkna kameralåsta (protected) bilder på varje.
+        Returnerar {ok, kort: [{namn, path, skyddade}, ...]}."""
+        import stat
+        from pathlib import Path
+
+        kort = []
+        volumes = Path("/Volumes")
+        if not volumes.exists():
+            return {"ok": True, "kort": []}
+
+        # Sök monterade DCIM-mappar (typisk SD/CF-struktur)
+        for vol in volumes.iterdir():
+            if not vol.is_dir():
+                continue
+            dcim = vol / "DCIM"
+            if not dcim.exists():
+                continue
+
+            # Räkna skyddade bilder
+            skyddade = 0
+            try:
+                for f in dcim.rglob("*"):
+                    if f.is_file() and f.suffix.lower() in {".nef", ".jpg", ".cr3", ".cr2", ".arw", ".dng", ".raf", ".rw2", ".orf"}:
+                        try:
+                            if f.stat().st_flags & stat.UF_IMMUTABLE:
+                                skyddade += 1
+                        except (OSError, AttributeError):
+                            pass
+            except (OSError, PermissionError):
+                continue
+
+            kort.append({"namn": vol.name, "path": str(vol), "skyddade": skyddade})
+
+        return {"ok": True, "kort": kort}
+
     def snabbplock_kortrot(self, kort_path, ut_mapp=None, oppna_lr=True):
         """Snabbplock: kopierar ENBART kameralåsta (protect/uchg) bildfiler från
         kortet utan AI eller scoring. Fristående snabbväg för paus-fotografering.
