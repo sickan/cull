@@ -1101,8 +1101,10 @@ class Api:
 
     def lista_minneskort(self):
         """Sök upp monterade minneskort och räkna kameralåsta (protected) bilder på varje.
+        Läser protect-flaggan från EXIF-data (Nikon sparar den där, inte som file-attribut).
         Returnerar {ok, kort: [{namn, path, skyddade}, ...]}."""
-        import stat
+        import subprocess
+        import json
         from pathlib import Path
 
         kort = []
@@ -1118,15 +1120,20 @@ class Api:
             if not dcim.exists():
                 continue
 
-            # Räkna skyddade bilder
+            # Räkna skyddade bilder (läs EXIF protect-flag)
             skyddade = 0
             try:
                 for f in dcim.rglob("*"):
                     if f.is_file() and f.suffix.lower() in {".nef", ".jpg", ".cr3", ".cr2", ".arw", ".dng", ".raf", ".rw2", ".orf"}:
                         try:
-                            if f.stat().st_flags & stat.UF_IMMUTABLE:
+                            # exiftool: -Protection returnerar "Protected" eller "Unprotected"
+                            result = subprocess.run(
+                                ["exiftool", "-Protection", "-s", "-n", str(f)],
+                                capture_output=True, timeout=1, text=True, check=False
+                            )
+                            if "1" in result.stdout or "Protected" in result.stdout:
                                 skyddade += 1
-                        except (OSError, AttributeError):
+                        except (OSError, subprocess.TimeoutExpired):
                             pass
             except (OSError, PermissionError):
                 continue
