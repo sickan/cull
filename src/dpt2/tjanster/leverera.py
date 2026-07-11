@@ -52,6 +52,50 @@ def hough_vinkel(jpg_path):
     return xmp_writer.berakna_uppratning(img)
 
 
+def skriv_iptc(filer, *, matchnamn="", fotograf="", spelarnamn_per_fil=None, logg=print):
+    """Skriver IPTC-bildtexter (Caption, Keywords, Photographer).
+
+    matchnamn:           match-beskrivning (läggs i Caption)
+    fotograf:            fotografens namn
+    spelarnamn_per_fil:  {Path: "spelarnamn"} dict för keywords
+
+    Returnerar {'skrivna': n}. IPTC skrivs direkt i raw/jpg-filerna via exiftool."""
+    import subprocess
+    import json
+
+    if not (matchnamn or fotograf or spelarnamn_per_fil):
+        return {"skrivna": 0}
+
+    spelarnamn_per_fil = spelarnamn_per_fil or {}
+    skrivna = 0
+
+    for f in filer:
+        # Bygg IPTC-kommando (exiftool)
+        cmd = ["exiftool", "-overwrite_original"]
+
+        if matchnamn:
+            cmd.append(f"-IPTC:Caption-Abstract={matchnamn}")
+        if fotograf:
+            cmd.append(f"-IPTC:Photographer={fotograf}")
+            cmd.append(f"-XMP:Creator={fotograf}")
+
+        spelarnamn = spelarnamn_per_fil.get(f, "")
+        if spelarnamn:
+            cmd.append(f"-IPTC:Keywords={spelarnamn}")
+
+        cmd.append(str(f))
+
+        try:
+            subprocess.run(cmd, capture_output=True, timeout=5, check=False)
+            skrivna += 1
+        except Exception:
+            pass
+
+    if skrivna:
+        logg(f"  IPTC: {skrivna} bilder märkta (fotograf, matchinfo, spelarnamn).")
+    return {"skrivna": skrivna}
+
+
 def skriv_sidecars(filer, *, husstil_path=None, exp_bump=0.0, xmp_brus=False,
                    objektiv_pa_raw=True, vinkel_for=None, iso_for=None,
                    logg=print):

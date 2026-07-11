@@ -1055,6 +1055,27 @@ class Api:
             exp_bump=float(config.get("expKnuff") or 0.0),
             objektiv_pa_raw=config.get("objektiv", True))
 
+        # IPTC-bildtexter (fotograf + matchinfo + spelarnamn från roster)
+        iptc_res = {"skrivna": 0}
+        if config.get("iptc"):
+            # Matchinfo från urval/match
+            match = None
+            if urval.get("match_id"):
+                match = store.hamta_match(self.conn, urval["match_id"])
+            matchnamn = ""
+            if match:
+                matchnamn = f"{match.get('lag_hemma', '')} – {match.get('lag_borta', '')}"
+                if match.get("resultat"):
+                    matchnamn += f" {match['resultat']}"
+                matchnamn = matchnamn.strip(" –").strip()
+
+            fotograf = config.get("fotograf", "").strip() or "Stig Johansson – Dalecarlia Photo AB"
+
+            iptc_res = leverera.skriv_iptc(
+                filer,
+                matchnamn=matchnamn,
+                fotograf=fotograf)
+
         store.satt_urval_status(self.conn, urval_id, "levererad")
 
         # Öppna i Lightroom (om export-rot eller config säger det)
@@ -1064,7 +1085,8 @@ class Api:
                 self.oppna_i_lightroom(str(lr_mapp))
 
         return {"ok": True, "status": "levererad", "path": str(ut_dir) if ut_dir else None,
-                "kopierade": len(kopierade), "skrivna": res["skrivna"], "ratade": res["ratade"]}
+                "kopierade": len(kopierade), "skrivna": res["skrivna"], "ratade": res["ratade"],
+                "iptc": iptc_res["skrivna"]}
 
     def leverera_egen_mapp(self, mapp, config=None):
         """§6: bildkälla i Leverera — 'Egen mapp' (t.ex. redan gallrat i Photo
