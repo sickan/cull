@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -491,6 +491,25 @@ def _migrera(conn, fran_version):
         # en URL faller den tyst tillbaka på monogram i stället för klubbmärke.
         if _har_tabell(conn, "lag") and not _har_kolumn(conn, "lag", "logga_url"):
             conn.execute("ALTER TABLE lag ADD COLUMN logga_url TEXT;")
+    if fran_version < 21:
+        # v21: fotoackreditering för matcher. Status per fotojobb (egen tabell —
+        # jobben bor hos Calendar Sync-tjänsten, jfr fotojobb_notering) +
+        # arrangörens regler på tävlingen (press-adress, "begär senast"-dagar).
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS ackreditering (
+          fotojobb_id        TEXT PRIMARY KEY,
+          status             TEXT NOT NULL DEFAULT 'ejbegard'
+                               CHECK (status IN ('ejbegard','begard','beviljad','nekad')),
+          note               TEXT NOT NULL DEFAULT '',
+          paminnelse_jobb_id TEXT
+        )""")
+        if _har_tabell(conn, "tavling"):
+            for kol, ddl in (
+                ("press_email", "ALTER TABLE tavling ADD COLUMN press_email TEXT"),
+                ("ackr_dagar", "ALTER TABLE tavling ADD COLUMN ackr_dagar INTEGER"),
+            ):
+                if not _har_kolumn(conn, "tavling", kol):
+                    conn.execute(ddl)
 
 
 def _har_kolumn(conn, tabell, kolumn):

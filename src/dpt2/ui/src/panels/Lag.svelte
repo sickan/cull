@@ -239,7 +239,7 @@
     const id = 'ny-' + Date.now()
     tavlingar = [...tavlingar, { id, namn: '', typ: 'liga',
       sport: 'fotboll', gren: 'dam', fran: '', till: '', ort: '', arena: '',
-      hemsida: '', logga: null, kalender: 0 }]
+      hemsida: '', logga: null, kalender: 0, press_email: '', ackr_dagar: null }]
     apnaTavling({ id })
   }
 
@@ -584,6 +584,12 @@
                       <input bind:value={t.arena} on:change={() => gerTavling(t)} placeholder="Arena" />
                     </div>
                     <input bind:value={t.hemsida} on:change={() => gerTavling(t)} placeholder="Hemsida" />
+                    <!-- Ackreditering: arrangörens regler — pressadressen förifyller
+                         mailet, dagarna ger "begär senast" (tomt = 10 dagar). -->
+                    <div class="dubbel">
+                      <input bind:value={t.press_email} on:change={() => gerTavling(t)} placeholder="Pressadress (ackreditering)" />
+                      <input bind:value={t.ackr_dagar} on:change={() => gerTavling(t)} inputmode="numeric" placeholder="Ackr: dagar före match (10)" />
+                    </div>
                     {#if sparad === t.id}<span class="flash">✓ sparat</span>{/if}
                     <div class="kalfot">
                       <span class="kalik">

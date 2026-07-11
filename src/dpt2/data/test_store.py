@@ -251,6 +251,50 @@ class TestFotojobbNotering(unittest.TestCase):
         self.assertEqual(store.noteringar_for_fotojobb(self.c, [None]), {})
 
 
+class TestAckreditering(unittest.TestCase):
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+
+    def test_grundlage_utan_rad(self):
+        a = store.hamta_ackreditering(self.c, "jobb1")
+        self.assertEqual(a, {"status": "ejbegard", "note": "",
+                             "paminnelse_jobb_id": None})
+        self.assertEqual(store.ackreditering_for_fotojobb(self.c, ["jobb1"]), {})
+
+    def test_satt_status_och_note(self):
+        store.satt_ackreditering(self.c, "jobb1", status="begard")
+        store.satt_ackreditering(self.c, "jobb1", note="Väst vid mittlinjen")
+        a = store.hamta_ackreditering(self.c, "jobb1")
+        self.assertEqual(a["status"], "begard")          # note-skrivning rör inte status
+        self.assertEqual(a["note"], "Väst vid mittlinjen")
+        batch = store.ackreditering_for_fotojobb(self.c, ["jobb1", "jobb2"])
+        self.assertEqual(list(batch), ["jobb1"])
+
+    def test_grundlage_raderar_raden(self):
+        # Nollställd till Ej begärd + tom not = grundläget → raden ska bort,
+        # tabellen bär bara avvikelser.
+        store.satt_ackreditering(self.c, "jobb1", status="beviljad", note="x")
+        store.satt_ackreditering(self.c, "jobb1", status="ejbegard", note="")
+        self.assertEqual(store.ackreditering_for_fotojobb(self.c, ["jobb1"]), {})
+
+    def test_okand_status_kastar(self):
+        with self.assertRaises(ValueError):
+            store.satt_ackreditering(self.c, "jobb1", status="kanske")
+
+    def test_paminnelse_id_satts_och_rensas(self):
+        store.satt_ackreditering(self.c, "jobb1", paminnelse_jobb_id="rem1")
+        self.assertEqual(store.hamta_ackreditering(self.c, "jobb1")
+                         ["paminnelse_jobb_id"], "rem1")
+        store.satt_ackreditering(self.c, "jobb1", paminnelse_jobb_id=None)
+        self.assertEqual(store.ackreditering_for_fotojobb(self.c, ["jobb1"]), {})
+
+    def test_radera(self):
+        store.satt_ackreditering(self.c, "jobb1", status="nekad")
+        store.radera_ackreditering(self.c, "jobb1")
+        self.assertEqual(store.hamta_ackreditering(self.c, "jobb1")["status"],
+                         "ejbegard")
+
+
 class TestLagTavling(unittest.TestCase):
     def setUp(self):
         self.c = db.oppna(":memory:")
@@ -308,6 +352,24 @@ class TestLagTavling(unittest.TestCase):
         store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll")  # rör ej
         t = store.lista_tavlingar(self.c)[0]
         self.assertEqual(t["hemsida"], "damallsvenskan.se")   # bevarat
+
+    def test_upsert_tavling_ackrediteringsregler(self):
+        store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll",
+                             press_email="press@obos.se", ackr_dagar=14)
+        store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll")  # rör ej
+        t = store.lista_tavlingar(self.c)[0]
+        self.assertEqual(t["press_email"], "press@obos.se")   # bevarat
+        self.assertEqual(t["ackr_dagar"], 14)
+        # tom sträng rensar (None = "rör inte" — fältet skickas alltid av UI:t)
+        store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll",
+                             press_email="", ackr_dagar="")
+        t = store.lista_tavlingar(self.c)[0]
+        self.assertIsNone(t["press_email"])
+        self.assertIsNone(t["ackr_dagar"])
+        # ogiltigt dagtal får inte fälla sparningen — tolkas som orimligt → NULL
+        store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll",
+                             ackr_dagar="tio")
+        self.assertIsNone(store.lista_tavlingar(self.c)[0]["ackr_dagar"])
 
     def test_hamta_tavling(self):
         tid = store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll",

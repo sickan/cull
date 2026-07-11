@@ -26,7 +26,9 @@ CREATE TABLE tavling (
   ort       TEXT,
   arena     TEXT,
   logga     TEXT,                       -- filsökväg
-  kalender  INTEGER NOT NULL DEFAULT 0  -- fotojobb-utkast skapat (se fotojobb_utkast)
+  kalender  INTEGER NOT NULL DEFAULT 0, -- fotojobb-utkast skapat (se fotojobb_utkast)
+  press_email TEXT,                     -- arrangörens press/ackrediteringsadress
+  ackr_dagar  INTEGER                   -- "begär senast" = matchdatum − dagar (tom = default)
 );
 
 -- Lokalt fotojobb-utkast (tävling → "Lägg i Google Calendar"). Väntar på att
@@ -126,6 +128,18 @@ CREATE TABLE fotojobb_match (
 CREATE TABLE fotojobb_notering (
   fotojobb_id TEXT PRIMARY KEY,
   notering    TEXT NOT NULL
+);
+
+-- Fotoackreditering per matchjobb (bara kategori Sport). Skild från jobbet
+-- självt — jobben bor hos Calendar Sync-tjänsten, samma textnyckel-rymd som
+-- fotojobb_match/fotojobb_notering. paminnelse_jobb_id pekar på tjänstens
+-- "Begär ackreditering senast"-event (speglas till Google Calendar).
+CREATE TABLE ackreditering (
+  fotojobb_id        TEXT PRIMARY KEY,
+  status             TEXT NOT NULL DEFAULT 'ejbegard'
+                       CHECK (status IN ('ejbegard','begard','beviljad','nekad')),
+  note               TEXT NOT NULL DEFAULT '',
+  paminnelse_jobb_id TEXT
 );
 
 -- Uttagen trupp per match (subset av lagets spelare) + vem som startade.

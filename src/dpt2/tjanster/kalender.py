@@ -94,6 +94,16 @@ class Kalender:
         status, _ = self._anrop("DELETE", f"/api/events/{jobb_id}", auth=True)
         return {"ok": status in (200, 204), "status": status}
 
+    # ── mail (ackreditering — skickas via kontots Gmail hos tjänsten) ─────────
+    def skicka_mail(self, till, amne, kropp):
+        """Skickar ett mail via tjänstens /api/mail/send (Gmail API med samma
+        Google-konto som kalendern). Returnerar {ok, status, fel}."""
+        status, data = self._anrop(
+            "POST", "/api/mail/send",
+            body={"to": till, "subject": amne, "body": kropp}, auth=True)
+        fel = (data or {}).get("error") if isinstance(data, dict) else None
+        return {"ok": status == 200, "status": status, "fel": fel}
+
 
 def _packa_upp(data):
     """Tjänsten svarar `{event: {...}}` på POST/PUT (routes/events.ts) — packa

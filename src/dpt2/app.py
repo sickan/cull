@@ -15,7 +15,7 @@ import json
 import os
 import re
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from dpt2.data import db, store, sportprofil
 from dpt2.motorer import story_overlay          # hitta_logga (gamla filkonventionen)
@@ -37,6 +37,13 @@ DEV_URL = "http://localhost:5173"
 # synkas. Match utan fastställd avsparkstid blir heldag i stället.
 MATCH_LANGD_MIN = {"fotboll": 120, "volleyboll": 150, "handboll": 90,
                    "beachvolley": 90, "innebandy": 120, "tennis": 120}
+
+# Ackreditering: "begär senast" = matchdatum − arrangörens dagar (tavling.
+# ackr_dagar); okänd arrangör faller tillbaka på 10 dagar (handoff §5).
+ACKR_DEFAULT_DAGAR = 10
+# Markör i description på tjänstens påminnelse-event — så de kan kännas igen
+# och döljas i Fotojobb-listan (de är meta, inte uppdrag) och på publika ytor.
+ACKR_PAMINNELSE_MARKOR = "[dpt-ackr-paminnelse]"
 
 
 class Api:
@@ -68,6 +75,9 @@ class Api:
     def spara_match(self, match):
         mid = store.spara_match(self.conn, match)
         self._synka_kalenderjobb(mid)
+        # Nytt datum/tävling flyttar "begär senast" — håll påminnelsen i fas.
+        for jid in store.fotojobb_for_match(self.conn, mid):
+            self._synka_ackr_paminnelse(jid)
         return {"ok": True, "id": mid}
 
     def satt_resultat(self, match_id, resultat, mellan, malskyttar):
@@ -294,6 +304,9 @@ class Api:
         if not pa:
             for jid in lankade:
                 store.lanka_fotojobb_match(self.conn, jid, None)
+                # Jobbet försvinner → dess ackreditering (och påminnelsen i
+                # kalendern) ska inte leva kvar föräldralös.
+                self._stada_ackreditering(jid)
                 try:
                     self.kalender.radera_jobb(jid)
                 except Exception as e:
@@ -312,6 +325,7 @@ class Api:
         jid = (r.get("jobb") or {}).get("id")
         if jid:
             store.lanka_fotojobb_match(self.conn, jid, match_id)
+            self._synka_ackr_paminnelse(jid)
         return {"ok": True, "synk_jobb_id": jid}
 
     def hamta_trupp(self, match_id):
@@ -405,7 +419,9 @@ class Api:
             ort=tavling.get("ort"),
             arena=tavling.get("arena"), hemsida=tavling.get("hemsida"),
             fran=tavling.get("fran"), till=tavling.get("till"),
-            kalender=bool(tavling.get("kalender")))
+            kalender=bool(tavling.get("kalender")),
+            press_email=tavling.get("press_email"),
+            ackr_dagar=tavling.get("ackr_dagar"))
         return {"ok": bool(tid), "id": tid}
 
     def radera_lag(self, id):
@@ -559,12 +575,26 @@ class Api:
                     and j.get("status") != "cancelled"] if isinstance(jobb, list) else []
         except Exception:
             jobb = []
+        # Ackrediteringspåminnelserna är meta (skapade av oss, lever i Google
+        # Calendar) — inte uppdrag. De ska aldrig visas som Fotojobb-rader.
+        jobb = [j for j in jobb
+                if ACKR_PAMINNELSE_MARKOR not in (j.get("description") or "")]
         alla = utkast + jobb
         ider = [j.get("id") for j in alla]
         matchref = store.matchref_for_fotojobb(self.conn, ider)
         noteringar = store.noteringar_for_fotojobb(self.conn, ider)
+        ackr = store.ackreditering_for_fotojobb(self.conn, ider)
         for j in alla:
             j["match_id"] = matchref.get(j.get("id"))
+            # Ackreditering finns bara på matcher (Sport) — övriga kategorier
+            # saknar fältet helt (handoff §5).
+            if j.get("category") == "Sport":
+                a = ackr.get(j.get("id")) or {}
+                j["ackreditering"] = {"status": a.get("status") or "ejbegard",
+                                      "note": a.get("note") or ""}
+                senast, press = self._ackr_regel(j.get("match_id"))
+                j["begar_senast"] = senast
+                j["press_email"] = press
             if j.get("utkast"):
                 j["notering"] = noteringar.get(j.get("id"), "")
             else:
@@ -615,6 +645,9 @@ class Api:
                     # Noteringen bor hos tjänsten nu — städa den lokala
                     # fallback-raden så gamla noter inte spökar efter migrering.
                     store.satt_fotojobb_notering(self.conn, sparat_id, "")
+                # Match-koppling/datum/kategori kan ha ändrats → håll
+                # "begär senast"-påminnelsen i Google Calendar i fas.
+                self._synka_ackr_paminnelse(sparat_id)
         return r
 
     def radera_fotojobb(self, jobb_id):
@@ -623,6 +656,7 @@ class Api:
         (de har inga främmandenycklar mot jobbet — det bor hos tjänsten)."""
         store.lanka_fotojobb_match(self.conn, jobb_id, None)
         store.satt_fotojobb_notering(self.conn, jobb_id, "")
+        self._stada_ackreditering(jobb_id)
         if store.hamta_fotojobb_utkast(self.conn, jobb_id):
             store.radera_fotojobb_utkast(self.conn, jobb_id)
             return {"ok": True}
@@ -661,7 +695,120 @@ class Api:
             store.lanka_fotojobb_match(self.conn, utkast_id, None)
             store.satt_fotojobb_notering(self.conn, utkast_id, "")
             store.radera_fotojobb_utkast(self.conn, utkast_id)
+            if nytt_id:
+                self._synka_ackr_paminnelse(nytt_id)
         return r
+
+    # ── Ackreditering (fotoackreditering för matcher — bara Sport) ───────────
+    def _stada_ackreditering(self, jobb_id):
+        """Tar bort jobbets ackreditering + påminnelse-eventet i kalendern
+        (best-effort) — används när jobbet självt försvinner."""
+        a = store.hamta_ackreditering(self.conn, jobb_id)
+        if a.get("paminnelse_jobb_id"):
+            try:
+                self.kalender.radera_jobb(a["paminnelse_jobb_id"])
+            except Exception:
+                pass
+        store.radera_ackreditering(self.conn, jobb_id)
+
+    def _ackr_regel(self, match_id):
+        """(begär_senast, press_email) ur den kopplade matchens arrangörsregel:
+        tavling.ackr_dagar före matchdatumet (default 10 när arrangören saknar
+        regel) + tavling.press_email. Utan match/datum finns inget att härleda
+        → (None, "")."""
+        if not match_id:
+            return None, ""
+        m = store.hamta_match(self.conn, match_id)
+        if not m:
+            return None, ""
+        t = (store.hamta_tavling(self.conn, m.get("tavling_id"))
+             if m.get("tavling_id") else None) or {}
+        press = t.get("press_email") or ""
+        senast = None
+        if m.get("datum"):
+            try:
+                dagar = int(t.get("ackr_dagar") or ACKR_DEFAULT_DAGAR)
+                senast = (datetime.strptime(m["datum"], "%Y-%m-%d")
+                          - timedelta(days=dagar)).strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+        return senast, press
+
+    def _synka_ackr_paminnelse(self, jobb_id):
+        """Speglar "begär senast" till Google Calendar som heldagspåminnelse
+        (via tjänsten, markerad så den döljs i Fotojobb-listan). Påminnelsen
+        finns medan status är Ej begärd och regeln ger ett datum; den tas bort
+        så fort begäran är skickad/avgjord. Tyst best-effort — den får aldrig
+        blockera statusändringen eller sparningen den rider på."""
+        if not self.kalender.har_nyckel():
+            return
+        a = store.hamta_ackreditering(self.conn, jobb_id)
+        match_id = store.matchref_for_fotojobb(self.conn, [jobb_id]).get(jobb_id)
+        senast, _ = self._ackr_regel(match_id)
+        pid = a.get("paminnelse_jobb_id")
+        vill_ha = a["status"] == "ejbegard" and bool(senast)
+        try:
+            if vill_ha:
+                m = store.hamta_match(self.conn, match_id) or {}
+                namn = " – ".join(x for x in (m.get("lag_hemma"),
+                                              m.get("lag_borta")) if x)
+                data = {"title": f"Begär ackreditering – {namn}" if namn
+                        else "Begär ackreditering",
+                        "start_at": senast, "end_at": senast, "all_day": True,
+                        "description": "Fotoackreditering ska vara begärd "
+                        f"senast idag. {ACKR_PAMINNELSE_MARKOR}"}
+                if pid and not self.kalender.uppdatera_jobb(pid, data).get("ok"):
+                    pid = None       # borttagen hos tjänsten → skapa ny
+                if not pid:
+                    r = self.kalender.skapa_jobb(data)
+                    nytt = (r.get("jobb") or {}).get("id") if r.get("ok") else None
+                    if nytt:
+                        store.satt_ackreditering(self.conn, jobb_id,
+                                                 paminnelse_jobb_id=nytt)
+            elif pid:
+                self.kalender.radera_jobb(pid)
+                store.satt_ackreditering(self.conn, jobb_id,
+                                         paminnelse_jobb_id=None)
+        except Exception:
+            pass
+
+    def satt_ackreditering(self, jobb_id, status=None, note=None):
+        """Statuspiller + Svar/notering i matchens editor. Håller
+        kalenderpåminnelsen i fas med statusen."""
+        try:
+            store.satt_ackreditering(self.conn, jobb_id,
+                                     status=status, note=note)
+        except ValueError as e:
+            return {"ok": False, "fel": str(e)}
+        self._synka_ackr_paminnelse(jobb_id)
+        a = store.hamta_ackreditering(self.conn, jobb_id)
+        return {"ok": True, "ackreditering": {"status": a["status"],
+                                              "note": a["note"]}}
+
+    def skicka_ackr_mail(self, jobb_id, till, amne, kropp):
+        """Väg B: skickar ackrediteringsmailet via användarens Gmail (tjänsten
+        håller kontot) och sätter status Begärd automatiskt när utskicket
+        lyckades — misslyckas det ändras ingenting."""
+        till = (till or "").strip()
+        if "@" not in till:
+            return {"ok": False, "fel": "Ange mottagarens e-postadress."}
+        if not (amne or "").strip():
+            return {"ok": False, "fel": "Ämnesraden är tom."}
+        if not self.kalender.har_nyckel():
+            return {"ok": False, "fel": "Inte ansluten till Calendar Sync-"
+                    "tjänsten — sätt CALENDAR_SYNC_API_KEY i Inställningar."}
+        try:
+            r = self.kalender.skicka_mail(till, amne.strip(), kropp or "")
+        except Exception as e:
+            return {"ok": False, "fel": str(e)}
+        if not r.get("ok"):
+            return {"ok": False, "fel": r.get("fel") or
+                    f"Utskicket misslyckades (HTTP {r.get('status')})."}
+        store.satt_ackreditering(self.conn, jobb_id, status="begard")
+        self._synka_ackr_paminnelse(jobb_id)      # Begärd → påminnelsen bort
+        a = store.hamta_ackreditering(self.conn, jobb_id)
+        return {"ok": True, "ackreditering": {"status": a["status"],
+                                              "note": a["note"]}}
 
     # ── Aktiv match (delas av Efter match-panelerna) ─────────────────────────
     def satt_aktiv_match(self, id):

@@ -549,12 +549,21 @@ def radera_spelare(conn, spelare_id):
     conn.commit()
 
 
+def _heltal(v):
+    """Tolkar UI-fältvärde som positivt heltal; tomt/ogiltigt/0 → None."""
+    try:
+        return int(v) or None
+    except (TypeError, ValueError):
+        return None
+
+
 def upsert_tavling(conn, namn, *, sport, typ="liga", gren=None, logga=None,
                    fran=None, till=None, ort=None, arena=None, hemsida=None,
-                   kalender=False):
+                   kalender=False, press_email=None, ackr_dagar=None):
     """Skapar/uppdaterar en tävling (id = slug av namnet). Uppdaterar typ/sport/
     ort/arena/hemsida/logga/kalender på en befintlig; gren ('dam'|'herr'|'mixed')
-    bara när den anges. Returnerar tävlings-id."""
+    bara när den anges. press_email/ackr_dagar (ackreditering) uppdateras när
+    de anges — tom sträng/0 rensar (None = rör inte). Returnerar tävlings-id."""
     if not (namn or "").strip():
         return None
     gren = _enum(gren, GRENAR)
@@ -563,9 +572,11 @@ def upsert_tavling(conn, namn, *, sport, typ="liga", gren=None, logga=None,
     if fin is None:
         conn.execute(
             "INSERT INTO tavling(id,typ,sport,gren,namn,hemsida,fran,till,ort,"
-            "arena,logga,kalender) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            "arena,logga,kalender,press_email,ackr_dagar)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (tid, typ, sport, gren, namn, hemsida, fran, till, ort, arena,
-             logga, 1 if kalender else 0))
+             logga, 1 if kalender else 0,
+             (press_email or "").strip() or None, _heltal(ackr_dagar)))
     else:
         conn.execute(
             "UPDATE tavling SET typ=?,sport=?,fran=?,till=?,ort=?,arena=?,"
@@ -577,6 +588,12 @@ def upsert_tavling(conn, namn, *, sport, typ="liga", gren=None, logga=None,
             conn.execute("UPDATE tavling SET hemsida=? WHERE id=?", (hemsida, tid))
         if logga:
             conn.execute("UPDATE tavling SET logga=? WHERE id=?", (logga, tid))
+        if press_email is not None:
+            conn.execute("UPDATE tavling SET press_email=? WHERE id=?",
+                         ((press_email or "").strip() or None, tid))
+        if ackr_dagar is not None:
+            conn.execute("UPDATE tavling SET ackr_dagar=? WHERE id=?",
+                         (_heltal(ackr_dagar), tid))
     conn.commit()
     return tid
 
@@ -698,6 +715,62 @@ def noteringar_for_fotojobb(conn, fotojobb_ider):
         f"SELECT fotojobb_id, notering FROM fotojobb_notering "
         f"WHERE fotojobb_id IN ({platshallare})", ider).fetchall()
     return {r["fotojobb_id"]: r["notering"] for r in rader}
+
+
+# ── Ackreditering per matchjobb (bara Sport; jobben bor hos tjänsten) ─────────
+ACKR_STATUS = ("ejbegard", "begard", "beviljad", "nekad")
+_ACKR_TOM = {"status": "ejbegard", "note": "", "paminnelse_jobb_id": None}
+
+
+def hamta_ackreditering(conn, fotojobb_id):
+    """Jobbets ackreditering; saknad rad = grundläget (Ej begärd, tom not)."""
+    r = conn.execute("SELECT status,note,paminnelse_jobb_id FROM ackreditering "
+                     "WHERE fotojobb_id=?", (fotojobb_id,)).fetchone()
+    return dict(r) if r else dict(_ACKR_TOM)
+
+
+def ackreditering_for_fotojobb(conn, fotojobb_ider):
+    """Batch-uppslag: {fotojobb_id: {status,note,paminnelse_jobb_id}}. Bara
+    jobb med en faktisk rad — anroparen defaultar övriga till Ej begärd."""
+    ider = [i for i in fotojobb_ider if i]
+    if not ider:
+        return {}
+    platshallare = ",".join("?" * len(ider))
+    rader = conn.execute(
+        f"SELECT fotojobb_id,status,note,paminnelse_jobb_id FROM ackreditering "
+        f"WHERE fotojobb_id IN ({platshallare})", ider).fetchall()
+    return {r["fotojobb_id"]: {"status": r["status"], "note": r["note"],
+                               "paminnelse_jobb_id": r["paminnelse_jobb_id"]}
+            for r in rader}
+
+
+def satt_ackreditering(conn, fotojobb_id, *, status=None, note=None,
+                       paminnelse_jobb_id=...):
+    """Uppdaterar jobbets ackreditering (bara angivna fält). Blir resultatet
+    grundläget raderas raden istället — tabellen bär bara avvikelser, så ett
+    jobb kan alltid nollställas till Ej begärd utan att lämna skräp."""
+    a = hamta_ackreditering(conn, fotojobb_id)
+    if status is not None:
+        if status not in ACKR_STATUS:
+            raise ValueError(f"okänd ackrediteringsstatus: {status}")
+        a["status"] = status
+    if note is not None:
+        a["note"] = (note or "").strip()
+    if paminnelse_jobb_id is not ...:
+        a["paminnelse_jobb_id"] = paminnelse_jobb_id or None
+    conn.execute("DELETE FROM ackreditering WHERE fotojobb_id=?", (fotojobb_id,))
+    if a != _ACKR_TOM:
+        conn.execute(
+            "INSERT INTO ackreditering(fotojobb_id,status,note,paminnelse_jobb_id)"
+            " VALUES(?,?,?,?)",
+            (fotojobb_id, a["status"], a["note"], a["paminnelse_jobb_id"]))
+    conn.commit()
+    return a
+
+
+def radera_ackreditering(conn, fotojobb_id):
+    conn.execute("DELETE FROM ackreditering WHERE fotojobb_id=?", (fotojobb_id,))
+    conn.commit()
 
 
 # ── Tävling ↔ lag (tävling äger sina deltagande lag) ─────────────────────────
@@ -896,7 +969,7 @@ def hamta_match(conn, match_id):
         "id": m["id"], "lag_hemma": _namn(m["lag_hemma_id"]),
         "lag_borta": _namn(m["lag_borta_id"]),
         "lag_hemma_id": m["lag_hemma_id"], "lag_borta_id": m["lag_borta_id"],
-        "hem_gren": _gren(m["lag_hemma_id"]),
+        "hem_gren": _gren(m["lag_hemma_id"]), "tavling_id": m["tavling_id"],
         "datum": m["datum"] or "",
         "tid": m["tid"] or "", "arena": m["arena"] or "", "liga": liga,
         "sport": m["sport"] or "", "resultat": m["resultat"] or "",

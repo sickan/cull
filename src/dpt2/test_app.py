@@ -651,6 +651,8 @@ class _FakeKalender:
         self.uppdaterade = []
         self.beskrivningar = {}      # jobb-id → description hos "tjänsten"
         self.jobb = []               # svar för lista_jobb
+        self.mail = []               # skickade (till, amne, kropp)
+        self.mail_svar = {"ok": True, "status": 200, "fel": None}
 
     def har_nyckel(self):
         return True
@@ -677,6 +679,10 @@ class _FakeKalender:
     def radera_jobb(self, jid):
         self.raderade.append(jid)
         return {"ok": True}
+
+    def skicka_mail(self, till, amne, kropp):
+        self.mail.append((till, amne, kropp))
+        return dict(self.mail_svar)
 
 
 class TestFotojobbUtkastBridge(unittest.TestCase):
@@ -935,7 +941,10 @@ class TestMatchSynkOchRadering(unittest.TestCase):
     def test_synk_pa_ar_idempotent(self):
         r1 = self.api.satt_match_synk(self.mid, True)
         r2 = self.api.satt_match_synk(self.mid, True)
-        self.assertEqual(len(self.fake.skapade), 1)
+        # skapade rymmer även ackrediteringspåminnelsen — räkna bara jobben
+        jobb = [j for j in self.fake.skapade
+                if "Begär ackreditering" not in j["title"]]
+        self.assertEqual(len(jobb), 1)
         self.assertEqual(r1["synk_jobb_id"], r2["synk_jobb_id"])
 
     def test_synk_av_tar_bort_jobb_och_lank(self):
@@ -943,7 +952,8 @@ class TestMatchSynkOchRadering(unittest.TestCase):
         r = self.api.satt_match_synk(self.mid, False)
         self.assertTrue(r["ok"])
         self.assertIsNone(r["synk_jobb_id"])
-        self.assertEqual(self.fake.raderade, ["remote1"])
+        # jobbet + dess ackrediteringspåminnelse städas (ordningen kvittar)
+        self.assertEqual(sorted(self.fake.raderade), ["remote1", "remote2"])
         self.assertIsNone(self.api.lista_matcher()[0]["synk_jobb_id"])
 
     def test_synk_kraver_datum(self):
@@ -965,14 +975,18 @@ class TestMatchSynkOchRadering(unittest.TestCase):
         self.assertIsNone(self.api.lista_matcher()[0]["synk_jobb_id"])
         r = self.api.satt_match_synk(self.mid, True)
         self.assertTrue(r["ok"])
-        self.assertEqual(len(self.fake.skapade), 1)
+        jobb = [j for j in self.fake.skapade
+                if "Begär ackreditering" not in j["title"]]
+        self.assertEqual(len(jobb), 1)
 
     def test_radera_match_tar_bort_kalenderjobb_och_lankar(self):
         self.api.satt_match_synk(self.mid, True)
         r = self.api.radera_match(self.mid)
         self.assertTrue(r["ok"])
         self.assertEqual(self.api.lista_matcher(), [])
-        self.assertEqual(self.fake.raderade, ["remote1"])
+        # både jobbet OCH dess ackrediteringspåminnelse städas hos tjänsten
+        self.assertIn("remote1", self.fake.raderade)
+        self.assertIn("remote2", self.fake.raderade)   # påminnelsen
         self.assertEqual(
             store.matchref_for_fotojobb(self.api.conn, ["remote1"]), {})
 
@@ -992,9 +1006,10 @@ class TestMatchSynkOchRadering(unittest.TestCase):
         m["resultat"] = "6-0"
         m["mellan"] = "3-0"
         self.api.spara_match(m)
-        self.assertEqual(len(self.fake.uppdaterade), 1)
-        jid, jobb = self.fake.uppdaterade[0]
-        self.assertEqual(jid, "remote1")
+        # uppdaterade kan även rymma ackrediteringspåminnelsen — plocka jobbet
+        upp = [(i, j) for (i, j) in self.fake.uppdaterade if i == "remote1"]
+        self.assertEqual(len(upp), 1)
+        jid, jobb = upp[0]
         self.assertEqual(jobb["location"], "Ny arena")
         self.assertEqual(jobb["title"], "Malmö FF – FC Rosengård")
         self.assertEqual(jobb["description"], "Slutresultat 6-0 (3-0)")
@@ -1310,3 +1325,140 @@ class TestMobilLive(unittest.TestCase):
         mid = self._match()
         self.assertTrue(self.api.satt_resultat(mid, "2-0", "", "")["ok"])
         self.assertEqual(store.hamta_match(self.api.conn, mid)["resultat"], "2-0")
+
+
+class TestAckreditering(unittest.TestCase):
+    """Fotoackreditering (handoff "Ackreditering"): status per matchjobb,
+    "begär senast" ur arrangörens regel, mailväg B och kalenderpåminnelsen."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.fake = _FakeKalender()
+        self.api.kalender = self.fake
+
+    def _matchjobb(self, *, ackr_dagar=14, press="press@obos.se",
+                   datum="2026-07-19"):
+        """Tävling med regler + match + synkat kalenderjobb → jobbets id."""
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan",
+                                "sport": "fotboll", "press_email": press,
+                                "ackr_dagar": ackr_dagar})
+        mid = self.api.spara_match({
+            "lag_hemma": "Malmö FF", "lag_borta": "Kristianstads DFF",
+            "datum": datum, "tid": "14:00", "sport": "fotboll",
+            "liga": "OBOS Damallsvenskan"})["id"]
+        r = self.api.satt_match_synk(mid, True)
+        self.assertTrue(r["ok"])
+        jid = r["synk_jobb_id"]
+        # Speglar tjänsten: matchjobbet finns i lista_jobb-svaret.
+        self.fake.jobb = [{**self.fake.skapade[0], "id": jid,
+                           "status": "confirmed"}]
+        return jid
+
+    def test_paminnelse_skapas_vid_synk(self):
+        # Ej begärd + regel ger datum → heldagspåminnelse hos tjänsten
+        # (matchdatum − ackr_dagar), markerad som intern.
+        self._matchjobb(ackr_dagar=14, datum="2026-07-19")
+        pam = [j for j in self.fake.skapade
+               if "Begär ackreditering" in j["title"]]
+        self.assertEqual(len(pam), 1)
+        self.assertEqual(pam[0]["start_at"], "2026-07-05")
+        self.assertTrue(pam[0]["all_day"])
+        self.assertIn("[dpt-ackr-paminnelse]", pam[0]["description"])
+
+    def test_lista_blandar_in_ackreditering_bara_for_sport(self):
+        jid = self._matchjobb()
+        self.fake.jobb.append({"id": "j-land", "title": "Landskap",
+                               "category": "Landskap", "status": "confirmed",
+                               "start_at": "2026-07-12T04:30:00",
+                               "end_at": "2026-07-12T06:00:00"})
+        jobb = {j["id"]: j for j in self.api.lista_fotojobb()}
+        self.assertEqual(jobb[jid]["ackreditering"],
+                         {"status": "ejbegard", "note": ""})
+        self.assertEqual(jobb[jid]["begar_senast"], "2026-07-05")
+        self.assertEqual(jobb[jid]["press_email"], "press@obos.se")
+        self.assertNotIn("ackreditering", jobb["j-land"])   # bara Sport
+
+    def test_paminnelse_event_doljs_i_listan(self):
+        jid = self._matchjobb()
+        pam = next(j for j in self.fake.skapade
+                   if "Begär ackreditering" in j["title"])
+        self.fake.jobb.append({**pam, "id": "rem1", "status": "confirmed"})
+        ider = [j["id"] for j in self.api.lista_fotojobb()]
+        self.assertIn(jid, ider)
+        self.assertNotIn("rem1", ider)
+
+    def test_status_styr_paminnelsen(self):
+        jid = self._matchjobb()
+        pam_id = store.hamta_ackreditering(
+            self.api.conn, jid)["paminnelse_jobb_id"]
+        self.assertTrue(pam_id)
+        # Beviljad → påminnelsen raderas hos tjänsten och id:t släpps.
+        r = self.api.satt_ackreditering(jid, status="beviljad")
+        self.assertEqual(r["ackreditering"]["status"], "beviljad")
+        self.assertIn(pam_id, self.fake.raderade)
+        self.assertIsNone(store.hamta_ackreditering(
+            self.api.conn, jid)["paminnelse_jobb_id"])
+        # Tillbaka till Ej begärd → ny påminnelse skapas.
+        self.api.satt_ackreditering(jid, status="ejbegard")
+        self.assertTrue(store.hamta_ackreditering(
+            self.api.conn, jid)["paminnelse_jobb_id"])
+
+    def test_note_ror_inte_status(self):
+        jid = self._matchjobb()
+        self.api.satt_ackreditering(jid, status="begard")
+        r = self.api.satt_ackreditering(jid, note="Väst vid mittlinjen")
+        self.assertEqual(r["ackreditering"],
+                         {"status": "begard", "note": "Väst vid mittlinjen"})
+
+    def test_skicka_mail_satter_begard(self):
+        jid = self._matchjobb()
+        r = self.api.skicka_ackr_mail(jid, "press@obos.se",
+                                      "Ackreditering – Malmö FF", "Hej")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["ackreditering"]["status"], "begard")
+        self.assertEqual(self.fake.mail, [("press@obos.se",
+                                           "Ackreditering – Malmö FF", "Hej")])
+        # Begärd → påminnelsen är borttagen.
+        self.assertIsNone(store.hamta_ackreditering(
+            self.api.conn, jid)["paminnelse_jobb_id"])
+
+    def test_skicka_mail_validerar_och_ror_inget_vid_fel(self):
+        jid = self._matchjobb()
+        self.assertFalse(self.api.skicka_ackr_mail(jid, "", "Ämne", "x")["ok"])
+        self.assertFalse(self.api.skicka_ackr_mail(jid, "a@b.se", " ", "x")["ok"])
+        self.fake.mail_svar = {"ok": False, "status": 502,
+                               "fel": "Gmail-behörighet saknas"}
+        r = self.api.skicka_ackr_mail(jid, "a@b.se", "Ämne", "x")
+        self.assertFalse(r["ok"])
+        self.assertIn("Gmail", r["fel"])
+        # misslyckat utskick → status orörd (fortfarande Ej begärd)
+        self.assertEqual(store.hamta_ackreditering(self.api.conn, jid)["status"],
+                         "ejbegard")
+
+    def test_utan_regel_faller_tillbaka_pa_default(self):
+        # Arrangör utan ackr_dagar → 10 dagar (handoff §5 default-fallback).
+        jid = self._matchjobb(ackr_dagar=None, datum="2026-07-19")
+        j = next(x for x in self.api.lista_fotojobb() if x["id"] == jid)
+        self.assertEqual(j["begar_senast"], "2026-07-09")
+
+    def test_radera_fotojobb_stadar_ackreditering(self):
+        jid = self._matchjobb()
+        pam_id = store.hamta_ackreditering(
+            self.api.conn, jid)["paminnelse_jobb_id"]
+        self.api.satt_ackreditering(jid, note="kontakt: Eva")
+        self.api.radera_fotojobb(jid)
+        self.assertIn(pam_id, self.fake.raderade)
+        self.assertEqual(store.hamta_ackreditering(self.api.conn, jid),
+                         {"status": "ejbegard", "note": "",
+                          "paminnelse_jobb_id": None})
+
+    def test_nytt_matchdatum_flyttar_paminnelsen(self):
+        jid = self._matchjobb(datum="2026-07-19")
+        m = store.hamta_match(
+            self.api.conn,
+            store.matchref_for_fotojobb(self.api.conn, [jid])[jid])
+        self.api.spara_match({**m, "datum": "2026-08-01"})
+        pam_id = store.hamta_ackreditering(
+            self.api.conn, jid)["paminnelse_jobb_id"]
+        upp = [d for (i, d) in self.fake.uppdaterade if i == pam_id]
+        self.assertTrue(upp and upp[-1]["start_at"] == "2026-07-18")

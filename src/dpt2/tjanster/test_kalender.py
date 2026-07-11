@@ -70,6 +70,26 @@ class TestKalender(unittest.TestCase):
         k = Kalender(api_key="fel", transport=t)
         self.assertEqual(k.lista_jobb(forsok=1), [])   # forsok=1 → ingen backoff-sömn
 
+    def test_skicka_mail(self):
+        t = FejkTransport({("POST", "/api/mail/send"): (200, {"ok": True, "id": "m1"})})
+        k = Kalender(api_key="x", transport=t)
+        r = k.skicka_mail("press@obos.se", "Ackreditering – X", "Hej")
+        self.assertTrue(r["ok"])
+        self.assertEqual(t.anrop[0]["body"],
+                         {"to": "press@obos.se", "subject": "Ackreditering – X",
+                          "body": "Hej"})
+        self.assertEqual(t.anrop[0]["headers"]["Authorization"], "Bearer x")
+
+    def test_skicka_mail_fel_bar_tjanstens_besked(self):
+        # 502 med error-fält (t.ex. "gmail.send-scope saknas — anslut om kontot")
+        # ska nå anroparen så editorn kan visa varför utskicket stoppades.
+        t = FejkTransport({("POST", "/api/mail/send"):
+                           (502, {"error": "Gmail-behörighet saknas"})})
+        k = Kalender(api_key="x", transport=t)
+        r = k.skicka_mail("press@obos.se", "Ämne", "Hej")
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["fel"], "Gmail-behörighet saknas")
+
     def test_retry_vid_kall_start(self):
         # Första anropet failar (kall Worker), andra ger data → retry räddar.
         class Flaky:

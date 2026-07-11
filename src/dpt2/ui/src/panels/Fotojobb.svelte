@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte'
   import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher, listaLag,
-    privatKalendrar, privatHandelser } from '../lib/api.js'
+    privatKalendrar, privatHandelser, sattAckreditering, skickaAckrMail } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { grenFarg } from '../lib/gren.js'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
@@ -85,6 +85,16 @@
   const KAT_FARG = { Sport: '#2F7CB0', Landskap: '#C9871F', Event: '#C9657F', 'Övrigt': '#6E8B5E' }
   const NULLKAT = 'rgba(35,32,26,.45)'
   const FILTER = ['Alla', ...KATEGORIER, 'Okategoriserat']
+
+  // ── Ackreditering (bara matcher/Sport — handoff "Ackreditering") ──────────
+  // Hörnfärgerna delar familj med synk/krock: Begärd amber, Beviljad grön,
+  // Nekad röd. Ej begärd har inget hörn (grundläget är osignalerat).
+  const ACKRCOL = { begard: '#E0A341', beviljad: '#6FB35A', nekad: '#E07A6E' }
+  const ACKR_ETIKETT = { ejbegard: 'Ej begärd', begard: 'Begärd', beviljad: 'Beviljad', nekad: 'Nekad' }
+  const ACKR_PILLER = ['ejbegard', 'begard', 'beviljad', 'nekad']
+  const ackrStatus = (j) => (j.category === 'Sport' ? (j.ackreditering?.status || 'ejbegard') : null)
+  let ackrFilter = false        // header-chipet: visa bara icke-beviljade matcher
+  let ackrCompose = null        // mail-compose-utkast {jobbId, till, amne, kropp, fel, skickar}
 
   const WDAG = ['söndag', 'måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag', 'lördag']
   const pad = (n) => String(n).padStart(2, '0')
@@ -198,9 +208,16 @@
     else { synkFelId = j.id; synkFelMsg = r?.fel || 'Kunde inte aktivera synk.' }
   }
 
+  // Ackreditering väntar = kommande Sport-jobb som inte är beviljade (passerade
+  // matcher räknas inte — där finns inget kvar att begära).
+  const ackrVantande = (j) => j.category === 'Sport' && !arForfluten(j)
+    && (j.ackreditering?.status || 'ejbegard') !== 'beviljad'
+  $: ackrAntal = jobb.filter(ackrVantande).length
+
   $: filtrerade = jobb.filter((j) =>
     katFilter === 'Alla' ? true
       : katFilter === 'Okategoriserat' ? !j.category : j.category === katFilter)
+    .filter((j) => !ackrFilter || ackrVantande(j))
 
   // Bara krockar är intressanta i DPT2 — de privata posterna visas inte som egna
   // rader/band längre, de lever bara som krock-signal på själva jobbet. En källa
@@ -259,6 +276,9 @@
   // Ingen Ändra-knapp: raden är klickytan. `rad` skickas med så formuläret kan
   // ankras överst i vyn istället för att fällas ut nedanför skärmkanten.
   function oppnaRedigering(j, rad = null) {
+    // Matcher (Sport) öppnar den FULLA editorn (modalen) — där match-koppling
+    // och ackreditering bor (handoff §2). Övriga behåller inline-kortet.
+    if (j.category === 'Sport') { oppnaModalFor(j); return }
     if (jobEditId === j.id) { stangRedigering(); return }     // klick igen stänger
     redigerar = { ...j, category: j.category || '', match_id: j.match_id || '',
       notering: j.notering || '',
@@ -280,9 +300,54 @@
   }
   function onKeydown(e) {
     if (e.key !== 'Escape') return
-    if (pinnadJobb != null) pinnadJobb = null
+    if (ackrCompose) ackrCompose = null
+    else if (pinnadJobb != null) pinnadJobb = null
     else if (jobEditId != null) stangRedigering()
     else if (modal) modal = null
+  }
+
+  // ── Ackreditering: status/notering (editorn) + mail-compose (väg B) ───────
+  // Tap på ett piller sätter statusen DIREKT (ingen "Spara" behövs — den bor
+  // skilt från jobbet). Modal-utkastet uppdateras i plats + listan laddas om
+  // så hörnet/filtret följer med.
+  async function sattAckrStatus(status) {
+    if (!modal?.id) return
+    const r = await sattAckreditering(modal.id, { status })
+    if (r?.ok) { modal = { ...modal, ackreditering: r.ackreditering }; laddaOm() }
+  }
+  async function sattAckrNote(note) {
+    if (!modal?.id) return
+    const r = await sattAckreditering(modal.id, { note })
+    if (r?.ok) { modal = { ...modal, ackreditering: r.ackreditering }; laddaOm() }
+  }
+  // Grundmall (handoff §3) — förifylld, redigeras fritt före utskick.
+  function oppnaAckrMail() {
+    if (!modal?.id) return
+    const namn = (modal.title || '').replace(/^Match\s*[–-]\s*/, '')
+    const d = modal.start_at || ''
+    const dat = d.length >= 10 ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : ''
+    ackrCompose = {
+      jobbId: modal.id, till: modal.press_email || '',
+      amne: `Ackreditering – ${namn}`,
+      kropp: `Hej,\n\nJag vill ansöka om fotoackreditering för ${namn}` +
+        `${dat ? ' den ' + dat : ''}. Jag fotograferar för Dalecarlia Photo.` +
+        `\n\nTacksam för svar,\n`,
+      fel: '', skickar: false,
+    }
+  }
+  async function skickaAckr() {
+    if (!ackrCompose || ackrCompose.skickar) return
+    ackrCompose = { ...ackrCompose, skickar: true, fel: '' }
+    const r = await skickaAckrMail(ackrCompose.jobbId, ackrCompose.till,
+      ackrCompose.amne, ackrCompose.kropp)
+    if (r?.ok) {
+      // Skickat → status Begärd automatiskt (låst designbeslut).
+      if (modal?.id === ackrCompose.jobbId) modal = { ...modal, ackreditering: r.ackreditering }
+      ackrCompose = null
+      laddaOm()
+    } else {
+      ackrCompose = { ...ackrCompose, skickar: false, fel: r?.fel || 'Utskicket misslyckades.' }
+    }
   }
 
   // §3: passerade matchjobb visar slutresultatet i raden. Matchen är sanningen
@@ -352,6 +417,13 @@
             style={katFilter === f ? `background:${f === 'Alla' ? 'var(--acc)' : f === 'Okategoriserat' ? NULLKAT : katFarg(f)};border-color:transparent;color:#fff` : ''}
             on:click={() => (katFilter = f)}>{f}</button>
         {/each}
+        <!-- Översiktsfiltret (handoff §4): samlar Sport-matcher som inte är
+             beviljade än — begär i tid utan att leta igenom hela listan. -->
+        <button class="chip ackrchip" class:on={ackrFilter} aria-pressed={ackrFilter}
+          on:click={() => (ackrFilter = !ackrFilter)}>
+          <svg width="12" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3v18l7-4 7 4V3z"/></svg>
+          Ackreditering {ackrAntal}
+        </button>
         <span class="kallrubrik scd">Kalendrar</span>
         <!-- Jobbkalendern är låst på: DPT äger den och skriver till den. De privata
              läses skrivskyddat och kan släckas — men krocken varnar ändå. -->
@@ -416,7 +488,11 @@
                     {#if krock && krockVisas === j.id}<KrockPop krockar={krock} {kalendrar} heldag={j.all_day} />{/if}
                     <div class="tlkort" role="button" tabindex="0" class:forfluten={arForfluten(j)}
                       on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
+                      <Hornmarkor farg={katFarg(j.category)} r={10} horn="uppe-vanster" titel={j.category || 'Okategoriserat'} />
                       <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
+                      {#if ackrStatus(j) && ackrStatus(j) !== 'ejbegard'}
+                        <Hornmarkor farg={ACKRCOL[ackrStatus(j)]} r={10} horn="nere-vanster" titel={'Ackreditering: ' + ACKR_ETIKETT[ackrStatus(j)]} />
+                      {/if}
                       {#if krock}
                         <Hornmarkor farg="var(--krock)" r={10} horn="nere-hoger" titel="Krockar med privat kalender" />
                         <button class="krocktapp" aria-label="Visa krock" on:click={(e) => krockKlick(e, j.id)}
@@ -475,9 +551,13 @@
                 <div class="radwrap">
                 {#if krock && krockVisas === j.id}<KrockPop krockar={krock} {kalendrar} heldag={j.all_day} />{/if}
                 {#if j.all_day}
-                  <div class="rad heldag" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
+                  <div class="rad heldag" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)}
                     on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
+                    <Hornmarkor farg={katFarg(j.category)} r={12} horn="uppe-vanster" titel={j.category || 'Okategoriserat'} />
                     <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
+                    {#if ackrStatus(j) && ackrStatus(j) !== 'ejbegard'}
+                      <Hornmarkor farg={ACKRCOL[ackrStatus(j)]} r={12} horn="nere-vanster" titel={'Ackreditering: ' + ACKR_ETIKETT[ackrStatus(j)]} />
+                    {/if}
                     {#if krock}
                       <Hornmarkor farg="var(--krock)" r={12} horn="nere-hoger" titel="Krockar med privat kalender" />
                       <button class="krocktapp" aria-label="Visa krock" on:click={(e) => krockKlick(e, j.id)}
@@ -501,9 +581,13 @@
                     {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                   </div>
                 {:else}
-                  <div class="rad" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} style="border-left-color:{katFarg(j.category)}"
+                  <div class="rad" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)}
                     on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
+                    <Hornmarkor farg={katFarg(j.category)} r={12} horn="uppe-vanster" titel={j.category || 'Okategoriserat'} />
                     <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
+                    {#if ackrStatus(j) && ackrStatus(j) !== 'ejbegard'}
+                      <Hornmarkor farg={ACKRCOL[ackrStatus(j)]} r={12} horn="nere-vanster" titel={'Ackreditering: ' + ACKR_ETIKETT[ackrStatus(j)]} />
+                    {/if}
                     {#if krock}
                       <Hornmarkor farg="var(--krock)" r={12} horn="nere-hoger" titel="Krockar med privat kalender" />
                       <button class="krocktapp" aria-label="Visa krock" on:click={(e) => krockKlick(e, j.id)}
@@ -601,6 +685,30 @@
               {/each}
             </select>
           </label>
+          <!-- Ackreditering (handoff §2) — bara sparade, synkade matchjobb:
+               statusen bor skilt från jobbet och sparas direkt vid tap. -->
+          {#if modal.id && !modal.utkast}
+            <div class="ackrbox">
+              <div class="ackrhead">
+                <span class="lbl">Ackreditering</span>
+                {#if modal.begar_senast}<span class="ackrsenast">begär senast {modal.begar_senast}</span>{/if}
+              </div>
+              <div class="ackrpiller">
+                {#each ACKR_PILLER as s}
+                  <button class:on={(modal.ackreditering?.status || 'ejbegard') === s}
+                    style={(modal.ackreditering?.status || 'ejbegard') === s && s !== 'ejbegard' ? `background:${ACKRCOL[s]};border-color:transparent;color:#fff` : ''}
+                    on:click={() => sattAckrStatus(s)}>{ACKR_ETIKETT[s]}</button>
+                {/each}
+              </div>
+              <button class="ackrmail" on:click={oppnaAckrMail}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+                Skicka ackrediteringsmail
+              </button>
+              <input class="ackrnote" value={modal.ackreditering?.note || ''}
+                on:change={(e) => sattAckrNote(e.target.value)}
+                placeholder="Svar / notering (kontakt, villkor…)" />
+            </div>
+          {/if}
         {/if}
         <div class="rad2">
           <label class="check" on:click={() => (modal.all_day = !modal.all_day)}>
@@ -615,6 +723,34 @@
           </button>
           <button class="sek" on:click={() => (modal = null)}>Avbryt</button>
           <span class="dnot">Speglas till Google Calendar</span>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Mail-compose (väg B): skickas via användarens Gmail inifrån appen —
+     grundmallen förifylld, allt fritt redigerbart. Skickat → status Begärd. -->
+{#if ackrCompose}
+  <div class="overlay" on:click|self={() => (ackrCompose = null)}>
+    <div class="dialog">
+      <div class="dhead">
+        <span class="scd">Ackrediteringsmail</span>
+        <span class="gmailbricka scd">skickas via Gmail</span>
+        <button class="stang" on:click={() => (ackrCompose = null)}>×</button>
+      </div>
+      <div class="dbody">
+        <label class="full">Till<input bind:value={ackrCompose.till} placeholder="press@arrangör.se" /></label>
+        <label class="full">Ämne<input bind:value={ackrCompose.amne} /></label>
+        <label class="full">Meddelande<textarea bind:value={ackrCompose.kropp} rows="7"></textarea></label>
+        {#if ackrCompose.fel}<div class="synkfel">⚠ {ackrCompose.fel}</div>{/if}
+        <div class="dfoot">
+          <button class="prim" on:click={skickaAckr}
+            disabled={ackrCompose.skickar || !ackrCompose.till.includes('@') || !ackrCompose.amne.trim()}>
+            {ackrCompose.skickar ? 'Skickar…' : 'Skicka'}
+          </button>
+          <button class="sek" on:click={() => (ackrCompose = null)}>Avbryt</button>
+          <span class="dnot ackrauto">→ status blir Begärd automatiskt</span>
         </div>
       </div>
     </div>
@@ -659,10 +795,11 @@
      skuggan — men stapla ALDRIG opacity på texten (den håller AA via tokens). */
   .rad.forfluten, .tlkort.forfluten { box-shadow: none; }
   .rad.forfluten .datum .d, .rad.forfluten .hrange { opacity: 0.62; }
-  .rad.forfluten { border-left-color: var(--div) !important; }
   .chips { display: flex; gap: 7px; flex-wrap: wrap; }
   .chip { padding: 5px 13px; border: 1px solid var(--div); border-radius: 999px;
     background: var(--kort); color: var(--t-mut); font-size: 12.5px; font-weight: 600; }
+  .chip.ackrchip { display: inline-flex; align-items: center; gap: 6px; }
+  .chip.ackrchip.on { background: var(--acc); border-color: transparent; color: #fff; }
 
   .body { flex: 1; overflow-y: auto; padding: 16px 30px 30px; }
   .tom { color: var(--t-help); font-size: 13px; }
@@ -677,8 +814,10 @@
   .manad { font-weight: 700; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--t-mut); margin: 18px 2px 12px; }
   .lista { display: flex; flex-direction: column; gap: 10px; }
+  /* Ackreditering §1: kategorins vänsterkant ersatt av hörnbågen uppe-vänster
+     (<Hornmarkor>) — fyra oberoende hörnsignaler ryms på samma kort. */
   .rad { position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px; background: var(--kort);
-    border: 1px solid var(--div); border-left: 3px solid var(--acc); border-radius: var(--r);
+    border: 1px solid var(--div); border-radius: var(--r);
     padding: 12px 16px; box-shadow: var(--skugga); cursor: pointer; }
   .rad:hover { background: var(--div3); }
   .datum { width: 44px; flex: none; text-align: center; }
@@ -782,6 +921,29 @@
   .redigerakort input:focus, .redigerakort textarea:focus { border-color: var(--acc); }
   .rkfoot { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
   .grenlbl3 { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-right: 8px; }
+
+  /* ── Ackreditering (editorn + compose) ─────────────────────────────────── */
+  .ackrbox { display: flex; flex-direction: column; gap: 10px; padding: 13px;
+    background: var(--panel); border: 1px solid var(--div); border-radius: 10px; }
+  .ackrhead { display: flex; align-items: center; justify-content: space-between; }
+  .ackrsenast { font-size: 11.5px; color: var(--t-mut); font-variant-numeric: tabular-nums; }
+  .ackrpiller { display: flex; gap: 7px; flex-wrap: wrap; }
+  .ackrpiller button { padding: 6px 13px; border: 1px solid var(--div); border-radius: 999px;
+    background: var(--kort); color: var(--t-mut); font-size: 12px; font-weight: 600; }
+  /* Ej begärd är grundläget — vald utan egen färg (färgerna bär de tre aktiva). */
+  .ackrpiller button.on { border-color: var(--t-mut); color: var(--t-head); font-weight: 700; }
+  .ackrmail { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
+    background: var(--acc); color: #fff; border: 0; border-radius: 8px; padding: 9px 14px;
+    font-size: 12.5px; font-weight: 600; }
+  .ackrbox .ackrnote { padding: 8px 10px; border: 1px solid var(--div); border-radius: 8px;
+    background: var(--kort); color: var(--t-head); font-size: 12.5px; font-weight: 400;
+    text-transform: none; letter-spacing: 0; outline: none; }
+  .ackrbox .ackrnote:focus { border-color: var(--acc); }
+  /* .dhead span sätter rubrikstorlek — brickan behöver högre specificitet. */
+  .dhead .gmailbricka { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: #4c7a3d; background: rgba(111,179,90,.14); border: 1px solid rgba(111,179,90,.4);
+    border-radius: 5px; padding: 2px 8px; }
+  .ackrauto { color: #4c7a3d; }
 
   .tva { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .katblock { display: flex; flex-direction: column; gap: 6px; }
