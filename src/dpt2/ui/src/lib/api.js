@@ -815,6 +815,27 @@ export async function startaTraning(config = {}) {
     events: [{ typ: 'klar', resultat: { n_uppdrag: 3, n_valda: 71 } }] })
 }
 
+// Lär av match — märker ett gallrat urvals mapp som träningsdata (kör i workern).
+export async function larAvMatch(mapp, matchNamn = '', sport = '') {
+  const api = brygga()
+  if (api) return api.lar_av_match(mapp, matchNamn, sport)
+  if (!mapp) return wait({ ok: false, fel: 'Peka ut urvalets mapp.' })
+  const antal = 40
+  return wait({ ok: true, antal,
+    meddelande: `${antal} bilder märkta som träningsdata — AI lär av denna gallring.` })
+}
+
+let MOCK_HISTORIK = [
+  { id: 'f_rosengard', match_namn: 'FC Rosengård – Malmö FF', sport: 'fotboll', n: 38, skapad: '2026-07-04 14:20' },
+  { id: 'f_kristianstad', match_namn: 'Malmö FF – Kristianstads DFF', sport: 'fotboll', n: 40, skapad: '2026-06-30 09:12' },
+]
+
+export async function traningshistorik() {
+  const api = brygga()
+  if (api) return api.traningshistorik()
+  return wait(structuredClone(MOCK_HISTORIK))
+}
+
 // Logg — worker-events (strukturerad IPC). Buffras i appen; mock genererar ström.
 let MOCK_LOGG = []
 

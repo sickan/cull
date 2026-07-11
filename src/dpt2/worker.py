@@ -93,6 +93,29 @@ def jobb_trana(args):
         _emit(event("fel", text=r.get("fel", "okänt fel")))
 
 
+def jobb_lar(args):
+    """Lär av match: extraherar features ur ett gallrat urvals mapp och lagrar
+    dem som facit (alla valda = fotografens positiva val). Samma tunga
+    extraktion som omrakna, men riktat mot EN mapp."""
+    from dpt2.motorer import ai_lager
+    from dpt2.tjanster import traning
+    mapp = args.get("mapp")
+    if not mapp:
+        _emit(event("fel", text="Ingen mapp angiven (mapp).")); return
+    _emit(event("start", jobb="lar"))
+    _emit(event("progress", andel=0.05, text="Laddar modeller…"))
+    modeller = ai_lager.ladda_modeller(n_pose=1, med_estetik=True,
+                                       med_ogon=True, med_clip=True)
+    _emit(event("progress", andel=0.2, text="Märker bilder…"))
+    r = traning.lar_av_match(_db(args), os.path.expanduser(mapp), modeller,
+                             match_namn=args.get("match_namn", ""),
+                             sport=args.get("sport", ""), logg=_logg())
+    if r.get("fel"):
+        _emit(event("fel", text=r["fel"]))
+    else:
+        _emit(event("klar", resultat=r))
+
+
 def jobb_gallra(args):
     """Kör cull på ett urval (läser kalla + cull_jobb ur db): extrahera features
     → poängsätt (modell/handsatt) → urvalsmotor → uppdatera urval.bilder."""
@@ -198,6 +221,7 @@ def _jobb_ej_implementerad(namn):
 JOBB = {
     "demo": jobb_demo,
     "omrakna": jobb_omrakna,
+    "lar": jobb_lar,
     "trana": jobb_trana,
     "gallra": jobb_gallra,
     "nummer": jobb_nummer,

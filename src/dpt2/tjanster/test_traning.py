@@ -82,5 +82,64 @@ class TestTranaModell(unittest.TestCase):
         self.assertFalse(res["ok"])
 
 
+class TestLarAvMatch(unittest.TestCase):
+    """Lär av match: en gallrad mapp → ett facit-uppdrag med features, alla
+    valda (label=1). Extraktionen mockas (ingen bild/modell-laddning)."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+
+    def _kor(self, stems):
+        from dpt2.motorer import extraktion
+        from dpt2.tjanster import leverera, traning
+        paths = [f"/urval/{s}.NEF" for s in stems]
+        X = [_vekt(True, i) for i in range(len(stems))]
+        orig_lista, orig_feat = leverera.lista_bilder, extraktion.features_for_bilder
+        leverera.lista_bilder = lambda mapp: paths
+        extraktion.features_for_bilder = lambda p, m, **kw: (X, list(stems))
+        try:
+            return traning.lar_av_match(self.c, "/urval", modeller=None,
+                                        match_namn="MFF – KDFF", sport="fotboll",
+                                        logg=lambda *_: None)
+        finally:
+            leverera.lista_bilder = orig_lista
+            extraktion.features_for_bilder = orig_feat
+
+    def test_markning_lagras_som_valt_facit(self):
+        r = self._kor(["a", "b", "c"])
+        self.assertEqual(r["n_bilder"], 3)
+        self.assertEqual(r["valda"], 3)
+        self.assertEqual(r["namn"], "MFF – KDFF")
+        # Facit-rader lagrade MED vektorer → syns i träningsdatan (alla valda)
+        upp = store.facit_for_traning(self.c)
+        self.assertEqual(len(upp), 1)
+        X, y, sport = upp[0]
+        self.assertEqual(len(X), 3)
+        self.assertEqual(sum(y), 3)
+        self.assertEqual(sport, "fotboll")
+        # Syns i historiken
+        hist = store.lista_facit(self.c)
+        self.assertEqual(hist[0]["match_namn"], "MFF – KDFF")
+        self.assertEqual(hist[0]["n"], 3)
+
+    def test_idempotent_omkorning_ersatter(self):
+        self._kor(["a", "b", "c"])
+        self._kor(["a", "b"])
+        self.assertEqual(len(store.lista_facit(self.c)), 1)  # ingen dubblett
+        self.assertEqual(store.lista_facit(self.c)[0]["n"], 2)
+
+    def test_tom_mapp_ger_fel(self):
+        from dpt2.tjanster import leverera, traning
+        orig = leverera.lista_bilder
+        leverera.lista_bilder = lambda mapp: []
+        try:
+            r = traning.lar_av_match(self.c, "/tom", modeller=None,
+                                     logg=lambda *_: None)
+        finally:
+            leverera.lista_bilder = orig
+        self.assertIn("fel", r)
+        self.assertEqual(r["n_bilder"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

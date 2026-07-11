@@ -41,6 +41,34 @@ def omrakna_arkiv(conn, root, modeller, *, env=None, logg=print):
     return {"uppdrag": len(uppdrag), "bilder": tot, "valda": tot_valda}
 
 
+def lar_av_match(conn, mapp, modeller, *, match_namn="", sport="", env=None,
+                 logg=print):
+    """Lär av match: märker ETT gallrat urval (mappen med de behållna bilderna)
+    som träningsdata. Extraherar features ur bilderna med NUVARANDE libs och
+    lagrar dem som ett facit-uppdrag där ALLA rader är valda (label=1) —
+    fotografens positiva val blir modellens smakfacit. Idempotent per uppdrags-
+    namn (omkörning ersätter). Returnerar {n_bilder, valda, namn} eller
+    {..., fel} om inget lokalt gick att läsa."""
+    from dpt2.tjanster import leverera
+    paths = leverera.lista_bilder(str(mapp))
+    namn = match_namn or Path(mapp).name or "Gallrat urval"
+    if not paths:
+        return {"n_bilder": 0, "valda": 0, "namn": namn,
+                "fel": "Inga bildfiler i urvalets mapp."}
+    logg(f"Lär av {namn}: {len(paths)} bilder i mappen.")
+    X, stems = extraktion.features_for_bilder(paths, modeller, env=env,
+                                              sport=sport or None)
+    if not X:
+        return {"n_bilder": 0, "valda": 0, "namn": namn,
+                "fel": "Inga bilder gick att läsa lokalt (online-only?)."}
+    rader = [(s, 1, 1.0, v) for s, v in zip(stems, X)]
+    fid = store.spara_facit(conn, match_namn=namn, sport=sport or "okänd",
+                            n=len(rader), features=extraktion.FEATURES)
+    store.ersatt_facit_rader(conn, fid, rader)
+    logg(f"  {namn}: {len(rader)} bilder märkta som träningsdata.")
+    return {"n_bilder": len(rader), "valda": len(rader), "namn": namn}
+
+
 def trana_modell(conn, *, typ="arkiv", modell_path, logg=print):
     """Tränar ur ALLA lagrade facit-vektorer. Sparar pkl + modell-bibliotekrad
     (aktiv). Returnerar {ok, n_uppdrag, n_valda} eller {ok:False, fel}."""

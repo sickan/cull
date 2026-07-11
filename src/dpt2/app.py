@@ -1215,46 +1215,29 @@ class Api:
         return {"ok": True, "n_raw": len(raw), "n_skriv": n_skriv,
                 "meddelande": f"XMP-sidecars skrivna på {n_skriv} raw-filer. Importera mappen i Lightroom."}
 
-    def lar_av_match(self, pm_mapp, match_namn="", sport=""):
-        """Photo Mechanic "Lär av match": markerar ett urval som träningsdata.
-        Läser filerna från mappen och förbättrar träningskorpusen via arkiv-
-        omräkning (features extracteras senare när träningen körs). Returnerar
-        {ok, n_bilder} eller {ok:False, fel}."""
-        if not pm_mapp:
-            return {"ok": False, "fel": "Peka ut Photo Mechanic-mappen."}
+    def lar_av_match(self, mapp, match_namn="", sport=""):
+        """Lär av match: märker ett gallrat urval (mappen med de behållna
+        bilderna, från Gallra eller egen Photo Mechanic-gallring) som
+        träningsdata. Kör i WORKERN — extraherar features ur bilderna och lagrar
+        dem som facit där alla är valda (label=1). Returnerar
+        {ok, antal, meddelande} eller {ok:False, fel}."""
+        if not mapp:
+            return {"ok": False, "fel": "Peka ut urvalets mapp."}
+        r = self._kor_jobb("lar", {"mapp": mapp, "match_namn": match_namn,
+                                   "sport": sport})
+        if not r["ok"]:
+            return {"ok": False,
+                    "fel": r.get("fel") or "Kunde inte märka bilderna."}
+        res = r["resultat"] or {}
+        antal = res.get("n_bilder", 0)
+        return {"ok": True, "antal": antal,
+                "meddelande": f"{antal} bilder märkta som träningsdata "
+                              "— AI lär av denna gallring."}
 
-        pm_path = Path(pm_mapp)
-        if not pm_path.is_dir():
-            return {"ok": False, "fel": "Mappen hittades inte."}
-
-        # Läs alla bildfiler från PM-mappen
-        filer = leverera.lista_bilder(str(pm_path))
-        if not filer:
-            return {"ok": False, "fel": "Inga bildfiler i Photo Mechanic-mappen."}
-
-        # Använd tjanster/traning-modulen för att lagra som arkiv-uppdrag
-        from dpt2.tjanster import traning
-        namn = match_namn or pm_path.name or "Photo Mechanic-urval"
-
-        try:
-            # Omräkna arkiv lagrar filerna som träningsuppdrag
-            # I denna förenklad version: skapa ett facit-uppdrag utan features
-            # Features kommer extraheras när träningen körs
-            facit_id = store.spara_facit(
-                self.conn,
-                match_namn=namn,
-                sport=sport or "okänd",
-                n=len(filer),
-                features=extraktion.FEATURES
-            )
-            # Markera alla bilder som "valda" för träning (label=1, men utan features än)
-            rader = [(Path(f).stem, 1, 1.0, None) for f in filer]
-            store.ersatt_facit_rader(self.conn, facit_id, rader)
-        except Exception as e:
-            return {"ok": False, "fel": f"Kunde inte spara träningsdata: {e}"}
-
-        return {"ok": True, "n_bilder": len(filer), "namn": namn,
-                "meddelande": f"{namn}: {len(filer)} bilder märkta som träningsdata. Kör 'Träna' för att förbättra modellen."}
+    def traningshistorik(self):
+        """Facit-uppdragen (Lär av match + arkiv-omräkning) för Träna-panelens
+        historik — nyast först: {match_namn, n, skapad, sport}."""
+        return store.lista_facit(self.conn)
 
     # ── Publicera (Bildsvepet-text + Matchdag-story) ─────────────────────────
     def forhandsgranska_bildsvep_fraga(self, matchinfo, fakta=None):

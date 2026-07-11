@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
-  import { listaModeller, sattAktivModell, startaTraning, startaOmraknaArkiv, valjMapp } from '../lib/api.js'
+  import { listaModeller, sattAktivModell, startaTraning, startaOmraknaArkiv,
+    valjMapp, listaUrval, larAvMatch, traningshistorik } from '../lib/api.js'
 
   const TYP_NAMN = { din_smak: 'Din smak', arkiv: 'Arkiv', hybrid: 'Hybrid' }
 
@@ -12,12 +13,66 @@
   let korTrana = false
   let status = null
 
+  // ── Lär av match ──────────────────────────────────────────────────────────
+  let urvalval = []          // dropdown-poster {id, namn, kalla, bilder, kalltyp, etikett}
+  let valtUrvalId = ''
+  let larKor = false
+  let larStatus = null       // {ok, meddelande} | {ok:false, fel} | null
+  let historik = []
+
+  $: valtUrval = urvalval.find((u) => u.id === valtUrvalId) || null
+
   $: aktiv = modeller.find((m) => m.aktiv) || null
 
   onMount(async () => {
     modeller = await listaModeller()
+    await laddaLarData()
     laddar = false
   })
+
+  function urvalEtikett(u) {
+    if (u.lag_hemma) return `${u.lag_hemma} – ${u.lag_borta}`
+    return (u.kalla || '').split('/').pop() || 'Urval'
+  }
+
+  async function laddaLarData() {
+    const [urval, hist] = await Promise.all([listaUrval('gallrad'), traningshistorik()])
+    urvalval = urval.map((u) => {
+      const namn = urvalEtikett(u)
+      return { id: u.id, namn, kalla: u.kalla, bilder: u.bilder, kalltyp: 'Gallra',
+        etikett: `Gallra · ${namn} · ${u.bilder} bilder` }
+    })
+    historik = hist
+  }
+
+  async function valjPmMapp() {
+    const r = await valjMapp('Välj Photo Mechanic-mapp')
+    if (!r.ok) return
+    const namn = (r.path || '').split('/').pop() || 'PM-urval'
+    const id = 'pm:' + r.path
+    urvalval = [{ id, namn, kalla: r.path, bilder: null, kalltyp: 'PM',
+      etikett: `PM · ${namn}` }, ...urvalval.filter((u) => u.id !== id)]
+    valtUrvalId = id
+    larStatus = null
+  }
+
+  async function korLarAvMatch() {
+    if (!valtUrval || larKor) return
+    larKor = true; larStatus = null
+    const r = await larAvMatch(valtUrval.kalla, valtUrval.namn, '')
+    larKor = false
+    larStatus = r
+    if (r.ok) historik = await traningshistorik()
+  }
+
+  function aterstallLar() { larStatus = null }
+
+  const MANADER = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+  function kortDatum(s) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '')
+    if (!m) return s || ''
+    return `${+m[3]} ${MANADER[+m[2] - 1] || ''}`
+  }
 
   async function aktivera(m) {
     const r = await sattAktivModell(m.id)
@@ -104,6 +159,75 @@
   {#if laddar}
     <p class="tom">Laddar modeller…</p>
   {:else}
+    <!-- Lär av match — den vardagliga feedback-loopen efter en gallring -->
+    <div class="kort larkort">
+      <div class="larhuvud">
+        <span class="larikon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+            <path d="M12 3l1.9 4.9L19 9.8l-4 3.4 1.2 5.3L12 15.9 7.8 18.5 9 13.2 5 9.8l5.1-1.9z"/>
+          </svg>
+        </span>
+        <div>
+          <div class="lartitel scd">Lär av match</div>
+          <p class="larbesk">Märk ett gallrat urval som träningsdata — modellen lär sig
+            din stil inför nästa AI-gallring. Fungerar med urval från Gallra eller egna
+            gallringar i Photo Mechanic.</p>
+        </div>
+      </div>
+
+      <label class="full">Urval
+        <select bind:value={valtUrvalId} on:change={aterstallLar}>
+          <option value="" disabled>Välj gallrat urval…</option>
+          {#each urvalval as u (u.id)}
+            <option value={u.id}>{u.etikett}</option>
+          {/each}
+        </select>
+      </label>
+
+      {#if valtUrval}
+        <div class="statusrad">
+          <span class="sprick"></span>
+          {#if valtUrval.bilder != null}{valtUrval.bilder} bilder i urvalet · {/if}läses från urvalets mapp
+        </div>
+      {/if}
+
+      <div class="larslot">
+        {#if larKor}
+          <div class="larbar korbar"><span class="spinner"></span> Märker bilder…</div>
+        {:else if larStatus && larStatus.ok}
+          <div class="larbar okbar">
+            <span class="bock">✓</span>
+            <span class="larmed">{larStatus.meddelande}</span>
+            <button class="sek" on:click={aterstallLar}>Kör igen</button>
+          </div>
+        {:else if larStatus && !larStatus.ok}
+          <div class="larbar felbar">
+            <span class="larmed">{larStatus.fel}</span>
+            <button class="sek" on:click={aterstallLar}>Försök igen</button>
+          </div>
+        {:else}
+          <button class="sek pmknapp" on:click={valjPmMapp}>Välj PM-mapp…</button>
+          <button class="prim" on:click={korLarAvMatch} disabled={!valtUrval}>Märk och lär</button>
+        {/if}
+      </div>
+    </div>
+
+    <div class="kort">
+      <div class="cardH">Träningshistorik</div>
+      {#if historik.length === 0}
+        <p class="not">Ingen träningsdata märkt än. Välj ett gallrat urval ovan och klicka "Märk och lär".</p>
+      {:else}
+        <div class="histlista">
+          {#each historik as h (h.id)}
+            <div class="histrad">
+              <span class="hnamn">{h.match_namn}</span>
+              <span class="hmeta">{h.n} bilder · {kortDatum(h.skapad)}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
     {#if aktiv}
       <div class="aktiv">
         <span class="prick"></span>
@@ -379,4 +503,43 @@
   .prim { padding: 9px 18px; border: 0; border-radius: 8px; background: var(--acc);
     color: var(--kort); font-size: 13px; font-weight: 600; }
   .prim:disabled { opacity: 0.5; cursor: default; }
+
+  /* Lär av match */
+  .larkort { margin-top: 18px; }
+  .larhuvud { display: flex; gap: 14px; align-items: flex-start; }
+  .larikon { flex: none; width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--acc-soft); color: var(--acc); }
+  .larikon svg { width: 22px; height: 22px; }
+  .lartitel { font-size: 17px; font-weight: 700; color: var(--t-head); }
+  .larbesk { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--t-mut); }
+
+  .statusrad { display: flex; align-items: center; gap: 8px; margin: -4px 0 0;
+    font-size: 12px; color: var(--t-mut); }
+  .sprick { width: 7px; height: 7px; border-radius: 50%; background: var(--sol); flex: none; }
+
+  .larslot { display: flex; align-items: center; gap: 10px; }
+  .pmknapp { margin-right: auto; }
+  .larbar { display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 11px 14px; border-radius: var(--r); font-size: 12.5px; font-weight: 500; }
+  .larbar .larmed { flex: 1; }
+  .larbar .sek { flex: none; }
+  .korbar { color: var(--t-mut); background: var(--panel); border: 1px solid var(--div3); }
+  .okbar { color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ok) 32%, transparent); }
+  .okbar .bock { font-weight: 700; flex: none; }
+  .felbar { color: var(--rose); background: color-mix(in srgb, var(--rose) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--rose) 32%, transparent); }
+  .spinner { width: 14px; height: 14px; flex: none; border-radius: 50%;
+    border: 2px solid var(--div); border-top-color: var(--acc); animation: snurr 0.7s linear infinite; }
+  @keyframes snurr { to { transform: rotate(360deg); } }
+
+  /* Träningshistorik */
+  .histlista { display: flex; flex-direction: column; gap: 2px; }
+  .histrad { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 9px 4px; border-bottom: 1px solid var(--div3); }
+  .histrad:last-child { border-bottom: 0; }
+  .hnamn { font-size: 13.5px; font-weight: 600; color: var(--t-head); min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hmeta { font-size: 12px; color: var(--t-mut); flex: none; }
 </style>
