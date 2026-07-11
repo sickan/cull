@@ -16,6 +16,7 @@
     { rubrik: 'Efter match', poster: [
       { id: 'gallra', namn: 'Gallra', nr: 1 },
       { id: 'leverera', namn: 'Leverera', nr: 2 },
+      { id: 'snabbplock', namn: 'Snabbplock' },
       { id: 'publicera', namn: 'Matchpublicering', nr: 3 },
     ] },
     { rubrik: 'Webb', poster: [{ id: 'innehall', namn: 'Innehåll' }] },

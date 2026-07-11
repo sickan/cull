@@ -631,6 +631,22 @@ export async function startaNummer(urvalId) {
     meddelande: `Tröjnummer skrivna på ${Math.round(n * 0.8)} av ${n} bilder.` })
 }
 
+export async function snabbplockKortrot(kortPath, utMapp = null) {
+  const api = brygga()
+  if (api) return api.snabbplock_kortrot(kortPath, utMapp)
+  return wait({ ok: true, antal: 47, path: kortPath + '/Snabbplock',
+    meddelande: '47 kameralåsta bilder kopierade.' })
+}
+
+export async function listaMinnesKort() {
+  const api = brygga()
+  if (api) return api.lista_minneskort()
+  return wait({ ok: true, kort: [
+    { namn: 'NIKON D5', path: '/Volumes/NIKON D5', skyddade: 12 },
+    { namn: 'NIKON Z 8', path: '/Volumes/NIKON Z 8', skyddade: 8 }
+  ]})
+}
+
 // fakta = redan kända matchfakta ({resultat, mellan, malskyttar, arena, datum,
 // liga}) — vävs in i Claude-frågan så websökning inte behöver leta upp sånt
 // appen redan vet (se tjanster/bildsvep.py:bygg_fraga).

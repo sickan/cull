@@ -6,6 +6,7 @@
   import Lag from './panels/Lag.svelte'
   import Gallra from './panels/Gallra.svelte'
   import Leverera from './panels/Leverera.svelte'
+  import Snabbplock from './panels/Snabbplock.svelte'
   import Publicera from './panels/Publicera.svelte'
   import Innehall from './panels/Innehall.svelte'
   import Trana from './panels/Trana.svelte'
@@ -101,6 +102,8 @@
       <Gallra {aktivMatchData} on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
     {:else if aktiv === 'leverera'}
       <Leverera on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
+    {:else if aktiv === 'snabbplock'}
+      <Snabbplock on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'publicera'}
       <Publicera on:navigera={(e) => (aktiv = e.detail)} on:materialAndrat={uppdateraDelvis} />
     {:else if aktiv === 'innehall'}
