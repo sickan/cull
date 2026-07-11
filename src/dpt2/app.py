@@ -924,28 +924,139 @@ class Api:
                                if r["ok"] and res
                                else (r.get("fel") or "Kunde inte läsa nummer."))}
 
+    def _kopiera_urval(self, urval_id, behall_stems, export_rot=None, overskriv=False):
+        """Kopierar behållna bilder från urval till export-rot eller källmappen
+        under 'urval/'. Returnerar (ut_dir_path, kopierade_filer) eller (None, [])."""
+        import shutil
+        urval = store.hamta_urval(self.conn, urval_id)
+        if not urval:
+            return None, []
+
+        kalla = Path(urval.get("kalla") or "")
+        if not kalla.is_dir():
+            return None, []
+
+        # Filer från källan (rekursivt nu efter fix/gallra-kortrot)
+        alla = leverera.lista_bilder(str(kalla))
+        behall_fils = [f for f in alla if f.stem in behall_stems]
+        if not behall_fils:
+            return None, []
+
+        # Målmapp-logik: som dpt v1
+        def _sanera(s):
+            return s.replace("/", "-").replace(":", ".").strip()
+
+        if export_rot:
+            rot = Path(export_rot).expanduser()
+            match_namn = _sanera(urval.get("match_namn") or kalla.parent.name or kalla.name)
+            ut_dir = rot / match_namn
+            if ut_dir.exists():
+                if overskriv:
+                    self._rmtree_kraft(ut_dir)
+                else:
+                    i = 2
+                    while (rot / f"{match_namn} {i}").exists():
+                        i += 1
+                    ut_dir = rot / f"{match_namn} {i}"
+        else:
+            # Källmappen under 'urval/'
+            ut_dir = kalla / "urval"
+            if ut_dir.exists():
+                if overskriv:
+                    self._rmtree_kraft(ut_dir)
+                else:
+                    i = 2
+                    while (kalla / f"urval {i}").exists():
+                        i += 1
+                    ut_dir = kalla / f"urval {i}"
+
+        try:
+            ut_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            return None, []
+
+        kopierade = []
+        for f in behall_fils:
+            try:
+                mal = ut_dir / f.name
+                shutil.copy2(f, mal)
+                try:
+                    os.chflags(mal, 0)  # rensa uchg-flagga från kameralåsta original
+                except (OSError, AttributeError):
+                    pass
+                kopierade.append(mal)
+            except OSError:
+                continue
+
+        return ut_dir, kopierade
+
+    def _rmtree_kraft(self, path):
+        """Raderar mapp inkl. immutable-flagga (uchg från kamera-låsta filer)."""
+        import shutil, stat
+        def _losgor(func, p, exc):
+            try:
+                os.chflags(p, 0)
+            except (OSError, AttributeError):
+                pass
+            try:
+                os.chmod(p, stat.S_IRWXU)
+            except OSError:
+                pass
+            try:
+                func(p)
+            except OSError:
+                pass
+        try:
+            shutil.rmtree(path, onexc=_losgor)
+        except TypeError:
+            shutil.rmtree(path, onerror=_losgor)
+
     def leverera_urval(self, urval_id, config=None):
-        """Skriver XMP-sidecars för urvalets källmapp (husstil-preset + EV-knuff)
-        och sätter urvalets status → levererad. Den lätta, in-process-delen:
-        upprätning via Apple Vision + tröjnummer-OCR körs i ML-workern (kommer)."""
+        """Skriver XMP-sidecars för urvalets behållna bilder. Om export-rot är
+        angiven: kopierar filerna där först. Sätter status → levererad."""
         config = config or {}
         urval = store.hamta_urval(self.conn, urval_id)
         if not urval:
             return {"ok": False, "fel": "Okänt urval."}
-        filer = leverera.lista_bilder(urval.get("kalla") or "")
-        kept = set(store.behall_stems(self.conn, urval_id))
-        if kept:                              # bara gallringens behållna bilder
-            filer = [f for f in filer if f.stem in kept]
+
+        # Behållna bilder från gallring (om urval är gallrat)
+        behall_stems = set(store.behall_stems(self.conn, urval_id))
+
+        # Kopiering (om export-rot angiven och behållna bilder finns)
+        ut_dir = None
+        kopierade = []
+        export_rot = (config.get("exportRot") or "").strip() or None
+        if export_rot and behall_stems:
+            ut_dir, kopierade = self._kopiera_urval(
+                urval_id, behall_stems,
+                export_rot=export_rot,
+                overskriv=config.get("exportOverskriv", False))
+            if ut_dir and not kopierade:
+                return {"ok": False, "fel": "Kunde inte kopiera några bilder till export-rot."}
+
+        # Sidecars: skriv på export-kopior om kopierade, annars på källan
+        filer = kopierade if kopierade else leverera.lista_bilder(urval.get("kalla") or "")
+        # Filtrera efter behållna endast om some bilder är markerade
+        if behall_stems:
+            filer = [f for f in filer if f.stem in behall_stems]
         if not filer:
-            return {"ok": False, "fel": "Hittar inga bildfiler i källmappen "
-                    f"({urval.get('kalla') or '—'})."}
+            return {"ok": False, "fel": "Hittar inga bildfiler att leverera."}
+
         res = leverera.skriv_sidecars(
             filer, husstil_path=(config.get("husstil") or None),
-            exp_bump=float(config.get("exp_bump") or 0.0),
+            exp_bump=float(config.get("expKnuff") or 0.0),
             objektiv_pa_raw=config.get("objektiv", True))
+
         store.satt_urval_status(self.conn, urval_id, "levererad")
-        return {"ok": True, "status": "levererad",
-                "skrivna": res["skrivna"], "ratade": res["ratade"]}
+
+        # Öppna i Lightroom (om export-rot eller config säger det)
+        if ut_dir or (config.get("oppnaI") == "Lightroom"):
+            lr_mapp = ut_dir or Path(urval.get("kalla") or "")
+            if lr_mapp.exists():
+                self.oppna_i_lightroom(str(lr_mapp))
+
+        return {"ok": True, "status": "levererad", "path": str(ut_dir) if ut_dir else None,
+                "kopierade": len(kopierade), "skrivna": res["skrivna"], "ratade": res["ratade"]}
 
     def leverera_egen_mapp(self, mapp, config=None):
         """§6: bildkälla i Leverera — 'Egen mapp' (t.ex. redan gallrat i Photo
