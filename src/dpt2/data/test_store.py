@@ -775,6 +775,38 @@ class TestMigrering(unittest.TestCase):
         self.assertIn("kind", kolumner)
         self.assertIn("trupp_kalla", kolumner)
 
+    def test_migrera_v22_till_v23_sportevent_typ(self):
+        # v22-läge: innehall med gamla typ-CHECK:en (utan sportevent) och en
+        # befintlig rad. Efter v23 ska sportevent gå att spara och raden vara
+        # orörd (tabellen skrivs om — CHECK kan inte ALTER:as).
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA user_version=22")
+        c.execute("CREATE TABLE matchen(id TEXT PRIMARY KEY)")
+        c.execute("""CREATE TABLE innehall (
+          id TEXT PRIMARY KEY,
+          typ TEXT NOT NULL CHECK (typ IN ('match','event','landskap','portratt','blogg')),
+          match_id TEXT REFERENCES matchen(id) ON DELETE SET NULL,
+          status TEXT, frontmatter TEXT, body TEXT, export_path TEXT,
+          publicerad INTEGER NOT NULL DEFAULT 0, synkad_tid TEXT, skapad TEXT)""")
+        c.execute("INSERT INTO matchen VALUES('m1')")
+        c.execute("INSERT INTO innehall(id,typ,match_id,publicerad,skapad) "
+                  "VALUES('i1','match','m1',1,'2026-07-01')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            c.execute("INSERT INTO innehall(id,typ,publicerad) VALUES('x','sportevent',0)")
+        db._migrera(c, 22)
+        # befintlig rad orörd (inkl. FK-koppling och publicerad-flaggan)
+        r = c.execute("SELECT * FROM innehall WHERE id='i1'").fetchone()
+        self.assertEqual(r["typ"], "match")
+        self.assertEqual(r["match_id"], "m1")
+        self.assertEqual(r["publicerad"], 1)
+        # nya typen accepteras nu
+        c.execute("INSERT INTO innehall(id,typ,publicerad,skapad) "
+                  "VALUES('i2','sportevent',0,'2026-07-11')")
+        self.assertEqual(c.execute(
+            "SELECT typ FROM innehall WHERE id='i2'").fetchone()["typ"], "sportevent")
+
     def test_migrera_v2_till_v3(self):
         # Bygg ett v2-läge (lag/tavling utan nya kolumner) och migrera additivt.
         import sqlite3

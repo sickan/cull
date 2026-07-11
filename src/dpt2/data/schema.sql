@@ -324,7 +324,7 @@ CREATE TABLE historik (
 
 CREATE TABLE innehall (
   id          TEXT PRIMARY KEY,
-  typ         TEXT NOT NULL CHECK (typ IN ('match','event','landskap','portratt','blogg')),
+  typ         TEXT NOT NULL CHECK (typ IN ('match','sportevent','event','landskap','portratt','blogg')),
   match_id    TEXT REFERENCES matchen(id) ON DELETE SET NULL,
   status      TEXT,                      -- frontmatter-status (kommande/avslutad…)
   frontmatter TEXT,                      -- json

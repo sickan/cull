@@ -472,6 +472,73 @@ class TestApi(unittest.TestCase):
             self.assertNotIn("DSC_0001.NEF", r["md"])
             self.assertIn('bilder:\n  - "/bilder/gront/1.jpg"', r["md"])
 
+    def test_innehall_md_sportevent(self):
+        # Sportevent (skiss 1e): egen hero, bild-only-galleri (bilder:-array)
+        # och underartiklar (slug-referenser) i frontmattern.
+        r = self.api.forhandsgranska_innehall({
+            "typ": "sportevent", "titel": "SM-veckan Borlänge",
+            "period": "29 jun – 5 jul", "plats": "Borlänge",
+            "ingress": "En vecka av allt.",
+            "figurer": [{"bild": "/Users/stig/DSC_1.NEF", "alt": "x", "bildtext": "y"}],
+            "underartiklar": [{"titel": "MFF – Kristianstad",
+                               "slug": "mff-kristianstad", "match_id": "m1"}]})
+        self.assertEqual(r["slug"], "sm-veckan-borlange")
+        self.assertIn("typ: sportevent", r["md"])
+        self.assertIn("period: 29 jun – 5 jul", r["md"])
+        self.assertIn("underartiklar:", r["md"])
+        self.assertIn("mff-kristianstad", r["md"])
+        # bild-only: härledd referens, aldrig källfilen, ingen bildtext
+        self.assertIn("/bilder/sm-veckan-borlange/1.jpg", r["md"])
+        self.assertNotIn("DSC_1.NEF", r["md"])
+        self.assertNotIn("*y*", r["md"])
+        # spara accepteras av schemat (v23)
+        res = self.api.spara_innehall({"typ": "sportevent", "titel": "SM-veckan"})
+        self.assertTrue(res["ok"])
+        self.assertEqual(self.api.lista_innehall("sportevent")[0]["typ"], "sportevent")
+
+    def test_publicera_natet_sportevent_stoppas_med_tydligt_fel(self):
+        # Workern/sajten saknar sportevent-typen — publiceringen ska säga det
+        # begripligt i stället för att skicka och få 400.
+        r = self.api.publicera_innehall_natet({"typ": "sportevent", "titel": "SM"})
+        self.assertFalse(r["ok"])
+        self.assertIn("sportevent", r["fel"])
+
+    def test_innehall_md_match_topp_flagga(self):
+        # Startside-kureringen: topp följer med frontmattern (och utelämnas
+        # när den inte är satt — sajtens zod-schema defaultar till false).
+        med = self.api.forhandsgranska_innehall({
+            "typ": "match", "titel": "A – B", "hem": "A", "borta": "B", "topp": True})
+        self.assertIn("topp: true", med["md"])
+        utan = self.api.forhandsgranska_innehall({
+            "typ": "match", "titel": "A – B", "hem": "A", "borta": "B"})
+        self.assertNotIn("topp", utan["md"])
+
+    def test_sport_topp_sparas_och_speglas(self):
+        # Valet persisteras i installning; skarpt läge speglar till workern via
+        # innehall_synk.satt_topp (fejkad här), testläge rör den aldrig.
+        class FejkSynk:
+            def __init__(self):
+                self.anrop = []
+            def satt_topp(self, typ, vald_id):
+                self.anrop.append((typ, vald_id))
+                return {"ok": True, "andrade": 1, "fel": None}
+        fejk = FejkSynk()
+        self.api.innehall_synk = fejk
+        r = self.api.satt_sport_topp("valj", "i9")
+        self.assertTrue(r["ok"])
+        self.assertEqual(fejk.anrop, [("match", "i9")])
+        t = self.api.sport_topp()
+        self.assertEqual(t["lage"], "valj")
+        self.assertEqual(t["innehall_id"], "i9")
+        # 'senaste' → rensa flaggan på workern (vald=None)
+        self.api.satt_sport_topp("senaste")
+        self.assertEqual(fejk.anrop[-1], ("match", None))
+        # testläge: bara lokal persist, inget synk-anrop
+        innan = len(fejk.anrop)
+        self.api.satt_sport_topp("valj", "i2", True)
+        self.assertEqual(len(fejk.anrop), innan)
+        self.assertEqual(self.api.sport_topp()["innehall_id"], "i2")
+
     def test_publicera_natet_event_laddar_upp_bilder_till_r2(self):
         # Regression: event-publicering laddade aldrig upp galleribilderna till
         # R2 och skrev ingen bilder:-array → sajtens kort/detaljsida blev

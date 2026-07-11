@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -521,6 +521,34 @@ def _migrera(conn, fran_version):
             ):
                 if not _har_kolumn(conn, "lag", kol):
                     conn.execute(ddl)
+    if fran_version < 23:
+        # v23: innehållstyp 'sportevent' (Event/mästerskap — egen hero, eget
+        # galleri, underartiklar i frontmatter; handoff "sportsidor & menyer"
+        # 11 jul 2026). typ-CHECK:en kan inte ALTER:as i SQLite → leaf-tabellen
+        # skrivs om (inga inkommande FK:er; 'portratt' försvann redan i v12).
+        # Samma guard som v12 — äldre syntetiska testdatabaser saknar innehall.
+        if _har_tabell(conn, "innehall"):
+            conn.execute("PRAGMA foreign_keys=OFF")
+            conn.executescript("""
+            CREATE TABLE innehall_ny (
+              id          TEXT PRIMARY KEY,
+              typ         TEXT NOT NULL CHECK (typ IN ('match','sportevent','event','landskap','blogg')),
+              match_id    TEXT REFERENCES matchen(id) ON DELETE SET NULL,
+              status      TEXT,
+              frontmatter TEXT,
+              body        TEXT,
+              export_path TEXT,
+              publicerad  INTEGER NOT NULL DEFAULT 0,
+              synkad_tid  TEXT,
+              skapad      TEXT
+            );
+            INSERT INTO innehall_ny
+              SELECT id,typ,match_id,status,frontmatter,body,export_path,
+                     publicerad,synkad_tid,skapad FROM innehall;
+            DROP TABLE innehall;
+            ALTER TABLE innehall_ny RENAME TO innehall;
+            """)
+            conn.execute("PRAGMA foreign_keys=ON")
 
 
 def _har_kolumn(conn, tabell, kolumn):

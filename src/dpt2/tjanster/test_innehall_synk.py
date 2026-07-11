@@ -92,6 +92,50 @@ class TestInnehallSynk(unittest.TestCase):
         k = InnehallSynk(api_key="x", transport=t)
         self.assertIsNone(k.status("match", "i1")["deploy"])
 
+    def test_satt_topp_flyttar_flaggan(self):
+        # "Välj själv": den valda raden får topp=true, en tidigare topp rensas;
+        # rader som redan är rätt PUT:as inte om (spar deploy-varv).
+        t = FejkTransport({
+            ("GET", "/api/innehall/match"): (200, {"innehall": [
+                {"id": "a", "slug": "a-b", "frontmatter": {"hem": "A", "topp": True}, "body": "x", "match_id": "m1"},
+                {"id": "b", "slug": "c-d", "frontmatter": {"hem": "C"}, "body": None, "match_id": None},
+                {"id": "c", "slug": "e-f", "frontmatter": {"hem": "E"}, "body": None, "match_id": None},
+            ]}),
+            ("PUT", "/api/innehall/match/a"): (200, {"innehall": {"id": "a"}}),
+            ("PUT", "/api/innehall/match/b"): (200, {"innehall": {"id": "b"}}),
+        })
+        k = InnehallSynk(api_key="x", transport=t)
+        r = k.satt_topp("match", "b")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["andrade"], 2)
+        puts = {a["url"].rsplit("/", 1)[-1]: a["body"] for a in t.anrop if a["metod"] == "PUT"}
+        self.assertEqual(set(puts), {"a", "b"})              # c var redan rätt → orörd
+        self.assertNotIn("topp", puts["a"]["frontmatter"])   # gamla toppen rensad
+        self.assertTrue(puts["b"]["frontmatter"]["topp"])    # nya toppen satt
+        self.assertEqual(puts["a"]["frontmatter"]["hem"], "A")   # övriga fält kvar
+
+    def test_satt_topp_rensar_alla_vid_none(self):
+        # "Senaste matchen": vald_id=None → alla topp-flaggor rensas.
+        t = FejkTransport({
+            ("GET", "/api/innehall/match"): (200, {"innehall": [
+                {"id": "a", "slug": "a-b", "frontmatter": {"topp": True}},
+                {"id": "b", "slug": "c-d", "frontmatter": {}},
+            ]}),
+            ("PUT", "/api/innehall/match/a"): (200, {"innehall": {"id": "a"}}),
+        })
+        k = InnehallSynk(api_key="x", transport=t)
+        r = k.satt_topp("match", None)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["andrade"], 1)
+
+    def test_satt_topp_okand_vald_ger_fel(self):
+        t = FejkTransport({("GET", "/api/innehall/match"): (200, {"innehall": [
+            {"id": "a", "slug": "a-b", "frontmatter": {}}]})})
+        k = InnehallSynk(api_key="x", transport=t)
+        r = k.satt_topp("match", "finns-ej")
+        self.assertFalse(r["ok"])
+        self.assertIn("inte publicerad", r["fel"])
+
     def _riktig_jpg(self, mapp, namn="01.jpg", storlek=(400, 300)):
         """Skapar en riktig (liten) JPEG — ladda_upp_bild optimerar via PIL,
         så en fejkad byte-sträng duger inte längre som testbild."""

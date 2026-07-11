@@ -1712,6 +1712,13 @@ class Api:
         härledda bild-URL:er (rör aldrig sajten eller dess innehåll-DB-rad)."""
         data = data or {}
         typ = data.get("typ", "match")
+        if typ == "sportevent" and not test:
+            # Workern/sajten saknar sportevent-typen ännu (content-sync
+            # types.ts + Astro-collection) — säg det rakt ut i stället för
+            # ett 400 från workern. Lokal spara/export fungerar redan.
+            return {"ok": False, "id": None,
+                    "fel": "Sajten saknar sportevent-stöd ännu — spara utkastet "
+                           "eller exportera .md lokalt så länge."}
         # Matchpublicering webb-kanal: server-crop:a hero-bilden (fokus+zoom+
         # format) i stället för att luta på sajtens object-position. Sker för
         # både test och skarp; heroPosition nollas eftersom bilden redan är
@@ -1799,6 +1806,29 @@ class Api:
         if r.get("ok"):
             store.satt_synkad(self.conn, iid, datetime.now().isoformat(timespec="seconds"))
         return {"ok": r.get("ok", False), "id": iid, "fel": r.get("fel")}
+
+    # ── Sport-startsidan: hero-kurering ("topp") ──────────────────────────────
+    def sport_topp(self):
+        """Startsidans hero-val: {lage: 'senaste'|'valj', innehall_id}.
+        'senaste' = sajten härleder hero (nyaste avslutade matchen)."""
+        return {"ok": True,
+                "lage": store.hamta_installning(self.conn, "sport_topp_lage") or "senaste",
+                "innehall_id": store.hamta_installning(self.conn, "sport_topp_id") or None}
+
+    def satt_sport_topp(self, lage, innehall_id=None, test=False):
+        """Sätter startsidans hero-val och speglar det till workern: vald
+        matchartikel får topp=true i sin publicerade frontmatter, alla andra
+        rensas (sport.astro lyfter topp-posten till hero). Testläge sparar
+        bara valet lokalt — rör aldrig workern."""
+        lage = lage if lage in ("senaste", "valj") else "senaste"
+        store.satt_installning(self.conn, "sport_topp_lage", lage)
+        store.satt_installning(self.conn, "sport_topp_id", innehall_id or "")
+        if test:
+            return {"ok": True, "test": True}
+        vald = innehall_id if lage == "valj" else None
+        r = self.innehall_synk.satt_topp("match", vald)
+        return {"ok": r.get("ok", False), "andrade": r.get("andrade", 0),
+                "fel": r.get("fel")}
 
     # ── På gång (webb) — härledd ur matchlistan (ersätter kuraterad lista) ────
     def _pagang_kommande(self, idag=None):
@@ -2041,7 +2071,7 @@ def _utkast_till_jobbdict(u):
 # Innehåll-typ → content-collection-mapp (speglar CTYPER.mapp i Innehall.svelte)
 # — används av testläge för att räkna ut samma relativa sökväg under
 # test-output/content/ som skarpt hade skrivit under sajtens content/.
-_INNEHALL_MAPP = {"blogg": "blogg", "match": "matcher",
+_INNEHALL_MAPP = {"blogg": "blogg", "match": "matcher", "sportevent": "sportevent",
                   "landskap": "landskap", "event": "event"}
 
 
@@ -2080,6 +2110,27 @@ def _innehall_md(data, bild_urls=None):
             "hero": bild_urls.get("hero") or data.get("hero") or None,
             "heroPosition": data.get("heroPosition") or None,
             "status": data.get("status") or None,
+        }
+    elif typ == "sportevent":
+        # Event/mästerskap (skiss 1e): egen hero + eget galleri + manuellt
+        # valda under-matchartiklar. Underartiklarna refereras med slug —
+        # sajtens framtida sportevent-sida länkar /sport/{slug}.
+        fm = {
+            "typ": "sportevent",
+            "titel": titel,
+            "period": data.get("period") or None,
+            "plats": data.get("plats") or None,
+            "datum": data.get("datum") or None,
+            "ingress": data.get("ingress") or None,
+            "hero": bild_urls.get("hero") or data.get("hero") or None,
+            "heroPosition": data.get("heroPosition") or None,
+            "status": data.get("status") or None,
+            "topp": data.get("topp") or None,
+            "underartiklar": [
+                {"titel": u.get("titel") or "", "slug": u.get("slug") or "",
+                 "match_id": u.get("match_id") or None}
+                for u in (data.get("underartiklar") or [])
+            ] or None,
         }
     elif typ == "landskap":
         fm = {
@@ -2128,8 +2179,11 @@ def _innehall_md(data, bild_urls=None):
             "heroPosition": data.get("heroPosition") or None,
             "pixieset": data.get("pixieset") or None,
             "malskyttar": malskyttar or None,
+            # Startside-kurering ("Välj själv"): sport.astro lyfter posten med
+            # topp-flaggan till hero. None = härledd (nyaste avslutade).
+            "topp": data.get("topp") or None,
         }
-    gal_text = typ not in ("landskap", "event")         # bild-only annars
+    gal_text = typ not in ("landskap", "event", "sportevent")   # bild-only annars
     # URL-segmentet skiljer sig från content-collection-mappen för match:
     # filerna hamnar i public/sport/<slug>/ (sidan är src/pages/sport/[slug]
     # .astro), INTE public/bilder/<slug>/ — bara fixat för match hittills
@@ -2153,7 +2207,7 @@ def _innehall_md(data, bild_urls=None):
                     "alt": (f.get("alt") or "") if gal_text else "",
                     "bildtext": (f.get("bildtext") or "") if gal_text else ""}
                    for i, f in enumerate(data.get("figurer") or [], 1)]
-    if typ in ("match", "event", "landskap") and figurer:
+    if typ in ("match", "sportevent", "event", "landskap") and figurer:
         # sport/portratt/landskap.astro läser frontmatterns `bilder:`-array
         # direkt (hero = bilder[0], galleriet = resten). För event & landskap
         # är detta ENDA bildkällan sajten renderar (brödtexten visas inte som

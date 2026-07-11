@@ -183,6 +183,40 @@ class InnehallSynk:
             return data["innehall"]
         return []
 
+    def satt_topp(self, typ, vald_id):
+        """Startside-kureringen ("Välj själv"): sätter frontmatter.topp=true på
+        EN publicerad rad och rensar flaggan på alla andra av samma typ —
+        GET-lista → modifiera → PUT tillbaka, ingen bild-omuppladdning.
+        vald_id=None → rensa överallt (sajten härleder hero som förut).
+        Returnerar {ok, andrade, fel}."""
+        if not self.api_key:
+            return {"ok": False, "andrade": 0,
+                    "fel": "CONTENT_SYNC_API_KEY saknas — kan inte kurera."}
+        rader = self.lista(typ)
+        andrade, fel = 0, None
+        vald_fanns = False
+        for rad in rader:
+            rid = rad.get("id")
+            fm = rad.get("frontmatter")
+            if not rid or not isinstance(fm, dict):
+                continue
+            vill = bool(vald_id) and rid == vald_id
+            vald_fanns = vald_fanns or vill
+            if vill == bool(fm.get("topp")):
+                continue                       # redan rätt — spara ett deploy-varv
+            ny_fm = ({**fm, "topp": True} if vill
+                     else {k: v for k, v in fm.items() if k != "topp"})
+            r = self.publicera(typ, rid, slug=rad.get("slug") or "",
+                               frontmatter=ny_fm, body=rad.get("body"),
+                               match_id=rad.get("match_id"))
+            if r.get("ok"):
+                andrade += 1
+            else:
+                fel = r.get("fel") or f"kunde inte uppdatera {rid}"
+        if vald_id and not vald_fanns:
+            fel = "Artikeln är inte publicerad på sajten ännu — publicera den först."
+        return {"ok": fel is None, "andrade": andrade, "fel": fel}
+
     def radera(self, typ, innehall_id, *, forsok=3):
         """DELETE /api/innehall/:typ/:id — tar bort en rad på workern (posten
         försvinner ur public-API:t → från sajten vid nästa bygge). Idempotent:
