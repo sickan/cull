@@ -496,12 +496,31 @@ class TestApi(unittest.TestCase):
         self.assertTrue(res["ok"])
         self.assertEqual(self.api.lista_innehall("sportevent")[0]["typ"], "sportevent")
 
-    def test_publicera_natet_sportevent_stoppas_med_tydligt_fel(self):
-        # Workern/sajten saknar sportevent-typen — publiceringen ska säga det
-        # begripligt i stället för att skicka och få 400.
-        r = self.api.publicera_innehall_natet({"typ": "sportevent", "titel": "SM"})
-        self.assertFalse(r["ok"])
-        self.assertIn("sportevent", r["fel"])
+    def test_publicera_natet_sportevent_laddar_upp_och_publicerar(self):
+        # Sportevent nätpubliceras nu (worker + Astro fick typen): hero +
+        # galleribilder laddas upp till R2 och frontmatterns bilder[] pekar dit.
+        import os, tempfile
+        from unittest import mock
+        d = tempfile.mkdtemp()
+        b1 = os.path.join(d, "a.jpg")
+        with open(b1, "wb") as fh:
+            fh.write(b"x")
+        fejk = mock.MagicMock()
+        fejk.ladda_upp_bild.side_effect = \
+            lambda typ, slug, kalla, namn, **kw: f"https://r2.example/{typ}/{slug}/{namn}"
+        fejk.publicera.return_value = {"ok": True}
+        self.api.innehall_synk = fejk
+        r = self.api.publicera_innehall_natet({
+            "typ": "sportevent", "titel": "SM-veckan Borlänge",
+            "period": "29 jun – 5 jul", "figurer": [{"bild": b1}],
+            "underartiklar": [{"titel": "A – B", "slug": "a-b", "match_id": "m1"}]})
+        self.assertTrue(r["ok"])
+        _, kwargs = fejk.publicera.call_args
+        self.assertEqual(kwargs["typ"] if "typ" in kwargs else fejk.publicera.call_args[0][0],
+                         "sportevent")
+        self.assertEqual(kwargs["frontmatter"]["bilder"],
+                         ["https://r2.example/sportevent/sm-veckan-borlange/1.jpg"])
+        self.assertEqual(kwargs["frontmatter"]["underartiklar"][0]["slug"], "a-b")
 
     def test_innehall_md_match_topp_flagga(self):
         # Startside-kureringen: topp följer med frontmattern (och utelämnas

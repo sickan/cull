@@ -1712,13 +1712,6 @@ class Api:
         härledda bild-URL:er (rör aldrig sajten eller dess innehåll-DB-rad)."""
         data = data or {}
         typ = data.get("typ", "match")
-        if typ == "sportevent" and not test:
-            # Workern/sajten saknar sportevent-typen ännu (content-sync
-            # types.ts + Astro-collection) — säg det rakt ut i stället för
-            # ett 400 från workern. Lokal spara/export fungerar redan.
-            return {"ok": False, "id": None,
-                    "fel": "Sajten saknar sportevent-stöd ännu — spara utkastet "
-                           "eller exportera .md lokalt så länge."}
         # Matchpublicering webb-kanal: server-crop:a hero-bilden (fokus+zoom+
         # format) i stället för att luta på sajtens object-position. Sker för
         # både test och skarp; heroPosition nollas eftersom bilden redan är
@@ -1775,7 +1768,7 @@ class Api:
                         max_bredd=1600, kvalitet=75)
                     if url:
                         bild_urls[i] = url
-        elif typ in ("event", "landskap", "blogg"):
+        elif typ in ("event", "landskap", "blogg", "sportevent"):
             # Samma R2-uppladdning som match: separat hero-bild (B4 — hero är
             # nu skild från galleriet) + galleribilderna. Utan detta hamnade
             # bara den lokala källsökvägen (t.ex. en Dropbox-sökväg) i

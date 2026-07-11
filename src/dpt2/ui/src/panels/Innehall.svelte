@@ -872,7 +872,7 @@
             </div>
           {/if}
         </div>
-        <div class="ovfot">Underartiklarna länkas från eventsidan på sajten (kräver sajtstöd — kommer).</div>
+        <div class="ovfot">Underartiklarna länkas från eventsidan på sajten (/sportevent/{aktSlug || '…'}).</div>
       </div>
     {:else if ctyp === 'event'}
       <div class="kort">
@@ -995,8 +995,7 @@
           {#if $testMode}<span class="ok testhint">✓ Test — exempelfil: <span class="testpath">{sparadPath}</span> · rensas vid omstart</span>
           {:else}<span class="ok">✓ Sparad till content/{EDITOR_MAPP[ctyp]}/</span>{/if}
         {/if}
-        <button class="prim" on:click={publicera} disabled={synkar || ctyp === 'sportevent'}
-          title={ctyp === 'sportevent' ? 'Sajten saknar sportevent-stöd ännu — spara/exportera lokalt så länge' : ''}>
+        <button class="prim" on:click={publicera} disabled={synkar}>
           {synkar ? 'Publicerar…' : 'Publicera till hemsidan'}</button>
         {#if synkad}
           {#if $testMode}<span class="ok testhint">✓ Test — exempelfil: <span class="testpath">{synkadPath}</span> · rensas vid omstart</span>
