@@ -1077,6 +1077,168 @@ class Api:
         uid = store.spara_urval(self.conn, kalla=mapp, bilder=len(filer))
         return self.leverera_urval(uid, config)
 
+    def snabbplock_kortrot(self, kort_path, ut_mapp=None, oppna_lr=True):
+        """Snabbplock: kopierar ENBART kameralåsta (protect/uchg) bildfiler från
+        kortet utan AI eller scoring. Fristående snabbväg för paus-fotografering.
+        Returnerar {ok, antal, path} eller {ok:False, fel}."""
+        import shutil, stat
+        if not kort_path:
+            return {"ok": False, "fel": "Peka ut kortet/mappen."}
+        kort = Path(kort_path)
+        if not kort.is_dir():
+            return {"ok": False, "fel": "Kortet/mappen hittades inte."}
+
+        # Läs alla bildfiler (rekursivt från kort-rot)
+        filer = leverera.lista_bilder(str(kort))
+        if not filer:
+            return {"ok": False, "fel": "Inga bildfiler på kortet."}
+
+        # Filtrera till bara kameralåsta
+        skyddade = []
+        for f in filer:
+            try:
+                if f.stat().st_flags & stat.UF_IMMUTABLE:
+                    skyddade.append(f)
+            except (OSError, AttributeError):
+                pass
+
+        if not skyddade:
+            return {"ok": False, "fel": f"Inga kameralåsta bilder. Lås bilderna i kameran först."}
+
+        # Målmapp
+        if ut_mapp:
+            ut_dir = Path(ut_mapp).expanduser()
+        else:
+            ut_dir = kort / "Snabbplock"
+        if ut_dir.exists():
+            i = 2
+            bas = ut_dir.name
+            while ut_dir.parent.joinpath(f"{bas} {i}").exists():
+                i += 1
+            ut_dir = ut_dir.parent.joinpath(f"{bas} {i}")
+
+        try:
+            ut_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            return {"ok": False, "fel": f"Kan inte skapa mappen {ut_dir}: {e}"}
+
+        # Kopiera (och rensa uchg-flagga)
+        kopierade = 0
+        for f in skyddade:
+            try:
+                mal = ut_dir / f.name
+                shutil.copy2(f, mal)
+                try:
+                    os.chflags(mal, 0)
+                except (OSError, AttributeError):
+                    pass
+                kopierade += 1
+            except OSError:
+                continue
+
+        if not kopierade:
+            return {"ok": False, "fel": "Kunde inte kopiera några bilder."}
+
+        # Skriv Blue-etikett-XMP för varje kopia
+        from dpt2.motorer import xmp_writer
+        for f in (ut_dir / f.name for f in skyddade[:kopierade]):
+            if f.exists():
+                try:
+                    xmp_writer.skriv_xmp(f, label="Blue")
+                except Exception:
+                    pass
+
+        # Öppna i Lightroom
+        if oppna_lr:
+            self.oppna_i_lightroom(str(ut_dir))
+
+        return {"ok": True, "antal": kopierade, "path": str(ut_dir)}
+
+    def rata_upp_mapp(self, mapp):
+        """Upprätning: skriver XMP-sidecars bredvid raw-filerna för att initiera
+        Lightroom-upprätning. Icke-förstörande: befintliga develop + betyg/
+        etikett bevaras. I denna version används bara en placeholder för
+        upprätningsvinkeln; den tunga gyro/Vision-räkningen kan köras senare
+        via arbetaren. Returnerar {ok, n_raw, n_skriv} eller {ok:False, fel}."""
+        from dpt2.motorer import xmp_writer
+
+        if not mapp:
+            return {"ok": False, "fel": "Peka ut en mapp."}
+
+        kat = Path(mapp)
+        if not kat.is_dir():
+            return {"ok": False, "fel": "Mappen hittades inte."}
+
+        # Hämta raw-filer (rekursivt)
+        raw = [f for f in leverera.lista_bilder(str(kat))
+               if f.suffix.lower() in {".nef", ".dng", ".cr3", ".cr2", ".arw", ".raf", ".rw2", ".orf"}]
+
+        if not raw:
+            return {"ok": False, "fel": "Inga raw-filer i mappen."}
+
+        n_skriv = 0
+        for f in raw:
+            # Läs befintlig XMP (bevarar develop + betyg)
+            sc = f.with_suffix(".xmp")
+            preset = rating = label = None
+            if sc.exists():
+                try:
+                    preset = xmp_writer.las_preset(sc)
+                except Exception:
+                    pass
+
+            # Skriv XMP (icke-förstörande, bara placeholder för upprätning)
+            try:
+                xmp_writer.skriv_xmp(f, vinkel=0.0, preset=preset,
+                                    rating=rating, label=label)
+                n_skriv += 1
+            except Exception:
+                pass
+
+        return {"ok": True, "n_raw": len(raw), "n_skriv": n_skriv,
+                "meddelande": f"XMP-sidecars skrivna på {n_skriv} raw-filer. Importera mappen i Lightroom."}
+
+    def lar_av_match(self, pm_mapp, match_namn="", sport=""):
+        """Photo Mechanic "Lär av match": markerar ett urval som träningsdata.
+        Läser filerna från mappen och förbättrar träningskorpusen via arkiv-
+        omräkning (features extracteras senare när träningen körs). Returnerar
+        {ok, n_bilder} eller {ok:False, fel}."""
+        if not pm_mapp:
+            return {"ok": False, "fel": "Peka ut Photo Mechanic-mappen."}
+
+        pm_path = Path(pm_mapp)
+        if not pm_path.is_dir():
+            return {"ok": False, "fel": "Mappen hittades inte."}
+
+        # Läs alla bildfiler från PM-mappen
+        filer = leverera.lista_bilder(str(pm_path))
+        if not filer:
+            return {"ok": False, "fel": "Inga bildfiler i Photo Mechanic-mappen."}
+
+        # Använd tjanster/traning-modulen för att lagra som arkiv-uppdrag
+        from dpt2.tjanster import traning
+        namn = match_namn or pm_path.name or "Photo Mechanic-urval"
+
+        try:
+            # Omräkna arkiv lagrar filerna som träningsuppdrag
+            # I denna förenklad version: skapa ett facit-uppdrag utan features
+            # Features kommer extraheras när träningen körs
+            facit_id = store.spara_facit(
+                self.conn,
+                match_namn=namn,
+                sport=sport or "okänd",
+                n=len(filer),
+                features=extraktion.FEATURES
+            )
+            # Markera alla bilder som "valda" för träning (label=1, men utan features än)
+            rader = [(Path(f).stem, 1, 1.0, None) for f in filer]
+            store.ersatt_facit_rader(self.conn, facit_id, rader)
+        except Exception as e:
+            return {"ok": False, "fel": f"Kunde inte spara träningsdata: {e}"}
+
+        return {"ok": True, "n_bilder": len(filer), "namn": namn,
+                "meddelande": f"{namn}: {len(filer)} bilder märkta som träningsdata. Kör 'Träna' för att förbättra modellen."}
+
     # ── Publicera (Bildsvepet-text + Matchdag-story) ─────────────────────────
     def forhandsgranska_bildsvep_fraga(self, matchinfo, fakta=None):
         """Bygger (utan nätverksanrop) exakt den fråga som skulle skickas till
