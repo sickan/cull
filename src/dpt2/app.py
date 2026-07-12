@@ -2130,6 +2130,17 @@ def _innehall_md(data, bild_urls=None):
         }
         if data.get("datum"):
             slug = f"{data['datum']}-{slug}"            # blogg/{datum}-{slug}.md
+    elif typ == "film":
+        # Film-sidan (film.astro): hero + ingress + bild-only-galleri. Bilderna
+        # är oftast redan URL:er (importerade/pixieset) → figur-grenen nedan
+        # behåller en befintlig http-URL i stället för att härleda /bilder/...
+        fm = {
+            "typ": "film",
+            "titel": titel,
+            "ingress": data.get("ingress") or None,
+            "hero": bild_urls.get("hero") or data.get("hero") or None,
+            "heroPosition": data.get("heroPosition") or None,
+        }
     else:
         malskyttar = data.get("malskyttar")
         if isinstance(malskyttar, str):
@@ -2159,7 +2170,7 @@ def _innehall_md(data, bild_urls=None):
             # topp-flaggan till hero. None = härledd (nyaste avslutade).
             "topp": data.get("topp") or None,
         }
-    gal_text = typ not in ("landskap", "event", "sportevent")   # bild-only annars
+    gal_text = typ not in ("landskap", "event", "sportevent", "film")   # bild-only annars
     # URL-segmentet skiljer sig från content-collection-mappen för match:
     # filerna hamnar i public/sport/<slug>/ (sidan är src/pages/sport/[slug]
     # .astro), INTE public/bilder/<slug>/ — bara fixat för match hittills
@@ -2179,20 +2190,46 @@ def _innehall_md(data, bild_urls=None):
         # källfilen (f["bild"]), precis som match-grenen ovan. Att luta på
         # f["bild"] var buggen som skrev lokala Dropbox-sökvägar rakt in i den
         # publicerade brödtexten så sajten aldrig fick en läsbar bild.
-        figurer = [{"bild": bild_urls.get(i) or f"/bilder/{bildslug}/{i}.jpg",
+        # Behåll en redan absolut http-URL (importerat/publicerat innehåll där
+        # bilden lever på pixieset/R2), annars den kanoniska /bilder/-sökvägen.
+        # Lokala källfiler (f["bild"] = Dropbox-sökväg) matchar INTE http → de
+        # härleds fortfarande, precis som förr (aldrig lokala sökvägar i md).
+        def _figbild(i, f):
+            b = f.get("bild") or ""
+            if str(b).startswith("http"):
+                return b
+            return bild_urls.get(i) or f"/bilder/{bildslug}/{i}.jpg"
+        figurer = [{"bild": _figbild(i, f),
                     "alt": (f.get("alt") or "") if gal_text else "",
                     "bildtext": (f.get("bildtext") or "") if gal_text else ""}
                    for i, f in enumerate(data.get("figurer") or [], 1)]
-    if typ in ("match", "sportevent", "event", "landskap") and figurer:
+    if typ in ("match", "sportevent", "event", "landskap", "film") and figurer:
         # sport/portratt/landskap.astro läser frontmatterns `bilder:`-array
         # direkt (hero = bilder[0], galleriet = resten). För event & landskap
         # är detta ENDA bildkällan sajten renderar (brödtexten visas inte som
         # galleri där) — utan den blir korten och detaljsidorna bildlösa.
         fm["bilder"] = [f["bild"] for f in figurer] or None
-    figur_md = AX.figurer_markdown(figurer)
-    delar = [(data.get("body") or "").rstrip(), figur_md]
     if typ == "blogg":
-        delar.append(_platser_md(data.get("platser")))
+        # Inline-bilder (design-handoff "blogg inline-bilder"): en [bild N]-token
+        # i brödtexten byts mot figur N:s markdown (N = 1-baserad galleriposition).
+        # Token utan matchande bild lämnas orörd. Bilder som INTE refereras av
+        # någon token faller till slutgalleriet, som förr. Ordning: brödtext →
+        # Platser & tips → oanvänt galleri.
+        anvanda = set()
+
+        def _ers(m):
+            i = int(m.group(1)) - 1
+            if 0 <= i < len(figurer):
+                anvanda.add(i)
+                return AX.figurer_markdown([figurer[i]])
+            return m.group(0)
+        body_md = re.sub(r"\[bild\s+(\d+)\]", _ers, data.get("body") or "",
+                         flags=re.IGNORECASE)
+        galleri_md = AX.figurer_markdown(
+            [f for i, f in enumerate(figurer) if i not in anvanda])
+        delar = [body_md.rstrip(), _platser_md(data.get("platser")), galleri_md]
+    else:
+        delar = [(data.get("body") or "").rstrip(), AX.figurer_markdown(figurer)]
     body = "\n\n".join(p for p in delar if p)
     return fm, body, slug, AX.render_md(fm, body)
 

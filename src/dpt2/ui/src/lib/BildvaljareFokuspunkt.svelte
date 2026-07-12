@@ -24,6 +24,11 @@
   let dataUri = ''
   let laddar = false
   let fel = ''
+  // Redan publicerat/importerat innehåll har hero som en färdig URL (t.ex.
+  // pixieset/R2) utan lokal källfil — visa den URL:en direkt som förhandsvisning
+  // så fokuspunkten kan sättas ändå. Lokal miniatyr (dataUri) vinner när den finns.
+  $: urlHero = /^https?:\/\//.test(hero || '') ? hero : ''
+  $: visasBild = dataUri || urlHero
   let format = 'hero'                        // hero | kort | story — bara förhandsvisning
   $: if (!visaFormatval) format = 'hero'     // låst 21:9-vy
   let imgRatio = 16 / 9                      // bildens riktiga bredd/höjd (sätts vid inläsning)
@@ -90,7 +95,7 @@
     heroPosition = `${x}% ${y}%`
     dispatch('change', { hero, heroPosition })
   }
-  function ned(e) { if (!dataUri) return; try { e.currentTarget.setPointerCapture(e.pointerId) } catch (_) {} drar = true; satt(e) }
+  function ned(e) { if (!visasBild) return; try { e.currentTarget.setPointerCapture(e.pointerId) } catch (_) {} drar = true; satt(e) }
   function ror(e) { if (drar) satt(e) }
   function upp() { drar = false }
 </script>
@@ -98,7 +103,7 @@
 <div class="fokusfalt">
   <div class="fokusrad">
     <button type="button" class="valjbtn" on:click={valjBild} disabled={laddar}>
-      {laddar ? 'Laddar…' : dataUri ? 'Byt bild' : 'Välj bild'}
+      {laddar ? 'Laddar…' : visasBild ? 'Byt bild' : 'Välj bild'}
     </button>
     {#if hero}<span class="filnamn mono">{hero}</span>{/if}
     {#if dataUri && visaFormatval}
@@ -110,11 +115,11 @@
     {/if}
   </div>
 
-  {#if dataUri}
+  {#if visasBild}
     <div class="fokusgrid">
       <div class="fokusbild" bind:this={boxEl}
         on:pointerdown={ned} on:pointermove={ror} on:pointerup={upp} on:pointerleave={upp}>
-        <img class="fokusfoto" src={dataUri} alt="" draggable="false" on:load={paBildLast} />
+        <img class="fokusfoto" src={visasBild} alt="" draggable="false" on:load={paBildLast} />
         <div class="ram" style="left:{ram.l}%; top:{ram.t}%; width:{ram.w}%; height:{ram.h}%;"></div>
         <span class="korsprick" style="left:{punkt.x}%; top:{punkt.y}%;"></span>
       </div>

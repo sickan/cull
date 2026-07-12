@@ -25,10 +25,11 @@
     { id: 'landskap', namn: 'Landskap', farg: '#C9871F', hint: 'Bildserie — landskap & natur, endast bilder.' },
     { id: 'event', namn: 'Människor', farg: '#C9657F', hint: 'Porträtt, bröllop, student & företag.' },
     { id: 'blogg', namn: 'Blogg', farg: '#7A8794', hint: 'Journal, resor & fritext — en fristående bloggpost.' },
+    { id: 'film', namn: 'Film', farg: '#8A6FB0', hint: 'Analog / film — hero, ingress och ett bildgalleri.' },
   ]
   const EVENT_KAT = ['Porträtt', 'Bröllop', 'Student', 'Företag', 'Mode', 'Övrigt']
   // Editor-typ → export-mapp (content-collection). 'match' = matcher.
-  const EDITOR_MAPP = { match: 'matcher', sportevent: 'sportevent', blogg: 'blogg', landskap: 'landskap', event: 'event' }
+  const EDITOR_MAPP = { match: 'matcher', sportevent: 'sportevent', blogg: 'blogg', landskap: 'landskap', event: 'event', film: 'film' }
 
   let libType = 'sport'               // bibliotekets typ-nav
   let editorMode = false              // false = bibliotek, true = fokuserad editor
@@ -41,6 +42,11 @@
     hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
   let cmsBlogg = { kategori: '', titel: '', datum: '', ingress: '', body: '',
     hero: '', heroPosition: 'center center', heroKalla: '', platser: [], figurer: [] }
+  let cmsFilm = { titel: '', ingress: '',
+    hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
+  // Blogg inline-bilder: högerklicksmeny som infogar en [bild N]-token vid
+  // markören i brödtexten. blImgMeny = {x, y, pos} när menyn är öppen.
+  let blImgMeny = null
   // Matchartikeln: fälten är KOPPLADE till matchen tills man skriver eget
   // (own[f]=true bryter kopplingen; "↺ Hämta" återkopplar) — prototypens cmsOwn.
   const tomMatchArt = () => ({ innehallId: null, hem: '', borta: '', resultat: '',
@@ -76,11 +82,21 @@
   $: akt = ctyp === 'event' ? cmsEvent
     : ctyp === 'landskap' ? cmsLandskap
     : ctyp === 'match' ? cmsMatch
-    : ctyp === 'sportevent' ? cmsSportevent : cmsBlogg
+    : ctyp === 'sportevent' ? cmsSportevent
+    : ctyp === 'film' ? cmsFilm : cmsBlogg
   $: libinfo = LIBTYPER.find((t) => t.id === libType)
   // Bildtext per bild: match & blogg. Landskap/Människor/Sportevent = bild-only
   // (speglar _innehall_md:s gal_text).
   $: galText = ctyp === 'match' || ctyp === 'blogg'
+  // Gallerindex som refereras av [bild N]-token i bloggbrödtexten (för "I TEXTEN"-
+  // badgen + för att veta vilka bilder som ligger inline).
+  $: blUsed = (() => {
+    const s = new Set()
+    if (ctyp !== 'blogg') return s
+    const re = /\[bild\s+(\d+)\]/gi; let m
+    while ((m = re.exec(cmsBlogg.body || ''))) { const i = parseInt(m[1], 10) - 1; if (i >= 0) s.add(i) }
+    return s
+  })()
   $: aktTitel = ctyp === 'match' ? `${cmsMatch.hem} – ${cmsMatch.borta}` : (akt.titel || '')
   $: aktSlug = slugga(aktTitel)
   $: profil = profiler[artMatch?.sport] || profiler.fotboll ||
@@ -110,7 +126,7 @@
 
   // ── Bibliotek: publicerat & utkast ─────────────────────────────────────────
   const TYP_NAMN = { match: 'Matchartikel', sportevent: 'Event/mästerskap',
-    blogg: 'Blogg', event: 'Människor', landskap: 'Landskap' }
+    blogg: 'Blogg', event: 'Människor', landskap: 'Landskap', film: 'Film' }
   const DRAFTS_KEY = 'dpt2.drafts.v1'
   let overviewTab = 'publicerat'
   let poster = []                     // alla innehåll-rader (DB via listaInnehall)
@@ -169,15 +185,18 @@
     }
     const bas = { titel: fm.titel || '', ingress: fm.ingress || '',
                   hero: fm.hero || '', heroPosition: fm.heroPosition || 'center center', heroKalla: '', figurer: [] }
-    if (p.typ === 'event') cmsEvent = { ...cmsEvent, ...bas, kategori: fm.kategori || 'Porträtt', kund: fm.kund || '', datum: fm.datum || '', plats: fm.plats || '' }
-    else if (p.typ === 'landskap') cmsLandskap = { ...cmsLandskap, ...bas, plats: fm.plats || '', period: fm.period || '' }
-    else cmsBlogg = { ...cmsBlogg, ...bas, kategori: fm.kategori || '', datum: fm.datum || '', body: fm.body || p.body || '', platser: [] }
+    const bilderTillFig = (fm.bilder || []).map((url) => ({ bild: url, alt: '', bildtext: '', src: '', thumb: '' }))
+    if (p.typ === 'event') cmsEvent = { ...cmsEvent, ...bas, kategori: fm.kategori || 'Porträtt', kund: fm.kund || '', datum: fm.datum || '', plats: fm.plats || '', figurer: bilderTillFig }
+    else if (p.typ === 'landskap') cmsLandskap = { ...cmsLandskap, ...bas, plats: fm.plats || '', period: fm.period || '', figurer: bilderTillFig }
+    else if (p.typ === 'film') cmsFilm = { ...cmsFilm, ...bas, figurer: bilderTillFig }
+    else cmsBlogg = { ...cmsBlogg, ...bas, kategori: fm.kategori || '', datum: fm.datum || '', body: fm.body || p.body || '', platser: [], figurer: bilderTillFig }
     draftId = null
     oppnaEditor(p.typ)
   }
   function laddaUtkast(u) {
     if (u.typ === 'event') cmsEvent = { ...cmsEvent, ...u.data }
     else if (u.typ === 'landskap') cmsLandskap = { ...cmsLandskap, ...u.data }
+    else if (u.typ === 'film') cmsFilm = { ...cmsFilm, ...u.data }
     else if (u.typ === 'blogg') cmsBlogg = { ...cmsBlogg, ...u.data }
     else if (u.typ === 'sportevent') cmsSportevent = { ...tomSportevent(), ...u.data }
     else if (u.typ === 'match') { cmsMatch = { ...tomMatchArt(), ...u.data }; artMatchId = u.matchId || artMatchId; laddaArtMatch(false) }
@@ -220,7 +239,28 @@
   $: heroPost = (toppLage === 'valj' && toppValId && sportKort.find((p) => p.id === toppValId))
     || sportKort.find((p) => p.typ === 'match' && publiceradPost(p) && p.frontmatter?.resultat)
     || sportKort[0] || null
-  const heroBildUrl = (p) => /^https?:\/\//.test(p?.frontmatter?.hero || '') ? p.frontmatter.hero : ''
+  // Publicerat innehåll refererar bilder på flera sätt: absoluta URL:er
+  // (event/blogg/film → pixieset/R2), sajt-absoluta sökvägar (match-galleri
+  // /assets/photos/…) och bara filnamn (match-hero "01.jpg" → /sport/{slug}/).
+  // För VISNING i DPT2 resolvas de relativa mot den skarpa sajten — den
+  // kanoniska publiceringsdatan lämnas orörd (ingen mutation).
+  const SAJT = 'https://dalecarliaphoto.se'
+  const bildUrl = (ref, slug) => {
+    const r = ref || ''
+    if (!r) return ''
+    if (/^https?:\/\//.test(r)) return r
+    if (r.startsWith('/')) return SAJT + r
+    return slug ? `${SAJT}/sport/${slug}/${r}` : ''
+  }
+  // Kortens hero: explicit hero, annars bilder[0] (event/landskap härleder hero
+  // därifrån på sajten). Resolvas till en visningsbar URL.
+  const heroBildUrl = (p) => {
+    const fm = p?.frontmatter || {}
+    return bildUrl(fm.hero || (fm.bilder && fm.bilder[0]) || '', fm.slug || p?.id || '')
+  }
+  // Galleri-miniatyr: lokal miniatyr (thumb) vinner, annars figurens bild-URL
+  // (resolvad om den är sajt-absolut/relativ).
+  const figThumbSrc = (b) => b?.thumb || bildUrl(b?.bild || '', '')
 
   // "Öppna matchartikel för match X" — från sportevent-underartiklar & kort.
   async function oppnaMatchArtikel(matchId = null, post = null) {
@@ -289,7 +329,14 @@
       mellan: fm.halvtid || fm.set || fm.perioder || '', datum: fm.datum || '',
       serie: fm.serie || '', arena: fm.arena || '', pixieset: fm.pixieset || '',
       malskyttar: Array.isArray(fm.malskyttar) ? fm.malskyttar.join(', ') : (fm.malskyttar || ''),
-      heroPosition: fm.heroPosition || 'center center',
+      // Hero resolvad för VISNING (match-hero "01.jpg" → /sport/{slug}/01.jpg) så
+      // fältet visar bilden i stället för bara filnamnet. Vid skarp publicering
+      // vinner ändå R2-URL:en (bild_urls['hero']); lokala utkast berörs ej.
+      hero: bildUrl(fm.hero, fm.slug || p.id), heroPosition: fm.heroPosition || 'center center',
+      // Publicerade galleribilder (frontmatterns bilder[]) in i galleriet så de
+      // syns när man öppnar en publicerad matchartikel — precis som event/film.
+      // "Hämta höjdpunkter" ersätter dem med ett färskt Gallra-urval vid behov.
+      figurer: (fm.bilder || []).map((url) => ({ bild: url, alt: '', bildtext: '', src: '', thumb: '' })),
       svep: (p.body || '').split('\n').filter((l) => !l.trim().startsWith('![')).join('\n').trim() }
     laddaArtMatch(false)
     oppnaEditor('match')
@@ -444,6 +491,8 @@
   function data() {
     if (ctyp === 'event') return { typ: 'event', ...cmsEvent, figurer: utanThumb(cmsEvent.figurer) }
     if (ctyp === 'landskap') return { typ: 'landskap', ...cmsLandskap, figurer: utanThumb(cmsLandskap.figurer) }
+    if (ctyp === 'film') return { typ: 'film', ...cmsFilm,
+      bilder: cmsFilm.figurer.map((f) => f.bild).filter(Boolean), figurer: utanThumb(cmsFilm.figurer) }
     if (ctyp === 'match') {
       const c = cmsMatch
       return { typ: 'match', id: c.innehallId || undefined, match_id: artMatchId || null,
@@ -499,6 +548,27 @@
   }
   function laggPlats() { cmsBlogg.platser = [...cmsBlogg.platser, { plats: '', tips: '' }] }
   function taPlats(i) { cmsBlogg.platser = cmsBlogg.platser.filter((_, j) => j !== i); forhandsgranska() }
+
+  // ── Blogg inline-bilder: högerklick i brödtexten → infoga [bild N]-token ─────
+  function blCtx(e) {
+    e.preventDefault()
+    blImgMeny = { x: e.clientX, y: e.clientY, pos: e.target.selectionStart }
+  }
+  function blImgClose() { if (blImgMeny) blImgMeny = null }
+  function blInsertImg(i) {
+    if (!blImgMeny) return
+    const body = cmsBlogg.body || ''
+    const p = Math.max(0, Math.min(blImgMeny.pos == null ? body.length : blImgMeny.pos, body.length))
+    cmsBlogg.body = body.slice(0, p) + `[bild ${i + 1}]` + body.slice(p)
+    blImgMeny = null
+    forhandsgranska()
+  }
+  // Menyns position: klampad mot fönsterkanterna (som prototypen).
+  $: blImgMenyStil = blImgMeny
+    ? `position:fixed;left:${Math.max(8, Math.min(blImgMeny.x, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 290))}px;`
+      + `top:${Math.max(8, Math.min(blImgMeny.y, (typeof window !== 'undefined' ? window.innerHeight : 800) - (60 + cmsBlogg.figurer.length * 47)))}px;`
+      + 'z-index:410;width:270px;'
+    : 'display:none;'
 
   async function spara() {
     if (!$testMode && !exportDirs[ctyp]) {
@@ -561,6 +631,7 @@
               {#if lt.id === 'sport'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v5l4.3 3.1-1.6 5H9.3l-1.6-5L12 8.5"/></svg>
               {:else if lt.id === 'landskap'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-8 4 6 3-4 6 6"/><circle cx="17.5" cy="7.5" r="1.8"/></svg>
               {:else if lt.id === 'event'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.5 3.1-5.5 7-5.5s7 2 7 5.5"/></svg>
+              {:else if lt.id === 'film'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M8 5v14M16 5v14M4 9.5h4M4 14.5h4M16 9.5h4M16 14.5h4"/></svg>
               {:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>{/if}
             </span>
             <span class="cmstnamn scd">{lt.namn}</span>
@@ -571,10 +642,11 @@
         <button class="nyknapp" on:click={() => {
           if (libType === 'blogg') cmsBlogg = { kategori: '', titel: '', datum: '', ingress: '', body: '', hero: '', heroPosition: 'center center', heroKalla: '', platser: [], figurer: [] }
           else if (libType === 'landskap') cmsLandskap = { titel: '', plats: '', period: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
+          else if (libType === 'film') cmsFilm = { titel: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
           else cmsEvent = { kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
           draftId = null
           oppnaEditor(libType)
-        }}>+ Ny {libType === 'blogg' ? 'blogg' : libType === 'landskap' ? 'landskap' : 'människa'}</button>
+        }}>+ Ny {libType === 'blogg' ? 'blogg' : libType === 'landskap' ? 'landskap' : libType === 'film' ? 'film' : 'människa'}</button>
       {/if}
     </div>
     <div class="cmssub">{libinfo?.hint}
@@ -621,7 +693,7 @@
             <button class="sportkort" on:click={() => laddaPost(p)} title="Öppna för redigering">
               {#if publiceradPost(p)}<Hornmarkor farg="#6FB35A" r={10} titel="Publicerad" />{/if}
               {#if p.typ === 'sportevent'}<span class="tavlingbadge">Tävling</span>{/if}
-              <div class="skthumb"></div>
+              <div class="skthumb">{#if heroBildUrl(p)}<img src={heroBildUrl(p)} alt="" loading="lazy" />{/if}</div>
               <div class="sktitel">{titelAv(p)}</div>
               <div class="skmeta">{[p.frontmatter?.resultat, datumKort(p.frontmatter?.datum),
                 publiceradPost(p) ? '' : 'utkast'].filter(Boolean).join(' · ') || '—'}</div>
@@ -695,7 +767,7 @@
             <div class="ovrad" role="button" tabindex="0" title="Klicka för att ändra"
               on:click={() => laddaPost(p)} on:keydown={(e) => e.key === 'Enter' && laddaPost(p)}>
               <Hornmarkor farg="#6FB35A" r={10} titel="Publicerad" />
-              <div class="ovthumb"></div>
+              <div class="ovthumb">{#if heroBildUrl(p)}<img src={heroBildUrl(p)} alt="" loading="lazy" />{/if}</div>
               <div class="ovmitt"><div class="ovtitel">{titelAv(p)}</div><div class="ovmeta">{datumText(p.synkad_tid || p.frontmatter?.datum, 'Publicerad')}</div></div>
               <button class="ovx" class:armerad={$armerad === `pub-${p.id}`}
                 title={$armerad === `pub-${p.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
@@ -720,7 +792,7 @@
           {#each libUtkastDb as p (p.id)}
             <div class="ovrad" role="button" tabindex="0" title="Klicka för att fortsätta"
               on:click={() => laddaPost(p)} on:keydown={(e) => e.key === 'Enter' && laddaPost(p)}>
-              <div class="ovthumb"></div>
+              <div class="ovthumb">{#if heroBildUrl(p)}<img src={heroBildUrl(p)} alt="" loading="lazy" />{/if}</div>
               <div class="ovmitt"><div class="ovtitel">{titelAv(p)}</div><div class="ovmeta">{datumText(p.skapad, 'Skapad')} · utkast</div></div>
               <button class="ovx" class:armerad={$armerad === `pub-${p.id}`}
                 on:click|stopPropagation={taBortKlick(`pub-${p.id}`, () => raderaPost(p))}>
@@ -906,6 +978,20 @@
         </div>
         <div class="f mt"><label>Ingress</label><textarea rows="3" bind:value={cmsLandskap.ingress} on:change={forhandsgranska}></textarea></div>
       </div>
+    {:else if ctyp === 'film'}
+      <div class="kort">
+        <div class="caps">Film — analog / stillbild</div>
+        <div class="grid2">
+          <div class="f"><label>Titel</label><input bind:value={cmsFilm.titel} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Tema</label>
+            <div class="temalast" title="Temat härleds ur innehållstypen">
+              <span class="temaprick"></span><span class="temanamn">Sol</span>
+              <span class="temainfo">· låst för Film</span>
+            </div>
+          </div>
+        </div>
+        <div class="f mt"><label>Ingress</label><textarea rows="3" bind:value={cmsFilm.ingress} on:change={forhandsgranska}></textarea></div>
+      </div>
     {:else}
       <div class="kort">
         <div class="caps">Journal / reseberättelse</div>
@@ -915,8 +1001,33 @@
           <div class="f"><label>Datum</label><input type="date" bind:value={cmsBlogg.datum} on:change={forhandsgranska} /></div>
         </div>
         <div class="f mt"><label>Ingress</label><textarea rows="2" bind:value={cmsBlogg.ingress} on:change={forhandsgranska}></textarea></div>
-        <div class="f mt"><label>Brödtext (markdown)</label><textarea rows="6" bind:value={cmsBlogg.body} on:change={forhandsgranska}></textarea></div>
+        <div class="f mt"><label>Brödtext (markdown) · högerklick infogar bild</label>
+          <textarea rows="6" bind:value={cmsBlogg.body} on:change={forhandsgranska} on:contextmenu={blCtx}></textarea>
+        </div>
+        <div class="blimghjalp">Högerklicka i texten för att infoga en bild ur galleriet där markören står — <span class="mono">[bild 2]</span> byts mot bilden vid publicering. Bilder utan token hamnar som galleri sist i inlägget.</div>
+        {#if (cmsBlogg.body || '').trim()}
+          <div class="f mt"><label>Förhandsvisning</label>
+            <div class="bodyprev">{@html cmsBlogg.body}</div>
+          </div>
+        {/if}
       </div>
+
+      {#if blImgMeny}
+        <div class="blimgoverlay" on:click={blImgClose} on:contextmenu|preventDefault={blImgClose} role="presentation"></div>
+        <div class="blimgmeny" style={blImgMenyStil}>
+          <div class="blimgrubrik">Infoga bild vid markören</div>
+          {#each cmsBlogg.figurer as b, i (b)}
+            <button type="button" class="blimgrad" on:click={() => blInsertImg(i)}>
+              <span class="blimgtn">{#if figThumbSrc(b)}<img src={figThumbSrc(b)} alt="" />{:else}<span class="blimgn">{i + 1}</span>{/if}</span>
+              <span class="blimgtxt">
+                <span class="blimglbl">{b.alt || `Bild ${i + 1}`}</span>
+                <span class="blimgtok mono">[bild {i + 1}]</span>
+              </span>
+            </button>
+          {/each}
+          {#if !cmsBlogg.figurer.length}<div class="blimgtom">Inga bilder i galleriet ännu.</div>{/if}
+        </div>
+      {/if}
 
       <div class="kort">
         <div class="caps">Platser &amp; tips</div>
@@ -959,9 +1070,10 @@
         {#each akt.figurer as b, i (b)}
           <div class="figtile" class:drar={dragIdx === i} draggable="true"
             on:dragstart={() => dragStart(i)} on:dragover={(e) => dragOver(i, e)} on:drop={() => slapp(i)} on:dragend={() => (dragIdx = null)}>
-            <button type="button" class="figthumb" class:has={!!b.thumb}
+            <button type="button" class="figthumb" class:has={!!figThumbSrc(b)}
               on:click={() => valjFigurBild(i)} title="Välj bild">
-              {#if b.thumb}<img src={b.thumb} alt="" draggable="false" />{:else}<span>+ bild {i + 1}</span>{/if}
+              {#if figThumbSrc(b)}<img src={figThumbSrc(b)} alt="" draggable="false" />{:else}<span>+ bild {i + 1}</span>{/if}
+              {#if ctyp === 'blogg' && blUsed.has(i)}<span class="itexten">I TEXTEN</span>{/if}
             </button>
             <button class="figx" class:armerad={$armerad === `fig-${i}`}
               title={$armerad === `fig-${i}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
@@ -971,7 +1083,7 @@
               <input class="figcap" bind:value={b.bildtext} on:change={forhandsgranska} placeholder="Bildtext…" />
               <input class="figalt" bind:value={b.alt} on:change={forhandsgranska} placeholder="Alt-text (tillgänglighet)" />
             {:else}
-              <div class="figref">/bilder/{aktSlug}/{i + 1}.jpg</div>
+              <div class="figref">{(b.bild || '').startsWith('http') ? b.bild : `/bilder/${aktSlug}/${i + 1}.jpg`}</div>
             {/if}
           </div>
         {/each}
@@ -1047,8 +1159,9 @@
   .ovrad { position: relative; overflow: hidden; display: flex; align-items: center; gap: 11px; cursor: pointer;
     background: var(--panel); border: 1px solid var(--div3); border-radius: 10px; padding: 9px 12px; margin-bottom: 7px; }
   .ovrad:hover { border-color: var(--acc); }
-  .ovthumb { width: 42px; height: 42px; flex: none; border-radius: 7px;
+  .ovthumb { width: 42px; height: 42px; flex: none; border-radius: 7px; overflow: hidden;
     background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 6px, var(--kort) 6px, var(--kort) 12px); }
+  .ovthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .ovmitt { flex: 1; min-width: 0; }
   .ovtitel { font-size: 13px; font-weight: 600; color: var(--t-head); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ovmeta { font-size: 11px; color: var(--t-mut); margin-top: 2px; }
@@ -1084,8 +1197,9 @@
   .sportkort { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 6px; text-align: left;
     border: 1px solid var(--div3); border-radius: 10px; background: var(--panel); padding: 10px; cursor: pointer; }
   .sportkort:hover { border-color: var(--acc); }
-  .skthumb { width: 100%; aspect-ratio: 4/3; border-radius: 7px;
+  .skthumb { width: 100%; aspect-ratio: 4/3; border-radius: 7px; overflow: hidden;
     background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 7px, var(--kort) 7px, var(--kort) 14px); }
+  .skthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .sktitel { font-size: 12.5px; font-weight: 700; color: var(--t-head); }
   .skmeta { font-size: 10.5px; color: var(--t-mut); }
   .tavlingbadge { position: absolute; top: 16px; left: 16px; z-index: 2; font-size: 9px; font-weight: 700;
@@ -1187,6 +1301,30 @@
   .galhint { font-size: 11px; color: var(--t-help); }
 
   .galgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; align-items: start; }
+  .blimghjalp { font-size: 11px; color: var(--t-help); margin-top: 6px; line-height: 1.5; }
+  .blimghjalp .mono { font-family: var(--mono, ui-monospace, monospace); }
+  .blimgoverlay { position: fixed; inset: 0; z-index: 409; }
+  .blimgmeny { background: var(--kort, var(--panel)); border: 1px solid var(--div);
+    border-radius: 10px; box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4); padding: 5px;
+    display: flex; flex-direction: column; gap: 1px; }
+  .blimgrubrik { font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--t-caps, var(--t-mut)); padding: 7px 9px 5px; }
+  .blimgrad { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+    background: transparent; border: none; border-radius: 7px; padding: 6px 8px; cursor: pointer;
+    font-family: inherit; }
+  .blimgrad:hover { background: var(--div3); }
+  .blimgtn { position: relative; width: 44px; height: 33px; flex: none; border-radius: 5px;
+    overflow: hidden; border: 1px solid var(--div3); display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(135deg, var(--div3), var(--div3) 5px, var(--kort) 5px, var(--kort) 10px); }
+  .blimgtn img { width: 100%; height: 100%; object-fit: cover; }
+  .blimgn { font-family: var(--mono, ui-monospace, monospace); font-size: 9px; color: var(--t-mut); }
+  .blimgtxt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .blimglbl { font-size: 12px; color: var(--t-head); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .blimgtok { font-family: var(--mono, ui-monospace, monospace); font-size: 10px; color: var(--t-mut); }
+  .blimgtom { font-size: 11.5px; color: var(--t-mut); padding: 7px 9px; }
+  .itexten { position: absolute; left: 6px; bottom: 6px; font-size: 9px; font-weight: 700;
+    letter-spacing: 0.05em; background: rgba(10, 13, 17, 0.72); color: var(--acc);
+    border: 1px solid var(--div); border-radius: 5px; padding: 2px 6px; font-family: inherit; }
   .figtile { position: relative; display: flex; flex-direction: column; gap: 7px;
     border: 1px solid var(--div3); border-radius: 10px; padding: 8px; background: var(--panel); }
   .figtile.drar { opacity: 0.4; }
@@ -1210,6 +1348,15 @@
   .figaddtile svg { width: 20px; height: 20px; }
   .figaddtile:hover { border-color: var(--acc); color: var(--acc); }
 
+  .bodyprev { border: 1px solid var(--div); border-radius: 9px; padding: 14px 16px;
+    background: var(--panel); max-height: 520px; overflow-y: auto; font-size: 14px;
+    line-height: 1.6; color: var(--t-body, var(--t-head)); }
+  .bodyprev :global(img) { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 12px 0; }
+  .bodyprev :global(figure) { margin: 14px 0; }
+  .bodyprev :global(figcaption) { font-size: 12px; color: var(--t-mut); margin-top: 5px; }
+  .bodyprev :global(blockquote) { margin: 14px 0; padding-left: 14px; border-left: 3px solid var(--acc);
+    color: var(--t-mut); font-style: italic; }
+  .bodyprev :global(h1), .bodyprev :global(h2), .bodyprev :global(h3) { color: var(--t-head); margin: 16px 0 8px; }
   .figurer { display: flex; flex-direction: column; gap: 10px; }
   .figadd { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px dashed var(--div); border-radius: 10px; padding: 11px; color: var(--t-mut); font-size: 13px; font-weight: 500; background: transparent; width: 100%; }
   .figadd:hover { border-color: var(--acc); color: var(--acc); }
