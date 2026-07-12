@@ -1,92 +1,459 @@
 <script>
-  import { onMount } from 'svelte'
-  import { snabbplockKortrot, valjMapp, listaMinnesKort } from '../lib/api.js'
+  // Snabbplock — dedikerat plock-läge (B1–B3 ur MFF-backloggen).
+  // Flöde: Kort in → Plocka → Mata ut → (nästa kort …) → Granska → Lightroom.
+  // Medvetet mörk "fältläge"-panel oavsett app-tema (se design-handoffen) —
+  // därför egen hårdkodad palett, inte tokens.css.
+  //
+  // UI-först: rutnätet visar platshållar-tumnaglar och Lightroom-steget är en
+  // simulerad statuslista. Riktig RAW-preview + urval persistat per jobb +
+  // stegvis kopiera/import görs i en backend-uppföljning (markerat nedan).
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte'
+  import { aktivMatch, listaMinnesKort } from '../lib/api.js'
 
-  let kort = []
-  let valtKort = ''
-  let utMapp = ''
-  let laddar = true
-  let kor = false
-  let status = ''
-  let resultat = null
+  const dispatch = createEventDispatcher()
+  const N_THUMBS = 10 // tumnaglar som visas per kort (de senaste; resten rullar in)
+
+  // Seedade demo-kort — används tills riktig kort-detektering (volym-montering)
+  // är inkopplad. Fylls med riktiga monterade kort om sådana finns.
+  const SEED = [
+    { name: 'Kort 1 · NIKON Z 8 · 277Z8_01', total: 312 },
+    { name: 'Kort 2 · NIKON Z 8 · 278Z8_02', total: 168 },
+    { name: 'Kort 3 · NIKON Z 9 · 104Z9_07', total: 96 },
+  ]
+
+  let step = 'insert' // insert | pick | review | lr
+  let cardIdx = 0 // nästa kort att läsa
+  let cards = SEED
+  let picks = {} // { [cardIdx]: { [thumbIdx]: true } }
+  let removed = {} // granska: { 'c-i': true }
+  let lrPhase = 'idle' // idle | running | done
+  let lrStep = 0
+  let timer = null
+  let headerMatch = null
 
   onMount(async () => {
+    headerMatch = await aktivMatch()
+    // Fånga upp redan monterade kort så flödet kan köras skarpt när kort sitter i.
     const r = await listaMinnesKort()
-    if (r.ok) kort = r.kort || []
-    valtKort = kort[0]?.path || ''
-    laddar = false
+    if (r && r.ok && r.kort && r.kort.length) {
+      cards = r.kort.map((k, i) => ({
+        name: `Kort ${i + 1} · ${k.namn}`,
+        total: k.skyddade || 0,
+        path: k.path,
+      }))
+    }
   })
+  onDestroy(() => timer && clearInterval(timer))
 
-  async function valjUtMapp() {
-    const r = await valjMapp('Välj utgångsmapp för snabbplock')
-    if (r.ok) utMapp = r.path
+  // ── Härledda värden ────────────────────────────────────────────────────────
+  $: cur = step === 'pick' ? cardIdx - 1 : -1
+  const range = (n) => Array.from({ length: n }, (_, i) => i)
+  $: doneIdx = range(cardIdx).filter((c) => c !== cur)
+  // Reaktiv (inte const) så statements som anropar den spårar `picks` som
+  // beroende och räknas om när urvalet ändras.
+  $: pickedList = (c) => Object.keys(picks[c] || {}).map(Number).sort((a, b) => a - b)
+  $: totalPicked = Object.keys(picks).reduce((a, c) => a + Object.keys(picks[c]).length, 0)
+  $: removedN = Object.keys(removed).length
+  $: finalN = totalPicked - removedN
+  $: hasNextCard = cardIdx < cards.length
+  $: allCardsDone = cardIdx >= cards.length
+  $: canReview = step === 'insert' && totalPicked > 0
+  $: noneDone = doneIdx.length === 0 && cur < 0
+  $: curCard = cur >= 0 ? cards[cur] : null
+  $: curPickedN = cur >= 0 ? pickedList(cur).length : 0
+
+  $: headerFixture = headerMatch
+    ? `${headerMatch.lag_hemma} – ${headerMatch.lag_borta} · aktiv match`
+    : 'Inget aktivt jobb — plocka ändå'
+
+  // Chips i urvals-raden: en grön per genomgånget kort + amber för det som läses.
+  $: cardChips = [
+    ...doneIdx.map((c) => ({
+      label: `${cards[c].name.split(' · ')[0]} · ${pickedList(c).length} plockade`,
+      cur: false,
+    })),
+    ...(cur >= 0 ? [{ label: `${cards[cur].name.split(' · ')[0]} · läses nu`, cur: true }] : []),
+  ]
+
+  // Flödes-stepper (B3): Lightroom lyser sist.
+  const FLOW = ['Kort in', 'Plocka', 'Kort ut', 'Granska', 'Lightroom']
+  $: flowActive =
+    step === 'insert' ? (doneIdx.length ? 2 : 0) : step === 'pick' ? 1 : step === 'review' ? 3 : 4
+
+  const dscNum = (c, i) => 'DSC_0' + (400 + c * 100 + i)
+  // Platshållar-ton per ruta (tills riktiga RAW-previews kopplas in).
+  const tint = (c, i) => {
+    const h = (c * 47 + i * 23) % 360
+    return `linear-gradient(135deg, hsl(${h} 24% 26%), hsl(${(h + 40) % 360} 22% 17%))`
   }
 
-  async function korSnabbplock() {
-    if (!valtKort) return
-    kor = true
-    status = ''
-    resultat = null
-    const r = await snabbplockKortrot(valtKort, utMapp || undefined)
-    kor = false
-    if (r.ok) {
-      status = `✓ ${r.antal} bilder kopierade till ${r.path}`
-      resultat = r
-    } else {
-      status = r.fel || 'Fel vid snabbplock'
-    }
+  $: curThumbs =
+    cur < 0
+      ? []
+      : range(N_THUMBS).map((i) => ({ i, num: dscNum(cur, i), on: !!(picks[cur] || {})[i] }))
+
+  $: reviewGroups = Object.keys(picks)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .filter((c) => pickedList(c).length)
+    .map((c) => ({
+      label: `${cards[c].name} — ${pickedList(c).length} plockade`,
+      thumbs: pickedList(c).map((i) => {
+        const k = `${c}-${i}`
+        return { c, i, key: k, num: dscNum(c, i), off: !!removed[k] }
+      }),
+    }))
+  $: doneCardsN = reviewGroups.length
+
+  const LR_STEG = [
+    ['Kopierar N bilder till arbetsdisken', 'Urvalet kopierat — korten orörda'],
+    ['Bygger import med husstil + metadata', 'Import byggd'],
+    ['Öppnar Lightroom med urvalet', 'Lightroom öppnat med urvalet'],
+  ]
+  $: lrSteps = LR_STEG.map((d, i) => {
+    const done = lrPhase === 'done' || lrStep > i
+    const active = lrPhase === 'running' && lrStep === i
+    return { label: done ? d[1] : d[0].replace('N', finalN), done, active }
+  })
+
+  // ── Handlingar ──────────────────────────────────────────────────────────────
+  function insertCard() {
+    if (cardIdx >= cards.length) return
+    cardIdx += 1
+    step = 'pick'
+  }
+  function togglePick(c, i) {
+    const per = { ...(picks[c] || {}) }
+    if (per[i]) delete per[i]
+    else per[i] = true
+    picks = { ...picks, [c]: per }
+  }
+  function ejectCard() {
+    step = 'insert'
+  }
+  function goReview() {
+    step = 'review'
+  }
+  function toggleRemoved(k) {
+    const r = { ...removed }
+    if (r[k]) delete r[k]
+    else r[k] = true
+    removed = r
+  }
+  function backToInsert() {
+    step = 'insert'
+  }
+  function openLightroom() {
+    // UI-först: simulerad statuslista (samma mönster som Live-publiceringen).
+    // Backend-uppföljning: kopiera valda bilder → bygg import → öppna LR skarpt.
+    step = 'lr'
+    lrPhase = 'running'
+    lrStep = 0
+    timer && clearInterval(timer)
+    timer = setInterval(() => {
+      lrStep += 1
+      if (lrStep >= 3) {
+        clearInterval(timer)
+        timer = null
+        lrStep = 3
+        lrPhase = 'done'
+      }
+    }, 800)
+  }
+  function restart() {
+    timer && clearInterval(timer)
+    timer = null
+    step = 'insert'
+    cardIdx = 0
+    picks = {}
+    removed = {}
+    lrPhase = 'idle'
+    lrStep = 0
   }
 </script>
 
-<div class="panel">
-  <header><h1 class="scd">Snabbplock</h1></header>
-  <p class="sub">Kopiera kameralåsta bilder från kort — fristående snabbväg för paus-fotografering.</p>
-
-  {#if laddar}
-    <p class="tom">Läser minneskort…</p>
-  {:else}
-    <div class="kort">
-      <div class="caps">Minneskort</div>
-      {#if kort.length}
-        <div class="frad">
-          <span class="fl">Kort</span>
-          <select bind:value={valtKort}>
-            {#each kort as k}
-              <option value={k.path}>{k.namn} ({k.skyddade} låsta)</option>
-            {/each}
-          </select>
-        </div>
-        <div class="frad">
-          <span class="fl">Utgångsmapp (opt.)</span>
-          <input class="mono" bind:value={utMapp} placeholder="~/…eller lämna tomt för Snabbplock/" />
-          <button class="valj" on:click={valjUtMapp}>Välj…</button>
-        </div>
-        <button class="btn-primary" on:click={korSnabbplock} disabled={kor || !valtKort}>
-          {kor ? 'Kopierar…' : 'Kör snabbplock'}
-        </button>
-        {#if status}
-          <p class={resultat?.ok ? 'status-ok' : 'status-err'}>{status}</p>
-        {/if}
-      {:else}
-        <p class="tom">Inget minneskort monterat. Sätt in kortet och försök igen.</p>
-      {/if}
+<div class="sp">
+  <!-- Topp: titel + jobb + flödes-stepper -->
+  <div class="topp">
+    <div class="titel">
+      <span class="ikon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/></svg>
+      </span>
+      <div>
+        <div class="h1 scd">Snabbplock</div>
+        <div class="fixtur">{headerFixture}</div>
+      </div>
     </div>
-  {/if}
+    <span class="vaxt"></span>
+    <div class="stepper">
+      {#each FLOW as f, i}
+        <span class="fs" class:aktiv={i === flowActive} class:gjord={i < flowActive}>{f}</span>
+        {#if i < FLOW.length - 1}<span class="pil">→</span>{/if}
+      {/each}
+    </div>
+  </div>
+
+  <div class="kropp">
+    <!-- Urvals-rad: alltid synlig — B1 -->
+    <div class="urval">
+      <span class="urval-lbl">Urval</span>
+      {#each cardChips as cc}
+        <span class="chip" class:cur={cc.cur}><span class="chip-dot"></span>{cc.label}</span>
+      {/each}
+      {#if noneDone}<span class="tom">Inga kort genomgångna ännu</span>{/if}
+      <span class="vaxt"></span>
+      <span class="total scd">{totalPicked} plockade</span>
+    </div>
+
+    <!-- ============ STEG: SÄTT I KORT ============ -->
+    {#if step === 'insert'}
+      <div class="dropyta">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(243,245,247,.4)" stroke-width="1.4" class="drop-ic"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 3v4M12 3v4M15 3v4"/></svg>
+        <div class="drop-h scd">Sätt i ett minneskort</div>
+        <div class="drop-p">Kortet läses direkt — plocka medan bilderna rullar in.<br>Urvalet ligger kvar mellan korten.</div>
+        {#if hasNextCard}
+          <button class="btn-amber" on:click={insertCard}>Kort upptäckt: {cards[cardIdx].name} — läs kortet</button>
+          <div class="drop-not">(prototyp — simulerar att kortet sätts i)</div>
+        {/if}
+        {#if allCardsDone}<div class="drop-alla">Alla kort genomgångna.</div>{/if}
+      </div>
+      {#if canReview}
+        <div class="mitt">
+          <button class="btn-linje" on:click={goReview}>Klar — granska urvalet ({totalPicked}) ›</button>
+        </div>
+      {/if}
+    {/if}
+
+    <!-- ============ STEG: PLOCKA ============ -->
+    {#if step === 'pick'}
+      <div class="rad-rubrik">
+        <span class="grondot"></span>
+        <span class="rr-namn scd">{curCard.name}</span>
+        <span class="rr-meta">{curCard.total} bilder på kortet · nyast först</span>
+        <span class="vaxt"></span>
+        <span class="rr-plock"><b>{curPickedN}</b> plockade på det här kortet</span>
+      </div>
+      <div class="rutnat plock">
+        {#each curThumbs as t}
+          <button class="ruta" class:on={t.on} style="background-image:{tint(cur, t.i)}" on:click={() => togglePick(cur, t.i)}>
+            {#if t.on}<span class="stjarna">★</span>{/if}
+            <span class="dsc">{t.num}</span>
+          </button>
+        {/each}
+      </div>
+      <div class="hjalp">Klicka en bild för att plocka den · klicka igen för att ångra. Visar de senaste — resten av kortet rullar in under genomgången.</div>
+      <div class="fot-rad">
+        <button class="btn-mork" on:click={ejectCard}>⏏ Mata ut kortet</button>
+        <span class="fot-hjalp">Urvalet ligger kvar — sätt i nästa kort,<br>eller granska när alla kort är genomgångna.</span>
+        <span class="vaxt"></span>
+        <button class="btn-linje" on:click={goReview}>Klar — granska ({totalPicked}) ›</button>
+      </div>
+    {/if}
+
+    <!-- ============ STEG: GRANSKA (B2) ============ -->
+    {#if step === 'review'}
+      <div class="granska-rubrik">
+        <span class="gr-h scd">Granska urvalet</span>
+        <span class="gr-p">Kryssa bort det som inte ska med — sedan öppnas Lightroom med resten.</span>
+      </div>
+      {#each reviewGroups as g}
+        <div class="grupp">
+          <div class="grupp-lbl">{g.label}</div>
+          <div class="rutnat granska">
+            {#each g.thumbs as t}
+              <button class="ruta gruta" class:av={t.off} style="background-image:{tint(t.c, t.i)}" on:click={() => toggleRemoved(t.key)}>
+                {#if t.off}<span class="kryss">✕</span>{:else}<span class="stjarna liten">★</span>{/if}
+                <span class="dsc">{t.num}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/each}
+      <div class="fot-rad">
+        <button class="btn-mork" on:click={backToInsert}>‹ Fler kort</button>
+        <span class="vaxt"></span>
+        {#if removedN}<span class="bortkryss">{removedN} bortkryssade</span>{/if}
+        <button class="btn-amber stor" on:click={openLightroom}>Öppna i Lightroom · {finalN} bilder</button>
+      </div>
+    {/if}
+
+    <!-- ============ STEG: LIGHTROOM (B3) ============ -->
+    {#if step === 'lr'}
+      <div class="lr-kort">
+        {#if lrPhase === 'running'}
+          <div class="lr-h scd">Öppnar Lightroom …</div>
+        {:else}
+          <div class="lr-klar">
+            <span class="lr-badge">✓</span>
+            <div class="lr-h scd">Lightroom öppnat</div>
+          </div>
+        {/if}
+        <div class="lr-steg">
+          {#each lrSteps as st}
+            <div class="lr-rad">
+              <span class="lr-dot" class:done={st.done} class:active={st.active}>✓</span>
+              <span class="lr-lbl" class:done={st.done} class:active={st.active}>{st.label}</span>
+            </div>
+          {/each}
+        </div>
+        {#if lrPhase === 'done'}
+          <div class="lr-slut">{finalN} bilder importerade från {doneCardsN} kort.<br>Korten kan formateras när säkerhetskopian är verifierad.</div>
+          <div class="mitt"><button class="btn-mork liten" on:click={restart}>Börja om</button></div>
+        {/if}
+      </div>
+    {/if}
+  </div>
+
+  <!-- Footer: snabbväg, inte ett steg -->
+  <div class="footer">
+    <span class="footer-txt">Plocka direkt från minneskorten — Lightroom öppnas när urvalet är klart.</span>
+    <span class="vaxt"></span>
+    <button class="btn-mork" on:click={() => dispatch('navigera', 'gallra')}>Fortsätt till Gallra ›</button>
+  </div>
 </div>
 
 <style>
-  .panel { padding: 1rem; }
-  header { margin-bottom: 1rem; }
-  .caps { font-size: 0.75rem; font-weight: 600; opacity: 0.6; text-transform: uppercase; margin-bottom: 0.5rem; }
-  .sub { opacity: 0.7; margin-bottom: 1rem; }
-  .kort { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
-  .frad { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
-  .fl { min-width: 100px; font-size: 0.9rem; }
-  input, select { flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; font-size: 0.9rem; }
-  .valj { padding: 0.5rem 1rem; cursor: pointer; }
-  .btn-primary { width: 100%; padding: 0.75rem; background: var(--accent); color: var(--text); border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; margin-top: 1rem; }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .status-ok { color: var(--success); margin-top: 1rem; }
-  .status-err { color: var(--error); margin-top: 1rem; }
-  .tom { opacity: 0.6; font-style: italic; }
+  /* Medvetet mörk fältläges-panel — egen palett, oberoende av app-temat. */
+  .sp {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0a0d11;
+    color: #f3f5f7;
+    font-family: Saira, sans-serif;
+    box-sizing: border-box;
+  }
+  .scd { font-family: 'Saira Condensed', sans-serif; }
+  .vaxt { flex: 1; }
+  button { font-family: inherit; cursor: pointer; }
+
+  /* Topp */
+  .topp {
+    flex: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: #0d1015;
+    padding: 16px 26px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .titel { display: flex; align-items: center; gap: 12px; }
+  .ikon {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: rgba(240, 180, 90, 0.14); color: #f0b45a;
+    display: flex; align-items: center; justify-content: center; flex: none;
+  }
+  .h1 { font-size: 20px; font-weight: 700; letter-spacing: 0.01em; }
+  .fixtur { font-size: 11.5px; color: rgba(243, 245, 247, 0.5); }
+  .stepper { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .fs {
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 999px; border: 1px solid transparent;
+    color: rgba(243, 245, 247, 0.3);
+  }
+  .fs.gjord { color: rgba(243, 245, 247, 0.6); }
+  .fs.aktiv {
+    font-weight: 700; color: #f0b45a;
+    background: rgba(240, 180, 90, 0.14); border-color: rgba(240, 180, 90, 0.4);
+  }
+  .pil { color: rgba(243, 245, 247, 0.28); font-size: 11px; }
+
+  .kropp { flex: 1; max-width: 1060px; width: 100%; margin: 0 auto; padding: 22px 26px 40px; box-sizing: border-box; }
+
+  /* Urvals-rad */
+  .urval {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: #12151b; border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px; padding: 12px 16px; margin-bottom: 18px;
+  }
+  .urval-lbl { font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: rgba(243, 245, 247, 0.45); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: #1b2028; border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px; padding: 4px 12px; font-size: 11.5px; font-weight: 600; color: rgba(243, 245, 247, 0.8);
+  }
+  .chip-dot { width: 7px; height: 7px; border-radius: 50%; background: #6fb35a; flex: none; }
+  .chip.cur { background: rgba(240, 180, 90, 0.1); border-color: rgba(240, 180, 90, 0.4); color: #f0b45a; }
+  .chip.cur .chip-dot { background: #f0b45a; }
+  .tom { font-size: 12px; color: rgba(243, 245, 247, 0.4); }
+  .total { font-size: 17px; font-weight: 700; color: #f0b45a; }
+
+  /* Sätt i kort */
+  .dropyta {
+    border: 1.5px dashed rgba(255, 255, 255, 0.18); border-radius: 16px;
+    padding: 46px 30px; text-align: center; background: rgba(255, 255, 255, 0.015);
+  }
+  .drop-ic { margin-bottom: 14px; }
+  .drop-h { font-size: 22px; font-weight: 700; }
+  .drop-p { font-size: 12.5px; color: rgba(243, 245, 247, 0.5); margin-top: 6px; line-height: 1.5; }
+  .drop-not { font-size: 10.5px; color: rgba(243, 245, 247, 0.35); margin-top: 9px; }
+  .drop-alla { font-size: 12.5px; color: rgba(243, 245, 247, 0.5); margin-top: 16px; }
+  .mitt { display: flex; justify-content: center; margin-top: 18px; }
+
+  /* Knappar */
+  .btn-amber { background: #f0b45a; color: #100c05; border: none; border-radius: 10px; padding: 12px 22px; font-size: 13.5px; font-weight: 700; margin-top: 20px; }
+  .btn-amber.stor { padding: 13px 24px; font-size: 14px; margin-top: 0; }
+  .btn-linje { background: transparent; border: 1.5px solid #f0b45a; color: #f0b45a; border-radius: 10px; padding: 12px 24px; font-size: 13.5px; font-weight: 700; }
+  .btn-mork { background: #12151b; border: 1px solid rgba(255, 255, 255, 0.16); color: #f3f5f7; border-radius: 10px; padding: 12px 20px; font-size: 13.5px; font-weight: 700; }
+  .btn-mork.liten { padding: 10px 18px; font-size: 12.5px; font-weight: 600; border-radius: 9px; }
+
+  /* Plocka */
+  .rad-rubrik { display: flex; align-items: center; gap: 12px; margin-bottom: 13px; flex-wrap: wrap; }
+  .grondot { width: 9px; height: 9px; border-radius: 50%; background: #6fb35a; box-shadow: 0 0 9px #6fb35a; flex: none; }
+  .rr-namn { font-size: 18px; font-weight: 700; }
+  .rr-meta { font-size: 12px; color: rgba(243, 245, 247, 0.5); }
+  .rr-plock { font-size: 12.5px; color: rgba(243, 245, 247, 0.7); }
+  .rr-plock b { color: #f0b45a; }
+
+  .rutnat { display: grid; gap: 10px; }
+  .rutnat.plock { grid-template-columns: repeat(5, 1fr); }
+  .rutnat.granska { grid-template-columns: repeat(6, 1fr); gap: 9px; }
+  .ruta {
+    position: relative; aspect-ratio: 3 / 2; border-radius: 9px; overflow: hidden; padding: 0;
+    background-size: cover; background-position: center;
+    outline: 1px solid rgba(255, 255, 255, 0.09); outline-offset: -2px; border: none;
+  }
+  .ruta.on { outline: 2.5px solid #f0b45a; box-shadow: 0 0 14px rgba(240, 180, 90, 0.35); }
+  .ruta.gruta { border-radius: 8px; outline: 1px solid rgba(255, 255, 255, 0.12); outline-offset: -1px; }
+  .ruta.gruta.av { outline: 1px solid rgba(224, 96, 127, 0.5); }
+  .stjarna {
+    position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%;
+    background: #f0b45a; color: #100c05; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+  }
+  .stjarna.liten { top: 5px; right: 5px; width: 19px; height: 19px; font-size: 11px; background: rgba(10, 13, 17, 0.6); color: #f0b45a; }
+  .kryss { position: absolute; inset: 0; background: rgba(10, 13, 17, 0.66); display: flex; align-items: center; justify-content: center; font-size: 19px; color: #e0607f; }
+  .dsc { position: absolute; left: 7px; bottom: 6px; font-family: 'Saira Condensed', sans-serif; font-size: 10px; color: rgba(255, 255, 255, 0.55); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
+  .hjalp { font-size: 11px; color: rgba(243, 245, 247, 0.4); margin-top: 10px; }
+
+  .fot-rad { display: flex; align-items: center; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); flex-wrap: wrap; }
+  .fot-hjalp { font-size: 11.5px; color: rgba(243, 245, 247, 0.45); line-height: 1.45; }
+  .bortkryss { font-size: 12px; color: rgba(243, 245, 247, 0.5); }
+
+  /* Granska */
+  .granska-rubrik { display: flex; align-items: baseline; gap: 12px; margin-bottom: 5px; flex-wrap: wrap; }
+  .gr-h { font-size: 20px; font-weight: 700; }
+  .gr-p { font-size: 12px; color: rgba(243, 245, 247, 0.5); }
+  .grupp { margin-top: 16px; }
+  .grupp-lbl { font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: rgba(243, 245, 247, 0.45); margin-bottom: 9px; }
+
+  /* Lightroom */
+  .lr-kort { max-width: 520px; margin: 40px auto 0; background: #12151b; border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 16px; padding: 28px 30px; }
+  .lr-h { font-size: 19px; font-weight: 700; text-align: center; margin-bottom: 20px; }
+  .lr-klar { text-align: center; margin-bottom: 20px; }
+  .lr-badge { display: inline-flex; width: 44px; height: 44px; border-radius: 50%; background: #6fb35a; color: #0a0d11; align-items: center; justify-content: center; font-size: 21px; font-weight: 700; margin-bottom: 10px; }
+  .lr-klar .lr-h { margin-bottom: 0; }
+  .lr-steg { display: flex; flex-direction: column; gap: 15px; }
+  .lr-rad { display: flex; align-items: center; gap: 12px; }
+  .lr-dot { width: 18px; height: 18px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; background: transparent; color: transparent; border: 1.5px solid rgba(255, 255, 255, 0.2); }
+  .lr-dot.active { background: #f0b45a; color: #0a0d11; border: none; }
+  .lr-dot.done { background: #6fb35a; color: #0a0d11; border: none; }
+  .lr-lbl { font-size: 12.5px; color: rgba(243, 245, 247, 0.4); }
+  .lr-lbl.active { color: #f3f5f7; }
+  .lr-lbl.done { color: rgba(243, 245, 247, 0.85); }
+  .lr-slut { font-size: 11.5px; color: rgba(243, 245, 247, 0.5); text-align: center; margin-top: 18px; line-height: 1.5; }
+
+  /* Footer */
+  .footer { flex: none; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 26px; border-top: 1px solid rgba(255, 255, 255, 0.08); background: #0d1015; }
+  .footer-txt { font-size: 12px; color: rgba(243, 245, 247, 0.55); }
 </style>
