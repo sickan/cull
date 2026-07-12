@@ -167,8 +167,13 @@ class Api:
         matchspecifika inhopp/nummer), annars LAGENS egna trupper — matchtruppen
         skapas först vid "Hämta match", och målskytt-väljaren i mobilen ska ha
         spelarna även för matcher som inte förberetts vid datorn."""
+        # Matchtruppen bär `start` (matchdaguttag markerar de 11) + position
+        # (sparas i `info` på matchspelare). Mobilens MÅL-flöde delar upp
+        # startelva vs bänk på `start`; utan uttag är alla start=False → sökbar lista.
         roster = [{"nr": s.get("nr") or None, "namn": s.get("namn"),
-                   "lag": s.get("lag")}
+                   "lag": s.get("lag"),
+                   "start": bool(s.get("start")),
+                   "position": s.get("info") or s.get("position") or ""}
                   for s in (m.get("spelare") or []) if s.get("namn")]
         if roster:
             return roster
@@ -179,7 +184,8 @@ class Api:
             for s in store.lag_trupp(self.conn, l["id"]):
                 if s.get("namn"):
                     roster.append({"nr": s.get("nr") or None, "namn": s["namn"],
-                                   "lag": sida})
+                                   "lag": sida, "start": False,
+                                   "position": s.get("position") or ""})
         return roster
 
     def _push_live(self, match_id, falt):
