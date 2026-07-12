@@ -1751,7 +1751,7 @@ class Api:
                         max_bredd=1600, kvalitet=75)
                     if url:
                         bild_urls[i] = url
-        elif typ in ("event", "landskap", "blogg", "sportevent"):
+        elif typ in ("event", "landskap", "blogg", "sportevent", "film"):
             # Samma R2-uppladdning som match: separat hero-bild (B4 — hero är
             # nu skild från galleriet) + galleribilderna. Utan detta hamnade
             # bara den lokala källsökvägen (t.ex. en Dropbox-sökväg) i
@@ -2048,7 +2048,7 @@ def _utkast_till_jobbdict(u):
 # — används av testläge för att räkna ut samma relativa sökväg under
 # test-output/content/ som skarpt hade skrivit under sajtens content/.
 _INNEHALL_MAPP = {"blogg": "blogg", "match": "matcher", "sportevent": "sportevent",
-                  "landskap": "landskap", "event": "event"}
+                  "landskap": "landskap", "event": "event", "film": "film"}
 
 
 def _innehall_md(data, bild_urls=None):
