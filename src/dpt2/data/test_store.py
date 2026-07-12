@@ -181,6 +181,26 @@ class TestMatchCRUD(unittest.TestCase):
         mid = store.spara_match(self.c, m)
         self.assertEqual(store.hamta_match(self.c, mid)["status"], "kommande")
 
+    def test_resultat_vid_uppdatering_ger_avslutad(self):
+        # En kommande match som EFTERÅT får ett resultat (Slutsignalen) måste bli
+        # 'avslutad' — även fast utkastet bär med sig det inlästa 'kommande'.
+        m = dict(self.match); m["resultat"] = ""; m["datum"] = "2027-01-01"
+        mid = store.spara_match(self.c, m)
+        uppd = store.hamta_match(self.c, mid)          # bär status='kommande'
+        uppd["resultat"] = "2-0"
+        store.spara_match(self.c, uppd)
+        self.assertEqual(store.hamta_match(self.c, mid)["status"], "avslutad")
+
+    def test_satt_resultat_uppgraderar_status(self):
+        # Resultatremsan (satt_resultat) ska följa samma regel: resultat →
+        # avslutad, rensat resultat → återhärledd status.
+        m = dict(self.match); m["resultat"] = ""; m["datum"] = "2027-01-01"
+        mid = store.spara_match(self.c, m)
+        store.satt_resultat(self.c, mid, resultat="2-0")
+        self.assertEqual(store.hamta_match(self.c, mid)["status"], "avslutad")
+        store.satt_resultat(self.c, mid, resultat="")
+        self.assertEqual(store.hamta_match(self.c, mid)["status"], "kommande")
+
     def test_redigera_tar_bort_spelare(self):
         mid = store.spara_match(self.c, self.match)
         m = store.hamta_match(self.c, mid)

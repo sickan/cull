@@ -277,7 +277,17 @@
     slutForm = { resultat: m?.resultat || '', mellan: m?.mellan || '', malskyttar: m?.malskyttar || '',
       mkLive: true, mkSome: true, mkWeb: true }
   }
-  function slutSet(f, v) { slutForm = { ...slutForm, [f]: v } }
+  function slutSet(f, v) {
+    slutForm = { ...slutForm, [f]: v }
+    // Resultat/mellan/målskyttar hör till MATCHEN, inte bara till Slutsignal-
+    // formuläret. Spegla in dem i utkast så att BÅDE "Spara & skapa utkast"
+    // och den vanliga "Spara"-knappen persisterar dem. Utan detta tappades ett
+    // resultat som skrevs i Slutsignalen tyst så fort man committade med den
+    // vanliga Spara-knappen (som sparar utkast, inte slutForm).
+    if (f === 'resultat' || f === 'mellan' || f === 'malskyttar') {
+      utkast = { ...utkast, [f]: v }
+    }
+  }
   async function slutSave() {
     if (arMatch()) return
     const m = { ...utkast, resultat: slutForm.resultat, mellan: slutForm.mellan,

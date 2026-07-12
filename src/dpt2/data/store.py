@@ -875,8 +875,15 @@ def spara_match(conn, match):
 
     mid = (match.get("id") or "").strip() or ny_id()
     datum = iso_datum(match.get("datum"))
-    status = match.get("status") or matchlogik.harled_status(
-        datum, match.get("tid"), match.get("resultat"))
+    # Ett ifyllt resultat betyder alltid "avslutad" — även vid UPPDATERING.
+    # Tidigare vann det inlästa status-värdet (match.get("status") or ...), så
+    # en match som fick ett resultat via Slutsignalen låg kvar som 'kommande'
+    # (Slutsignal-fältet skrevs på matchen men status uppgraderades aldrig).
+    if (match.get("resultat") or "").strip():
+        status = "avslutad"
+    else:
+        status = match.get("status") or matchlogik.harled_status(
+            datum, match.get("tid"), None)
     skapad = match.get("skapad") or _nu()
 
     # ON CONFLICT DO UPDATE (äkta upsert) — INTE "INSERT OR REPLACE": den
@@ -927,10 +934,20 @@ def satt_resultat(conn, match_id, resultat=None, mellan=None, malskyttar=None):
     Innehåll — kontinuerlig redigering, inte Slutsignalens engångsskrivning).
     Ren UPDATE mot de tre kolumnerna, INTE spara_match: den senare kräver ett
     fullständigt match-dict (lag/tävling-normalisering) och bygger om hela
-    match_trupp vid varje anrop — fel verktyg för en fältvis autospar-remsa."""
+    match_trupp vid varje anrop — fel verktyg för en fältvis autospar-remsa.
+
+    Status följer med: ett ifyllt resultat gör matchen 'avslutad', ett rensat
+    resultat återhärleder status ur datum/tid (samma regel som spara_match)."""
+    rad = conn.execute("SELECT datum, tid FROM matchen WHERE id=?",
+                       (match_id,)).fetchone()
+    status = matchlogik.harled_status(
+        rad["datum"] if rad else None,
+        rad["tid"] if rad else None, resultat)
     conn.execute(
-        "UPDATE matchen SET resultat=?, mellan=?, malskyttar=? WHERE id=?",
-        (resultat or None, mellan or None, malskyttar or None, match_id))
+        "UPDATE matchen SET resultat=?, mellan=?, malskyttar=?, status=? "
+        "WHERE id=?",
+        (resultat or None, mellan or None, malskyttar or None,
+         status, match_id))
     conn.commit()
 
 
