@@ -111,6 +111,7 @@ CREATE TABLE matchen (
   galleri      TEXT,                     -- Pixieset-URL
   sida_url     TEXT,                     -- publicerad hemsideslänk
   omslag       TEXT,                     -- omslagsbild (filsökväg)
+  event        INTEGER NOT NULL DEFAULT 0, -- p.5: heldagsevent = match utan motståndare
   skapad       TEXT NOT NULL
 );
 CREATE INDEX idx_match_datum   ON matchen(datum);

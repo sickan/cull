@@ -143,6 +143,22 @@ class TestMatchCRUD(unittest.TestCase):
         borta = next(p for p in m["spelare"] if p["nr"] == "7")
         self.assertEqual(borta["lag"], "borta")
 
+    def test_p5_heldagsevent_utan_motstandare(self):
+        # p.5: event = match utan motståndare. Ingen borta-referens sparas även
+        # om ett namn följde med; event-flaggan round-trippar.
+        mid = store.spara_match(self.c, {
+            "lag_hemma": "Partille Cup", "lag_borta": "", "event": True,
+            "datum": "2026-07-06", "arena": "Göteborg", "sport": "fotboll",
+            "liga": "Heldagsevent"})
+        m = store.hamta_match(self.c, mid)
+        self.assertTrue(m["event"])
+        self.assertEqual(m["lag_hemma"], "Partille Cup")
+        self.assertEqual(m["lag_borta"], "")
+        self.assertIsNone(m["lag_borta_id"])
+        # syns i listan med event-flaggan
+        rad = next(r for r in store.lista_matcher(self.c) if r["id"] == mid)
+        self.assertTrue(rad["event"])
+
     def test_efter_match_lankar_round_trip(self):
         m = dict(self.match)
         m["galleri"] = "https://malmoff.pixieset.com/damallsvenskan-27jun/"

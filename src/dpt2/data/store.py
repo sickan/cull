@@ -865,13 +865,17 @@ def spara_match(conn, match):
             return lid
         return upsert_lag(conn, match.get(namn_nyckel, ""))
 
+    # p.5: heldagsevent = match utan motståndare. Ingen borta-referens (även om
+    # ett namn råkade följa med) och resultat är irrelevant.
+    event = 1 if match.get("event") else 0
     hemma_id = _lag_ref("lag_hemma_id", "lag_hemma")
-    borta_id = _lag_ref("lag_borta_id", "lag_borta")
+    borta_id = None if event else _lag_ref("lag_borta_id", "lag_borta")
 
     # Tävling äger sina lag: koppla in hemma/borta i den valda tävlingen.
     if tav_id:
         koppla_lag_till_tavling(conn, tav_id, hemma_id)
-        koppla_lag_till_tavling(conn, tav_id, borta_id)
+        if borta_id:
+            koppla_lag_till_tavling(conn, tav_id, borta_id)
 
     mid = (match.get("id") or "").strip() or ny_id()
     datum = iso_datum(match.get("datum"))
@@ -894,7 +898,7 @@ def spara_match(conn, match):
     conn.execute(
         "INSERT INTO matchen(id,tavling_id,sport,lag_hemma_id,"
         "lag_borta_id,datum,tid,arena,resultat,mellan,malskyttar,status,"
-        "galleri,sida_url,omslag,skapad) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+        "galleri,sida_url,omslag,event,skapad) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(id) DO UPDATE SET "
         "tavling_id=excluded.tavling_id, sport=excluded.sport, "
         "lag_hemma_id=excluded.lag_hemma_id, lag_borta_id=excluded.lag_borta_id, "
@@ -902,13 +906,13 @@ def spara_match(conn, match):
         "resultat=excluded.resultat, mellan=excluded.mellan, "
         "malskyttar=excluded.malskyttar, status=excluded.status, "
         "galleri=excluded.galleri, sida_url=excluded.sida_url, "
-        "omslag=excluded.omslag",
+        "omslag=excluded.omslag, event=excluded.event",
         (mid, tav_id, sport, hemma_id, borta_id, datum,
          match.get("tid") or None, match.get("arena") or None,
          match.get("resultat") or None, match.get("mellan") or None,
          match.get("malskyttar") or None, status,
          match.get("galleri") or None, match.get("sida_url") or None,
-         match.get("omslag") or None, skapad))
+         match.get("omslag") or None, event, skapad))
 
     # Spelare → trupp: bygg om länkarna (så borttagna spelare försvinner).
     conn.execute("DELETE FROM match_trupp WHERE match_id=?", (mid,))
@@ -1001,14 +1005,15 @@ def hamta_match(conn, match_id):
         "mellan": m["mellan"] or "", "malskyttar": m["malskyttar"] or "",
         "status": m["status"], "galleri": m["galleri"] or "",
         "sida_url": m["sida_url"] or "",
-        "omslag": m["omslag"] or "", "skapad": m["skapad"], "spelare": spelare,
+        "omslag": m["omslag"] or "", "event": bool(m["event"]),
+        "skapad": m["skapad"], "spelare": spelare,
     }
 
 
 def lista_matcher(conn):
     """Matchlista (utan spelare) för kalender/översikt, nyast först."""
     rader = conn.execute(
-        "SELECT m.id,m.datum,m.tid,m.arena,m.status,m.resultat,m.sport,"
+        "SELECT m.id,m.datum,m.tid,m.arena,m.status,m.resultat,m.sport,m.event,"
         "m.tavling_id, h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga, "
         "h.gren AS hem_gren, "
         "h.stall_hemma AS hemfarg, b.stall_hemma AS bortafarg, "

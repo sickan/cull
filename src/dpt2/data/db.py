@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -577,6 +577,13 @@ def _migrera(conn, fran_version):
             ALTER TABLE innehall_ny RENAME TO innehall;
             """)
             conn.execute("PRAGMA foreign_keys=ON")
+
+    if fran_version < 25:
+        # v25 (p.5): heldagsevent = match utan motståndare. Explicit flagga så
+        # ett event skiljs från en match där borta bara råkar vara okänd.
+        if _har_tabell(conn, "matchen") and not _har_kolumn(conn, "matchen", "event"):
+            conn.execute(
+                "ALTER TABLE matchen ADD COLUMN event INTEGER NOT NULL DEFAULT 0")
 
 
 def _har_kolumn(conn, tabell, kolumn):
