@@ -53,10 +53,18 @@ POST /rendera  → 200 image/jpeg | 400 {"fel": …} | 401 | 500
   "gren": "dam",                       // dam|herr|mixed → färgad kant
   "format": "9x16",                    // 9x16|4x5|1x1|1.91x1|16x9
   "fokus": {"x": 50, "y": 35}, "zoom": 1.15,
+  "overlay": true,                     // valfritt (default true); false = ren
+                                       //   beskuren bild utan Horisont-grafik
+  "scorers_layout": "auto",            // valfritt: auto|rad|chips|spalter (A4)
 
   "hem_logga": "<base64 PNG>", "borta_logga": "<base64 PNG>"
 }
 ```
+
+> **A2/A3/A4/A5 (2026-07-13):** mallförändringarna (indragen Skagen-logga,
+> borttagen liga-text + webbadress, dynamisk målskyttelista) ligger i
+> `story_overlay.py` och slår därför igenom här utan kodändring. Containern
+> måste dock **byggas om** (`docker build`) för att få den nya renderaren.
 
 Ogiltig indata (saknat foto, trasig JPEG, dålig base64, för stor bild) ger **400
 med förklaring**, aldrig en tyst 500.

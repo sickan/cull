@@ -13,6 +13,9 @@ Kontrakt (server-till-server, aldrig exponerad mot telefonen direkt):
            "liga": "...", "stallning": "3-1", "mal_rad": "...", "arena": "...",
            "sport": "fotboll", "tema": "Hav", "gren": "dam",
            "format": "9x16", "fokus": {"x": 50, "y": 40}, "zoom": 1.2,
+           "overlay": true,               # valfritt (default true); false =
+                                          #   ren beskuren bild utan grafik
+           "scorers_layout": "auto",      # valfritt: auto|rad|chips|spalter (A4)
            "foto": "<base64>",            # obligatoriskt
            "hem_logga": "<base64>",       # valfritt (annars monogram)
            "borta_logga": "<base64>"

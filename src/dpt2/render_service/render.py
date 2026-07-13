@@ -26,6 +26,7 @@ from dpt2.motorer import story_overlay
 _GENOMSLAPP = (
     "liga", "stallning", "mal_rad", "avspark_tid", "arena", "next_when",
     "sport", "tema", "gren", "format", "zoom",
+    "overlay", "scorers_layout",
 )
 
 MAX_BYTES = 25 * 1024 * 1024   # skydd mot orimliga uppladdningar

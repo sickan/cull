@@ -320,78 +320,48 @@ def _hornmask(w, h, horn="vl", inre=0.18, yttre=0.72):
 
 
 def _tema_logga_lager(canvas_w, canvas_h, tema):
-    """Skagen Hav-logga uppe till vänster, hörnmaskad.
+    """Skagen Hav-märket uppe till vänster.
 
-    80 % max-opacitet (höjt från 50 % 2026-07-03 — för svag mot ljusa/röriga
-    foton, i praktiken osynlig) + tightare hörnmask (närmare full synlighet,
-    inte bara en tunn skymt långt ute i hörnet)."""
+    A2 (2026-07-13): indraget från gren-kanten — vänsterkant = 18px gren-kant +
+    ~58px luft (x = 76px @ 1080), top = 44px, höjd = 132px. Ren logga (ingen
+    hörnmask längre) med mjuk drop-shadow (0 3px 10px rgba(0,0,0,.55)) och
+    85 % opacitet. Speglar prototypen `Matchgrafik Horisont.dc.html`."""
     import numpy as np
+    from PIL import ImageFilter
     Image, *_ = _pil()
     p = _hitta_tema_logga(tema)
     if not p:
         return None
     try:
+        # Skala mot canvas-bredden så 132px @ 1080 håller i alla format.
+        skala  = canvas_w / CANVAS_W
+        h_logo = max(1, round(132 * skala))
+        x0     = round(76 * skala)
+        y0     = round(44 * skala)
         logo = Image.open(p).convert("RGBA")
-        h_logo = 200
         w_logo = max(1, int(logo.width * h_logo / logo.height))
         logo   = logo.resize((w_logo, h_logo), Image.LANCZOS)
-        mask   = _hornmask(w_logo, h_logo, "vl", inre=0.05, yttre=0.5)
-        logo_a = __import__("numpy").asarray(logo.getchannel("A"), dtype=np.float32)
-        mask_a = __import__("numpy").asarray(mask, dtype=np.float32)
-        ny_a   = (logo_a * mask_a / 255.0 * 0.8).astype("uint8")
-        logo.putalpha(Image.fromarray(ny_a, "L"))
-        lager  = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
-        lager.alpha_composite(logo, (0, 0))
+        # 85 % opacitet
+        logo_a = (__import__("numpy").asarray(logo.getchannel("A"),
+                  dtype=np.float32) * 0.85).astype("uint8")
+        logo.putalpha(Image.fromarray(logo_a, "L"))
+
+        lager = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+        # Drop-shadow: 0 3px 10px rgba(0,0,0,.55)
+        blur   = max(1, round(10 * skala))
+        dy     = max(1, round(3 * skala))
+        sh_src = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+        sh_a   = Image.new("L", logo.size, 0)
+        sh_a.paste(logo.getchannel("A"), (0, 0))
+        black  = Image.new("RGBA", logo.size, (0, 0, 0, 140))
+        black.putalpha(sh_a)
+        sh_src.alpha_composite(black, (x0, y0 + dy))
+        sh_src = sh_src.filter(ImageFilter.GaussianBlur(blur))
+        lager.alpha_composite(sh_src)
+        lager.alpha_composite(logo, (x0, y0))
         return lager
     except Exception:
         return None
-
-
-def _competition_text_lager(canvas_w, canvas_h, competition):
-    """Tävlings-/liga-/mästerskapsnamnet, spärrad text uppe till höger — ersätter
-    den tidigare liga-loggan (watermark). CSS-referens: top:52px; right:60px;
-    max-width:560px; text-align:right; font:600 27px Saira; letter-spacing:.24em;
-    color:rgba(255,255,255,.66); text-shadow:0 1px 4px rgba(0,0,0,.55)."""
-    if not competition:
-        return None
-    from PIL import ImageFilter
-    Image, ImageDraw, *_ = _pil()
-    text    = competition.upper()
-    storlek = 27
-    max_w   = 560
-    right   = 60
-    top     = 52
-
-    tmp = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
-    d0  = ImageDraw.Draw(tmp)
-    tracking = round(0.24 * storlek)
-    bredd    = _spärrad_bredd(d0, text, _saira(600, storlek), tracking)
-    while bredd > max_w and storlek > 14:
-        storlek -= 1
-        tracking = round(0.24 * storlek)
-        bredd    = _spärrad_bredd(d0, text, _saira(600, storlek), tracking)
-    fnt = _saira(600, storlek)
-    h   = _text_h(d0, text, fnt)
-
-    pad   = 6
-    t_img = Image.new("RGBA", (int(bredd) + pad * 2, h + pad * 2 + 4), (0, 0, 0, 0))
-    t_d   = ImageDraw.Draw(t_img)
-
-    # Skugga: 0 1px 4px rgba(0,0,0,.55)
-    sh_img = Image.new("RGBA", t_img.size, (0, 0, 0, 0))
-    sh_d   = ImageDraw.Draw(sh_img)
-    _spärrad_text(sh_d, (pad, pad + 1), text, fnt, (0, 0, 0, 140), tracking)
-    sh_img = sh_img.filter(ImageFilter.GaussianBlur(4))
-    t_img.alpha_composite(sh_img)
-
-    # Text: vit, 66 % opacity → alpha 168
-    _spärrad_text(t_d, (pad, pad), text, fnt, (255, 255, 255, 168), tracking)
-
-    lager = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
-    x = canvas_w - right - pad - int(bredd)
-    y = top - pad
-    lager.alpha_composite(t_img, (x, y))
-    return lager
 
 
 # Gren-kant — samma färgspråk som gren-markören på matchkort/matchlista i appen.
@@ -414,53 +384,6 @@ def _gren_kant_lager(canvas_w, canvas_h, gren):
     lager = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
     strip = Image.new("RGBA", (bredd, canvas_h), farg)
     lager.alpha_composite(strip, (0, 0))
-    return lager
-
-
-# ---------------------------------------------------------------------------
-# Vertikal URL-text (nere till vänster)
-# ---------------------------------------------------------------------------
-
-def _url_text_lager(canvas_w, canvas_h):
-    """
-    'www.dalecarliaphoto.se' vertikalt, läses nedifrån upp.
-    CSS: left:24px; bottom:54px; writing-mode:vertical-rl; rotate(180deg).
-    """
-    from PIL import ImageFilter
-    Image, ImageDraw, *_ = _pil()
-    url      = "www.dalecarliaphoto.se"
-    fnt      = _saira(500, 16)
-    tracking = round(0.22 * 16)   # .22em @ 16px ≈ 4px
-
-    # Mät textdimension
-    tmp_img = Image.new("RGBA", (800, 60), (0, 0, 0, 0))
-    tmp_d   = ImageDraw.Draw(tmp_img)
-    t_w     = int(_spärrad_bredd(tmp_d, url, fnt, tracking))
-    t_h     = _text_h(tmp_d, "Ag", fnt)
-
-    # Rita text + skugga på horisontell yta
-    pad   = 4
-    h_img = Image.new("RGBA", (t_w + pad * 2, t_h + pad * 2 + 2), (0, 0, 0, 0))
-    h_d   = ImageDraw.Draw(h_img)
-
-    # Skugga: 0 1px 3px rgba(0,0,0,.55)
-    sh_img = Image.new("RGBA", h_img.size, (0, 0, 0, 0))
-    sh_d   = ImageDraw.Draw(sh_img)
-    _spärrad_text(sh_d, (pad, pad + 1), url, fnt, (0, 0, 0, 140), tracking)
-    sh_img = sh_img.filter(ImageFilter.GaussianBlur(3))
-    h_img.alpha_composite(sh_img)
-
-    # Text: vit, 70 % opacity → alpha 178
-    _spärrad_text(h_d, (pad, pad), url, fnt, (255, 255, 255, 178), tracking)
-
-    # Rotera CW → text läses nedifrån upp
-    v_img = h_img.rotate(-90, expand=True)
-
-    # Placera: left=24, bottom-edge=canvas_h-54
-    lager = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
-    x = 24
-    y = canvas_h - 54 - v_img.height
-    lager.alpha_composite(v_img, (x, y))
     return lager
 
 
@@ -594,11 +517,149 @@ def _render_preview(canvas, accent, lag_hemma, lag_borta,
 
 
 # ---------------------------------------------------------------------------
+# A4 · Målskyttelistan under Slutresultatet — dynamisk layout
+# ---------------------------------------------------------------------------
+# Tre layouter (speglar Tweaks-proppen `scorersLayout` i prototypen):
+#   'rad'     — en balanserad textrad (auto-krymp 30→26→23 efter antal), radbryts
+#               på skytte-gränser om den inte ryms i _SCORERS_MAXW.
+#   'chips'   — pill per skytt (accentprick), greedy radbrytning, centrerade rader.
+#   'spalter' — två spalter (grid) när >3 skyttar.
+# 'auto' (renderarens default): en rad så länge den ryms i ~940px, annars chips.
+# Skyttar separeras på '·'/radbrytning (komma kan ingå i EN skytt, t.ex.
+# "Fornes 50', 58', 80'") — därför splittas ALDRIG på komma.
+
+_SCORERS_MAXW = 940
+
+
+def _scorer_units(mal_rad):
+    return [s.strip() for s in re.split(r'\n|·', mal_rad or "") if s.strip()]
+
+
+def _wrap_units(d0, units, fnt, track, max_w):
+    """Radbryter skyttar (join ' · ') så varje rad ryms i max_w."""
+    sep, lines, cur = " · ", [], ""
+    for u in units:
+        cand = u if not cur else cur + sep + u
+        if cur and _spärrad_bredd(d0, cand, fnt, track) > max_w:
+            lines.append(cur)
+            cur = u
+        else:
+            cur = cand
+    if cur:
+        lines.append(cur)
+    return lines or [""]
+
+
+def _scorers_plan(d0, units, layout, max_w=_SCORERS_MAXW):
+    """Väljer layout + mäter höjden. Returnerar en plan-dict med 'mode'+'h'."""
+    n = len(units)
+    row_size = 23 if n > 6 else 26 if n > 4 else 30
+    fnt_row  = _saira(600, row_size)
+    track    = 1
+    one_line = " · ".join(units)
+    line_w   = _spärrad_bredd(d0, one_line, fnt_row, track) if units else 0
+
+    want = layout or "auto"
+    if want == "auto":
+        want = "rad" if (units and line_w <= max_w) else ("chips" if units else "rad")
+
+    if want == "rad":
+        lines = _wrap_units(d0, units, fnt_row, track, max_w) if units else [""]
+        lh    = int(row_size * 1.4)
+        return {"mode": "rad", "fnt": fnt_row, "track": track,
+                "lines": lines, "lh": lh, "h": len(lines) * lh}
+
+    if want == "spalter":
+        col_size = 30 if n > 8 else 34 if n > 4 else 40
+        fnt   = _saira_cond(600, col_size)
+        cols  = 2 if n > 3 else 1
+        rows  = (n + cols - 1) // cols
+        h_rad = _text_h(d0, "Ag", fnt)
+        gap_y = 16
+        return {"mode": "spalter", "fnt": fnt, "cols": cols, "units": units,
+                "h_rad": h_rad, "gap_y": gap_y,
+                "h": rows * h_rad + max(0, rows - 1) * gap_y}
+
+    # chips
+    chip_size = 27 if n > 6 else 31
+    fnt = _saira_cond(600, chip_size)
+    dot, gap_dot, pad_x, pad_y, gap_x, gap_y = 11, 13, 26, 10, 14, 16
+    chip_h = _text_h(d0, "Ag", fnt) + pad_y * 2
+    chips  = [(u, pad_x * 2 + dot + gap_dot + int(d0.textlength(u, font=fnt)))
+              for u in units]
+    rows, cur, cur_w = [], [], 0
+    for c in chips:
+        add = c[1] + (gap_x if cur else 0)
+        if cur and cur_w + add > max_w:
+            rows.append(cur)
+            cur, cur_w = [c], c[1]
+        else:
+            cur.append(c)
+            cur_w += add
+    if cur:
+        rows.append(cur)
+    return {"mode": "chips", "fnt": fnt, "rows": rows, "chip_h": chip_h,
+            "dot": dot, "gap_dot": gap_dot, "pad_x": pad_x, "gap_x": gap_x,
+            "gap_y": gap_y,
+            "h": len(rows) * chip_h + max(0, len(rows) - 1) * gap_y}
+
+
+def _draw_scorers(d, plan, accent, cx, y):
+    """Ritar sub-blocket centrerat kring x=cx med toppen vid y."""
+    mode = plan["mode"]
+    if mode == "rad":
+        fnt, track, lh = plan["fnt"], plan["track"], plan["lh"]
+        for line in plan["lines"]:
+            w = int(_spärrad_bredd(d, line, fnt, track))
+            _spärrad_text(d, (cx - w // 2, y), line, fnt, _VIT82, track)
+            y += lh
+        return
+
+    if mode == "chips":
+        fnt, chip_h = plan["fnt"], plan["chip_h"]
+        dot, gap_dot, pad_x = plan["dot"], plan["gap_dot"], plan["pad_x"]
+        gap_x, gap_y = plan["gap_x"], plan["gap_y"]
+        h_txt = _text_h(d, "Ag", fnt)
+        for row in plan["rows"]:
+            row_w = sum(cw for _, cw in row) + (len(row) - 1) * gap_x
+            x = cx - row_w // 2
+            for u, cw in row:
+                d.rounded_rectangle([x, y, x + cw, y + chip_h],
+                                    radius=chip_h // 2,
+                                    outline=(255, 255, 255, 66), width=2)
+                cyc = y + chip_h // 2
+                dx  = x + pad_x
+                d.ellipse([dx, cyc - dot // 2, dx + dot, cyc + dot // 2],
+                          fill=accent)
+                d.text((dx + dot + gap_dot, y + (chip_h - h_txt) // 2), u,
+                       font=fnt, fill=_VIT)
+                x += cw + gap_x
+            y += chip_h + gap_y
+        return
+
+    # spalter
+    fnt, cols, units = plan["fnt"], plan["cols"], plan["units"]
+    h_rad, gap_y = plan["h_rad"], plan["gap_y"]
+    dot, gap, gap_x = 13, 18, 60
+    col_w = max((dot + gap + int(d.textlength(u, font=fnt)) for u in units),
+                default=0)
+    total_w = cols * col_w + (cols - 1) * gap_x
+    x0 = cx - total_w // 2
+    for i, u in enumerate(units):
+        x  = x0 + (i % cols) * (col_w + gap_x)
+        ry = y + (i // cols) * (h_rad + gap_y)
+        cyc = ry + h_rad // 2
+        d.ellipse([x, cyc - dot // 2, x + dot, cyc + dot // 2], fill=accent)
+        d.text((x + dot + gap, ry), u, font=fnt, fill=_VIT)
+
+
+# ---------------------------------------------------------------------------
 # SCORE-block (Halvtid / Slutresultat)
 # ---------------------------------------------------------------------------
 
 def _render_score(canvas, accent, lag_hemma, lag_borta,
-                  bricka_h, bricka_b, score_label, score_text, score_sub):
+                  bricka_h, bricka_b, score_label, score_text, score_sub,
+                  scorers=None, scorers_layout="auto"):
     Image, ImageDraw, *_ = _pil()
     W, H = canvas.size
     L = _MARGIN
@@ -617,12 +678,18 @@ def _render_score(canvas, accent, lag_hemma, lag_borta,
     bb_score = d0.textbbox((0, 0), score_text, fnt_score)
     bb_sub  = d0.textbbox((0, 0), score_sub, fnt_sub)
 
+    # A4: Slutresultatet visar målskyttelistan i vald/auto-layout (rad/chips/
+    # spalter). Halvtid (scorers=None) behåller den enkla centrerade underraden.
+    units = scorers or []
+    plan  = _scorers_plan(d0, units, scorers_layout) if units else None
+    sub_h = plan["h"] if plan else bb_sub[3]
+
     # Centrera bricka med scoretextens visuella mitt
     score_glyph_ctr = (bb_score[1] + bb_score[3]) // 2
     by_crest = max(0, score_glyph_ctr - BRICKA_S // 2)
     h_row = max(bb_score[3], by_crest + BRICKA_S)
 
-    total_h = bb_lbl[3] + 30 + h_row + 40 + 3 + 28 + bb_sub[3]
+    total_h = bb_lbl[3] + 30 + h_row + 40 + 3 + 28 + sub_h
 
     y = H - _MARGIN - total_h
 
@@ -653,11 +720,15 @@ def _render_score(canvas, accent, lag_hemma, lag_borta,
     y = _divider(d, L + (BLOCK_W - div_w) // 2, y, div_w, alpha=56)
     y += 28
 
-    # 4. Underrad (centrerad)
-    track_sub = 2   # .05em * 30 ≈ 1.5
-    w_sub = int(_spärrad_bredd(d, score_sub, fnt_sub, track_sub))
-    _spärrad_text(d, (L + (BLOCK_W - w_sub) // 2, y),
-                  score_sub, fnt_sub, _VIT82, track_sub)
+    # 4. Underrad — Slutresultat: målskyttelistan (A4-layout); Halvtid: en
+    #    centrerad textrad (score_sub = tävlingsnamnet).
+    if plan:
+        _draw_scorers(d, plan, accent, L + BLOCK_W // 2, y)
+    else:
+        track_sub = 2   # .05em * 30 ≈ 1.5
+        w_sub = int(_spärrad_bredd(d, score_sub, fnt_sub, track_sub))
+        _spärrad_text(d, (L + (BLOCK_W - w_sub) // 2, y),
+                      score_sub, fnt_sub, _VIT82, track_sub)
     # (y inte uppdaterad — sista elementet)
 
     canvas.alpha_composite(lager)
@@ -863,7 +934,8 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                 startelva=None, sport="",
                 tema="Hav", gren="", hem_logga=None, borta_logga=None,
                 ut_path=None, ut_mapp=None,
-                format="9x16", fokus=None, zoom=1.0, env=None):
+                format="9x16", fokus=None, zoom=1.0, env=None,
+                overlay=True, scorers_layout="auto"):
     """
     Renderar en JPEG med Horisont-overlay.
 
@@ -885,6 +957,11 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         (set-/period-/gamesiffror), ifyllt av story_korning._matchfalt.
     startelva: sträng med namn (\n- eller kommaseparerade) eller None
     next_when: "Lör 14 jun · 16:00" (för Nästa match)
+    overlay: False → ren beskuren bild utan Horisont-grafik (iOS-klienten kan
+        begära det via story-anropet). Default True.
+    scorers_layout: "auto"|"rad"|"chips"|"spalter" — hur målskyttelistan ritas
+        under Slutresultatet (A4). "auto" = en rad om den ryms i ~940px, annars
+        chips.
     Returnerar Path till output-filen.
     """
     Image, ImageDraw, ImageFont, ImageOps = _pil()
@@ -906,94 +983,100 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
 
     canvas = foto.convert("RGBA")
 
-    # 2. Topp-scrim
-    canvas.alpha_composite(_topp_scrim(W))
+    # overlay=False (iOS-klienten kan begära det): ren beskuren bild utan
+    # Horisont-grafik — hoppa över alla lager, exportera bara fotot.
+    if overlay:
+        # 2. Topp-scrim
+        canvas.alpha_composite(_topp_scrim(W))
 
-    # 3. Skagen Hav-temalogga (uppe vänster)
-    lager = _tema_logga_lager(W, H, tema)
-    if lager:
-        canvas.alpha_composite(lager)
+        # 3. Skagen Hav-temalogga (uppe vänster, indragen — A2)
+        lager = _tema_logga_lager(W, H, tema)
+        if lager:
+            canvas.alpha_composite(lager)
 
-    # 4. Tävlingsnamn, text uppe höger (ersätter tidigare liga-logga/watermark)
-    competition = liga or "Damallsvenskan"
-    lager = _competition_text_lager(W, H, competition)
-    if lager:
-        canvas.alpha_composite(lager)
+        # 4. (A3) Liga-/tävlingstexten uppe till höger är BORTTAGEN ur
+        #    renderaren (medvetet beslut från skarp användning). `competition`
+        #    lever kvar för blockens egna underrader (Avspark/Startelva/
+        #    Halvtid), inte som watermark.
+        competition = liga or "Damallsvenskan"
 
-    # 5. Botten-scrim
-    scrim_h = int(H * 0.68)
-    bot_scrim = _botten_scrim(W, H)
-    canvas.alpha_composite(bot_scrim, (0, H - scrim_h))
+        # 5. Botten-scrim
+        scrim_h = int(H * 0.68)
+        bot_scrim = _botten_scrim(W, H)
+        canvas.alpha_composite(bot_scrim, (0, H - scrim_h))
 
-    # 6. Innehållsblock
-    isPreview  = state in ("Avspark", "Nästa match")
-    isScore    = state in ("Halvtid", "Slutresultat")
-    isLineup   = state == "Startelva"
-    isScorers  = state == "Målgörare"
+        # 6. Innehållsblock
+        isPreview  = state in ("Avspark", "Nästa match")
+        isScore    = state in ("Halvtid", "Slutresultat")
+        isLineup   = state == "Startelva"
+        isScorers  = state == "Målgörare"
 
-    # Härled visade texter (speglar renderVals() i HTML-referensen)
-    venue_up    = arena.upper() if arena else ""
-    big_word    = "AVSPARK" if state == "Avspark" else "NÄSTA\nMATCH"
-    if state == "Nästa match":
-        sub_line = f"{next_when} · {venue_up}" if next_when else venue_up
-        big_word = "NÄSTA MATCH"
-    else:
-        sub_line = f"{avspark_tid} · {venue_up}" if avspark_tid else venue_up
+        # Härled visade texter (speglar renderVals() i HTML-referensen)
+        venue_up    = arena.upper() if arena else ""
+        big_word    = "AVSPARK" if state == "Avspark" else "NÄSTA\nMATCH"
+        if state == "Nästa match":
+            sub_line = f"{next_when} · {venue_up}" if next_when else venue_up
+            big_word = "NÄSTA MATCH"
+        else:
+            sub_line = f"{avspark_tid} · {venue_up}" if avspark_tid else venue_up
 
-    # Halvtid/Slutresultat — etikett styrs av sportprofilen (fotboll:
-    # "Halvtid"/"Slutresultat" oförändrat, andra sporter: t.ex.
-    # "Periodsiffror"/"Resultat i set").
-    score_label = profil["mid_label"] if state == "Halvtid" else profil["res_label"]
-    # SairaCondensed-Bold saknar space-glyf — rendera utan mellanslag
-    if stallning and "-" in stallning:
-        delar = stallning.split("-", 1)
-        score_text = f"{delar[0].strip()}–{delar[1].strip()}"
-    else:
-        score_text = stallning or "?–?"
-    score_sub = mal_rad if state == "Slutresultat" else competition
+        # Halvtid/Slutresultat — etikett styrs av sportprofilen (fotboll:
+        # "Halvtid"/"Slutresultat" oförändrat, andra sporter: t.ex.
+        # "Periodsiffror"/"Resultat i set").
+        score_label = profil["mid_label"] if state == "Halvtid" else profil["res_label"]
+        # SairaCondensed-Bold saknar space-glyf — rendera utan mellanslag
+        if stallning and "-" in stallning:
+            delar = stallning.split("-", 1)
+            score_text = f"{delar[0].strip()}–{delar[1].strip()}"
+        else:
+            score_text = stallning or "?–?"
+        score_sub = mal_rad if state == "Slutresultat" else competition
+        # A4: målskyttar bara i Slutresultat (Halvtid = enkel underrad).
+        slut_scorers = _scorer_units(mal_rad) if state == "Slutresultat" else None
 
-    # Lagbrickor
-    mono_h = (lag_hemma[:3] if lag_hemma else "HEM").upper()
-    mono_b = (lag_borta[:3] if lag_borta else "BORT").upper()
+        # Lagbrickor
+        mono_h = (lag_hemma[:3] if lag_hemma else "HEM").upper()
+        mono_b = (lag_borta[:3] if lag_borta else "BORT").upper()
 
-    if isPreview:
-        bricka_h, pad_h = _bricka_med_skugga(_valj_logga(lag_hemma, hem_logga), 84, mono_h)
-        bricka_b, pad_b = _bricka_med_skugga(_valj_logga(lag_borta, borta_logga), 84, mono_b)
-        # Crop bort skugg-padding för att använda ren bricka vid placering
-        bricka_h_ren = bricka_h.crop((pad_h, pad_h, pad_h + 84, pad_h + 84))
-        bricka_b_ren = bricka_b.crop((pad_b, pad_b, pad_b + 84, pad_b + 84))
-        _render_preview(canvas, accent,
-                        lag_hemma or "", lag_borta or "",
-                        bricka_h_ren, bricka_b_ren,
-                        competition, big_word, sub_line)
+        if isPreview:
+            bricka_h, pad_h = _bricka_med_skugga(_valj_logga(lag_hemma, hem_logga), 84, mono_h)
+            bricka_b, pad_b = _bricka_med_skugga(_valj_logga(lag_borta, borta_logga), 84, mono_b)
+            # Crop bort skugg-padding för att använda ren bricka vid placering
+            bricka_h_ren = bricka_h.crop((pad_h, pad_h, pad_h + 84, pad_h + 84))
+            bricka_b_ren = bricka_b.crop((pad_b, pad_b, pad_b + 84, pad_b + 84))
+            _render_preview(canvas, accent,
+                            lag_hemma or "", lag_borta or "",
+                            bricka_h_ren, bricka_b_ren,
+                            competition, big_word, sub_line)
 
-    elif isScore:
-        bricka_h, pad_h = _bricka_med_skugga(_valj_logga(lag_hemma, hem_logga), 128, mono_h)
-        bricka_b, pad_b = _bricka_med_skugga(_valj_logga(lag_borta, borta_logga), 128, mono_b)
-        bricka_h_ren = bricka_h.crop((pad_h, pad_h, pad_h + 128, pad_h + 128))
-        bricka_b_ren = bricka_b.crop((pad_b, pad_b, pad_b + 128, pad_b + 128))
-        _render_score(canvas, accent,
-                      lag_hemma or "", lag_borta or "",
-                      bricka_h_ren, bricka_b_ren,
-                      score_label, score_text, score_sub)
-
-    elif isLineup:
-        sv_text = startelva or ""
-        _render_startelva(canvas, accent, lag_hemma or "",
-                          competition, arena or "", sv_text)
-
-    elif isScorers:
-        _render_malgorare(canvas, accent,
+        elif isScore:
+            bricka_h, pad_h = _bricka_med_skugga(_valj_logga(lag_hemma, hem_logga), 128, mono_h)
+            bricka_b, pad_b = _bricka_med_skugga(_valj_logga(lag_borta, borta_logga), 128, mono_b)
+            bricka_h_ren = bricka_h.crop((pad_h, pad_h, pad_h + 128, pad_h + 128))
+            bricka_b_ren = bricka_b.crop((pad_b, pad_b, pad_b + 128, pad_b + 128))
+            _render_score(canvas, accent,
                           lag_hemma or "", lag_borta or "",
-                          score_text, mal_rad or "")
+                          bricka_h_ren, bricka_b_ren,
+                          score_label, score_text, score_sub,
+                          scorers=slut_scorers, scorers_layout=scorers_layout)
 
-    # 7. Vertikal URL-text
-    canvas.alpha_composite(_url_text_lager(W, H))
+        elif isLineup:
+            sv_text = startelva or ""
+            _render_startelva(canvas, accent, lag_hemma or "",
+                              competition, arena or "", sv_text)
 
-    # 8. Gren-kant (vänster, full höjd) — sist/överst, ovanpå allt annat.
-    lager = _gren_kant_lager(W, H, gren)
-    if lager:
-        canvas.alpha_composite(lager)
+        elif isScorers:
+            _render_malgorare(canvas, accent,
+                              lag_hemma or "", lag_borta or "",
+                              score_text, mal_rad or "")
+
+        # 7. (A5) Vertikal webbadress i vänsterkanten är BORTTAGEN — gren-kanten
+        #    står ren.
+
+        # 8. Gren-kant (vänster, full höjd) — sist/överst, ovanpå allt annat.
+        lager = _gren_kant_lager(W, H, gren)
+        if lager:
+            canvas.alpha_composite(lager)
 
     # Exportera JPEG
     result = canvas.convert("RGB")
