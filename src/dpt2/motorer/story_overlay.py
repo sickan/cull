@@ -447,6 +447,16 @@ def _render_preview(canvas, accent, lag_hemma, lag_borta,
     track_comp = 8   # .3em * 28
     track_sub  = 5   # .16em * 34 ≈ 5.4
 
+    # Heldagsevent (p.5): ingen motståndare → eventnamnet är rubriken (big_word),
+    # ingen tankstreck-vs-rad. Rubriken kan bli lång → auto-krymp så den ryms.
+    is_event = not (lag_borta or "").strip()
+    if is_event:
+        langst = max(big_word.split("\n"), key=len) if big_word else ""
+        big_size = 150
+        while big_size > 60 and d0.textlength(langst, font=fnt_big) > BLOCK_W:
+            big_size -= 6
+            fnt_big = _saira_cond(700, big_size)
+
     # Använd bb[3] (draw_to_bottom) för layout — stora fonter har stor top-offset
     h_comp = d0.textbbox((0, 0), competition.upper(), fnt_comp)[3]
     h_big  = d0.textbbox((0, 0), big_word, fnt_big)[3]
@@ -463,11 +473,9 @@ def _render_preview(canvas, accent, lag_hemma, lag_borta,
     dash_ctr   = (bb_dash[1] + bb_dash[3]) // 2
     dash_dy    = bricka_ctr - dash_ctr
 
-    total_h = (h_comp +
-               14 + h_big +
-               18 + h_sub +
-               34 + 3 + 34 +   # margin + divider + margin
-               BRICKA_S)
+    total_h = h_comp + 14 + h_big + 18 + h_sub
+    if not is_event:                     # + divider + lag-rad (bara riktiga matcher)
+        total_h += 34 + 3 + 34 + BRICKA_S
 
     y = H - _MARGIN - total_h
 
@@ -487,15 +495,15 @@ def _render_preview(canvas, accent, lag_hemma, lag_borta,
     _spärrad_text(d, (L, y), sub_line.upper(), fnt_sub, _VIT80, track_sub)
     y += h_sub + 34
 
-    # 4. Divider
-    y = _divider(d, L, y, BLOCK_W, alpha=56)
-    y += 34
-
-    # 5. Lag-rad (flex, justify-content:center, gap:26). Heldagsevent (p.5) har
-    #    ingen motståndare → rita bara hemma-brickan + namnet, ingen tankstreck-
-    #     vs-layout eller tom borta-bricka.
-    w_ht   = int(d.textlength(lag_hemma, font=fnt_team))
-    if (lag_borta or "").strip():
+    # 4+5. Divider + lag-rad ritas bara för RIKTIGA matcher. Heldagsevent (p.5)
+    #      har ingen motståndare — eventnamnet står redan som rubrik (big_word),
+    #      så vs-raden (bricka – bricka) hoppas över helt.
+    if not is_event:
+        # Divider
+        y = _divider(d, L, y, BLOCK_W, alpha=56)
+        y += 34
+        # Lag-rad (flex, justify-content:center, gap:26)
+        w_ht   = int(d.textlength(lag_hemma, font=fnt_team))
         w_bt   = int(d.textlength(lag_borta, font=fnt_team))
         w_dash = int(d.textlength("–", font=fnt_dash))
         row_w  = BRICKA_S + 26 + w_ht + 26 + w_dash + 26 + w_bt + 26 + BRICKA_S
@@ -515,12 +523,6 @@ def _render_preview(canvas, accent, lag_hemma, lag_borta,
         rx += w_bt + 26
 
         lager.alpha_composite(bricka_b, (rx, y))
-    else:
-        row_w = BRICKA_S + 26 + w_ht
-        rx    = L + (BLOCK_W - row_w) // 2
-        lager.alpha_composite(bricka_h, (rx, y))
-        rx += BRICKA_S + 26
-        _spärrad_text(d, (rx, y + lagtext_dy), lag_hemma, fnt_team, _VIT, 0)
 
     canvas.alpha_composite(lager)
 
@@ -1028,6 +1030,10 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
             big_word = "NÄSTA MATCH"
         else:
             sub_line = f"{avspark_tid} · {venue_up}" if avspark_tid else venue_up
+        # p.5: heldagsevent (ingen motståndare) → eventnamnet ÄR rubriken, inte
+        # "NÄSTA MATCH"/"AVSPARK" (som antyder en kommande match).
+        if isPreview and not (lag_borta or "").strip():
+            big_word = (lag_hemma or "EVENT").upper()
 
         # Halvtid/Slutresultat — etikett styrs av sportprofilen (fotboll:
         # "Halvtid"/"Slutresultat" oförändrat, andra sporter: t.ex.
