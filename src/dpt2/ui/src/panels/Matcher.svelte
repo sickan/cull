@@ -248,7 +248,7 @@
   }
 
   function nyMatch() {
-    const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '' }
+    const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '', event: false }
     matcher = [{ ...tmp, trupp_n: 0 }, ...matcher]
     matchStatus = 'kommande'                 // nya utkast bor under Kommande
     oppen = tmp.id; utkast = { ...tmp, spelare: [] }; lagForTavling = []
@@ -265,6 +265,14 @@
   // Spara REF (lag-id), inte bara namnet — två lag kan heta lika (dam/herr).
   const valjHemma = (o) => { utkast.lag_hemma = o.namn; utkast.lag_hemma_id = o.id }
   const valjBorta = (o) => { utkast.lag_borta = o.namn; utkast.lag_borta_id = o.id }
+  // p.5: heldagsevent visas utan motståndare (ingen efterhängande "– ").
+  const matchnamn = (m) => (m?.event || !(m?.lag_borta || '').trim())
+    ? (m?.lag_hemma || '') : `${m.lag_hemma} – ${m.lag_borta}`
+  // p.5: heldagsevent = match utan motståndare. Slå på → rensa bortalaget.
+  function sattEvent(v) {
+    utkast = { ...utkast, event: v,
+      ...(v ? { lag_borta: '', lag_borta_id: null } : {}) }
+  }
   const skapaHemma = (namn) => { utkast.lag_hemma = namn; utkast.lag_hemma_id = null }
   const skapaBorta = (namn) => { utkast.lag_borta = namn; utkast.lag_borta_id = null }
   const arMatch = () => !utkast || (typeof utkast.id === 'string' && utkast.id.startsWith('ny-'))
@@ -500,7 +508,8 @@
               <span class="amon">{del(m.datum).length === 3 ? MK[del(m.datum)[1] - 1] : ''}</span>
             </div>
             <div class="afixtur">
-              <div class="afx scd">{m.lag_hemma} – {m.lag_borta}
+              <div class="afx scd">{matchnamn(m)}
+                {#if m.event}<span class="grenlbl scd" style="color:var(--acc)">Event</span>{/if}
                 {#if m.hem_gren}<span class="grenlbl scd" style="color:{grenFarg(m.hem_gren)}">{grenEtikett(m.hem_gren)}</span>{/if}
               </div>
               <div class="ameta">{[m.liga, m.arena, m.resultat ? `slutresultat ${m.resultat}` : ''].filter(Boolean).join(' · ')}</div>
@@ -555,7 +564,7 @@
                     <div class="mon">{del(m.datum).length === 3 ? MK[del(m.datum)[1] - 1] : ''}</div>
                   </div>
                   <div class="fixtur">
-                    <div class="fx scd">{m.lag_hemma} – {m.lag_borta}</div>
+                    <div class="fx scd">{matchnamn(m)}</div>
                     <div class="fmeta">
                       {#if m.hem_gren}<span class="grenlbl scd" style="color:{grenFarg(m.hem_gren)}">{grenEtikett(m.hem_gren)}</span>{/if}
                       <!-- Listjusteringar: liga + arena i metaraden (ligan doldes
@@ -582,7 +591,7 @@
                 {#if bekraftaId === m.id}
                   <div class="bekrafta">
                     <svg viewBox="0 0 24 24" fill="none" stroke="#C0453E" stroke-width="1.8"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>
-                    <div class="btxt">Ta bort <b>{m.lag_hemma} – {m.lag_borta}</b>? Kan inte ångras.</div>
+                    <div class="btxt">Ta bort <b>{matchnamn(m)}</b>? Kan inte ångras.</div>
                     <button class="bavbryt" on:click={() => (bekraftaId = null)}>Avbryt</button>
                     <button class="bta" on:click={() => taBort(m)}>Ta bort</button>
                   </div>
@@ -597,15 +606,21 @@
                           class:accent={c.tone === 'accent'} on:click={() => goFromMatch(utkast, c.dest)}>{c.label}</button>
                       {/each}
                     </div>
-                    <div class="rad2">
-                      <label>Hemmalag
+                    <label class="eventtogg">
+                      <input type="checkbox" checked={!!utkast.event} on:change={(e) => sattEvent(e.target.checked)} />
+                      <span>Heldagsevent <span class="eventmut">— utan motståndare (t.ex. cup, mästerskap)</span></span>
+                    </label>
+                    <div class="rad2" class:enkel={utkast.event}>
+                      <label>{utkast.event ? 'Lag / arrangör' : 'Hemmalag'}
                         <Combobox options={lagVal} value={utkast.lag_hemma} placeholder="Välj lag…"
                           on:pick={(e) => valjHemma(e.detail)} on:create={(e) => skapaHemma(e.detail)} />
                       </label>
-                      <label>Bortalag
-                        <Combobox options={lagVal} value={utkast.lag_borta} placeholder="Välj lag…"
-                          on:pick={(e) => valjBorta(e.detail)} on:create={(e) => skapaBorta(e.detail)} />
-                      </label>
+                      {#if !utkast.event}
+                        <label>Bortalag
+                          <Combobox options={lagVal} value={utkast.lag_borta} placeholder="Välj lag…"
+                            on:pick={(e) => valjBorta(e.detail)} on:create={(e) => skapaBorta(e.detail)} />
+                        </label>
+                      {/if}
                     </div>
                     <label class="full">Tävling
                       <Combobox options={tavlingVal} value={utkast.liga} placeholder="Välj tävling…"
@@ -624,7 +639,7 @@
                     {#if uttagProfil.squad}
                       <div class="uttagrad"><span class="caps2">Matchdaguttag</span><span class="uttagnot">kopplat till matchen</span></div>
                       <div class="lagbox2">
-                        {#each [{ sida: 'hemma', namn: utkast.lag_hemma, lista: hemSpelare }, { sida: 'borta', namn: utkast.lag_borta, lista: bortaSpelare }] as kol}
+                        {#each (utkast.event ? [{ sida: 'hemma', namn: utkast.lag_hemma, lista: hemSpelare }] : [{ sida: 'hemma', namn: utkast.lag_hemma, lista: hemSpelare }, { sida: 'borta', namn: utkast.lag_borta, lista: bortaSpelare }]) as kol}
                           {@const nStart = kol.lista.filter((p) => p.start).length}
                           <div class="lbox">
                             <div class="lhuvud">
@@ -916,6 +931,10 @@
 
   .editor { border-top: 1px solid var(--div3); padding: 16px 14px; display: flex; flex-direction: column; gap: 12px; }
   .rad2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .rad2.enkel { grid-template-columns: 1fr; }
+  .eventtogg { display: flex; align-items: center; gap: 9px; margin: 2px 0 4px; font-size: 12.5px; font-weight: 600; color: var(--t-head); cursor: pointer; }
+  .eventtogg input { width: 15px; height: 15px; accent-color: var(--acc); }
+  .eventmut { font-weight: 400; color: var(--t-mut); }
   .rad3 { display: flex; gap: 10px; }
   .rad3 input:nth-of-type(1) { width: 150px; flex: none; }
   .rad3 input:nth-of-type(2) { width: 104px; flex: none; }
