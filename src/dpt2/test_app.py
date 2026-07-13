@@ -307,6 +307,64 @@ class TestApi(unittest.TestCase):
             self.assertTrue(Path(res["path"]).exists())
             self.assertFalse(Path(f"{d}/aldrig-anvand").exists())
 
+    def test_kanal_tak_speglar_vagen(self):
+        # p.3/p.4: IG-taket beror på vägen; live/fb har fasta tak.
+        self.assertEqual(self.api._kanal_tak("ig", "direkt"), 10)
+        self.assertEqual(self.api._kanal_tak("ig", "disk"), 20)
+        self.assertEqual(self.api._kanal_tak("live"), 10)
+        self.assertEqual(self.api._kanal_tak("fb"), 20)
+
+    def test_ig_export_mapp_ligger_under_pictures(self):
+        # match_id=None → slug "ig"; ingen mapp SKAPAS (bara sökväg byggs).
+        p = self.api._ig_export_mapp(None)
+        self.assertIn("DPT2 IG-export", str(p))
+        self.assertTrue(p.name.endswith("-ig"))
+        self.assertFalse(p.exists())
+
+    def test_publicera_kanal_ig_disk_exporterar_utan_meta(self):
+        # p.3: "Exportera till disk" postar ALDRIG mot Meta — den renderar och
+        # returnerar exporterad=True. Kör i testläge → aldrig skarpt.
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        from dpt2.tjanster import story_korning
+        verklig = story_korning.FORHANDSVISNING_PATH
+        self.addCleanup(setattr, story_korning, "FORHANDSVISNING_PATH", verklig)
+        with tempfile.TemporaryDirectory() as d:
+            story_korning.FORHANDSVISNING_PATH = Path(d) / "fv.jpg"
+            foton = []
+            for i in range(3):
+                f = f"{d}/bild{i}.jpg"
+                Image.new("RGB", (400, 500), (80, 120, 160)).save(f, "JPEG")
+                foton.append({"path": f})
+            r = self.api.publicera_kanal({
+                "kanal": "ig", "vag": "disk", "format": "4x5", "moment": "resultat",
+                "bilder": foton, "test": True, "test_mapp": f"{d}/ut"})
+            self.assertTrue(r["ok"])
+            self.assertTrue(r.get("exporterad"))
+            self.assertEqual(r["antal"], 3)
+
+    def test_publicera_kanal_live_ar_multiframe(self):
+        # p.4: live-storyn tar nu fler än omslaget (var hårt kapad till 1).
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        from dpt2.tjanster import story_korning
+        verklig = story_korning.FORHANDSVISNING_PATH
+        self.addCleanup(setattr, story_korning, "FORHANDSVISNING_PATH", verklig)
+        with tempfile.TemporaryDirectory() as d:
+            story_korning.FORHANDSVISNING_PATH = Path(d) / "fv.jpg"
+            foton = []
+            for i in range(4):
+                f = f"{d}/bild{i}.jpg"
+                Image.new("RGB", (400, 700), (60, 90, 130)).save(f, "JPEG")
+                foton.append({"path": f})
+            r = self.api.publicera_kanal({
+                "kanal": "live", "format": "9x16", "moment": "avspark",
+                "bilder": foton, "test": True, "test_mapp": f"{d}/ut"})
+            self.assertTrue(r["ok"])
+            self.assertEqual(r["antal"], 4)   # inte längre kapad till 1
+
     def test_material_spara_lista_radera_genom_bryggan(self):
         res = self.api.spara_material({
             "kind": "live", "status": "utkast", "moment": "Avspark", "tema": "Hav",

@@ -1441,8 +1441,30 @@ class Api:
                     if p.get("url")), None)
         return {"ok": True, "path": path, "publicerad": True, "url": url}
 
-    KANAL_MAX = {"live": 1, "ig": 10, "fb": 4}
+    # p.4 (handoff v2): valbart bildantal per kanal. Taken speglar UI-steppern:
+    # Live-story max 10 (N story-frames), IG 10 (direkt) / 20 (disk-export),
+    # FB 20 (renderas; Meta-posten clampar dock till 4 i publicera_some).
     KANAL_MAL = {"live": {"story": True}, "ig": {"ig_inlagg": True}, "fb": {"fb": True}}
+
+    def _kanal_tak(self, kanal, vag=None):
+        """Bildantalstaket för en kanal (p.4) — IG beror på vägen (p.3)."""
+        if kanal == "ig":
+            return 20 if vag == "disk" else 10
+        return {"live": 10, "fb": 20}.get(kanal, 10)
+
+    def _ig_export_mapp(self, match_id):
+        """Synlig exportmapp för IG "Exportera till disk" (p.3): en tidsstämplad
+        mapp under ~/Pictures/DPT2 IG-export/ som fotografen hittar och postar
+        manuellt ifrån."""
+        m = store.hamta_match(self.conn, match_id) if match_id else None
+        namn = ""
+        if m:
+            namn = m.get("lag_hemma") or ""
+            if (m.get("lag_borta") or "").strip():
+                namn += f"-{m['lag_borta']}"
+        slug = store.slug_id(namn) if namn else "ig"
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M")
+        return Path.home() / "Pictures" / "DPT2 IG-export" / f"{stamp}-{slug}"
 
     def _rendera_kanalbilder(self, kanal, bilder, fmt, ut_mapp, storyfalt):
         """Renderar en kanals bildset server-side i FMT — varje bild med SIN EGEN
@@ -1484,6 +1506,7 @@ class Api:
         publicerar via Meta. Returnerar {ok, publicerad, antal, path, bilder, fel?}."""
         config = dict(config or {})
         kanal = config.get("kanal") or "ig"
+        vag = config.get("vag")                     # p.3: bara IG (direkt|disk)
         fmt = config.get("format") or ("9x16" if kanal == "live" else "1x1")
         norm = []
         for b in (config.get("bilder") or []):
@@ -1492,7 +1515,7 @@ class Api:
             p = os.path.expanduser(b.get("path") or "")
             if p and Path(p).exists():
                 norm.append({"path": p, "fokus": b.get("fokus"), "zoom": b.get("zoom", 1.0)})
-        norm = norm[:self.KANAL_MAX.get(kanal, 10)]
+        norm = norm[:self._kanal_tak(kanal, vag)]
         if not norm:
             return {"ok": False, "fel": "Välj minst en bild i Steg 1."}
         match_id = config.get("match_id") or store.hamta_installning(self.conn, "aktiv_match_id")
@@ -1501,8 +1524,14 @@ class Api:
                      "stallning": config.get("stallning", ""), "mellan": config.get("mellan", ""),
                      "mal_rad": config.get("mal_rad", "")}
         test = bool(config.pop("test", False))
+        # p.3: IG "Exportera till disk" postar ALDRIG mot Meta — den renderar
+        # (upp till 20) färdiga bilder till en synlig exportmapp som fotografen
+        # postar manuellt. Gäller även i testläge (samma icke-postande väg).
+        ig_disk = (kanal == "ig" and vag == "disk")
         if test:
             ut_mapp = Path(config.get("test_mapp") or testlage.ny_some_mapp())
+        elif ig_disk:
+            ut_mapp = self._ig_export_mapp(match_id)
         else:
             import tempfile
             ut_mapp = Path(tempfile.mkdtemp(prefix="dpt2-kanal-"))
@@ -1511,7 +1540,10 @@ class Api:
         if not renderade:
             return {"ok": False, "fel": "Kunde inte rendera bilderna."}
         if test:
-            return {"ok": True, "publicerad": True, "test": True,
+            return {"ok": True, "publicerad": True, "test": True, "exporterad": ig_disk,
+                    "antal": len(renderade), "path": str(ut_mapp), "bilder": renderade}
+        if ig_disk:
+            return {"ok": True, "publicerad": True, "exporterad": True,
                     "antal": len(renderade), "path": str(ut_mapp), "bilder": renderade}
         poster = meta_api.fran_env(logg=self._logg.append)
         if poster is None:

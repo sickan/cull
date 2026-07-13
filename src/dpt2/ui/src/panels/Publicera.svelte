@@ -404,9 +404,12 @@
       }
       const r = await publiceraKanal({ ...cfg.payload, test, test_mapp })
       const antal = r?.antal ?? 0
-      return { ok: !!r?.ok && (r.publicerad !== false),
-        text: r?.fel || (test ? `Testfil · ${antal} bild${antal === 1 ? '' : 'er'}`
-                              : `${antal} bild${antal === 1 ? '' : 'er'}`) }
+      const bildord = `${antal} bild${antal === 1 ? '' : 'er'}`
+      // p.3: IG "Exportera till disk" postar inte — visa att den exporterats.
+      const text = r?.fel
+        || (r?.exporterad ? `Exporterat till disk · ${bildord}`
+            : test ? `Testfil · ${bildord}` : bildord)
+      return { ok: !!r?.ok && (r.publicerad !== false), text }
     } catch (e) {
       return { ok: false, text: 'Fel: ' + (e?.message || e) }
     }
