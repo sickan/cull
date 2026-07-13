@@ -10,6 +10,7 @@
   import Upprattning from './panels/Upprattning.svelte'
   import Publicera from './panels/Publicera.svelte'
   import Innehall from './panels/Innehall.svelte'
+  import PaGang from './panels/PaGang.svelte'
   import Trana from './panels/Trana.svelte'
   import Logg from './panels/Logg.svelte'
   import Installningar from './panels/Installningar.svelte'
@@ -111,6 +112,8 @@
       <Publicera on:navigera={(e) => (aktiv = e.detail)} on:materialAndrat={uppdateraDelvis} />
     {:else if aktiv === 'innehall'}
       <Innehall on:navigera={(e) => (aktiv = e.detail)} />
+    {:else if aktiv === 'pagang'}
+      <PaGang />
     {:else if aktiv === 'trana'}
       <Trana />
     {:else if aktiv === 'logg'}

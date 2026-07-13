@@ -1,11 +1,12 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, createEventDispatcher } from 'svelte'
+  const dispatch = createEventDispatcher()
   import {
     forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall,
     valjMapp, valjFil, thumbForBild, slugga, listaInnehall, raderaInnehall, sparaInnehall,
     listaMatcher, hamtaMatch, aktivMatch, sportprofiler, listaLag, listaMaterial,
     listaFotojobb, urvalHojdpunkter, genereraBildsvep, forhandsgranskaBildsvepFraga,
-    pagangMatcher, sattPagangVisa, publiceraPagangMatcher, sportTopp, sattSportTopp,
+    pagangMatcher, sportTopp, sattSportTopp,
   } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { testMode } from '../lib/testlage.js'
@@ -271,23 +272,13 @@
     oppnaEditor('match')
   }
 
-  // ── På gång (kurering — samma härledda modell som Matchpublicering) ────────
+  // ── På gång (förhandslista på Sport-startsidan) ────────────────────────────
+  // Kureringen (visa-toggle + sajt-synk) bor nu i den egna Webb → På gång-posten
+  // (§C). Här visas bara en förhandslista; "Ordna ›" navigerar dit.
   let pagang = []
-  let pagangVisa = true
-  let pagangOppen = false
-  let pagangKor = false
-  let pagangFlash = ''
   async function laddaPagang() {
     const r = await pagangMatcher()
-    if (r?.ok) { pagang = r.matcher || []; pagangVisa = r.visa }
-  }
-  async function togglePagangVisa() { pagangVisa = !pagangVisa; await sattPagangVisa(pagangVisa) }
-  async function pagangUppdatera() {
-    pagangKor = true; pagangFlash = ''
-    const r = await publiceraPagangMatcher($testMode)
-    pagangKor = false
-    pagangFlash = r?.ok ? ($testMode ? '✓ Testfiler skrivna' : `✓ Uppdaterad · ${r.antal} matcher`) : (r?.fel || 'Kunde inte uppdatera')
-    setTimeout(() => (pagangFlash = ''), 2600)
+    if (r?.ok) pagang = r.matcher || []
   }
   const MK = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
   const datumKort = (iso) => { const d = (iso || '').split('-').map(Number); return d.length === 3 ? `${d[2]} ${MK[d[1] - 1]}` : '' }
@@ -725,31 +716,23 @@
           {/each}
         {/if}
 
-        <!-- På gång — bara sport, härlett ur Matcher. "Ordna ›" öppnar kureringen. -->
+        <!-- På gång — bara sport, härlett ur Matcher. "Ordna ›" öppnar nu den
+             egna Webb → På gång-posten (§C); kureringen bor där, inte inline. -->
         <div class="ovhuvud mt14">
           <span class="caps nomarg">På gång <span class="capshint">· kommande matcher &amp; tävlingar</span></span>
-          <button class="ordna" on:click={() => (pagangOppen = !pagangOppen)}>{pagangOppen ? 'Stäng' : 'Ordna ›'}</button>
+          <button class="ordna" on:click={() => dispatch('navigera', 'pagang')}>Ordna ›</button>
         </div>
         <div class="pgrad2">
-          {#each pagang.slice(0, pagangOppen ? 99 : 4) as m (m.id)}
+          {#each pagang.slice(0, 4) as m (m.id)}
             <div class="pgkort">
               <div class="pgdatum"><span class="pgdag scd">{(m.datum || '').split('-')[2] || '–'}</span>
                 <span class="pgmon">{MK[(Number((m.datum || '').split('-')[1]) || 1) - 1]?.toUpperCase()}</span></div>
               <span class="grendot" style="background:{grenFarg(m.hem_gren)}"></span>
-              <div class="pgi"><div class="pgf">{m.lag_hemma} – {m.lag_borta}</div><div class="pgl">{m.liga || ''}</div></div>
+              <div class="pgi"><div class="pgf">{m.lag_hemma}{m.lag_borta ? ` – ${m.lag_borta}` : ''}</div><div class="pgl">{m.liga || ''}</div></div>
             </div>
           {/each}
           {#if !pagang.length}<div class="ovtom">Inga kommande matcher i Matcher.</div>{/if}
         </div>
-        {#if pagangOppen}
-          <div class="pgfot">
-            <button class="visatoggle" on:click={togglePagangVisa}>
-              <span class="chk" class:pa={pagangVisa}>{pagangVisa ? '✓' : ''}</span>Visa på sajten</button>
-            <span class="pghint">Ordningen följer matchdatum (från Matcher) — lägg till/ta bort matcher där.</span>
-            {#if pagangFlash}<span class="ok sm">{pagangFlash}</span>{/if}
-            <button class="statusbtn" on:click={pagangUppdatera} disabled={pagangKor}>{pagangKor ? 'Uppdaterar…' : 'Uppdatera sajten'}</button>
-          </div>
-        {/if}
       </div>
     {:else}
       <!-- ── Enkeltyps-bibliotek (Landskap / Människor / Blogg) ── -->
@@ -1223,13 +1206,7 @@
   .pgi { flex: 1; min-width: 0; }
   .pgf { font-size: 12px; font-weight: 600; color: var(--t-head); }
   .pgl { font-size: 10.5px; color: var(--t-mut); }
-  .pgfot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-  .pghint { flex: 1; font-size: 11px; color: var(--t-help); min-width: 160px; }
-  .visatoggle { display: inline-flex; align-items: center; gap: 7px; border: 0; background: none;
-    font-size: 12px; font-weight: 600; color: var(--t-head); }
-  .chk { width: 16px; height: 16px; border-radius: 5px; border: 1px solid var(--div); display: inline-flex;
-    align-items: center; justify-content: center; font-size: 10px; color: #fff; flex: none; }
-  .chk.pa { background: var(--acc); border-color: var(--acc); }
+  /* På gång-kureringens stilar (visatoggle/chk/pgfot) flyttade till PaGang.svelte (§C). */
 
   /* Fokuserad editor: retur-rad */
   .returrad { display: flex; align-items: center; gap: 12px; }

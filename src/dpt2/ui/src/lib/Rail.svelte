@@ -20,7 +20,10 @@
       { id: 'upprattning', namn: 'Upprätning' },
       { id: 'publicera', namn: 'Matchpublicering', nr: 3 },
     ] },
-    { rubrik: 'Webb', poster: [{ id: 'innehall', namn: 'Innehåll' }] },
+    { rubrik: 'Webb', poster: [
+      { id: 'innehall', namn: 'Innehåll' },
+      { id: 'pagang', namn: 'På gång' },
+    ] },
     { rubrik: 'System', poster: [
       { id: 'trana', namn: 'Träna' },
       { id: 'logg', namn: 'Logg' },

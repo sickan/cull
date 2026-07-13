@@ -14,7 +14,7 @@
     publiceraInnehallNatet, listaMaterial, sparaMaterial, genereraBildsvep,
     forhandsgranskaBildsvepFraga,
     listaMinneskort, exporteraSkyddade,
-    pagangMatcher, sattPagangVisa, publiceraPagangMatcher, hamtaLive, synkaLivePaket,
+    hamtaLive,
   } from '../lib/api.js'
   import ResultatRemsa from '../lib/ResultatRemsa.svelte'
   import { losText as losTextDelad, tokenVals } from '../lib/webtext.js'
@@ -23,6 +23,16 @@
   import { testMode } from '../lib/testlage.js'
 
   const dispatch = createEventDispatcher()
+
+  // ── Flikar (backlog p.1) ────────────────────────────────────────────────────
+  // Sidan behåller sitt gemensamma huvud (match/event-väljare + resultat-remsa)
+  // men resten delas i tre flikar. Publiceringsraden (sidfot) döljs på Publicerat.
+  let mpTab = 'innehall'           // innehall | kanaler | publicerat
+  const MP_FLIKAR = [
+    ['innehall', '1 · Innehåll'],
+    ['kanaler', '2 · Kanaler & publicera'],
+    ['publicerat', 'Publicerat'],
+  ]
 
   // ── Grunddata ──────────────────────────────────────────────────────────────
   let matcher = []
@@ -50,7 +60,6 @@
       const id = akt?.id || matcher[0]?.id
       if (id) await laddaMatch(id)
     } catch (e) { console.error('Matchpublicering: init', e) }
-    laddaPagang()
     livePoll = setInterval(pollaLive, 10000)     // första hämtningen sker i laddaMatch
   })
 
@@ -105,7 +114,13 @@
   let matchOpen = false
   const MK = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
   function datumTxt(iso) { const d = (iso || '').split('-').map(Number); return d.length === 3 ? `${d[2]} ${MK[d[1] - 1]}` : '' }
-  $: matchMeta = match ? [datumTxt(match.datum), match.resultat || 'Kommande'].filter(Boolean).join(' · ') : ''
+  // p.5: ett event är en "match utan motståndare" i samma datamodell/flöde
+  // (heldagsevent, t.ex. "Partille Cup"). Resultatsiffrorna är irrelevanta då.
+  $: isEvent = !!(match && (match.event || match.heldag || !(match.lag_borta || '').trim()))
+  $: matchTitel = match ? (isEvent ? match.lag_hemma : `${match.lag_hemma} – ${match.lag_borta}`) : 'Ingen match'
+  $: matchMeta = match
+    ? [datumTxt(match.datum), isEvent ? 'Heldagsevent' : (match.resultat || 'Kommande')].filter(Boolean).join(' · ')
+    : ''
   async function valjMatch(id) {
     matchOpen = false
     if (id === match?.id) return
@@ -227,6 +242,11 @@
   // exakt vad som skickas innan man startar det, och se att det pågår.
   const TONER = ['Neutral', 'Peppig', 'Kort']
   let ton = 'Neutral'
+  // p.6: egna inspel till Claude-genereringen — utöver ton + matchfakta.
+  const VINKLAR = [['stamning', 'Stämning'], ['matchfakta', 'Matchfakta'], ['vinkel', 'Vinkel'], ['publik', 'Publiken']]
+  let vinklar = []                 // valda vinkel-nycklar (flerval)
+  let inspel = ''                  // fritext ("avgörande i 90:e, publikrekord…")
+  function toggleVinkel(v) { vinklar = vinklar.includes(v) ? vinklar.filter((x) => x !== v) : [...vinklar, v] }
   let genererar = false
   let genFel = ''
   let granska = null            // frågetexten medan granskningen är öppen
@@ -239,6 +259,9 @@
   const genFakta = () => ({
     resultat: resNu.resultat, mellan: resNu.mellan, malskyttar: resNu.malskyttar,
     arena: match.arena || '', datum: match.datum || '', liga: match.liga || '', ton,
+    // p.6: styrning utöver matchfakta — vinklar (valda chips) + fritext.
+    vinklar: vinklar.map((v) => (VINKLAR.find((x) => x[0] === v) || [])[1]).filter(Boolean),
+    inspel: inspel.trim(),
   })
 
   async function oppnaGranska() {
@@ -300,15 +323,27 @@
     { key: 'fb', namn: 'Facebook', under: 'Facebook-sida', format: ['1x1', '4x5', '1.91x1'], wide: false },
   ]
   const fmtEti = (f) => f.replace('x', ':')
-  // Kanaler bär bara format + på/av — beskärningen (fokus/zoom) sitter på FOTOT
-  // (Steg 1), delas av alla kanaler; kanalens format omformar bara ramen.
+  // Kanaler bär format + på/av + bildantal (p.4) — beskärningen (fokus/zoom)
+  // sitter på FOTOT (Steg 1), delas av alla kanaler; kanalens format omformar
+  // bara ramen.
+  // p.3: IG-inlägget har två vägar med olika tak: posta direkt via
+  // integrationen (API-gräns 10 för karusell) eller exportera till disk (20).
+  const IG_TAK = { direkt: 10, disk: 20 }
+  // p.4: valbart bildantal per kanal, kanalens tak synligt. Inget fast antal.
   let ch = {
-    live: { on: true, fmt: '9x16' },
-    ig: { on: true, fmt: '4x5' },
-    fb: { on: false, fmt: '1x1' },
+    live: { on: true, fmt: '9x16', antal: 1 },
+    ig: { on: true, fmt: '4x5', antal: 6, vag: 'direkt' },
+    fb: { on: false, fmt: '1x1', antal: 6 },
   }
+  const CH_TAK = { live: 10, fb: 20 }
+  function takFor(k) { return k === 'ig' ? IG_TAK[ch.ig.vag] : CH_TAK[k] }
   function toggleCh(k) { ch[k].on = !ch[k].on; ch = ch }
   function sattFmt(k, f) { ch[k].fmt = f; ch = ch }
+  function sattAntal(k, d) {
+    ch[k].antal = Math.max(1, Math.min(takFor(k), (ch[k].antal || 1) + d)); ch = ch
+  }
+  // Byte av IG-väg klampar bildantalet mot vägens tak (§A3).
+  function sattVag(v) { ch.ig.vag = v; ch.ig.antal = Math.min(ch.ig.antal, IG_TAK[v]); ch = ch }
 
   // ResultatRemsan sparade → spegla värdet (används vid publicering + token).
   // Stämpla tiden: pollen ska inte dra tillbaka ett äldre mobil-värde ovanpå
@@ -342,12 +377,17 @@
   // och körs av EN funktion — både vid publicering och vid omförsök.
   const _crop = (p) => ({ path: p.path, fokus: p.fokus, zoom: p.zoom })
   function kanalConfig(key) {
-    const bilder = key === 'live'
-      ? (coverPhoto ? [_crop(coverPhoto)] : [])
-      : ordnadeFoton.map(_crop)
-    return { typ: 'kanal', payload: { kanal: key, format: ch[key].fmt, bilder,
-      moment: 'resultat', tema, match_id: match.id, caption: losText(caption),
-      stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar } }
+    // p.4: varje kanal tar sitt valda antal foton (omslaget först). Live-storyn
+    // är en enda overlay-frame → minst omslaget, men respekterar taket uppåt.
+    const antal = Math.max(1, Math.min(ch[key].antal || 1, takFor(key)))
+    const bilder = ordnadeFoton.slice(0, antal).map(_crop)
+    const payload = { kanal: key, format: ch[key].fmt, bilder,
+      moment: isEvent ? 'nasta_match' : 'resultat', tema, match_id: match.id,
+      caption: losText(caption),
+      stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar }
+    // p.3: IG-vägen (direkt via integrationen / export till disk) följer med.
+    if (key === 'ig') payload.vag = ch.ig.vag
+    return { typ: 'kanal', payload }
   }
 
   // Legacy-rader (sparade före den här formen) saknar `typ`/payload och går inte
@@ -489,39 +529,9 @@
     }
   }
 
-  // ── På gång (webb) — härledd ur matchlistan ─────────────────────────────────
-  let pagang = []
-  let pagangVisa = true
-  let pagangKor = false
-  let pagangFlash = ''
-  async function laddaPagang() {
-    const r = await pagangMatcher()
-    if (r?.ok) { pagang = r.matcher || []; pagangVisa = r.visa }
-  }
-  async function togglePagangVisa() { pagangVisa = !pagangVisa; await sattPagangVisa(pagangVisa) }
-  async function uppdateraSajten() {
-    pagangKor = true; pagangFlash = ''
-    const r = await publiceraPagangMatcher($testMode)
-    pagangKor = false
-    pagangFlash = r?.ok ? ($testMode ? '✓ Testfiler skrivna' : `✓ Uppdaterad · ${r.antal} matcher`) : (r?.fel || 'Kunde inte uppdatera')
-    setTimeout(() => (pagangFlash = ''), 2600)
-  }
-
-  // Skickar match-paketen (lag, avspark, arena, sportprofil, roster) till DPT2
-  // Live-appen i mobilen. Sker även automatiskt vid "Uppdatera sajten" — den
-  // här knappen finns för att man ska kunna göra det utan att röra sajten,
-  // t.ex. strax innan man åker till matchen.
-  let mobilKor = false
-  let mobilFlash = ''
-  async function synkaMobil() {
-    mobilKor = true; mobilFlash = ''
-    const r = await synkaLivePaket()
-    mobilKor = false
-    mobilFlash = r?.ok
-      ? `✓ ${r.antal} matcher till mobilen${r.borttagna ? ` · ${r.borttagna} borttagna` : ''}`
-      : (r?.fel || 'Kunde inte synka till mobilen')
-    setTimeout(() => (mobilFlash = ''), 3200)
-  }
+  // På gång (webb) + mobilsynk flyttade HÄRIFRÅN: På gång bor nu under
+  // Webb → På gång (egen nav-post, §C); mobilsynken sker automatiskt i
+  // bakgrunden (p.2) — ingen knapp i Matchpublicering längre.
 
   // ── Live nu (snabbflöde) ────────────────────────────────────────────────────
   let liveOpen = false
@@ -621,24 +631,27 @@
     <button class="livenu" on:click={liveOppna}><span class="ldot"></span>Live nu — story direkt</button>
   </div>
 
-  <!-- Matchväljare -->
+  <!-- Match / event-väljare (p.5: event = match utan motståndare, samma flöde) -->
   <div class="matchrad">
-    <span class="mlbl">Match</span>
+    <span class="mlbl">Match / event</span>
     <div class="mdd">
       <button class="mddbtn" on:click={() => (matchOpen = !matchOpen)}>
-        <span class="mddnamn">{match ? `${match.lag_hemma} – ${match.lag_borta}` : 'Ingen match'}</span>
+        <span class="mddnamn">{matchTitel}</span>
         <span class="mddmeta">{matchMeta}</span><span class="mddpil">▾</span>
       </button>
       {#if matchOpen}
         <button class="mddskArm" on:click={() => (matchOpen = false)} aria-label="stäng"></button>
         <div class="mddlista">
-          <div class="mddcaps">Välj match</div>
+          <div class="mddcaps">Välj match eller heldagsevent</div>
           {#each matcher as m (m.id)}
+            {@const mEvent = m.event || m.heldag || !(m.lag_borta || '').trim()}
             <button class="mddrad" class:pa={m.id === match?.id} on:click={() => valjMatch(m.id)}>
               <span class="grendot" style="background:{grenFarg(m.hem_gren)}"></span>
-              <div class="mddi"><div class="mddf">{m.lag_hemma} – {m.lag_borta}</div>
-                <div class="mdds">{[datumTxt(m.datum), m.sport].filter(Boolean).join(' · ')}</div></div>
-              {#if m.resultat}<span class="mddres scd">{m.resultat}</span>{:else}<span class="mddkom">Kommande</span>{/if}
+              <div class="mddi"><div class="mddf">{mEvent ? m.lag_hemma : `${m.lag_hemma} – ${m.lag_borta}`}</div>
+                <div class="mdds">{[datumTxt(m.datum), mEvent ? 'Heldagsevent' : m.sport].filter(Boolean).join(' · ')}</div></div>
+              {#if mEvent}<span class="mddkom event">Event</span>
+              {:else if m.resultat}<span class="mddres scd">{m.resultat}</span>
+              {:else}<span class="mddkom">Kommande</span>{/if}
             </button>
           {/each}
         </div>
@@ -647,14 +660,25 @@
     <span class="mhint">— resultatmodellen följer matchens sport</span>
   </div>
 
-  <!-- Delad resultatremsa -->
-  {#if match}
+  <!-- Delad resultatremsa (p.5: gömd för heldagsevent — resultat är irrelevant) -->
+  {#if match && !isEvent}
     <ResultatRemsa {match} {profil} {lagAlla} extern={liveExtern} externRev={liveRev}
       {forsFran} on:sparat={onResSparat} />
-    <div class="remstext">Resultat &amp; målgörare fylls i <b>en gång här</b> — samma värden matas in i story, inlägg och webbartikel.</div>
+    <div class="remstext">Resultat &amp; målgörare fylls i <b>en gång här</b> — samma värden matas in i story,
+      inlägg och webbartikel. Mobilsynken sker <b>automatiskt i bakgrunden</b> — ingen knapp behövs.</div>
+  {:else if match && isEvent}
+    <div class="remstext eventrem">Heldagsevent — inga resultatsiffror. Samma bilder, text och kanaler som en match.</div>
   {/if}
 
-  <!-- Steg 1: Innehåll -->
+  <!-- Flikar (p.1): Innehåll · Kanaler & publicera · Publicerat -->
+  <div class="mpflikar">
+    {#each MP_FLIKAR as [k, etikett] (k)}
+      <button class="mpflik" class:on={mpTab === k} on:click={() => (mpTab = k)}>{etikett}</button>
+    {/each}
+  </div>
+
+  <!-- ===== Flik: Innehåll ===== -->
+  {#if mpTab === 'innehall'}
   <div class="steg"><span class="stegnr scd">1</span><span class="stegnamn">Innehåll</span>
     <span class="steghint">— skapas en gång, återanvänds i alla utgångar</span></div>
   <div class="grid2 s1">
@@ -748,6 +772,18 @@
         {#each TOKENS as t}<button class="tok" on:click={() => insertToken(t)}>{t}</button>{/each}</div>
       <div class="tokrad"><span class="tlbl">Ton:</span>
         {#each TONER as t}<button class="tonchip" class:on={ton === t} on:click={() => (ton = t)}>{t}</button>{/each}</div>
+      <!-- p.6: egna inspel till Claude-genereringen (utöver ton + matchfakta) -->
+      <div class="inspel">
+        <div class="inspelcaps">Inspel till genereringen</div>
+        <div class="vinkelchips">
+          {#each VINKLAR as [v, etikett] (v)}
+            <button class="vinkelchip" class:on={vinklar.includes(v)} on:click={() => toggleVinkel(v)}>{etikett}</button>
+          {/each}
+        </div>
+        <input class="inspelfalt" bind:value={inspel}
+          placeholder="Egna detaljer — avgörande i 90:e, publikrekord, lyft målvakten…" />
+        <div class="inspelhint">Skickas med som styrning när texten genereras — utöver matchfakta.</div>
+      </div>
       {#if genFel}<div class="genfel">{genFel}</div>{/if}
       <div class="hint">Sociala kanaler får @ och #. <b>Webben får samma text utan @/#</b> (rena namn, inga hashtags)
         — webbartikeln byggs i <b>Innehåll</b>, som hämtar referatet härifrån.</div>
@@ -781,12 +817,17 @@
       <span class="pchip">Facebook · i inlägget</span>
     </div>
   </div>
+  {/if}
 
-  <!-- Steg 2: Skicka till -->
-  <div class="steg"><span class="stegnr scd">2</span><span class="stegnamn">Skicka till</span>
-    <span class="steghint">— välj format + på/av per kanal · beskärningen sätts per foto i Steg 1 och följer med hit</span></div>
+  <!-- ===== Flik: Kanaler & publicera ===== -->
+  {#if mpTab === 'kanaler'}
+  <div class="steg"><span class="stegnr scd">2</span><span class="stegnamn">Kanaler &amp; publicera</span>
+    <span class="steghint">— format, bildantal + på/av per kanal · beskärningen sätts per foto i Innehåll och följer med hit</span></div>
   <div class="kanaler">
     {#each KANALER as k}
+      <!-- Inline (inte takFor()) så Svelte spårar ch.ig.vag och räknar om taket
+           när IG-vägen byts — en funktion döljer ch-beroendet för reaktiviteten. -->
+      {@const tak = k.key === 'ig' ? IG_TAK[ch.ig.vag] : CH_TAK[k.key]}
       <div class="kanal" class:av={!ch[k.key].on} class:wide={k.wide}>
         <div class="kanalhuvud" on:click={() => toggleCh(k.key)}>
           <span class="chk" class:pa={ch[k.key].on}>{ch[k.key].on ? '✓' : ''}</span>
@@ -798,13 +839,32 @@
               {#each k.format as f}<button class="fmtchip" class:on={ch[k.key].fmt === f} on:click={() => sattFmt(k.key, f)}>{fmtEti(f)}</button>{/each}
             </div>
           {/if}
+          <!-- p.3: IG-inlägget — valbar väg (klampar bildantalet mot vägens tak) -->
+          {#if k.key === 'ig'}
+            <div class="igvag">
+              <button class="igval" class:on={ch.ig.vag === 'direkt'} on:click={() => sattVag('direkt')}>
+                <span class="igdot" class:pa={ch.ig.vag === 'direkt'}></span><span class="igtxt">Posta direkt via integrationen</span><span class="igmax">max {IG_TAK.direkt}</span></button>
+              <button class="igval" class:on={ch.ig.vag === 'disk'} on:click={() => sattVag('disk')}>
+                <span class="igdot" class:pa={ch.ig.vag === 'disk'}></span><span class="igtxt">Exportera till disk</span><span class="igmax">max {IG_TAK.disk}</span></button>
+            </div>
+          {/if}
+          <!-- p.4: valbart bildantal med kanalens tak synligt -->
+          <div class="antalrad">
+            <span class="antallbl">Bilder</span>
+            <div class="stepper">
+              <button class="stepbtn" on:click={() => sattAntal(k.key, -1)} disabled={ch[k.key].antal <= 1}>−</button>
+              <span class="stepval scd">{ch[k.key].antal}</span>
+              <button class="stepbtn" on:click={() => sattAntal(k.key, 1)} disabled={ch[k.key].antal >= tak}>+</button>
+            </div>
+            <span class="antaltak">av max {tak}</span>
+          </div>
           <div class="cropbox ro" class:av={!ch[k.key].on}>
             {#if coverPath && thumbs[coverPath] && coverPhoto}
               <img class="cropimg" src={thumbs[coverPath]} alt="" on:load={(e) => paFotoLast(e, coverPath)} />
               {@const ram = ramFor(coverPhoto.fokus, coverPhoto.zoom, ch[k.key].fmt, ratios[coverPath] || 1.5)}
               <div class="cropram" style="left:{ram.l}%;top:{ram.t}%;width:{ram.w}%;height:{ram.h}%;border-color:{grenFarg(match?.hem_gren)};box-shadow:0 0 12px {grenFarg(match?.hem_gren)}55, 0 0 0 9999px rgba(7,9,12,.55)"></div>
             {:else}
-              <div class="prevtom">Välj omslag i Steg 1</div>
+              <div class="prevtom">Välj omslag i Innehåll</div>
             {/if}
           </div>
           <div class="crophint">{k.key === 'live' ? 'Omslaget med overlay' : 'Omslag + valda foton, var sin crop'} · {fmtEti(ch[k.key].fmt)}</div>
@@ -812,44 +872,16 @@
       </div>
     {/each}
   </div>
+  {/if}
 
-  <!-- På gång (webb) -->
-  <div class="steg"><span class="stegnr scd">W</span><span class="stegnamn">På gång <span class="wmut">(webb)</span></span>
-    <span class="steghint">— kommande matcher som schema-modul på sajten</span></div>
+  <!-- ===== Flik: Publicerat ===== -->
+  {#if mpTab === 'publicerat'}
+  <!-- Material: vad som faktiskt gick ut, och vägen tillbaka när en kanal föll.
+       (På gång-sektionen + mobilsynk-UI är borttagna härifrån — På gång bor nu
+       under Webb → På gång, mobilsynken sker automatiskt i bakgrunden.) -->
   <div class="kort">
     <div class="korthuvud">
-      <span class="caps">Kommande matcher · {pagang.length} st</span>
-      <button class="visatoggle" on:click={togglePagangVisa}>
-        <span class="chk sm" class:pa={pagangVisa}>{pagangVisa ? '✓' : ''}</span>Visa på sajten</button>
-    </div>
-    <div class="pglista">
-      {#each pagang.slice(0, 6) as m (m.id)}
-        <div class="pgrad">
-          <div class="pgdatum"><div class="pgdag scd">{(m.datum || '').split('-')[2] || '–'}</div>
-            <div class="pgmon">{MK[(Number((m.datum || '').split('-')[1]) || 1) - 1]?.toUpperCase()}</div></div>
-          <span class="grendot" style="background:{grenFarg(m.hem_gren)}"></span>
-          <div class="pgi"><div class="pgf">{m.lag_hemma} – {m.lag_borta}</div><div class="pgl">{m.liga || ''}</div></div>
-        </div>
-      {/each}
-      {#if !pagang.length}<div class="hint">Inga kommande matcher i Matcher.</div>{/if}
-    </div>
-    <div class="pgfot">
-      <span class="hint">Synkas automatiskt från Matcher — publiceras som "På gång"-widget på sajten
-        och skickas till DPT2 Live i mobilen.</span>
-      {#if mobilFlash}<span class="ok">{mobilFlash}</span>{/if}
-      {#if pagangFlash}<span class="ok">{pagangFlash}</span>{/if}
-      <button class="sek" on:click={synkaMobil} disabled={mobilKor || $testMode}
-        title={$testMode ? 'Testläge: rör aldrig molnet' : 'Skicka kommande matcher till DPT2 Live i mobilen'}>
-        {mobilKor ? 'Synkar…' : 'Synka till mobilen'}
-      </button>
-      <button class="sek" on:click={uppdateraSajten} disabled={pagangKor}>{pagangKor ? 'Uppdaterar…' : 'Uppdatera sajten'}</button>
-    </div>
-  </div>
-
-  <!-- Material: vad som faktiskt gick ut, och vägen tillbaka när en kanal föll -->
-  <div class="kort">
-    <div class="korthuvud">
-      <span class="caps">Material · {matAntal.alla} st</span>
+      <span class="caps">Publicerat &amp; utkast · {matAntal.alla} st</span>
       <div class="matfilter">
         {#each [['alla', 'Alla'], ['utkast', 'Utkast'], ['publicerad', 'Publicerade'], ['delvis', 'Delvis']] as [v, etikett] (v)}
           <button class="matchip" class:on={matFilter === v} on:click={() => (matFilter = v)}>
@@ -918,10 +950,13 @@
         {/each}
       </div>
     {/if}
+    <div class="hint">Klick öppnar materialet för ändring i Innehåll/Kanaler — utkast sparas löpande.</div>
   </div>
+  {/if}
 </div>
 
-<!-- Publiceringsrad -->
+<!-- Publiceringsrad — sidfot, dold på Publicerat-fliken (p.1) -->
+{#if mpTab !== 'publicerat'}
 <div class="pubrad">
   <div class="pubinfo">
     <div class="pubtitel">Skickas till <b>{aktiva.length} {aktiva.length === 1 ? 'kanal' : 'kanaler'}</b></div>
@@ -934,6 +969,7 @@
   <button class="sek" on:click={spara} disabled={!match}>Spara utkast</button>
   <button class="prim" on:click={publicera} disabled={!match || !aktiva.length || pubKor}>{pubKor ? 'Publicerar…' : `Publicera ${aktiva.length}`}</button>
 </div>
+{/if}
 
 <!-- Live nu — slide-over -->
 {#if liveOpen}
@@ -1066,7 +1102,6 @@
   .stegnr { width: 24px; height: 24px; border-radius: 7px; background: var(--div3); color: var(--acc);
     display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex: none; }
   .stegnamn { font-size: 16px; font-weight: 600; color: var(--t-head); }
-  .wmut { color: var(--t-mut); font-weight: 500; }
   .steghint { font-size: 12px; color: var(--t-mut); }
 
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -1169,6 +1204,48 @@
   .tonchip.on { background: var(--acc); border-color: var(--acc); color: var(--ink); }
   .genfel { font-size: 11.5px; color: var(--rose); font-weight: 600; margin-top: 9px; }
 
+  /* Flikar (p.1) */
+  .mpflikar { display: flex; gap: 6px; background: var(--panel); border: 1px solid var(--div);
+    border-radius: 11px; padding: 4px; margin: 6px 0 20px; }
+  .mpflik { flex: 1; padding: 9px 14px; border-radius: 8px; border: 0; font-size: 12.5px;
+    font-weight: 600; background: transparent; color: var(--t-mut); cursor: pointer; }
+  .mpflik.on { background: var(--acc); color: var(--ink); font-weight: 700; }
+  .eventrem { color: var(--t-mut); }
+  .mddkom.event { color: var(--acc); border-color: var(--acc-border); background: var(--acc-soft); }
+
+  /* p.6: Inspel till genereringen */
+  .inspel { border: 1px solid var(--div); border-radius: 10px; background: var(--panel); padding: 10px 12px; margin-top: 10px; }
+  .inspelcaps { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-caps); margin-bottom: 8px; }
+  .vinkelchips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+  .vinkelchip { font-size: 11px; font-weight: 600; padding: 3px 11px; border-radius: 999px;
+    border: 1px solid var(--div); background: transparent; color: var(--t-mut); cursor: pointer; }
+  .vinkelchip.on { background: var(--acc); border-color: var(--acc); color: var(--ink); }
+  .inspelfalt { width: 100%; box-sizing: border-box; background: var(--kort); border: 1px solid var(--div);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--t-head); }
+  .inspelhint { font-size: 10px; color: var(--t-help); margin-top: 6px; }
+
+  /* p.3: IG-väg */
+  .igvag { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .igval { display: flex; align-items: center; gap: 9px; background: var(--kort); border: 1px solid var(--div);
+    border-radius: 8px; padding: 8px 10px; font-size: 11.5px; font-weight: 600; color: var(--t-mut); cursor: pointer; }
+  .igval.on { border-color: var(--acc-border); background: var(--acc-soft); color: var(--t-head); }
+  .igdot { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--div2, var(--t-mut)); flex: none; }
+  .igdot.pa { border-color: var(--acc); background: var(--acc); box-shadow: inset 0 0 0 2.5px var(--kort); }
+  .igtxt { flex: 1; text-align: left; }
+  .igmax { font-size: 9.5px; color: var(--t-help); }
+
+  /* p.4: bildantal-stepper */
+  .antalrad { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+  .antallbl { font-size: 10.5px; font-weight: 600; color: var(--t-mut); }
+  .stepper { display: inline-flex; align-items: center; gap: 2px; background: var(--panel);
+    border: 1px solid var(--div); border-radius: 8px; padding: 2px; }
+  .stepbtn { width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent;
+    color: var(--t-head); font-size: 16px; font-weight: 700; cursor: pointer; }
+  .stepbtn:hover:not(:disabled) { background: var(--acc-soft); color: var(--acc); }
+  .stepbtn:disabled { opacity: 0.35; cursor: default; }
+  .stepval { min-width: 22px; text-align: center; font-size: 15px; font-weight: 700; color: var(--t-head); }
+  .antaltak { font-size: 9.5px; color: var(--t-help); }
+
   /* Godkänn prompten: exakt frågetexten som skickas, byggd lokalt utan nätanrop. */
   .granska { border: 1px solid var(--div3); border-radius: 10px; background: var(--panel);
     padding: 11px 12px; margin: 10px 0 4px; }
@@ -1231,17 +1308,7 @@
   .zoomtxt { font-size: 10px; color: var(--t-mut); }
   .crophint { font-size: 9.5px; color: var(--t-help); text-align: center; line-height: 1.35; }
 
-  .visatoggle { display: flex; align-items: center; gap: 8px; background: none; border: 0; font-size: 11.5px; color: var(--t-mut); font-weight: 600; }
-  .pglista { display: flex; flex-direction: column; }
-  .pgrad { display: flex; align-items: center; gap: 13px; padding: 10px 4px; border-top: 1px solid var(--div3); }
-  .pgdatum { text-align: center; width: 38px; flex: none; }
-  .pgdag { font-size: 19px; font-weight: 700; color: var(--t-head); line-height: 1; font-family: var(--font-c); }
-  .pgmon { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; color: var(--t-mut); }
-  .pgi { flex: 1; min-width: 0; }
-  .pgf { font-size: 13px; font-weight: 600; color: var(--t-head); }
-  .pgl { font-size: 10.5px; color: var(--t-mut); }
-  .pgfot { display: flex; align-items: center; gap: 12px; margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--div3); flex-wrap: wrap; }
-  .pgfot .hint { flex: 1; margin-top: 0; min-width: 200px; }
+  /* På gång-sektionens stilar flyttade till PaGang.svelte (§C). */
   .ok { font-size: 11.5px; color: var(--ok); font-weight: 600; }
   .ok.sm { margin-top: 6px; }
 

@@ -39,6 +39,14 @@ const MOCK_MATCHER = [
     liga: 'Nordea Open', tavling_id: null, hem_gren: '',   // individ utan gren → "ej satt"
     hemfarg: '#2F7CB0', bortafarg: '', trupp_n: 0,
   },
+  {
+    // p.5: heldagsevent = "match utan motståndare" i samma datamodell/flöde.
+    id: 'event-partille', datum: '2026-07-06', tid: '', event: true,
+    arena: 'Göteborg', status: 'kommande', resultat: '',
+    sport: 'fotboll', lag_hemma: 'Partille Cup', lag_borta: '',
+    liga: 'Heldagsevent', tavling_id: null, hem_gren: 'mixed',
+    hemfarg: '#6E8757', bortafarg: '', trupp_n: 0,
+  },
   // Säsongsarkiv-demo (matcher.svelte grupperar per kalenderår ur datum — riktig
   // säsongspartitionering + lazy-load per år är backend-arbete som är utanför
   // det här passet, se HANDOFF.md).
