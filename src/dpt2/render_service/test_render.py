@@ -81,6 +81,21 @@ class TestRendera(unittest.TestCase):
                       "lag_borta": "Italien", "sport": "volleyboll"}, foto=_jpeg())
         self.assertEqual(self._bild(ut).size, (1080, 1920))
 
+    def test_overlay_av_ger_annan_bild(self):
+        # overlay=False → ren beskuren bild utan grafik (iOS-klienten).
+        med = rendera({**BAS, "gren": "dam"}, foto=_jpeg())
+        utan = rendera({**BAS, "gren": "dam", "overlay": False}, foto=_jpeg())
+        self.assertNotEqual(_sig(med), _sig(utan))
+        self.assertEqual(self._bild(utan).size, (1080, 1920))
+
+    def test_scorers_layout_slapps_igenom(self):
+        # A4: layout-valet ska nå renderaren → rad vs chips ger olika bilder.
+        many = {**BAS, "stallning": "6-0",
+                "mal_rad": "A 10' · B 20' · C 30' · D 40' · E 50' · F 60'"}
+        rad = rendera({**many, "scorers_layout": "rad"}, foto=_jpeg())
+        chips = rendera({**many, "scorers_layout": "chips"}, foto=_jpeg())
+        self.assertNotEqual(_sig(rad), _sig(chips))
+
     def test_fokus_och_zoom(self):
         a = rendera(BAS, foto=_jpeg())
         b = rendera({**BAS, "fokus": {"x": 20, "y": 80}, "zoom": 1.6}, foto=_jpeg())
