@@ -45,6 +45,23 @@ class TestMatchfalt(unittest.TestCase):
         self.assertIsNone(f["startelva"])
         self.assertEqual(f["gren"], "")
 
+    def test_p5_event_harleder_next_when_ur_datum(self):
+        # Heldagsevent: kanalens config saknar next_when → underraden ska ändå
+        # få datumet (härlett ur eventets datum).
+        mid = store.spara_match(self.c, {
+            "lag_hemma": "Partille Cup", "lag_borta": "", "event": True,
+            "datum": "2026-07-06", "arena": "Göteborg"})
+        f = S._matchfalt(self.c, {"match_id": mid})
+        self.assertEqual(f["next_when"], "6 jul")
+        self.assertEqual(f["lag_borta"], "")
+        # explicit config.next_when (Live-flödet) vinner
+        f2 = S._matchfalt(self.c, {"match_id": mid, "next_when": "Lör 12 jul"})
+        self.assertEqual(f2["next_when"], "Lör 12 jul")
+        # en riktig match (ej event) härleder inte next_when
+        mid2 = store.spara_match(self.c, {"lag_hemma": "A", "lag_borta": "B",
+                                          "datum": "2026-08-01"})
+        self.assertEqual(S._matchfalt(self.c, {"match_id": mid2})["next_when"], "")
+
     def test_loggor_ur_lagens_databaspost(self):
         # lag.logga (uppladdad under Lag & tävlingar) ska följa med matchfälten
         # — INTE story_overlay.hitta_logga()s gamla filsystemkonvention.

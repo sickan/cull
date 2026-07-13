@@ -15,6 +15,21 @@ from dpt2.motorer import story_overlay
 from dpt2.motorer.nummer import _env
 
 
+_MAN = ["jan", "feb", "mar", "apr", "maj", "jun", "jul",
+        "aug", "sep", "okt", "nov", "dec"]
+
+
+def _datum_kort(iso):
+    """'2026-07-06' → '6 jul' (tom sträng vid ogiltigt datum)."""
+    d = (iso or "").split("-")
+    if len(d) == 3:
+        try:
+            return f"{int(d[2])} {_MAN[int(d[1]) - 1]}"
+        except (ValueError, IndexError):
+            return ""
+    return ""
+
+
 def _matchfalt(conn, config):
     """Fyller lag/liga/arena/ställning/mål/startelva ur matchen (match_id) med
     config som fallback — utom mallfälten (stallning/mal_rad/startelva/lag_borta):
@@ -43,11 +58,18 @@ def _matchfalt(conn, config):
         lag = store.hamta_lag(conn, lag_id) if lag_id else None
         return (lag or {}).get("logga") or None
 
+    # p.5: för heldagsevent (moment Nästa match, ingen motståndare) saknar
+    # kanalens config next_when → härled eventdatumet så underraden inte tappar
+    # datumet. Explicit config.next_when (Live-flödet) vinner alltid.
+    next_when = config.get("next_when") or (
+        _datum_kort(m.get("datum")) if m.get("event") else "")
+
     return {
         "lag_hemma": m.get("lag_hemma") or config.get("lag_hemma", ""),
         "lag_borta": config.get("lag_borta") or m.get("lag_borta", ""),
         "liga": m.get("liga") or config.get("liga", ""),
         "arena": m.get("arena") or config.get("arena", ""),
+        "next_when": next_when,
         "sport": sport,
         "stallning": config.get("stallning") or m.get("resultat", ""),
         "mal_rad": mal_rad,
@@ -79,7 +101,7 @@ def _rendera(conn, config, *, ut_path=None, ut_mapp=None, env=None):
         liga=f["liga"], stallning=f["stallning"], mal_rad=f["mal_rad"],
         arena=f["arena"], startelva=f["startelva"], sport=f["sport"],
         avspark_tid=config.get("avspark_tid", ""),
-        next_when=config.get("next_when", ""),
+        next_when=f.get("next_when", ""),
         tema=config.get("tema", "Hav"), gren=f["gren"],
         hem_logga=f["hem_logga"], borta_logga=f["borta_logga"],
         format=config.get("format", "9x16"),
