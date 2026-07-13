@@ -115,7 +115,8 @@ TON_INSTR = {
 
 
 def bygg_fraga(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
-               malskyttar="", arena="", datum="", liga="", ton=""):
+               malskyttar="", arena="", datum="", liga="", ton="",
+               vinklar=None, inspel=""):
     """Bygger frågesträngen som skickas till Claude — en ren strängoperation,
     inget nätverksanrop. Utbruten ur generera() så UI:t kan visa EXAKT vad som
     kommer skickas (för godkännande) innan det skarpa, ~2 minuter långa
@@ -123,7 +124,13 @@ def bygg_fraga(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
     datum/liga — allt appen redan har lokalt via resultat-remsan/matchposten)
     skickas med rakt av så Claude inte behöver websöka efter sånt som redan
     är verifierat; websökning används bara för sådant appen INTE har (nästa
-    match, tabellkontext, @-handles)."""
+    match, tabellkontext, @-handles).
+
+    p.6 (handoff v2): fotografens egna inspel — `vinklar` (lista med
+    vinkel-etiketter, t.ex. ["Stämning", "Publiken"]) och `inspel` (fritext,
+    t.ex. "avgörande i 90:e, publikrekord") — vävs in som STYRNING utöver
+    matchfakta. Fritexten är fotografens egen observation → behandlas som
+    verifierad (hitta inte på runt den, men använd den)."""
     matchinfo = (matchinfo or "").strip()
     fraga = f"Match: {matchinfo}."
     if sport and sport.lower() != "auto":
@@ -148,15 +155,24 @@ def bygg_fraga(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
                   "använd rakt av — sök inte efter dessa):\n" + "\n".join(kanda))
     if ton and ton in TON_INSTR:
         fraga += "\n\n" + TON_INSTR[ton]
+    # p.6: fotografens egna inspel — styrning utöver matchfakta.
+    vinkel_lista = [v.strip() for v in (vinklar or []) if v and v.strip()]
+    if vinkel_lista:
+        fraga += ("\n\nLÄGG SÄRSKILD VIKT VID (fotografens valda vinklar): "
+                  + ", ".join(vinkel_lista) + ".")
+    if (inspel or "").strip():
+        fraga += ("\n\nFOTOGRAFENS EGNA INSPEL (verifierade observationer — väv in "
+                  "dem, hitta inte på runt dem):\n" + inspel.strip())
     fraga += "\nSkriv Bildsvepet enligt formatet och svara med JSON."
     return fraga
 
 
 def generera(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
-             malskyttar="", arena="", datum="", liga="", ton="", logg=print, klient=None):
+             malskyttar="", arena="", datum="", liga="", ton="",
+             vinklar=None, inspel="", logg=print, klient=None):
     """Returnerar {referat, bildsvep} eller None. matchinfo = matchrad/-sträng;
-    övriga kwargs ger kontext/kända matchfakta (se bygg_fraga). Klienten
-    injiceras i test."""
+    övriga kwargs ger kontext/kända matchfakta + p.6-inspel (se bygg_fraga).
+    Klienten injiceras i test."""
     if not (matchinfo or "").strip():
         logg("⚠ Ingen matchinfo angiven.")
         return None
@@ -166,7 +182,7 @@ def generera(matchinfo, *, sport="", hemma_farg="", resultat="", mellan="",
 
     fraga = bygg_fraga(matchinfo, sport=sport, hemma_farg=hemma_farg, resultat=resultat,
                        mellan=mellan, malskyttar=malskyttar, arena=arena, datum=datum,
-                       liga=liga, ton=ton)
+                       liga=liga, ton=ton, vinklar=vinklar, inspel=inspel)
 
     logg("Hämtar matchfakta och skriver Bildsvepet via Claude (web search)…")
     data = claude.fraga_json(klient, SYSTEM, fraga,

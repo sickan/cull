@@ -1255,7 +1255,8 @@ class Api:
             matchinfo, sport=f.get("sport", ""), hemma_farg=f.get("hemma_farg", ""),
             resultat=f.get("resultat", ""), mellan=f.get("mellan", ""),
             malskyttar=f.get("malskyttar", ""), arena=f.get("arena", ""),
-            datum=f.get("datum", ""), liga=f.get("liga", ""), ton=f.get("ton", ""))}
+            datum=f.get("datum", ""), liga=f.get("liga", ""), ton=f.get("ton", ""),
+            vinklar=f.get("vinklar"), inspel=f.get("inspel", ""))}
 
     def generera_bildsvep(self, matchinfo, sport="", hemma_farg="", fakta=None):
         """Genererar Bildsvepet-bildtext (Claude web search) för granskning.
@@ -1268,7 +1269,8 @@ class Api:
                 matchinfo, sport=sport, hemma_farg=hemma_farg,
                 resultat=f.get("resultat", ""), mellan=f.get("mellan", ""),
                 malskyttar=f.get("malskyttar", ""), arena=f.get("arena", ""),
-                datum=f.get("datum", ""), liga=f.get("liga", ""), ton=f.get("ton", ""))
+                datum=f.get("datum", ""), liga=f.get("liga", ""), ton=f.get("ton", ""),
+                vinklar=f.get("vinklar"), inspel=f.get("inspel", ""))
         except Exception as e:
             return {"ok": False, "fel": f"Kunde inte generera: {e}"}
         if not data:

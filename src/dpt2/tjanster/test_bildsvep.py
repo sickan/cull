@@ -113,6 +113,29 @@ class TestByggFraga(unittest.TestCase):
         fraga = BS.bygg_fraga("")
         self.assertIn("Skriv Bildsvepet", fraga)
 
+    def test_p6_vinklar_och_inspel_vavs_in(self):
+        # p.6 (handoff v2): fotografens vinkel-chips + fritext ska styra prompten.
+        fraga = BS.bygg_fraga("Malmö FF–Kristianstad 6-0",
+                              vinklar=["Stämning", "Publiken"],
+                              inspel="avgörande i 90:e, publikrekord")
+        self.assertIn("SÄRSKILD VIKT", fraga)
+        self.assertIn("Stämning, Publiken", fraga)
+        self.assertIn("FOTOGRAFENS EGNA INSPEL", fraga)
+        self.assertIn("avgörande i 90:e, publikrekord", fraga)
+
+    def test_p6_tomma_inspel_ger_inga_rubriker(self):
+        fraga = BS.bygg_fraga("X–Y 1-0", vinklar=[], inspel="")
+        self.assertNotIn("SÄRSKILD VIKT", fraga)
+        self.assertNotIn("FOTOGRAFENS EGNA INSPEL", fraga)
+
+    def test_p6_vinklar_nar_hela_vagen_genom_generera(self):
+        kl = _Klient([_Svar(GILTIGT)])
+        BS.generera("Malmö FF–Kristianstad 6-0", vinklar=["Vinkel"],
+                    inspel="lyft målvakten", logg=lambda *_: None, klient=kl)
+        prompt = kl._content_text()
+        self.assertIn("SÄRSKILD VIKT", prompt)
+        self.assertIn("lyft målvakten", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
