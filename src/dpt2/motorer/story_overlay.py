@@ -491,27 +491,36 @@ def _render_preview(canvas, accent, lag_hemma, lag_borta,
     y = _divider(d, L, y, BLOCK_W, alpha=56)
     y += 34
 
-    # 5. Lag-rad (flex, justify-content:center, gap:26)
+    # 5. Lag-rad (flex, justify-content:center, gap:26). Heldagsevent (p.5) har
+    #    ingen motståndare → rita bara hemma-brickan + namnet, ingen tankstreck-
+    #     vs-layout eller tom borta-bricka.
     w_ht   = int(d.textlength(lag_hemma, font=fnt_team))
-    w_bt   = int(d.textlength(lag_borta, font=fnt_team))
-    w_dash = int(d.textlength("–", font=fnt_dash))
-    row_w  = BRICKA_S + 26 + w_ht + 26 + w_dash + 26 + w_bt + 26 + BRICKA_S
-    rx     = L + (BLOCK_W - row_w) // 2
+    if (lag_borta or "").strip():
+        w_bt   = int(d.textlength(lag_borta, font=fnt_team))
+        w_dash = int(d.textlength("–", font=fnt_dash))
+        row_w  = BRICKA_S + 26 + w_ht + 26 + w_dash + 26 + w_bt + 26 + BRICKA_S
+        rx     = L + (BLOCK_W - row_w) // 2
 
-    lager.alpha_composite(bricka_h, (rx, y))
-    rx += BRICKA_S + 26
+        lager.alpha_composite(bricka_h, (rx, y))
+        rx += BRICKA_S + 26
 
-    _spärrad_text(d, (rx, y + lagtext_dy), lag_hemma, fnt_team, _VIT, 0)
-    rx += w_ht + 26
+        _spärrad_text(d, (rx, y + lagtext_dy), lag_hemma, fnt_team, _VIT, 0)
+        rx += w_ht + 26
 
-    ac_85 = accent[:3] + (int(accent[3] * 0.85),)
-    d.text((rx, y + dash_dy), "–", font=fnt_dash, fill=ac_85)
-    rx += w_dash + 26
+        ac_85 = accent[:3] + (int(accent[3] * 0.85),)
+        d.text((rx, y + dash_dy), "–", font=fnt_dash, fill=ac_85)
+        rx += w_dash + 26
 
-    _spärrad_text(d, (rx, y + lagtext_dy), lag_borta, fnt_team, _VIT, 0)
-    rx += w_bt + 26
+        _spärrad_text(d, (rx, y + lagtext_dy), lag_borta, fnt_team, _VIT, 0)
+        rx += w_bt + 26
 
-    lager.alpha_composite(bricka_b, (rx, y))
+        lager.alpha_composite(bricka_b, (rx, y))
+    else:
+        row_w = BRICKA_S + 26 + w_ht
+        rx    = L + (BLOCK_W - row_w) // 2
+        lager.alpha_composite(bricka_h, (rx, y))
+        rx += BRICKA_S + 26
+        _spärrad_text(d, (rx, y + lagtext_dy), lag_hemma, fnt_team, _VIT, 0)
 
     canvas.alpha_composite(lager)
 

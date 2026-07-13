@@ -82,6 +82,22 @@ class TestMatchfalt(unittest.TestCase):
         self.assertFalse(S.kor_story(
             self.c, {"moment": "Avspark", "foto": "/finns/inte.jpg"})["ok"])
 
+    def test_p5_event_utan_motstandare_renderar(self):
+        # p.5: heldagsevent (ingen lag_borta) ska rendera en ren story utan
+        # tom borta-bricka / tankstreck — och aldrig krascha.
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        from dpt2.motorer import story_overlay
+        with tempfile.TemporaryDirectory() as d:
+            foto = f"{d}/f.jpg"
+            Image.new("RGB", (900, 1600), (40, 80, 110)).save(foto, "JPEG")
+            ut = story_overlay.skapa_story(
+                foto, "nasta_match", "Partille Cup", "",
+                liga="Heldagsevent", arena="Göteborg", next_when="6–11 jul",
+                gren="mixed", tema="Hav", ut_path=f"{d}/ut.jpg")
+            self.assertTrue(Path(ut).exists())
+
 
 class TestForhandsgranska(unittest.TestCase):
     """VIKTIGT: forhandsgranska() skriver till en FAST sökväg
