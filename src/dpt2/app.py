@@ -2191,10 +2191,14 @@ def _innehall_md(data, bild_urls=None):
         # Mellanresultatets nyckel varierar per sport (halvtid/set/perioder) —
         # sportprofilen avgör, fotboll som fallback för event/omärkta poster.
         prof = sportprofil.profil(data.get("sport"))
+        # p.5: heldagsevent = match utan motståndare. Flaggan låter sajten rendera
+        # utan "– borta"/resultat (samma härledning som appen: tom borta = event).
+        ar_event = bool(data.get("event")) or not (data.get("borta") or "").strip()
         fm = {
             "typ": typ,
             "hem": data.get("hem") or None,
             "borta": data.get("borta") or None,
+            "event": True if ar_event else None,
             "datum": data.get("datum") or None,
             "serie": data.get("serie") or None,
             "arena": data.get("arena") or None,

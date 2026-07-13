@@ -590,6 +590,17 @@ class TestApi(unittest.TestCase):
             "typ": "match", "titel": "A – B", "hem": "A", "borta": "B"})
         self.assertNotIn("topp", utan["md"])
 
+    def test_innehall_md_match_event_flagga(self):
+        # p.5: heldagsevent (match utan motståndare) → event: true i frontmatter
+        # så sajten kan rendera utan "– borta"/resultat.
+        ev = self.api.forhandsgranska_innehall({
+            "typ": "match", "titel": "Partille Cup", "hem": "Partille Cup", "borta": ""})
+        self.assertIn("event: true", ev["md"])
+        # riktig match (borta ifyllt) → ingen event-flagga
+        match = self.api.forhandsgranska_innehall({
+            "typ": "match", "titel": "A – B", "hem": "A", "borta": "B", "resultat": "1-0"})
+        self.assertNotIn("event:", match["md"])
+
     def test_sport_topp_sparas_och_speglas(self):
         # Valet persisteras i installning; skarpt läge speglar till workern via
         # innehall_synk.satt_topp (fejkad här), testläge rör den aldrig.
