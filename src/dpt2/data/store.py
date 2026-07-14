@@ -1056,15 +1056,18 @@ def merge_in_trupp(conn, match_id, nya_spelare, *, bevara_start=False):
 
 
 # ── SoMe-material (Publicera) ─────────────────────────────────────────────────
-def spara_some_material(conn, *, kanal, format, match_id=None, moment=None,
-                        tema=None, fil=None, id=None, skapad=None):
+def spara_some_material(conn, *, kanal, format, match_id=None, tavling_id=None,
+                        moment=None, tema=None, fil=None, id=None, skapad=None):
     """Spårar EN publicerad post (Instagram/Facebook/TikTok). Skrivs först när en
-    post faktiskt gått ut (inte i dry-run). Returnerar some_material-id."""
+    post faktiskt gått ut (inte i dry-run). match_id ELLER tavling_id (turnerings-
+    SoMe utan enskild match). Returnerar some_material-id."""
     sid = id or ny_id()
     conn.execute(
         "INSERT OR REPLACE INTO some_material"
-        "(id,match_id,kanal,format,moment,tema,fil,skapad) VALUES(?,?,?,?,?,?,?,?)",
-        (sid, match_id, kanal, format, moment, tema, fil, skapad or _nu()))
+        "(id,match_id,tavling_id,kanal,format,moment,tema,fil,skapad) "
+        "VALUES(?,?,?,?,?,?,?,?,?)",
+        (sid, match_id, tavling_id, kanal, format, moment, tema, fil,
+         skapad or _nu()))
     conn.commit()
     return sid
 
@@ -1076,8 +1079,16 @@ def lista_some_material(conn, match_id):
         (match_id,))]
 
 
+def lista_some_material_for_tavling(conn, tavling_id):
+    """Publicerade turnerings-poster, nyast först."""
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM some_material WHERE tavling_id=? ORDER BY skapad DESC",
+        (tavling_id,))]
+
+
 # ── Sparade material + utkast (Publicera-panelens arbetsyta) ──────────────────
 def spara_publicera_material(conn, *, kind, status, match_id=None, match_namn=None,
+                             mal_typ="match", tavling_id=None,
                              moment=None, tema=None, dropbox=None, foto=None,
                              channels=None, caption=None, banor=None,
                              ch_results=None, historik_note=None,
@@ -1097,14 +1108,17 @@ def spara_publicera_material(conn, *, kind, status, match_id=None, match_namn=No
     mid = id or ny_id()
     conn.execute(
         "INSERT INTO publicera_material"
-        "(id,kind,match_id,match_namn,status,moment,tema,dropbox,foto,channels,"
-        "caption,banor,ch_results,uppdaterad) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
-        "ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, match_id=excluded.match_id, "
+        "(id,kind,mal_typ,match_id,tavling_id,match_namn,status,moment,tema,dropbox,"
+        "foto,channels,caption,banor,ch_results,uppdaterad) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, mal_typ=excluded.mal_typ, "
+        "match_id=excluded.match_id, tavling_id=excluded.tavling_id, "
         "match_namn=excluded.match_namn, status=excluded.status, moment=excluded.moment, "
         "tema=excluded.tema, dropbox=excluded.dropbox, foto=excluded.foto, "
         "channels=excluded.channels, caption=excluded.caption, banor=excluded.banor, "
         "ch_results=excluded.ch_results, uppdaterad=excluded.uppdaterad",
-        (mid, kind, match_id, match_namn, status, moment, tema, dropbox, foto,
+        (mid, kind, mal_typ, match_id, tavling_id, match_namn, status, moment, tema,
+         dropbox, foto,
          json.dumps(channels, ensure_ascii=False) if channels is not None else None,
          caption,
          json.dumps(banor, ensure_ascii=False) if banor is not None else None,

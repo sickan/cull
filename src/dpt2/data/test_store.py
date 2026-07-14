@@ -777,6 +777,11 @@ class TestMigrering(unittest.TestCase):
         self.assertIn("foto", pubmatkol)
         self.assertIn("banor", pubmatkol)
         self.assertIn("ch_results", pubmatkol)
+        # v26 (tennis Fas 3): turnerings-SoMe-mål på material.
+        self.assertIn("mal_typ", pubmatkol)
+        self.assertIn("tavling_id", pubmatkol)
+        self.assertIn("tavling_id",
+                      [r[1] for r in c.execute("PRAGMA table_info(some_material)")])
         self.assertIn("trupp_kalla",
                       [r[1] for r in c.execute("PRAGMA table_info(lag)")])
         # v13: sportneutralt mellanresultat + innebandy i sport-enumen.
@@ -813,6 +818,47 @@ class TestMigrering(unittest.TestCase):
         r = c.execute("SELECT * FROM lag WHERE id='malmo-ff'").fetchone()
         self.assertEqual(r["namn"], "Malmö FF")
         self.assertIsNone(r["sport"])
+
+    def test_migrera_v25_till_v26(self):
+        # v25-läge: material-tabeller utan turnerings-kolumnerna → additivt v26.
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA user_version=25")
+        c.execute("CREATE TABLE some_material(id TEXT PRIMARY KEY, match_id TEXT)")
+        c.execute("CREATE TABLE publicera_material(id TEXT PRIMARY KEY, "
+                  "kind TEXT, match_id TEXT, match_namn TEXT)")
+        c.execute("INSERT INTO publicera_material VALUES('m1','some','x','A – B')")
+        db._migrera(c, 25)
+        pubkol = [r[1] for r in c.execute("PRAGMA table_info(publicera_material)")]
+        self.assertIn("mal_typ", pubkol)
+        self.assertIn("tavling_id", pubkol)
+        self.assertIn("tavling_id",
+                      [r[1] for r in c.execute("PRAGMA table_info(some_material)")])
+        # befintlig rad orörd, mal_typ defaultar 'match'
+        r = c.execute("SELECT * FROM publicera_material WHERE id='m1'").fetchone()
+        self.assertEqual(r["match_namn"], "A – B")
+        self.assertEqual(r["mal_typ"], "match")
+        self.assertIsNone(r["tavling_id"])
+
+    def test_turnering_material_round_trip(self):
+        # Turnerings-SoMe: material utan match_id, med tavling_id + mal_typ.
+        c = db.oppna(":memory:")
+        store.upsert_tavling(c, "Nordea Open", sport="tennis", typ="turnering")
+        mid = store.spara_publicera_material(
+            c, kind="some", status="utkast", mal_typ="turnering",
+            tavling_id="nordea-open", match_namn="Nordea Open",
+            caption="Dag 3 i Båstad", channels=["ig", "fb"])
+        rad = next(m for m in store.lista_publicera_material(c) if m["id"] == mid)
+        self.assertEqual(rad["mal_typ"], "turnering")
+        self.assertEqual(rad["tavling_id"], "nordea-open")
+        self.assertIsNone(rad["match_id"])
+        self.assertEqual(rad["match_namn"], "Nordea Open")
+        self.assertEqual(rad["channels"], ["ig", "fb"])
+        # publicerad post loggas mot tävlingen
+        store.spara_some_material(c, kanal="instagram", format="9x16",
+                                  tavling_id="nordea-open", moment="Dagens matcher")
+        self.assertEqual(len(store.lista_some_material_for_tavling(c, "nordea-open")), 1)
 
     def test_migrera_v1_till_v5(self):
         # v1-läge: urval + register-tabellerna (som alltid funnits). Migreringen

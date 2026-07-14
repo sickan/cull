@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -584,6 +584,20 @@ def _migrera(conn, fran_version):
         if _har_tabell(conn, "matchen") and not _har_kolumn(conn, "matchen", "event"):
             conn.execute(
                 "ALTER TABLE matchen ADD COLUMN event INTEGER NOT NULL DEFAULT 0")
+
+    if fran_version < 26:
+        # v26 (tennis Fas 3): turnerings-SoMe = publicering mot en hel turnering
+        # (t.ex. Nordea Open-veckan) i stället för en enskild match. Additivt,
+        # nullbart — befintliga match-material rörs inte (mal_typ defaultar 'match').
+        if _har_tabell(conn, "some_material") and not _har_kolumn(conn, "some_material", "tavling_id"):
+            conn.execute("ALTER TABLE some_material ADD COLUMN tavling_id TEXT")
+        if _har_tabell(conn, "publicera_material"):
+            if not _har_kolumn(conn, "publicera_material", "mal_typ"):
+                conn.execute(
+                    "ALTER TABLE publicera_material ADD COLUMN mal_typ TEXT "
+                    "NOT NULL DEFAULT 'match'")
+            if not _har_kolumn(conn, "publicera_material", "tavling_id"):
+                conn.execute("ALTER TABLE publicera_material ADD COLUMN tavling_id TEXT")
 
 
 def _har_kolumn(conn, tabell, kolumn):
