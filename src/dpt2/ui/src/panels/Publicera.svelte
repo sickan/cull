@@ -9,6 +9,7 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte'
   import {
     listaMatcher, hamtaMatch, aktivMatch, sattAktivMatch, sportprofiler, listaLag,
+    listaTavlingar,
     valjMapp, listaSomeBilder, thumbForBild,
     forhandsgranskaStory, publiceraLiveStory, publiceraKanal, nyTestPaketMapp,
     publiceraInnehallNatet, listaMaterial, sparaMaterial, genereraBildsvep,
@@ -36,9 +37,14 @@
 
   // ── Grunddata ──────────────────────────────────────────────────────────────
   let matcher = []
+  let tavlingar = []               // för turnerings-SoMe-målet (Fas 3)
   let lagAlla = []
   let profiler = {}
-  let match = null                 // fullständig aktiv match
+  let match = null                 // fullständig aktiv match ELLER syntetiskt turneringsmål
+  // Turnerings-SoMe: målet är hela tävlingen, inte en enskild match. `match`
+  // bär då ett syntetiskt objekt (arTurnering=true, event=true → resultatremsan
+  // göms och momentet blir generellt, precis som ett heldagsevent).
+  $: arTurnering = !!match?.arTurnering
   let materials = []
   // Färsk resultat/mellan/målskyttar-spegel — matas av ResultatRemsas 'sparat'-
   // event (den skriver på matchposten, panelen känner annars inte till ändringen)
@@ -55,8 +61,9 @@
   onMount(async () => {
     try {
       let akt
-      ;[matcher, profiler, lagAlla, akt, materials] = await Promise.all(
-        [listaMatcher(), sportprofiler(), listaLag(), aktivMatch(), listaMaterial()])
+      ;[matcher, profiler, lagAlla, akt, materials, tavlingar] = await Promise.all(
+        [listaMatcher(), sportprofiler(), listaLag(), aktivMatch(), listaMaterial(),
+         listaTavlingar()])
       const id = akt?.id || matcher[0]?.id
       if (id) await laddaMatch(id)
     } catch (e) { console.error('Matchpublicering: init', e) }
@@ -91,7 +98,7 @@
   function nollstallLive() { liveExtern = null; forsFran = null; senastEgen = '' }
 
   async function pollaLive() {
-    if (!match?.id) return
+    if (!match?.id || arTurnering) return   // turnering har ingen enskild match att polla
     let r
     try { r = await hamtaLive(match.id) } catch { return }   // offline → tyst
     const live = r?.live
@@ -119,13 +126,32 @@
   $: isEvent = !!(match && (match.event || match.heldag || !(match.lag_borta || '').trim()))
   $: matchTitel = match ? (isEvent ? match.lag_hemma : `${match.lag_hemma} – ${match.lag_borta}`) : 'Ingen match'
   $: matchMeta = match
-    ? [datumTxt(match.datum), isEvent ? 'Heldagsevent' : (match.resultat || 'Kommande')].filter(Boolean).join(' · ')
+    ? [datumTxt(match.datum), arTurnering ? 'Turnering' : (isEvent ? 'Heldagsevent' : (match.resultat || 'Kommande'))].filter(Boolean).join(' · ')
     : ''
   async function valjMatch(id) {
     matchOpen = false
     if (id === match?.id) return
     await sattAktivMatch(id)
     await laddaMatch(id)
+  }
+  // Turnerings-SoMe: bygg ett syntetiskt match-liknande mål ur en tävling så att
+  // resten av panelen (bilder, caption, kanaler) fungerar oförändrat. event=true
+  // → resultatremsan göms, momentet blir 'nasta_match'. Ingen mobil-live.
+  function byggTurneringsMal(t) {
+    return { id: `T:${t.id}`, arTurnering: true, tavling_id: t.id,
+      lag_hemma: t.namn, lag_borta: '', event: true, sport: t.sport,
+      arena: t.ort || '', datum: t.datum || t.fran || '', liga: t.namn,
+      resultat: '', mellan: '', malskyttar: '', galleri: '', sida_url: '' }
+  }
+  async function valjTurnering(id) {
+    matchOpen = false
+    const t = tavlingar.find((x) => x.id === id)
+    if (!t || match?.tavling_id === id) return
+    if (livePoll) { clearInterval(livePoll); livePoll = null }   // ingen mobil-live för turnering
+    match = byggTurneringsMal(t)
+    speglaRes(match); galleriUrl = ''; hemsidaUrl = ''
+    materialId = (materials || []).find((m) => m.tavling_id === id && m.kind === 'some')?.id || null
+    granska = null; genFel = ''; nollstallLive()
   }
 
   // ── Steg 1: Innehåll ───────────────────────────────────────────────────────
@@ -255,7 +281,7 @@
   let genTimer = null
 
   // Delade byggare — granskad fråga och skickad fråga MÅSTE utgå från samma data.
-  const genInfo = () => `${match.lag_hemma} – ${match.lag_borta}` + (resNu.resultat ? ` ${resNu.resultat}` : '')
+  const genInfo = () => (isEvent ? match.lag_hemma : `${match.lag_hemma} – ${match.lag_borta}`) + (resNu.resultat ? ` ${resNu.resultat}` : '')
   const genFakta = () => ({
     resultat: resNu.resultat, mellan: resNu.mellan, malskyttar: resNu.malskyttar,
     arena: match.arena || '', datum: match.datum || '', liga: match.liga || '', ton,
@@ -356,15 +382,19 @@
   let pubResultat = []             // [{kanal, ok, text}]
   let pubFlash = false
 
-  let materialId = null            // raden vi skriver utkast/utfall till för aktuell match
-  $: fixtur = match ? `${match.lag_hemma} – ${match.lag_borta}` : ''
+  let materialId = null            // raden vi skriver utkast/utfall till för aktuellt mål
+  $: fixtur = match ? (isEvent ? match.lag_hemma : `${match.lag_hemma} – ${match.lag_borta}`) : ''
+  // Målfälten som spar-/publicerings-raderna bär: match ELLER turnering.
+  $: malFalt = arTurnering
+    ? { mal_typ: 'turnering', tavling_id: match.tavling_id, match_id: null }
+    : { mal_typ: 'match', match_id: match?.id }
 
   async function spara() {
     if (!match) return
     // channels lagras som ren array — store json-kodar själv (JSON.stringify här
     // gav en json-sträng inuti en json-sträng).
     const r = await sparaMaterial({ id: materialId || undefined,
-      kind: 'some', status: 'utkast', match_id: match.id,
+      kind: 'some', status: 'utkast', ...malFalt,
       match_namn: fixtur, caption, channels: aktiva.map((k) => k.key), foto: coverPath })
     if (r?.ok) materialId = r.id
     materials = await listaMaterial()
@@ -382,7 +412,7 @@
     const antal = Math.max(1, Math.min(ch[key].antal || 1, takFor(key)))
     const bilder = ordnadeFoton.slice(0, antal).map(_crop)
     const payload = { kanal: key, format: ch[key].fmt, bilder,
-      moment: isEvent ? 'nasta_match' : 'resultat', tema, match_id: match.id,
+      moment: isEvent ? 'nasta_match' : 'resultat', tema, ...malFalt,
       caption: losText(caption),
       stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar }
     // p.3: IG-vägen (direkt via integrationen / export till disk) följer med.
@@ -458,7 +488,7 @@
     pubKor = false
     // Testläge persisterar aldrig material (samma kontrakt som lib/testlage.js).
     if (!test) {
-      const r = await sparaUtfall({ id: materialId || undefined, match_id: match.id,
+      const r = await sparaUtfall({ id: materialId || undefined, ...malFalt,
         match_namn: fixtur, caption, foto: coverPath }, chRes, cfgs)
       if (r?.ok) materialId = r.id
     }
@@ -634,9 +664,10 @@
     <button class="livenu" on:click={liveOppna}><span class="ldot"></span>Live nu — story direkt</button>
   </div>
 
-  <!-- Match / event-väljare (p.5: event = match utan motståndare, samma flöde) -->
+  <!-- Match / event / turnering-väljare (p.5: event = match utan motståndare;
+       Fas 3: turnering = SoMe mot hela tävlingen, ingen enskild match) -->
   <div class="matchrad">
-    <span class="mlbl">Match / event</span>
+    <span class="mlbl">Mål</span>
     <div class="mdd">
       <button class="mddbtn" on:click={() => (matchOpen = !matchOpen)}>
         <span class="mddnamn">{matchTitel}</span>
@@ -657,10 +688,21 @@
               {:else}<span class="mddkom">Kommande</span>{/if}
             </button>
           {/each}
+          {#if tavlingar.length}
+            <div class="mddcaps">Turnering — publicera mot hela tävlingen</div>
+            {#each tavlingar as t (t.id)}
+              <button class="mddrad" class:pa={match?.tavling_id === t.id} on:click={() => valjTurnering(t.id)}>
+                <span class="grendot turn"></span>
+                <div class="mddi"><div class="mddf">{t.namn}</div>
+                  <div class="mdds">{[t.sport, t.ort].filter(Boolean).join(' · ')}</div></div>
+                <span class="mddkom turn">Turnering</span>
+              </button>
+            {/each}
+          {/if}
         </div>
       {/if}
     </div>
-    <span class="mhint">— resultatmodellen följer matchens sport</span>
+    <span class="mhint">{arTurnering ? '— publicering för hela turneringen, utan enskild match' : '— resultatmodellen följer matchens sport'}</span>
   </div>
 
   <!-- Delad resultatremsa (p.5: gömd för heldagsevent — resultat är irrelevant) -->
@@ -669,6 +711,8 @@
       {forsFran} on:sparat={onResSparat} />
     <div class="remstext">Resultat &amp; målgörare fylls i <b>en gång här</b> — samma värden matas in i story,
       inlägg och webbartikel. Mobilsynken sker <b>automatiskt i bakgrunden</b> — ingen knapp behövs.</div>
+  {:else if match && arTurnering}
+    <div class="remstext eventrem">Turnering — publicering för hela tävlingen (t.ex. dagens matcher eller vecko-svep). Inga resultatsiffror; samma bilder, text och kanaler som en match.</div>
   {:else if match && isEvent}
     <div class="remstext eventrem">Heldagsevent — inga resultatsiffror. Samma bilder, text och kanaler som en match.</div>
   {/if}
@@ -1215,6 +1259,8 @@
   .mpflik.on { background: var(--acc); color: var(--ink); font-weight: 700; }
   .eventrem { color: var(--t-mut); }
   .mddkom.event { color: var(--acc); border-color: var(--acc-border); background: var(--acc-soft); }
+  .mddkom.turn { color: var(--acc); border-color: var(--acc-border); background: var(--acc-soft); }
+  .grendot.turn { border-radius: 999px; background: var(--acc); }
 
   /* p.6: Inspel till genereringen */
   .inspel { border: 1px solid var(--div); border-radius: 10px; background: var(--panel); padding: 10px 12px; margin-top: 10px; }

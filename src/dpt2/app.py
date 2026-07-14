@@ -1559,7 +1559,11 @@ class Api:
         norm = norm[:self._kanal_tak(kanal, vag)]
         if not norm:
             return {"ok": False, "fel": "Välj minst en bild i Steg 1."}
-        match_id = config.get("match_id") or store.hamta_installning(self.conn, "aktiv_match_id")
+        # Turnerings-SoMe (Fas 3): inget match_id — falla ALDRIG tillbaka på aktiv
+        # match då, posten hör till hela tävlingen.
+        tavling_id = config.get("tavling_id")
+        match_id = config.get("match_id") or (
+            None if tavling_id else store.hamta_installning(self.conn, "aktiv_match_id"))
         storyfalt = {"moment": config.get("moment", "resultat"), "match_id": match_id,
                      "tema": config.get("tema", "Hav"),
                      "stallning": config.get("stallning", ""), "mellan": config.get("mellan", ""),
@@ -1598,7 +1602,8 @@ class Api:
         pub = publicera_korning.kor_publicering(
             self.conn, {"bilder": renderade, "caption": config.get("caption", ""),
                         "mal": self.KANAL_MAL.get(kanal, {"ig_inlagg": True}),
-                        "match_id": match_id, "moment": config.get("moment"),
+                        "match_id": match_id, "tavling_id": tavling_id,
+                        "moment": config.get("moment"),
                         "tema": config.get("tema")},
             poster=poster, dry_run=False, logg=self._logg.append)
         if not pub.get("ok"):
@@ -1676,7 +1681,9 @@ class Api:
         data = data or {}
         mid = store.spara_publicera_material(
             self.conn, kind=data.get("kind"), status=data.get("status"),
-            match_id=data.get("match_id"), match_namn=data.get("match_namn"),
+            mal_typ=data.get("mal_typ") or "match",
+            match_id=data.get("match_id"), tavling_id=data.get("tavling_id"),
+            match_namn=data.get("match_namn"),
             moment=data.get("moment"), tema=data.get("tema"),
             dropbox=data.get("dropbox"), foto=data.get("foto"),
             channels=data.get("channels"), caption=data.get("caption"),

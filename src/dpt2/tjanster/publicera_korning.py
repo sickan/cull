@@ -42,6 +42,7 @@ def kor_publicering(conn, config, *, poster=None, dry_run=True,
     sparade = 0
     if not dry_run:
         match_id = config.get("match_id")
+        tavling_id = config.get("tavling_id")   # turnerings-SoMe (ej matchbunden)
         moment = config.get("moment")
         tema = config.get("tema")
         for post in r["resultat"]:
@@ -49,7 +50,7 @@ def kor_publicering(conn, config, *, poster=None, dry_run=True,
                 continue
             store.spara_some_material(
                 conn, kanal=post["kanal"], format=post["form"],
-                match_id=match_id, moment=moment, tema=tema,
+                match_id=match_id, tavling_id=tavling_id, moment=moment, tema=tema,
                 fil=post["bilder"][0] if post.get("bilder") else None)
             sparade += 1
         if sparade:
