@@ -1306,6 +1306,7 @@ class FejkLiveSynk:
         self.fjarrlista = fjarrlista or []
         self.pushade_falt = []           # [(match_id, falt)]
         self.pushade_paket = []          # [(match_id, paket)]
+        self.pushade_jobb = []           # [lista] per push_jobb-anrop
         self.raderade = []
 
     def har_nyckel(self):
@@ -1328,6 +1329,47 @@ class FejkLiveSynk:
     def radera_paket(self, match_id):
         self.raderade.append(match_id)
         return {"ok": True, "borttagen": True}
+
+    def push_jobb(self, jobb):
+        self.pushade_jobb.append(jobb)
+        return {"ok": True, "antal": len(jobb)}
+
+
+class TestFotojobbSynk(unittest.TestCase):
+    """synka_fotojobb trimmar lista_fotojobb till app-fält + härleder status."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.fake = FejkLiveSynk()
+        self.api.live_synk = self.fake
+
+    def test_synka_pushar_trimmade_jobb_med_status(self):
+        # Ett riktigt jobb + ett utkast → bokad resp. offert.
+        self.api.lista_fotojobb = lambda: [
+            {"id": "g1", "title": "Bröllop – Anna", "start_at": "2026-08-15T14:00:00",
+             "end_at": None, "all_day": False, "location": "Sofiero",
+             "category": "Bröllop", "notering": "Kund: Anna", "match_id": None,
+             "utkast": False},
+            {"id": "u1", "title": "Offert lagfoto", "start_at": None, "end_at": None,
+             "all_day": True, "location": "", "category": "Sport",
+             "notering": "", "match_id": "m1", "utkast": True},
+        ]
+        r = self.api.synka_fotojobb()
+        self.assertTrue(r["ok"])
+        self.assertEqual(len(self.fake.pushade_jobb), 1)
+        pushat = self.fake.pushade_jobb[0]
+        self.assertEqual(pushat[0]["status"], "bokad")
+        self.assertEqual(pushat[0]["titel"], "Bröllop – Anna")
+        self.assertEqual(pushat[0]["plats"], "Sofiero")
+        self.assertEqual(pushat[1]["status"], "offert")
+        self.assertEqual(pushat[1]["match_id"], "m1")
+        # Bara app-fält — inga råa Google-fält läcker igenom.
+        self.assertNotIn("google_event_id", pushat[0])
+        self.assertNotIn("description", pushat[0])
+
+    def test_synka_utan_nyckel(self):
+        self.api.live_synk = FejkLiveSynk(nyckel=False)
+        self.assertFalse(self.api.synka_fotojobb()["ok"])
 
 
 class TestMobilLive(unittest.TestCase):

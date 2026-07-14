@@ -189,3 +189,16 @@ class LiveSynk:
             return {"ok": False}
         return {"ok": status == 200,
                 "borttagen": bool((data or {}).get("borttagen"))}
+
+    def push_jobb(self, jobb):
+        """Pushar HELA fotojobb-listan (wholesale) till /api/jobb för Kalender-
+        och Jobb-flikarna i appen. `jobb` = lista av dictar (app-fält). Best-
+        effort — får aldrig blocka."""
+        if not self.har_nyckel():
+            return {"ok": False, "fel": "CONTENT_SYNC_API_KEY saknas."}
+        try:
+            status, data = self._anrop("PUT", "/api/jobb", body={"jobb": jobb})
+        except Exception as e:
+            return {"ok": False, "fel": str(e)}
+        return {"ok": status == 200,
+                "antal": (data or {}).get("antal") if isinstance(data, dict) else None}

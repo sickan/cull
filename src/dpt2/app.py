@@ -257,6 +257,19 @@ class Api:
                         borttagna += 1
         return {"ok": fel is None, "antal": antal, "borttagna": borttagna, "fel": fel}
 
+    def synka_fotojobb(self):
+        """Pushar HELA fotojobb-listan till mobilen (Kalender- och Jobb-flikarna).
+        DPT2 äger fotojobben (bokas här + Google-kalendersynk); appen speglar dem
+        bara. Wholesale replace, samma 'jag är kanske inte vid datorn'-premiss som
+        match-paketen. Trimmar till app-fält och härleder en status."""
+        if not self.live_synk.har_nyckel():
+            return {"ok": False, "fel": "CONTENT_SYNC_API_KEY saknas."}
+        try:
+            jobb = self.lista_fotojobb()
+        except Exception as e:
+            return {"ok": False, "fel": str(e)}
+        return self.live_synk.push_jobb([_jobb_till_app(j) for j in jobb])
+
     def _synka_kalenderjobb(self, match_id):
         """Push:ar matchens aktuella titel/tid/arena — och numera även
         SLUTRESULTATET som beskrivningsblock (ägarens beslut 2026-07-11) — till
@@ -1905,10 +1918,14 @@ class Api:
                     if self.innehall_synk.radera("pagang", rid).get("ok"):
                         borttagna += 1
         # Samma tillfälle, samma lista: se till att mobilen har match-paketen
-        # för alla kommande matcher (Mobil Live). Best-effort — får aldrig
-        # påverka utfallet av På gång-publiceringen.
+        # för alla kommande matcher (Mobil Live) + fotojobb-listan (Kalender/Jobb).
+        # Best-effort — får aldrig påverka utfallet av På gång-publiceringen.
         try:
             self.synka_live_paket()
+        except Exception:
+            pass
+        try:
+            self.synka_fotojobb()
         except Exception:
             pass
         return {"ok": fel is None, "antal": antal, "borttagna": borttagna,
@@ -2082,6 +2099,27 @@ def _utkast_till_jobbdict(u):
             "location": u.get("location") or "", "description": "",
             "category": u.get("category"), "status": "confirmed",
             "google_event_id": None, "source": "dpt", "utkast": True}
+
+
+def _jobb_till_app(j):
+    """Fotojobb (lista_fotojobb-form) → trimmad app-dict för mobilen. Härleder
+    status: utkast (lokalt, ej bokat i kalendern) → offert; riktigt jobb → bokad.
+    Leverans/klar-status finns ingen datakälla för ännu → utelämnas (app visar då
+    ingen progress). Notering (kundens/uppdragets text) följer med, bakom nyckeln."""
+    return {
+        "id": j.get("id"),
+        "titel": j.get("title") or "",
+        "kund": None,                      # titeln bär kunden idag; separat fält saknas
+        "start_at": j.get("start_at"),
+        "end_at": j.get("end_at"),
+        "all_day": bool(j.get("all_day")),
+        "plats": j.get("location") or None,
+        "kategori": j.get("category") or None,
+        "status": "offert" if j.get("utkast") else "bokad",
+        "notering": j.get("notering") or None,
+        "match_id": j.get("match_id"),
+        "leverans": None,
+    }
 
 
 # Innehåll-typ → content-collection-mapp (speglar CTYPER.mapp i Innehall.svelte)
