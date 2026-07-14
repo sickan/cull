@@ -1371,13 +1371,17 @@ class TestFotojobbSynk(unittest.TestCase):
         self.api.live_synk = FejkLiveSynk(nyckel=False)
         self.assertFalse(self.api.synka_fotojobb()["ok"])
 
-    def _skapa_utkast(self):
+    def _skapa_utkast(self, category="Sport"):
         """Skapar ett riktigt fotojobb-utkast (tävling → kalender-utkast) och
-        stubbar bort Google-kalendern så lista_fotojobb inte når nätet."""
+        stubbar bort Google-kalendern så lista_fotojobb inte når nätet. Sätter en
+        kategori så jobbet passerar app-filtret (_ar_appjobb)."""
         self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
                                 "fran": "2026-04-01", "till": "2026-10-31"})
         uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
         self.api.kalender = _FakeKalender()
+        if category:
+            self.api.spara_fotojobb({"id": uid, "utkast": True, "category": category,
+                                     "start_at": "2026-12-01T14:00:00"})
         return uid
 
     def test_lista_fotojobb_auto_synkar(self):
@@ -1399,11 +1403,20 @@ class TestFotojobbSynk(unittest.TestCase):
         self.assertEqual(len(self.fake.pushade_jobb), 1)
 
     def test_lista_utan_nyckel_ingen_synk(self):
-        uid = self._skapa_utkast()
+        self._skapa_utkast()
         self.api.live_synk = FejkLiveSynk(nyckel=False)
         self.api.lista_fotojobb()
         self.assertEqual(self.api.live_synk.pushade_jobb, [])
-        _ = uid
+
+    def test_okategoriserade_jobb_filtreras_bort(self):
+        # Kalenderns matchfixturer/privat (utan kategori) ska INTE nå appen;
+        # bara triageade uppdrag (med kategori). _ar_appjobb är regeln.
+        from dpt2.app import _ar_appjobb
+        self.assertTrue(_ar_appjobb({"category": "Event", "start_at": "2026-08-15"}))
+        self.assertTrue(_ar_appjobb({"category": "Sport"}))                 # utan datum
+        self.assertFalse(_ar_appjobb({"category": "", "start_at": "2026-08-15"}))
+        self.assertFalse(_ar_appjobb({"start_at": "2026-08-15"}))          # ingen kategori
+        self.assertFalse(_ar_appjobb({"category": "Sport", "start_at": "2019-01-01"}))  # gammalt
 
 
 class TestMobilLive(unittest.TestCase):

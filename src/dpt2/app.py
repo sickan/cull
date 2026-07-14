@@ -280,10 +280,13 @@ class Api:
 
     def _push_jobb_till_mobil(self, jobb_lista):
         """Trimmar en (redan hämtad) fotojobb-lista till app-fält och pushar den.
-        Best-effort — samma nyckelkrav som match-synken."""
+        Filtrerar först till de KURERADE uppdragen (se _ar_appjobb) — kalendern
+        bär hela livet (matchfixturer + privat), appen vill bara jobben. Best-
+        effort, samma nyckelkrav som match-synken."""
         if not self.live_synk.har_nyckel():
             return {"ok": False, "fel": "CONTENT_SYNC_API_KEY saknas."}
-        return self.live_synk.push_jobb([_jobb_till_app(j) for j in jobb_lista])
+        appjobb = [_jobb_till_app(j) for j in jobb_lista if _ar_appjobb(j)]
+        return self.live_synk.push_jobb(appjobb)
 
     def _synka_kalenderjobb(self, match_id):
         """Push:ar matchens aktuella titel/tid/arena — och numera även
@@ -2124,6 +2127,22 @@ def _utkast_till_jobbdict(u):
             "location": u.get("location") or "", "description": "",
             "category": u.get("category"), "status": "confirmed",
             "google_event_id": None, "source": "dpt", "utkast": True}
+
+
+def _ar_appjobb(j):
+    """Vilka kalenderjobb som ska nå appens Kalender/Jobb. Stigs Google-kalender
+    bär hela livet — ~2 års matchfixturer (okategoriserade "Lag – Lag") + privat.
+    Appen vill bara de KURERADE uppdragen: bröllop, porträtt, mästerskap m.m.
+    Signal = jobbet har en KATEGORI (Stig har aktivt triageat det i DPT2:s
+    Fotojobb-panel) OCH ligger i ett relevant tidsfönster (inte djup historik;
+    pågående leveranser från nyligen spelade matcher får ~45 dagars svans)."""
+    if not (j.get("category") or "").strip():
+        return False
+    s = (j.get("start_at") or "")[:10]
+    if not s:
+        return True
+    grans = (datetime.now() - timedelta(days=45)).date().isoformat()
+    return s >= grans
 
 
 def _jobb_till_app(j):
