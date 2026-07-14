@@ -86,9 +86,14 @@
   const norm = (s) => (s || '').toLowerCase()
 
   const sorteraLag = (lista) => [...lista].sort((a, b) => (a.namn || '').localeCompare(b.namn || '', 'sv'))
-  const filtreraLag = (lista) => lista
-    .filter((l) => lagGren === 'alla' || l.gren === lagGren)
-    .filter((l) => !lagSearch || norm(l.namn).includes(norm(lagSearch)))
+  // Ta gren/sök som ARGUMENT — inte via closure. Ett reaktivt `$:`-block spårar
+  // bara variabler som nämns i själva satsen, inte sådana som läses inne i en
+  // anropad funktion. Med closure-varianten (`filtreraLag(basLag)`) blev varken
+  // gren-chipsen eller sökrutan en dependency → listan filtrerades aldrig om
+  // fast chip/räknare uppdaterades. Explicita argument gör dem spårbara.
+  const filtreraLag = (lista, gren = lagGren, sok = lagSearch) => lista
+    .filter((l) => gren === 'alla' || l.gren === gren)
+    .filter((l) => !sok || norm(l.namn).includes(norm(sok)))
   // B1: gruppera efter sport för visning (fotboll/handboll/etc)
   function grupperaPerSport(lista) {
     const g = {}
@@ -112,7 +117,7 @@
     herr: basLag.filter((l) => l.gren === 'herr').length,
     mixed: basLag.filter((l) => l.gren === 'mixed').length,
   }
-  $: lagFiltrerat = filtreraLag(basLag)
+  $: lagFiltrerat = filtreraLag(basLag, lagGren, lagSearch)
 
   // Ordningen FRYSES medan en rad redigeras: namn-sortering, sport-gruppering och
   // arkiv-filter är alla reaktiva på fälten man skriver i, så utan frysning
@@ -148,8 +153,8 @@
 
   // Tydlig tom-status: gren-filtret kan träffa 0 aktiva men N arkiverade
   // (upplevdes som en bugg — laget fanns, men bara i arkivet).
-  $: arkivTraff = filtreraLag(arkiveradeLag).length
-  $: aktivTraff = filtreraLag(aktivaLag).length
+  $: arkivTraff = filtreraLag(arkiveradeLag, lagGren, lagSearch).length
+  $: aktivTraff = filtreraLag(aktivaLag, lagGren, lagSearch).length
 
   function hexToRgba(hex, a) {
     const n = parseInt((hex || '').replace('#', ''), 16)
