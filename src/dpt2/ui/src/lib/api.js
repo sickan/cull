@@ -35,9 +35,16 @@ const MOCK_MATCHER = [
   {
     id: 'dead00beef00', datum: '2026-07-18', tid: '11:00',
     arena: 'Båstad', status: 'kommande', resultat: '',
-    sport: 'tennis', lag_hemma: 'Rebecca Peterson', lag_borta: 'Kvalmotståndare',
-    liga: 'Nordea Open', tavling_id: null, hem_gren: '',   // individ utan gren → "ej satt"
-    hemfarg: '#2F7CB0', bortafarg: '', trupp_n: 0,
+    sport: 'tennis', lag_hemma: 'Rebecca Peterson', lag_borta: 'Mirjam Björklund',
+    liga: 'Nordea Open', tavling_id: 'nordea-open', hem_gren: '',   // individ utan gren → "ej satt"
+    hemfarg: '#2F7CB0', bortafarg: '#C9657F', trupp_n: 0,
+  },
+  {
+    id: 'dead00beef01', datum: '2026-07-17', tid: '13:00',
+    arena: 'Båstad', status: 'avslutad', resultat: '2–0',
+    sport: 'tennis', lag_hemma: 'Mirjam Björklund', lag_borta: 'Rebecca Peterson',
+    liga: 'Nordea Open', tavling_id: 'nordea-open', hem_gren: '',
+    hemfarg: '#C9657F', bortafarg: '#2F7CB0', trupp_n: 0,
   },
   {
     // p.5: heldagsevent = "match utan motståndare" i samma datamodell/flöde.
@@ -104,6 +111,7 @@ const MOCK_LAG = [
 const MOCK_TAVLINGAR = [
   { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', gren: 'dam', fran: '2026-04-01', till: '2026-10-31', ort: 'Sverige', arena: '', hemsida: 'svenskelitfotboll.se', logga: null, kalender: 0 },
   { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', gren: 'herr', fran: '2026-09-01', till: '2027-04-30', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
+  { id: 'nordea-open', namn: 'Nordea Open', typ: 'turnering', sport: 'tennis', gren: 'dam', fran: '2026-07-13', till: '2026-07-19', ort: 'Båstad', arena: 'Båstad Tennisstadion', hemsida: 'nordeaopen.se', logga: null, kalender: 0 },
 ]
 
 // Mock: sportprofiler (statisk fältmodell, speglar dpt2.data.sportprofil).

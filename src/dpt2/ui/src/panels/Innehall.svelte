@@ -448,12 +448,31 @@
     forhandsgranska()
   }
   let subValOppen = false
+  // Utövarmatcher (tennis) saknar bortasida vid heldagsevent → titel utan "– ".
+  const subTitel = (m) => (m.lag_borta || '').trim() ? `${m.lag_hemma} – ${m.lag_borta}` : m.lag_hemma
   function laggUnderartikel(m) {
-    const titel = `${m.lag_hemma} – ${m.lag_borta}`
     if (cmsSportevent.underartiklar.some((u) => u.match_id === m.id)) { subValOppen = false; return }
+    const titel = subTitel(m)
     cmsSportevent.underartiklar = [...cmsSportevent.underartiklar,
       { match_id: m.id, titel, slug: slugga(titel) }]
     subValOppen = false
+    forhandsgranska()
+  }
+  // Tävlingar som har matcher (härlett ur matchlistan — ingen extra hämtning).
+  // Fyller sporteventet med hela turneringens matcher i ett svep (t.ex. en
+  // tennisveckas alla matcher) i stället för en och en.
+  $: tavlingarMedMatcher = [...new Map(
+    matcher.filter((m) => m.tavling_id).map((m) => [m.tavling_id, m.liga || m.tavling_id])
+  )].map(([id, namn]) => ({ id, namn }))
+  let fyllTavling = ''
+  function fyllFranTavling() {
+    if (!fyllTavling) return
+    const nya = matcher
+      .filter((m) => m.tavling_id === fyllTavling)
+      .filter((m) => !cmsSportevent.underartiklar.some((u) => u.match_id === m.id))
+      .map((m) => ({ match_id: m.id, titel: subTitel(m), slug: slugga(subTitel(m)) }))
+    if (!nya.length) return
+    cmsSportevent.underartiklar = [...cmsSportevent.underartiklar, ...nya]
     forhandsgranska()
   }
   function taUnderartikel(i) {
@@ -914,6 +933,17 @@
               on:click={taBortKlick(`sub-${i}`, () => taUnderartikel(i))}>{$armerad === `sub-${i}` ? 'Ta bort?' : '×'}</button>
           </div>
         {/each}
+        {#if tavlingarMedMatcher.length}
+          <div class="fyllrad">
+            <select bind:value={fyllTavling}>
+              <option value="">Fyll alla matcher från tävling…</option>
+              {#each tavlingarMedMatcher as t (t.id)}
+                <option value={t.id}>{t.namn}</option>
+              {/each}
+            </select>
+            <button class="figadd" on:click={fyllFranTavling} disabled={!fyllTavling}>Fyll matcher</button>
+          </div>
+        {/if}
         <div class="subval">
           <button class="figadd" on:click={() => (subValOppen = !subValOppen)}>+ Lägg till match</button>
           {#if subValOppen}
@@ -1248,6 +1278,10 @@
   .submitt { flex: 1; min-width: 0; }
   .subtitel { font-size: 12.5px; font-weight: 600; color: var(--t-head); }
   .submeta { font-size: 10.5px; color: var(--t-mut); }
+  .fyllrad { display: flex; gap: 8px; margin-bottom: 8px; align-items: stretch; }
+  .fyllrad select { flex: 1; min-width: 0; border: 1px solid var(--div); border-radius: 10px;
+    background: var(--kort); color: var(--t-head); padding: 10px 11px; font-size: 13px; }
+  .fyllrad .figadd { width: auto; white-space: nowrap; padding: 10px 16px; }
   .subval { position: relative; }
   .sublista { margin-top: 8px; border: 1px solid var(--div); border-radius: 10px; background: var(--kort);
     max-height: 240px; overflow-y: auto; padding: 5px; }
