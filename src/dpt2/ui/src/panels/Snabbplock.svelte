@@ -13,17 +13,9 @@
   const dispatch = createEventDispatcher()
   const N_THUMBS = 10 // tumnaglar som visas per kort (de senaste; resten rullar in)
 
-  // Seedade demo-kort — används tills riktig kort-detektering (volym-montering)
-  // är inkopplad. Fylls med riktiga monterade kort om sådana finns.
-  const SEED = [
-    { name: 'Kort 1 · NIKON Z 8 · 277Z8_01', total: 312 },
-    { name: 'Kort 2 · NIKON Z 8 · 278Z8_02', total: 168 },
-    { name: 'Kort 3 · NIKON Z 9 · 104Z9_07', total: 96 },
-  ]
-
   let step = 'insert' // insert | pick | review | lr
   let cardIdx = 0 // nästa kort att läsa
-  let cards = SEED
+  let cards = [] // upptäckta monterade kort (växer när nya sätts i)
   let cardFiles = {} // { [cardIdx]: [{ path, filnamn, skyddad }] } — riktiga kortbilder
   let thumbs = {} // { [path]: data_uri } — lazy preview-cache
   let picks = {} // { [cardIdx]: { [thumbIdx]: true } }
@@ -33,21 +25,44 @@
   let lrFel = '' // felmeddelande om exporten misslyckas
   let lrPath = '' // arbetsmappen exporten skrevs till
   let timer = null
+  let pollTimer = null // detekterar isatta kort medan man står på Kort in
+  let letat = false // har vi kört minst en kort-detektering?
   let headerMatch = null
 
   onMount(async () => {
     headerMatch = await aktivMatch()
-    // Fånga upp redan monterade kort så flödet kan köras skarpt när kort sitter i.
-    const r = await listaMinnesKort()
-    if (r && r.ok && r.kort && r.kort.length) {
-      cards = r.kort.map((k, i) => ({
-        name: `Kort ${i + 1} · ${k.namn}`,
-        total: k.skyddade || 0,
-        path: k.path,
-      }))
-    }
   })
-  onDestroy(() => timer && clearInterval(timer))
+  onDestroy(() => {
+    timer && clearInterval(timer)
+    stopPoll()
+  })
+
+  // Detektera monterade kamerakort (volym m. DCIM). Nya kort läggs till sist
+  // med stabil numrering så cardIdx/picks inte förskjuts. Redan tillagda kort
+  // (samma path) hoppas över.
+  async function detektera() {
+    const r = await listaMinnesKort()
+    letat = true
+    if (r && r.ok && r.kort && r.kort.length) {
+      const kanda = new Set(cards.map((c) => c.path))
+      const bas = cards.length
+      const nya = r.kort
+        .filter((k) => k.path && !kanda.has(k.path))
+        .map((k, j) => ({ name: `Kort ${bas + j + 1} · ${k.namn}`, total: k.skyddade || 0, path: k.path }))
+      if (nya.length) cards = [...cards, ...nya]
+    }
+  }
+  function startPoll() {
+    if (pollTimer) return
+    detektera()
+    pollTimer = setInterval(detektera, 2500)
+  }
+  function stopPoll() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+  }
+  // Poll:a bara medan man står på Kort in-steget (ett isatt kort dyker upp
+  // automatiskt); sluta så fort man läser/plockar.
+  $: if (step === 'insert') startPoll(); else stopPoll()
 
   // ── Härledda värden ────────────────────────────────────────────────────────
   $: cur = step === 'pick' ? cardIdx - 1 : -1
@@ -70,7 +85,6 @@
         .filter(Boolean)
     )
   $: hasNextCard = cardIdx < cards.length
-  $: allCardsDone = cardIdx >= cards.length
   $: canReview = step === 'insert' && totalPicked > 0
   $: noneDone = doneIdx.length === 0 && cur < 0
   $: curCard = cur >= 0 ? cards[cur] : null
@@ -216,6 +230,8 @@
     timer = null
     step = 'insert'
     cardIdx = 0
+    cards = []
+    letat = false
     picks = {}
     removed = {}
     cardFiles = {}
@@ -264,13 +280,19 @@
     {#if step === 'insert'}
       <div class="dropyta">
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(243,245,247,.4)" stroke-width="1.4" class="drop-ic"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 3v4M12 3v4M15 3v4"/></svg>
-        <div class="drop-h scd">Sätt i ett minneskort</div>
-        <div class="drop-p">Kortet läses direkt — plocka medan bilderna rullar in.<br>Urvalet ligger kvar mellan korten.</div>
         {#if hasNextCard}
-          <button class="btn-amber" on:click={insertCard}>Kort upptäckt: {cards[cardIdx].name} — läs kortet</button>
-          <div class="drop-not">(prototyp — simulerar att kortet sätts i)</div>
+          <div class="drop-h scd">Kort upptäckt</div>
+          <div class="drop-p">{cards[cardIdx].name}<br>Läs kortet och plocka medan bilderna rullar in.</div>
+          <button class="btn-amber" on:click={insertCard}>Läs kortet ›</button>
+        {:else if cardIdx > 0}
+          <div class="drop-h scd">Kort genomgånget</div>
+          <div class="drop-p">Sätt i nästa kort — det upptäcks automatiskt.<br>Urvalet ligger kvar ({totalPicked} plockade).</div>
+          <button class="btn-mork liten" on:click={detektera}>Leta efter kort igen</button>
+        {:else}
+          <div class="drop-h scd">Sätt i ett minneskort</div>
+          <div class="drop-p">{letat ? 'Inget kort hittat än — det upptäcks automatiskt när det sitter i.' : 'Letar efter kort …'}<br>Kortet läses direkt — plocka medan bilderna rullar in.</div>
+          <button class="btn-mork liten" on:click={detektera}>Leta efter kort igen</button>
         {/if}
-        {#if allCardsDone}<div class="drop-alla">Alla kort genomgångna.</div>{/if}
       </div>
       {#if canReview}
         <div class="mitt">
@@ -451,8 +473,6 @@
   .drop-ic { margin-bottom: 14px; }
   .drop-h { font-size: 22px; font-weight: 700; }
   .drop-p { font-size: 12.5px; color: rgba(243, 245, 247, 0.5); margin-top: 6px; line-height: 1.5; }
-  .drop-not { font-size: 10.5px; color: rgba(243, 245, 247, 0.35); margin-top: 9px; }
-  .drop-alla { font-size: 12.5px; color: rgba(243, 245, 247, 0.5); margin-top: 16px; }
   .mitt { display: flex; justify-content: center; margin-top: 18px; }
 
   /* Knappar */
