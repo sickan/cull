@@ -33,11 +33,11 @@
   let matchStatus = 'kommande'   // 'kommande' | 'spelade'
   let matchFilterOpen = false    // ⚙ Filter-popover (sport + säsong)
 
-  const SPORTER = ['alla', 'fotboll', 'handboll', 'innebandy', 'volleyboll', 'beachvolley', 'tennis']
-  const SPORT_ETIKETT = { fotboll: 'Fotboll', handboll: 'Handboll', innebandy: 'Innebandy', volleyboll: 'Volleyboll', beachvolley: 'Beachvolley', tennis: 'Tennis' }
+  const SPORTER = ['alla', 'fotboll', 'handboll', 'innebandy', 'volleyboll', 'beachvolley', 'tennis', 'friidrott']
+  const SPORT_ETIKETT = { fotboll: 'Fotboll', handboll: 'Handboll', innebandy: 'Innebandy', volleyboll: 'Volleyboll', beachvolley: 'Beachvolley', tennis: 'Tennis', friidrott: 'Friidrott' }
   // Normallängd per sport (min) → uträknad sluttid; utan avsparkstid = heldag.
   // Speglar MATCH_LANGD_MIN i app.py (backend sätter kalenderjobbets sluttid).
-  const MATCH_LANGD = { fotboll: 120, volleyboll: 150, handboll: 90, beachvolley: 90, innebandy: 120, tennis: 120 }
+  const MATCH_LANGD = { fotboll: 120, volleyboll: 150, handboll: 90, beachvolley: 90, innebandy: 120, tennis: 120, friidrott: 180 }
   const TYP_ETIKETT = { liga: 'Liga', turnering: 'Turnering', masterskap: 'Mästerskap' }
   const MK = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
   const MANAD = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni', 'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December']

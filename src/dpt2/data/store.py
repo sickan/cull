@@ -53,7 +53,7 @@ def iso_datum(s):
 
 
 # Registrets enum-värden (gemener i DB; UI visar med versal).
-SPORTER = ("fotboll", "handboll", "volleyboll", "beachvolley", "tennis")
+SPORTER = ("fotboll", "handboll", "volleyboll", "beachvolley", "tennis", "friidrott")
 GRENAR = ("dam", "herr", "mixed")
 
 

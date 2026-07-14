@@ -17,7 +17,7 @@
 CREATE TABLE tavling (
   id        TEXT PRIMARY KEY,
   typ       TEXT NOT NULL CHECK (typ IN ('liga','turnering','masterskap')),
-  sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis')),
+  sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
   gren      TEXT CHECK (gren IN ('dam','herr','mixed')),
   namn      TEXT NOT NULL,
   hemsida   TEXT,                       -- tävlingens webbplats
@@ -51,7 +51,7 @@ CREATE TABLE lag (
   namn         TEXT NOT NULL,
   kind         TEXT NOT NULL DEFAULT 'team'
                  CHECK (kind IN ('team','individ')),  -- lagsport vs individuell utövare
-  sport        TEXT CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis')),
+  sport        TEXT CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
                                          -- landslag ("Sverige") särskiljs av sport
   gren         TEXT CHECK (gren IN ('dam','herr','mixed')),  -- mixed bara för team
   hemsida      TEXT,
@@ -97,7 +97,7 @@ CREATE INDEX idx_spelare_lag ON spelare(lag_id);
 CREATE TABLE matchen (
   id           TEXT PRIMARY KEY,
   tavling_id   TEXT REFERENCES tavling(id) ON DELETE SET NULL,
-  sport        TEXT CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis')),
+  sport        TEXT CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
   lag_hemma_id TEXT REFERENCES lag(id) ON DELETE SET NULL,
   lag_borta_id TEXT REFERENCES lag(id) ON DELETE SET NULL,
   datum        TEXT,                     -- ISO-datum

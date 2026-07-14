@@ -37,7 +37,8 @@ DEV_URL = "http://localhost:5173"
 # Normallängd per sport (minuter) — ger kalenderjobbets sluttid när en match
 # synkas. Match utan fastställd avsparkstid blir heldag i stället.
 MATCH_LANGD_MIN = {"fotboll": 120, "volleyboll": 150, "handboll": 90,
-                   "beachvolley": 90, "innebandy": 120, "tennis": 120}
+                   "beachvolley": 90, "innebandy": 120, "tennis": 120,
+                   "friidrott": 180}
 
 # Ackreditering: "begär senast" = matchdatum − arrangörens dagar (tavling.
 # ackr_dagar); okänd arrangör faller tillbaka på 10 dagar (handoff §5).
@@ -2313,12 +2314,16 @@ def _innehall_md(data, bild_urls=None):
         fm = {
             "typ": "sportevent",
             "titel": titel,
+            # Kort-etikett på sajten (Ligor & Tävlingar): Mästerskap/Turnering/
+            # Tävling/Lopp. Tom = sajten faller tillbaka på "Mästerskap".
+            "kategori": data.get("kategori") or None,
             "period": data.get("period") or None,
             "plats": data.get("plats") or None,
             "datum": data.get("datum") or None,
             "ingress": data.get("ingress") or None,
             "hero": bild_urls.get("hero") or data.get("hero") or None,
             "heroPosition": data.get("heroPosition") or None,
+            "pixieset": data.get("pixieset") or None,   # länk till Pixieset-galleriet
             "status": data.get("status") or None,
             "topp": data.get("topp") or None,
             "underartiklar": [

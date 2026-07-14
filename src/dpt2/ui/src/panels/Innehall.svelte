@@ -56,8 +56,10 @@
   let cmsMatch = tomMatchArt()
   let artMatchId = null               // vald match (cmsPick)
   let artMatch = null                 // fullständig matchpost (ResultatRemsa)
-  const tomSportevent = () => ({ innehallId: null, fotojobbId: '', titel: '', period: '',
-    plats: '', datum: '', ingress: '', hero: '', heroPosition: 'center center',
+  // Kort-etikett på sajtens Ligor & Tävlingar (chip). Mästerskap är default.
+  const SPORTEVENT_KAT = ['Mästerskap', 'Turnering', 'Tävling', 'Lopp']
+  const tomSportevent = () => ({ innehallId: null, fotojobbId: '', titel: '', kategori: 'Mästerskap',
+    period: '', plats: '', datum: '', ingress: '', pixieset: '', hero: '', heroPosition: 'center center',
     heroKalla: '', figurer: [], underartiklar: [] })
   let cmsSportevent = tomSportevent()
 
@@ -178,8 +180,9 @@
     if (p.typ === 'match') { laddaMatchPost(p); return }
     if (p.typ === 'sportevent') {
       cmsSportevent = { ...tomSportevent(), innehallId: p.id, titel: fm.titel || '',
+        kategori: fm.kategori || 'Mästerskap',
         period: fm.period || '', plats: fm.plats || '', datum: fm.datum || '',
-        ingress: fm.ingress || '', hero: fm.hero || '',
+        ingress: fm.ingress || '', pixieset: fm.pixieset || '', hero: fm.hero || '',
         heroPosition: fm.heroPosition || 'center center',
         underartiklar: (fm.underartiklar || []).map((u) => ({ ...u })) }
       draftId = null; oppnaEditor('sportevent'); return
@@ -517,8 +520,8 @@
     if (ctyp === 'sportevent') {
       const c = cmsSportevent
       return { typ: 'sportevent', id: c.innehallId || undefined,
-        titel: c.titel, period: c.period, plats: c.plats, datum: c.datum,
-        ingress: c.ingress, hero: c.hero, heroPosition: c.heroPosition,
+        titel: c.titel, kategori: c.kategori, period: c.period, plats: c.plats, datum: c.datum,
+        ingress: c.ingress, pixieset: c.pixieset, hero: c.hero, heroPosition: c.heroPosition,
         heroKalla: c.heroKalla, figurer: utanThumb(c.figurer),
         underartiklar: c.underartiklar }
     }
@@ -911,9 +914,15 @@
         <div class="caps">Event/mästerskap</div>
         <div class="grid2">
           <div class="f"><label>Titel</label><input bind:value={cmsSportevent.titel} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Kategori <span class="lblhint">— etikett på kortet</span></label>
+            <select bind:value={cmsSportevent.kategori} on:change={forhandsgranska}>
+              {#each SPORTEVENT_KAT as k}<option value={k}>{k}</option>{/each}
+            </select>
+          </div>
           <div class="f"><label>Period</label><input bind:value={cmsSportevent.period} on:change={forhandsgranska} placeholder="t.ex. 29 jun – 5 jul" /></div>
           <div class="f"><label>Plats</label><input bind:value={cmsSportevent.plats} on:change={forhandsgranska} /></div>
           <div class="f"><label>Datum</label><input type="date" bind:value={cmsSportevent.datum} on:change={forhandsgranska} /></div>
+          <div class="f"><label>Galleri-URL (Pixieset)</label><input bind:value={cmsSportevent.pixieset} on:change={forhandsgranska} placeholder="https://…pixieset.com/…" /></div>
         </div>
         <div class="f mt"><label>Ingress</label><textarea rows="3" bind:value={cmsSportevent.ingress} on:change={forhandsgranska}></textarea></div>
       </div>
@@ -1297,6 +1306,7 @@
   .mt { margin-top: 12px; }
   .f { display: flex; flex-direction: column; gap: 5px; }
   label { font-size: 11px; color: var(--t-mut); display: flex; align-items: center; }
+  .lblhint { font-weight: 400; opacity: 0.7; margin-left: 4px; }
   input, select, textarea { font-family: inherit; width: 100%; background: var(--panel); border: 1px solid var(--div);
     border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--t-head); outline: none; }
   input:focus, select:focus, textarea:focus { border-color: var(--acc); }

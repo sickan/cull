@@ -76,6 +76,17 @@ PROFILER = {
         "squad": False, "individ": True,
         "md_key": "set", "farg": "#7A8794",
     },
+    "friidrott": {
+        "namn": "Friidrott",
+        "res_label": "Resultat", "res_ph": "10,12 s",
+        "mid_label": "Placering", "mid_ph": "1", "mid_moment": "Delresultat",
+        "mid_token": "placering",
+        "start_moment": "Start",
+        "has_scorers": False, "scorers_label": "",
+        "lineup": "", "lineup_n": "",
+        "squad": False, "individ": True,
+        "md_key": "placering", "farg": "#B5643C",
+    },
 }
 
 _FALLBACK = "fotboll"

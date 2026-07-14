@@ -122,6 +122,7 @@ const MOCK_SPORTPROFILER = {
   volleyboll: { namn: 'Volleyboll', res_label: 'Resultat i set', res_ph: '3–1', mid_label: 'Setsiffror', mid_ph: '25–21, 23–25, 25–19, 25–17', mid_moment: 'Mellan set', mid_token: 'setsiffror', start_moment: 'Matchstart', has_scorers: false, scorers_label: '', lineup: 'Startsexa', lineup_n: '(6)', squad: true, individ: false, md_key: 'set', farg: '#C9657F' },
   beachvolley:{ namn: 'Beachvolley', res_label: 'Resultat i set', res_ph: '2–0', mid_label: 'Setsiffror', mid_ph: '21–18, 21–15', mid_moment: 'Mellan set', mid_token: 'setsiffror', start_moment: 'Matchstart', has_scorers: false, scorers_label: '', lineup: 'Par', lineup_n: '(2)', squad: false, individ: false, md_key: 'set', farg: '#E0A040' },
   tennis:     { namn: 'Tennis', res_label: 'Resultat i set', res_ph: '2–1', mid_label: 'Gamesiffror', mid_ph: '6–4, 3–6, 7–5', mid_moment: 'Mellan set', mid_token: 'gamesiffror', start_moment: 'Matchstart', has_scorers: false, scorers_label: '', lineup: '', lineup_n: '', squad: false, individ: true, md_key: 'set', farg: '#7A8794' },
+  friidrott:  { namn: 'Friidrott', res_label: 'Resultat', res_ph: '10,12 s', mid_label: 'Placering', mid_ph: '1', mid_moment: 'Delresultat', mid_token: 'placering', start_moment: 'Start', has_scorers: false, scorers_label: '', lineup: '', lineup_n: '', squad: false, individ: true, md_key: 'placering', farg: '#B5643C' },
 }
 
 // Mock: vilka lag som deltar i en tävling (tavling_lag). I appen kommer detta

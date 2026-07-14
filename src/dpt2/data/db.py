@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -598,6 +598,107 @@ def _migrera(conn, fran_version):
                     "NOT NULL DEFAULT 'match'")
             if not _har_kolumn(conn, "publicera_material", "tavling_id"):
                 conn.execute("ALTER TABLE publicera_material ADD COLUMN tavling_id TEXT")
+
+    if fran_version < 27:
+        # v27: 'friidrott' läggs till sport-enumen på tavling/lag/matchen. Precis
+        # som 'innebandy'/'tennis' tidigare kan CHECK inte ALTER:as i SQLite, så
+        # tabellerna skrivs om i tur och ordning (samma FK-avstängning +
+        # efterkontroll som v13). Guardad: hoppa om tavling redan tillåter
+        # friidrott (idempotent) eller om kärntabellerna saknas (äldre testdb:er).
+        if (_har_tabell(conn, "tavling") and _har_tabell(conn, "lag")
+                and _har_tabell(conn, "matchen")
+                and "friidrott" not in (conn.execute(
+                    "SELECT sql FROM sqlite_master WHERE name='tavling'"
+                ).fetchone()[0] or "")):
+            conn.execute("PRAGMA foreign_keys=OFF")
+            conn.executescript("""
+            CREATE TABLE tavling_ny (
+              id        TEXT PRIMARY KEY,
+              typ       TEXT NOT NULL CHECK (typ IN ('liga','turnering','masterskap')),
+              sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
+              gren      TEXT CHECK (gren IN ('dam','herr','mixed')),
+              namn      TEXT NOT NULL,
+              hemsida   TEXT,
+              fran      TEXT,
+              till      TEXT,
+              ort       TEXT,
+              arena     TEXT,
+              logga     TEXT,
+              kalender  INTEGER NOT NULL DEFAULT 0,
+              press_email TEXT,
+              ackr_dagar  INTEGER
+            );
+            INSERT INTO tavling_ny (id,typ,sport,gren,namn,hemsida,fran,till,ort,arena,logga,kalender,press_email,ackr_dagar)
+              SELECT id,typ,sport,gren,namn,hemsida,fran,till,ort,arena,logga,kalender,press_email,ackr_dagar FROM tavling;
+            DROP TABLE tavling;
+            ALTER TABLE tavling_ny RENAME TO tavling;
+
+            CREATE TABLE lag_ny (
+              id           TEXT PRIMARY KEY,
+              namn         TEXT NOT NULL,
+              kind         TEXT NOT NULL DEFAULT 'team'
+                             CHECK (kind IN ('team','individ')),
+              sport        TEXT CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
+              gren         TEXT CHECK (gren IN ('dam','herr','mixed')),
+              hemsida      TEXT,
+              instagram    TEXT,
+              logga        TEXT,
+              stall_hemma  TEXT,
+              stall_borta  TEXT,
+              stall_tredje TEXT,
+              profilfarg   TEXT,
+              klubb        TEXT,
+              trupp_kalla  TEXT,
+              arkiverad    INTEGER NOT NULL DEFAULT 0,
+              logga_url    TEXT,
+              press_email  TEXT,
+              ackr_dagar   INTEGER
+            );
+            INSERT INTO lag_ny (id,namn,kind,sport,gren,hemsida,instagram,logga,
+                                stall_hemma,stall_borta,stall_tredje,profilfarg,klubb,trupp_kalla,
+                                arkiverad,logga_url,press_email,ackr_dagar)
+              SELECT id,namn,kind,sport,gren,hemsida,instagram,logga,
+                     stall_hemma,stall_borta,stall_tredje,profilfarg,klubb,trupp_kalla,
+                     arkiverad,logga_url,press_email,ackr_dagar FROM lag;
+            DROP TABLE lag;
+            ALTER TABLE lag_ny RENAME TO lag;
+
+            CREATE TABLE matchen_ny (
+              id           TEXT PRIMARY KEY,
+              tavling_id   TEXT REFERENCES tavling(id) ON DELETE SET NULL,
+              sport        TEXT CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
+              lag_hemma_id TEXT REFERENCES lag(id) ON DELETE SET NULL,
+              lag_borta_id TEXT REFERENCES lag(id) ON DELETE SET NULL,
+              datum        TEXT,
+              tid          TEXT,
+              arena        TEXT,
+              resultat     TEXT,
+              mellan       TEXT,
+              malskyttar   TEXT,
+              status       TEXT NOT NULL DEFAULT 'kommande'
+                             CHECK (status IN ('kommande','pagaende','avslutad')),
+              galleri      TEXT,
+              sida_url     TEXT,
+              omslag       TEXT,
+              event        INTEGER NOT NULL DEFAULT 0,
+              skapad       TEXT NOT NULL
+            );
+            INSERT INTO matchen_ny (id,tavling_id,sport,lag_hemma_id,lag_borta_id,datum,
+                                     tid,arena,resultat,mellan,malskyttar,status,galleri,
+                                     sida_url,omslag,event,skapad)
+              SELECT id,tavling_id,sport,lag_hemma_id,lag_borta_id,datum,
+                     tid,arena,resultat,mellan,malskyttar,status,galleri,
+                     sida_url,omslag,event,skapad FROM matchen;
+            DROP TABLE matchen;
+            ALTER TABLE matchen_ny RENAME TO matchen;
+            CREATE INDEX idx_match_datum   ON matchen(datum);
+            CREATE INDEX idx_match_tavling ON matchen(tavling_id);
+            """)
+            conn.execute("PRAGMA foreign_keys=ON")
+            problem = conn.execute("PRAGMA foreign_key_check").fetchall()
+            if problem:
+                raise RuntimeError(
+                    f"v27-migrering: FK-integritet trasig efter ombyggnad: {problem}")
 
 
 def _har_kolumn(conn, tabell, kolumn):
