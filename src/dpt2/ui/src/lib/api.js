@@ -664,6 +664,24 @@ export async function listaMinnesKort() {
   ]})
 }
 
+// Bildfilerna på ett kort, nyast först (RAW+JPEG-par ihopslagna, RAW föredras)
+// — plockrutnätets källa. Varje ruta hämtar sedan sin preview via thumbForBild.
+export async function listaKortBilder(kortPath, antal = 24) {
+  const api = brygga()
+  if (api) return api.lista_kort_bilder(kortPath, antal)
+  return wait({ ok: true, totalt: antal, bilder: Array.from({ length: antal }, (_, i) => ({
+    path: `${kortPath}/DSC_${1000 + i}.NEF`, filnamn: `DSC_${1000 + i}.NEF`, skyddad: false })) })
+}
+
+// Snabbplockets skarpa 'Öppna i Lightroom' — kopierar de plockade filerna
+// (fulla sökvägar) till en arbetsmapp, skriver Blue-etikett och öppnar LR.
+export async function snabbplockExport(paths, utMapp = null, oppnaLr = true) {
+  const api = brygga()
+  if (api) return api.snabbplock_export(paths, utMapp, oppnaLr)
+  return wait({ ok: true, antal: (paths || []).length,
+    path: (utMapp || '~/Pictures/DPT2 Snabbplock/nu') })
+}
+
 export async function rataUppMapp(mapp) {
   const api = brygga()
   if (api) return api.rata_upp_mapp(mapp)

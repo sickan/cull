@@ -1728,3 +1728,94 @@ class TestAckreditering(unittest.TestCase):
             self.api.conn, jid)["paminnelse_jobb_id"]
         upp = [d for (i, d) in self.fake.uppdaterade if i == pam_id]
         self.assertTrue(upp and upp[-1]["start_at"] == "2026-07-18")
+
+
+class TestListaKortBilder(unittest.TestCase):
+    """lista_kort_bilder — nyast först + RAW/JPEG-par ihopslagna (RAW föredras)."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+
+    def _kort(self, filer):
+        """Bygger en temp-kortmapp; `filer` = [(namn, mtime), ...]."""
+        import os
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        dcim = os.path.join(d, "DCIM", "100NZ_8")
+        os.makedirs(dcim)
+        for namn, mt in filer:
+            p = os.path.join(dcim, namn)
+            open(p, "wb").write(b"x")
+            os.utime(p, (mt, mt))
+        return d
+
+    def test_nyast_forst_och_raw_jpeg_par_slas_ihop(self):
+        d = self._kort([
+            ("DSC_0001.NEF", 100), ("DSC_0001.JPG", 100),  # par → en post, RAW vald
+            ("DSC_0002.NEF", 300),                          # nyast
+            ("DSC_0003.JPG", 200),                          # ren jpeg
+        ])
+        r = self.api.lista_kort_bilder(d)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["totalt"], 3)
+        self.assertEqual([b["filnamn"] for b in r["bilder"]],
+                         ["DSC_0002.NEF", "DSC_0003.JPG", "DSC_0001.NEF"])
+
+    def test_antal_begransar(self):
+        d = self._kort([(f"DSC_{i:04d}.NEF", i) for i in range(5)])
+        r = self.api.lista_kort_bilder(d, antal=2)
+        self.assertEqual(len(r["bilder"]), 2)
+        self.assertEqual(r["totalt"], 5)
+
+    def test_saknad_mapp(self):
+        self.assertFalse(self.api.lista_kort_bilder("/finns/inte")["ok"])
+        self.assertFalse(self.api.lista_kort_bilder("")["ok"])
+
+
+class TestSnabbplockExport(unittest.TestCase):
+    """snabbplock_export — kopierar explicit plockade filer + öppnar LR."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        # Stubba LR-öppningen så testet inte startar Lightroom.
+        self._oppnad = []
+        self.api.oppna_i_lightroom = lambda s="": self._oppnad.append(s)
+
+    def _filer(self, namn):
+        import os
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        paths = []
+        for n in namn:
+            p = os.path.join(d, n)
+            open(p, "wb").write(b"raw")
+            paths.append(p)
+        return d, paths
+
+    def test_kopierar_valda_till_malmapp_och_oppnar_lr(self):
+        import os
+        d, paths = self._filer(["DSC_0001.NEF", "DSC_0002.NEF"])
+        mal = os.path.join(d, "ut")
+        r = self.api.snabbplock_export(paths, ut_mapp=mal)
+        self.assertTrue(r["ok"], r.get("fel"))
+        self.assertEqual(r["antal"], 2)
+        self.assertTrue(os.path.exists(os.path.join(mal, "DSC_0001.NEF")))
+        self.assertEqual(self._oppnad, [r["path"]])
+
+    def test_hoppar_over_saknade_filer(self):
+        import os
+        d, paths = self._filer(["DSC_0001.NEF"])
+        mal = os.path.join(d, "ut")
+        r = self.api.snabbplock_export(paths + ["/finns/inte.NEF"], ut_mapp=mal)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["antal"], 1)
+
+    def test_tom_lista_ger_fel(self):
+        self.assertFalse(self.api.snabbplock_export([])["ok"])
+
+    def test_inga_riktiga_filer_ger_fel(self):
+        r = self.api.snabbplock_export(["/finns/inte.NEF"])
+        self.assertFalse(r["ok"])
+        self.assertEqual(self._oppnad, [])

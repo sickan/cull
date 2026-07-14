@@ -1400,6 +1400,38 @@ class Api:
         return {"ok": True, "path": str(p),
                 "skyddade": sum(1 for f in self._bildfiler(p) if _ar_skyddad(f))}
 
+    def lista_kort_bilder(self, kort_path, antal=24):
+        """Bildfilerna på ett kort, nyast först (mtime desc), för Snabbplockets
+        plockrutnät. RAW+JPEG-par med samma stam slås ihop till en post och
+        RAW föredras som källa — då extraheras den inbäddade previewen via
+        thumb_for_bild. Returnerar {ok, bilder:[{path, filnamn, skyddad}],
+        totalt}; `antal` begränsar hur många poster som skickas (0/None = alla).
+        OBS: ingen .strip() på kort_path (se lista_minneskort)."""
+        if not kort_path:
+            return {"ok": False, "fel": "Peka ut kortet."}
+        p = Path(kort_path)
+        if not p.is_dir():
+            return {"ok": False, "fel": "Kortet/mappen hittades inte."}
+        _RAW = {".nef", ".dng", ".cr2", ".cr3", ".arw", ".raf", ".orf", ".rw2"}
+        per_stam = {}
+        for f in self._bildfiler(p):
+            try:
+                mt = f.stat().st_mtime
+            except OSError:
+                continue
+            nyckel = str(f.parent / f.stem).lower()
+            rank = 0 if f.suffix.lower() in _RAW else 1
+            cur = per_stam.get(nyckel)
+            if cur is None or rank < cur[0]:
+                per_stam[nyckel] = (rank, f, mt)
+        poster = sorted(per_stam.values(), key=lambda t: t[2], reverse=True)
+        totalt = len(poster)
+        if antal:
+            poster = poster[:antal]
+        bilder = [{"path": str(f), "filnamn": f.name, "skyddad": _ar_skyddad(f)}
+                  for (_r, f, _mt) in poster]
+        return {"ok": True, "bilder": bilder, "totalt": totalt}
+
     def exportera_skyddade(self, kort_path, mal_mapp, oppna_lr=True):
         """Kopierar BARA skyddade (låsta på kameran) bilder från kortet till
         mal_mapp och öppnar mappen i Lightroom för redigering. De redigerade
@@ -1427,6 +1459,59 @@ class Api:
         if oppna_lr and kopierade:
             self.oppna_i_lightroom(str(mal))
         return {"ok": True, "antal": kopierade, "path": str(mal)}
+
+    def snabbplock_export(self, paths, ut_mapp=None, oppna_lr=True):
+        """Snabbplockets 'Öppna i Lightroom': kopierar de EXPLICIT plockade
+        bildfilerna (fulla sökvägar i `paths`) till en arbetsmapp, rensar ev.
+        uchg-flagga, skriver Blue-etikett-XMP och öppnar mappen i Lightroom.
+        Till skillnad från snabbplock_kortrot (ALLA kameralåsta på ETT kort)
+        jobbar den mot användarens urval och kan spänna över flera kort.
+        Default-mål: ~/Pictures/DPT2 Snabbplock/<tidsstämpel> (versionshanteras
+        om den råkar finnas). Returnerar {ok, antal, path} eller {ok:False, fel}."""
+        import shutil
+        from datetime import datetime
+        if not paths:
+            return {"ok": False, "fel": "Inga bilder plockade."}
+        filer = [Path(s) for s in paths if s and Path(s).is_file()]
+        if not filer:
+            return {"ok": False, "fel": "Inga av de plockade filerna hittades "
+                    "(sitter kortet kvar?)."}
+        if ut_mapp:
+            ut_dir = Path(ut_mapp).expanduser()
+        else:
+            stamp = datetime.now().strftime("%Y-%m-%d %H%M")
+            ut_dir = Path.home() / "Pictures" / "DPT2 Snabbplock" / stamp
+            i, bas = 2, ut_dir
+            while ut_dir.exists():
+                ut_dir = bas.parent / f"{bas.name} {i}"
+                i += 1
+        try:
+            ut_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            return {"ok": False, "fel": f"Kan inte skapa mappen {ut_dir}: {e}"}
+        kopierade = []
+        for f in filer:
+            try:
+                mal = ut_dir / f.name
+                shutil.copy2(f, mal)
+                try:
+                    os.chflags(mal, 0)      # rensa uchg så kopian blir redigerbar
+                except (OSError, AttributeError):
+                    pass
+                kopierade.append(mal)
+            except OSError:
+                continue
+        if not kopierade:
+            return {"ok": False, "fel": "Kunde inte kopiera några bilder."}
+        from dpt2.motorer import xmp_writer
+        for mal in kopierade:
+            try:
+                xmp_writer.skriv_xmp(mal, label="Blue")
+            except Exception:
+                pass
+        if oppna_lr:
+            self.oppna_i_lightroom(str(ut_dir))
+        return {"ok": True, "antal": len(kopierade), "path": str(ut_dir)}
 
     def publicera_live_story(self, config):
         """Live-flödets 'Publicera story ›': renderar 9:16-overlayen i workern

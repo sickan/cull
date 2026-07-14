@@ -8,7 +8,7 @@
   // simulerad statuslista. Riktig RAW-preview + urval persistat per jobb +
   // stegvis kopiera/import görs i en backend-uppföljning (markerat nedan).
   import { onMount, onDestroy, createEventDispatcher } from 'svelte'
-  import { aktivMatch, listaMinnesKort } from '../lib/api.js'
+  import { aktivMatch, listaMinnesKort, listaKortBilder, thumbForBild, snabbplockExport } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
   const N_THUMBS = 10 // tumnaglar som visas per kort (de senaste; resten rullar in)
@@ -24,10 +24,14 @@
   let step = 'insert' // insert | pick | review | lr
   let cardIdx = 0 // nästa kort att läsa
   let cards = SEED
+  let cardFiles = {} // { [cardIdx]: [{ path, filnamn, skyddad }] } — riktiga kortbilder
+  let thumbs = {} // { [path]: data_uri } — lazy preview-cache
   let picks = {} // { [cardIdx]: { [thumbIdx]: true } }
   let removed = {} // granska: { 'c-i': true }
-  let lrPhase = 'idle' // idle | running | done
+  let lrPhase = 'idle' // idle | running | done | fel
   let lrStep = 0
+  let lrFel = '' // felmeddelande om exporten misslyckas
+  let lrPath = '' // arbetsmappen exporten skrevs till
   let timer = null
   let headerMatch = null
 
@@ -55,6 +59,16 @@
   $: totalPicked = Object.keys(picks).reduce((a, c) => a + Object.keys(picks[c]).length, 0)
   $: removedN = Object.keys(removed).length
   $: finalN = totalPicked - removedN
+  // De faktiska filsökvägarna som ska exporteras: plockade minus bortkryssade,
+  // och bara de som har en riktig fil bakom sig (cardFiles laddat).
+  $: finalPaths = Object.keys(picks)
+    .map(Number)
+    .flatMap((c) =>
+      pickedList(c)
+        .filter((i) => !removed[`${c}-${i}`])
+        .map((i) => (cardFiles[c] || [])[i]?.path)
+        .filter(Boolean)
+    )
   $: hasNextCard = cardIdx < cards.length
   $: allCardsDone = cardIdx >= cards.length
   $: canReview = step === 'insert' && totalPicked > 0
@@ -90,7 +104,14 @@
   $: curThumbs =
     cur < 0
       ? []
-      : range(N_THUMBS).map((i) => ({ i, num: dscNum(cur, i), on: !!(picks[cur] || {})[i] }))
+      : cardFiles[cur]
+        ? cardFiles[cur].map((b, i) => ({
+            i, num: b.filnamn, path: b.path,
+            uri: thumbs[b.path] || null, on: !!(picks[cur] || {})[i],
+          }))
+        : range(N_THUMBS).map((i) => ({
+            i, num: dscNum(cur, i), path: null, uri: null, on: !!(picks[cur] || {})[i],
+          }))
 
   $: reviewGroups = Object.keys(picks)
     .map(Number)
@@ -100,7 +121,12 @@
       label: `${cards[c].name} — ${pickedList(c).length} plockade`,
       thumbs: pickedList(c).map((i) => {
         const k = `${c}-${i}`
-        return { c, i, key: k, num: dscNum(c, i), off: !!removed[k] }
+        const f = (cardFiles[c] || [])[i]
+        return {
+          c, i, key: k, off: !!removed[k],
+          num: f ? f.filnamn : dscNum(c, i),
+          uri: f ? thumbs[f.path] || null : null,
+        }
       }),
     }))
   $: doneCardsN = reviewGroups.length
@@ -117,10 +143,28 @@
   })
 
   // ── Handlingar ──────────────────────────────────────────────────────────────
-  function insertCard() {
+  async function insertCard() {
     if (cardIdx >= cards.length) return
+    const idx = cardIdx
     cardIdx += 1
     step = 'pick'
+    const card = cards[idx]
+    if (!card.path) return // demo-kort utan riktig sökväg → platshållar-rutnät
+    const r = await listaKortBilder(card.path, N_THUMBS)
+    if (r && r.ok && r.bilder) {
+      cardFiles = { ...cardFiles, [idx]: r.bilder }
+      if (r.totalt != null) cards = cards.map((c, i) => (i === idx ? { ...c, total: r.totalt } : c))
+      laddaThumbs(r.bilder)
+    }
+  }
+  // Hämtar de inbäddade previewerna en och en (exiftool per fil) och fyller på
+  // cachen — rutorna byter från platshållar-ton till bild allteftersom.
+  async function laddaThumbs(bilder) {
+    for (const b of bilder) {
+      if (thumbs[b.path]) continue
+      const t = await thumbForBild(b.path)
+      if (t && t.ok && t.data_uri) thumbs = { ...thumbs, [b.path]: t.data_uri }
+    }
   }
   function togglePick(c, i) {
     const per = { ...(picks[c] || {}) }
@@ -143,22 +187,29 @@
   function backToInsert() {
     step = 'insert'
   }
-  function openLightroom() {
-    // UI-först: simulerad statuslista (samma mönster som Live-publiceringen).
-    // Backend-uppföljning: kopiera valda bilder → bygg import → öppna LR skarpt.
+  async function openLightroom() {
+    // Skarp export: kopierar de plockade filerna till en arbetsmapp, skriver
+    // Blue-etikett och öppnar mappen i Lightroom (api.snabbplock_export).
     step = 'lr'
     lrPhase = 'running'
     lrStep = 0
-    timer && clearInterval(timer)
-    timer = setInterval(() => {
-      lrStep += 1
-      if (lrStep >= 3) {
-        clearInterval(timer)
-        timer = null
-        lrStep = 3
-        lrPhase = 'done'
-      }
-    }, 800)
+    lrFel = ''
+    lrPath = ''
+    const paths = finalPaths
+    if (!paths.length) {
+      lrPhase = 'fel'
+      lrFel = 'Inga plockade filer att exportera.'
+      return
+    }
+    const r = await snabbplockExport(paths)
+    if (r && r.ok) {
+      lrStep = 3
+      lrPath = r.path || ''
+      lrPhase = 'done'
+    } else {
+      lrPhase = 'fel'
+      lrFel = (r && r.fel) || 'Kunde inte kopiera bilderna / öppna Lightroom.'
+    }
   }
   function restart() {
     timer && clearInterval(timer)
@@ -167,8 +218,12 @@
     cardIdx = 0
     picks = {}
     removed = {}
+    cardFiles = {}
+    thumbs = {}
     lrPhase = 'idle'
     lrStep = 0
+    lrFel = ''
+    lrPath = ''
   }
 </script>
 
@@ -235,7 +290,7 @@
       </div>
       <div class="rutnat plock">
         {#each curThumbs as t}
-          <button class="ruta" class:on={t.on} style="background-image:{tint(cur, t.i)}" on:click={() => togglePick(cur, t.i)}>
+          <button class="ruta" class:on={t.on} class:laddar={!t.uri && t.path} style="background-image:{t.uri ? `url(${t.uri})` : tint(cur, t.i)}" on:click={() => togglePick(cur, t.i)}>
             {#if t.on}<span class="stjarna">★</span>{/if}
             <span class="dsc">{t.num}</span>
           </button>
@@ -261,7 +316,7 @@
           <div class="grupp-lbl">{g.label}</div>
           <div class="rutnat granska">
             {#each g.thumbs as t}
-              <button class="ruta gruta" class:av={t.off} style="background-image:{tint(t.c, t.i)}" on:click={() => toggleRemoved(t.key)}>
+              <button class="ruta gruta" class:av={t.off} style="background-image:{t.uri ? `url(${t.uri})` : tint(t.c, t.i)}" on:click={() => toggleRemoved(t.key)}>
                 {#if t.off}<span class="kryss">✕</span>{:else}<span class="stjarna liten">★</span>{/if}
                 <span class="dsc">{t.num}</span>
               </button>
@@ -280,25 +335,34 @@
     <!-- ============ STEG: LIGHTROOM (B3) ============ -->
     {#if step === 'lr'}
       <div class="lr-kort">
-        {#if lrPhase === 'running'}
-          <div class="lr-h scd">Öppnar Lightroom …</div>
-        {:else}
+        {#if lrPhase === 'fel'}
           <div class="lr-klar">
-            <span class="lr-badge">✓</span>
-            <div class="lr-h scd">Lightroom öppnat</div>
+            <span class="lr-badge fel">!</span>
+            <div class="lr-h scd">Exporten stannade</div>
           </div>
-        {/if}
-        <div class="lr-steg">
-          {#each lrSteps as st}
-            <div class="lr-rad">
-              <span class="lr-dot" class:done={st.done} class:active={st.active}>✓</span>
-              <span class="lr-lbl" class:done={st.done} class:active={st.active}>{st.label}</span>
+          <div class="lr-slut">{lrFel}</div>
+          <div class="mitt"><button class="btn-amber liten" on:click={() => (step = 'review')}>‹ Tillbaka till granska</button></div>
+        {:else}
+          {#if lrPhase === 'running'}
+            <div class="lr-h scd">Öppnar Lightroom …</div>
+          {:else}
+            <div class="lr-klar">
+              <span class="lr-badge">✓</span>
+              <div class="lr-h scd">Lightroom öppnat</div>
             </div>
-          {/each}
-        </div>
-        {#if lrPhase === 'done'}
-          <div class="lr-slut">{finalN} bilder importerade från {doneCardsN} kort.<br>Korten kan formateras när säkerhetskopian är verifierad.</div>
-          <div class="mitt"><button class="btn-mork liten" on:click={restart}>Börja om</button></div>
+          {/if}
+          <div class="lr-steg">
+            {#each lrSteps as st}
+              <div class="lr-rad">
+                <span class="lr-dot" class:done={st.done} class:active={st.active}>✓</span>
+                <span class="lr-lbl" class:done={st.done} class:active={st.active}>{st.label}</span>
+              </div>
+            {/each}
+          </div>
+          {#if lrPhase === 'done'}
+            <div class="lr-slut">{finalN} bilder kopierade från {doneCardsN} kort och öppnade i Lightroom.<br>{#if lrPath}<span class="lr-path">{lrPath}</span><br>{/if}Korten kan formateras när säkerhetskopian är verifierad.</div>
+            <div class="mitt"><button class="btn-mork liten" on:click={restart}>Börja om</button></div>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -394,6 +458,7 @@
   /* Knappar */
   .btn-amber { background: #f0b45a; color: #100c05; border: none; border-radius: 10px; padding: 12px 22px; font-size: 13.5px; font-weight: 700; margin-top: 20px; }
   .btn-amber.stor { padding: 13px 24px; font-size: 14px; margin-top: 0; }
+  .btn-amber.liten { padding: 10px 18px; font-size: 12.5px; margin-top: 0; }
   .btn-linje { background: transparent; border: 1.5px solid #f0b45a; color: #f0b45a; border-radius: 10px; padding: 12px 24px; font-size: 13.5px; font-weight: 700; }
   .btn-mork { background: #12151b; border: 1px solid rgba(255, 255, 255, 0.16); color: #f3f5f7; border-radius: 10px; padding: 12px 20px; font-size: 13.5px; font-weight: 700; }
   .btn-mork.liten { padding: 10px 18px; font-size: 12.5px; font-weight: 600; border-radius: 9px; }
@@ -415,6 +480,8 @@
     outline: 1px solid rgba(255, 255, 255, 0.09); outline-offset: -2px; border: none;
   }
   .ruta.on { outline: 2.5px solid #f0b45a; box-shadow: 0 0 14px rgba(240, 180, 90, 0.35); }
+  .ruta.laddar { animation: puls 1.3s ease-in-out infinite; }
+  @keyframes puls { 0%, 100% { opacity: 1; } 50% { opacity: 0.62; } }
   .ruta.gruta { border-radius: 8px; outline: 1px solid rgba(255, 255, 255, 0.12); outline-offset: -1px; }
   .ruta.gruta.av { outline: 1px solid rgba(224, 96, 127, 0.5); }
   .stjarna {
@@ -442,6 +509,8 @@
   .lr-h { font-size: 19px; font-weight: 700; text-align: center; margin-bottom: 20px; }
   .lr-klar { text-align: center; margin-bottom: 20px; }
   .lr-badge { display: inline-flex; width: 44px; height: 44px; border-radius: 50%; background: #6fb35a; color: #0a0d11; align-items: center; justify-content: center; font-size: 21px; font-weight: 700; margin-bottom: 10px; }
+  .lr-badge.fel { background: #e0607f; }
+  .lr-path { font-family: 'Saira Condensed', sans-serif; color: rgba(243, 245, 247, 0.7); font-size: 11px; word-break: break-all; }
   .lr-klar .lr-h { margin-bottom: 0; }
   .lr-steg { display: flex; flex-direction: column; gap: 15px; }
   .lr-rad { display: flex; align-items: center; gap: 12px; }
