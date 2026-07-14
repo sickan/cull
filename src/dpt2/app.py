@@ -261,14 +261,29 @@ class Api:
         """Pushar HELA fotojobb-listan till mobilen (Kalender- och Jobb-flikarna).
         DPT2 äger fotojobben (bokas här + Google-kalendersynk); appen speglar dem
         bara. Wholesale replace, samma 'jag är kanske inte vid datorn'-premiss som
-        match-paketen. Trimmar till app-fält och härleder en status."""
+        match-paketen. Trimmar till app-fält och härleder en status.
+
+        OBS: `lista_fotojobb` auto-synkar redan (se där) — den här metoden är den
+        explicita synkroniserade varianten för På gång-flödet. `_i_jobbsynk`-
+        flaggan stänger av auto-synken under det interna list-anropet så vi inte
+        pushar två gånger."""
         if not self.live_synk.har_nyckel():
             return {"ok": False, "fel": "CONTENT_SYNC_API_KEY saknas."}
+        self._i_jobbsynk = True
         try:
             jobb = self.lista_fotojobb()
         except Exception as e:
             return {"ok": False, "fel": str(e)}
-        return self.live_synk.push_jobb([_jobb_till_app(j) for j in jobb])
+        finally:
+            self._i_jobbsynk = False
+        return self._push_jobb_till_mobil(jobb)
+
+    def _push_jobb_till_mobil(self, jobb_lista):
+        """Trimmar en (redan hämtad) fotojobb-lista till app-fält och pushar den.
+        Best-effort — samma nyckelkrav som match-synken."""
+        if not self.live_synk.har_nyckel():
+            return {"ok": False, "fel": "CONTENT_SYNC_API_KEY saknas."}
+        return self.live_synk.push_jobb([_jobb_till_app(j) for j in jobb_lista])
 
     def _synka_kalenderjobb(self, match_id):
         """Push:ar matchens aktuella titel/tid/arena — och numera även
@@ -626,6 +641,16 @@ class Api:
                 # Lokal rad = fallback för noter skrivna innan description-synken.
                 note, _ = _dela_beskrivning(j.get("description"))
                 j["notering"] = note or noteringar.get(j.get("id"), "")
+        # Auto-synk till mobilen: panelen laddar om lista_fotojobb vid montering och
+        # efter varje ändring (spara/radera/aktivera), så det räcker att haka på
+        # HÄR för att jobben ska nå appens Kalender/Jobb utan ett manuellt steg.
+        # Best-effort, får aldrig blocka läsningen; `_i_jobbsynk` hindrar dubbel-
+        # push när synka_fotojobb själv anropar oss.
+        if not getattr(self, "_i_jobbsynk", False):
+            try:
+                self._push_jobb_till_mobil(alla)
+            except Exception:
+                pass
         return alla
 
     def spara_fotojobb(self, jobb):

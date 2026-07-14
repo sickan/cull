@@ -1371,6 +1371,40 @@ class TestFotojobbSynk(unittest.TestCase):
         self.api.live_synk = FejkLiveSynk(nyckel=False)
         self.assertFalse(self.api.synka_fotojobb()["ok"])
 
+    def _skapa_utkast(self):
+        """Skapar ett riktigt fotojobb-utkast (tävling → kalender-utkast) och
+        stubbar bort Google-kalendern så lista_fotojobb inte når nätet."""
+        self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
+                                "fran": "2026-04-01", "till": "2026-10-31"})
+        uid = self.api.lagg_tavling_i_kalender("obos-damallsvenskan")["utkast_id"]
+        self.api.kalender = _FakeKalender()
+        return uid
+
+    def test_lista_fotojobb_auto_synkar(self):
+        # Panelen laddar om via lista_fotojobb → jobben ska pushas automatiskt,
+        # utan att synka_fotojobb anropas explicit.
+        uid = self._skapa_utkast()
+        self.assertEqual(self.fake.pushade_jobb, [])   # inget pushat än
+        jobb = self.api.lista_fotojobb()
+        self.assertTrue(any(j.get("id") == uid for j in jobb))
+        self.assertEqual(len(self.fake.pushade_jobb), 1)   # auto-synk
+        self.assertTrue(any(j["id"] == uid for j in self.fake.pushade_jobb[0]))
+
+    def test_auto_synk_ingen_dubbelpush_via_synka(self):
+        # synka_fotojobb anropar lista_fotojobb internt — reentrancy-guarden ska
+        # se till att det blir EN push, inte två.
+        self._skapa_utkast()
+        self.fake.pushade_jobb.clear()
+        self.api.synka_fotojobb()
+        self.assertEqual(len(self.fake.pushade_jobb), 1)
+
+    def test_lista_utan_nyckel_ingen_synk(self):
+        uid = self._skapa_utkast()
+        self.api.live_synk = FejkLiveSynk(nyckel=False)
+        self.api.lista_fotojobb()
+        self.assertEqual(self.api.live_synk.pushade_jobb, [])
+        _ = uid
+
 
 class TestMobilLive(unittest.TestCase):
     def setUp(self):
