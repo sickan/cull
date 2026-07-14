@@ -8,7 +8,7 @@
   // simulerad statuslista. Riktig RAW-preview + urval persistat per jobb +
   // stegvis kopiera/import görs i en backend-uppföljning (markerat nedan).
   import { onMount, onDestroy, createEventDispatcher } from 'svelte'
-  import { aktivMatch, listaMinnesKort, listaKortBilder, thumbForBild, snabbplockExport } from '../lib/api.js'
+  import { aktivMatch, listaMinnesKort, listaKortBilder, thumbForBild, snabbplockExport, snabbplockStage } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
   const N_THUMBS = 10 // tumnaglar som visas per kort (de senaste; resten rullar in)
@@ -20,6 +20,10 @@
   let thumbs = {} // { [path]: data_uri } — lazy preview-cache
   let picks = {} // { [cardIdx]: { [thumbIdx]: true } }
   let removed = {} // granska: { 'c-i': true }
+  let staged = {} // { [kortsökväg]: arbetsdisk-sökväg } — filer säkrade medan kortet satt i
+  let stageJobb = null // gemensam arbetsmapp för hela plocket (alla kort)
+  let staging = false // pågår en kopiering till arbetsdisken just nu?
+  let stageFel = '' // om säkringen av ett kort misslyckades
   let lrPhase = 'idle' // idle | running | done | fel
   let lrStep = 0
   let lrFel = '' // felmeddelande om exporten misslyckas
@@ -75,13 +79,17 @@
   $: removedN = Object.keys(removed).length
   $: finalN = totalPicked - removedN
   // De faktiska filsökvägarna som ska exporteras: plockade minus bortkryssade,
-  // och bara de som har en riktig fil bakom sig (cardFiles laddat).
+  // och bara de som har en riktig fil bakom sig (cardFiles laddat). Pekar på den
+  // säkrade arbetskopian (staged) när kortet redan matats ut — annars på kortet.
   $: finalPaths = Object.keys(picks)
     .map(Number)
     .flatMap((c) =>
       pickedList(c)
         .filter((i) => !removed[`${c}-${i}`])
-        .map((i) => (cardFiles[c] || [])[i]?.path)
+        .map((i) => {
+          const p = (cardFiles[c] || [])[i]?.path
+          return p ? staged[p] || p : null
+        })
         .filter(Boolean)
     )
   $: hasNextCard = cardIdx < cards.length
@@ -188,10 +196,41 @@
     else per[i] = true
     picks = { ...picks, [c]: per }
   }
-  function ejectCard() {
+  // Säkrar det aktuella kortets plockade filer till arbetsdisken MEDAN det
+  // fortfarande sitter i. Måste ske innan kortet matas ut — annars avmonteras
+  // volymen och filerna går inte att kopiera vid Lightroom-steget (det var
+  // buggen: bara kortet som satt kvar följde med). Idempotent: redan säkrade
+  // filer hoppas över.
+  async function stageCard(c) {
+    if (c < 0) return
+    const paths = pickedList(c)
+      .map((i) => (cardFiles[c] || [])[i]?.path)
+      .filter((p) => p && !staged[p])
+    if (!paths.length) return
+    staging = true
+    stageFel = ''
+    try {
+      const r = await snabbplockStage(paths, stageJobb)
+      if (r && r.ok) {
+        if (r.mapp) stageJobb = r.mapp
+        const nya = { ...staged }
+        for (const par of r.stegade || []) nya[par.src] = par.dst
+        staged = nya
+        if ((r.saknade || []).length)
+          stageFel = `${r.saknade.length} bild(er) kunde inte säkras från kortet.`
+      } else {
+        stageFel = (r && r.fel) || 'Kunde inte säkra kortets bilder till arbetsdisken.'
+      }
+    } finally {
+      staging = false
+    }
+  }
+  async function ejectCard() {
+    await stageCard(cur)
     step = 'insert'
   }
-  function goReview() {
+  async function goReview() {
+    await stageCard(cur)
     step = 'review'
   }
   function toggleRemoved(k) {
@@ -238,6 +277,10 @@
     removed = {}
     cardFiles = {}
     thumbs = {}
+    staged = {}
+    stageJobb = null
+    staging = false
+    stageFel = ''
     lrPhase = 'idle'
     lrStep = 0
     lrFel = ''
@@ -326,11 +369,12 @@
         <div class="hjalp">Klicka en bild för att plocka den · klicka igen för att ångra. Visar alla kameralåsta bilder på kortet — nyast först.</div>
       {/if}
       <div class="fot-rad">
-        <button class="btn-mork" on:click={ejectCard}>⏏ Mata ut kortet</button>
-        <span class="fot-hjalp">Urvalet ligger kvar — sätt i nästa kort,<br>eller granska när alla kort är genomgångna.</span>
+        <button class="btn-mork" on:click={ejectCard} disabled={staging}>{staging ? 'Säkrar kortet …' : '⏏ Mata ut kortet'}</button>
+        <span class="fot-hjalp">{#if staging}Kopierar de plockade bilderna till arbetsdisken — vänta tills det är klart innan du drar ut kortet.{:else}Urvalet ligger kvar och säkras när du matar ut kortet<br>— sätt i nästa kort, eller granska när alla är genomgångna.{/if}</span>
         <span class="vaxt"></span>
-        <button class="btn-linje" on:click={goReview}>Klar — granska ({totalPicked}) ›</button>
+        <button class="btn-linje" on:click={goReview} disabled={staging}>Klar — granska ({totalPicked}) ›</button>
       </div>
+      {#if stageFel}<div class="stage-fel">{stageFel}</div>{/if}
     {/if}
 
     <!-- ============ STEG: GRANSKA (B2) ============ -->
@@ -523,6 +567,8 @@
   .fot-rad { display: flex; align-items: center; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); flex-wrap: wrap; }
   .fot-hjalp { font-size: 11.5px; color: rgba(243, 245, 247, 0.45); line-height: 1.45; }
   .bortkryss { font-size: 12px; color: rgba(243, 245, 247, 0.5); }
+  .stage-fel { margin-top: 12px; font-size: 12px; color: #e0607f; }
+  button:disabled { opacity: 0.55; cursor: default; }
 
   /* Granska */
   .granska-rubrik { display: flex; align-items: baseline; gap: 12px; margin-bottom: 5px; flex-wrap: wrap; }

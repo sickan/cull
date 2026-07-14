@@ -684,6 +684,17 @@ export async function snabbplockExport(paths, utMapp = null, oppnaLr = true) {
     path: (utMapp || '~/Pictures/DPT2 Snabbplock/nu') })
 }
 
+// Säkrar ett korts plockade filer till arbetsdisken MEDAN kortet sitter i
+// (kopieras när kortet matas ut/lämnas) så plocket kan spänna över flera kort.
+// `mapp` återanvänds mellan korten så allt hamnar i samma arbetsmapp.
+export async function snabbplockStage(paths, mapp = null) {
+  const api = brygga()
+  if (api) return api.snabbplock_stage(paths, mapp)
+  const bas = mapp || '/tmp/dpt2-snabbplock-demo'
+  return wait({ ok: true, mapp: bas, saknade: [],
+    stegade: (paths || []).map((p) => ({ src: p, dst: bas + '/' + p.split('/').pop() })) })
+}
+
 export async function rataUppMapp(mapp) {
   const api = brygga()
   if (api) return api.rata_upp_mapp(mapp)

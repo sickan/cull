@@ -1478,10 +1478,15 @@ class Api:
         from datetime import datetime
         if not paths:
             return {"ok": False, "fel": "Inga bilder plockade."}
-        filer = [Path(s) for s in paths if s and Path(s).is_file()]
+        filer, saknade = [], []
+        for s in paths:
+            if s and Path(s).is_file():
+                filer.append(Path(s))
+            else:
+                saknade.append(s)
         if not filer:
             return {"ok": False, "fel": "Inga av de plockade filerna hittades "
-                    "(sitter kortet kvar?)."}
+                    "(sitter korten kvar? de säkras normalt när de matas ut)."}
         if ut_mapp:
             ut_dir = Path(ut_mapp).expanduser()
         else:
@@ -1517,7 +1522,55 @@ class Api:
                 pass
         if oppna_lr:
             self.oppna_i_lightroom(str(ut_dir))
-        return {"ok": True, "antal": len(kopierade), "path": str(ut_dir)}
+        return {"ok": True, "antal": len(kopierade), "path": str(ut_dir),
+                "saknade": len(saknade)}
+
+    def snabbplock_stage(self, paths, mapp=None):
+        """Säkrar (kopierar) de plockade filerna till en arbetsmapp MEDAN kortet
+        fortfarande sitter i — så att Snabbplock kan spänna över flera kort utan
+        att tappa tidigare korts bilder. När man byter kort avmonteras det förra
+        kortets volym och dess sökvägar slutar peka på något; kopierade vi först
+        vid Lightroom-steget föll de tysta bort (bara kortet som satt kvar följde
+        med). Anropas därför när ett kort matas ut / lämnas. `mapp` återanvänds
+        för alla kort i samma plock så allt hamnar i EN arbetsmapp;
+        snabbplock_export jobbar sedan mot de stegade kopiorna. Filnamnskrockar
+        mellan kort (två DSC_0001.NEF) får ett -N-suffix i stället för att skriva
+        över. Returnerar {ok, mapp, stegade:[{src,dst}], saknade:[...]}."""
+        import shutil
+        import tempfile
+        if not paths:
+            return {"ok": True, "mapp": mapp, "stegade": [], "saknade": []}
+        if mapp:
+            stage_dir = Path(mapp).expanduser()
+            try:
+                stage_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                return {"ok": False, "fel": f"Kan inte skapa arbetsmappen: {e}"}
+        else:
+            stage_dir = Path(tempfile.mkdtemp(prefix="dpt2-snabbplock-"))
+        stegade, saknade = [], []
+        for s in paths:
+            src = Path(s) if s else None
+            if not (src and src.is_file()):
+                saknade.append(s)
+                continue
+            mal = stage_dir / src.name
+            if mal.exists():
+                k = 2
+                while mal.exists():
+                    mal = stage_dir / f"{src.stem}-{k}{src.suffix}"
+                    k += 1
+            try:
+                shutil.copy2(src, mal)
+                try:
+                    os.chflags(mal, 0)  # rensa uchg så kopian blir redigerbar
+                except (OSError, AttributeError):
+                    pass
+                stegade.append({"src": s, "dst": str(mal)})
+            except OSError:
+                saknade.append(s)
+        return {"ok": True, "mapp": str(stage_dir), "stegade": stegade,
+                "saknade": saknade}
 
     def publicera_live_story(self, config):
         """Live-flödets 'Publicera story ›': renderar 9:16-overlayen i workern

@@ -1836,3 +1836,93 @@ class TestSnabbplockExport(unittest.TestCase):
         r = self.api.snabbplock_export(["/finns/inte.NEF"])
         self.assertFalse(r["ok"])
         self.assertEqual(self._oppnad, [])
+
+    def test_export_rapporterar_saknade(self):
+        import os
+        d, paths = self._filer(["DSC_0001.NEF"])
+        mal = os.path.join(d, "ut")
+        r = self.api.snabbplock_export(paths + ["/finns/inte.NEF"], ut_mapp=mal)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["antal"], 1)
+        self.assertEqual(r["saknade"], 1)
+
+
+class TestSnabbplockStage(unittest.TestCase):
+    """snabbplock_stage — säkrar korts bilder MEDAN kortet sitter i, så plocket
+    kan spänna över flera kort utan att tappa de tidigare (regression: bara
+    kortet som satt kvar följde med till Lightroom)."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+
+    def _kort(self, namn):
+        import os
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        paths = []
+        for n in namn:
+            p = os.path.join(d, n)
+            open(p, "wb").write(b"raw-" + n.encode())
+            paths.append(p)
+        return d, paths
+
+    def test_stagar_till_gemensam_mapp_och_returnerar_mappning(self):
+        import os
+        _, paths = self._kort(["DSC_0001.NEF", "DSC_0002.NEF"])
+        r = self.api.snabbplock_stage(paths)
+        self.assertTrue(r["ok"], r.get("fel"))
+        self.assertEqual(len(r["stegade"]), 2)
+        self.assertEqual(r["saknade"], [])
+        for par in r["stegade"]:
+            self.assertTrue(os.path.isfile(par["dst"]))
+            self.assertEqual(os.path.dirname(par["dst"]), r["mapp"])
+
+    def test_atervanvander_mapp_over_flera_kort(self):
+        import os
+        _, k1 = self._kort(["A_0001.NEF"])
+        _, k2 = self._kort(["B_0001.NEF"])
+        r1 = self.api.snabbplock_stage(k1)
+        r2 = self.api.snabbplock_stage(k2, mapp=r1["mapp"])
+        self.assertEqual(r1["mapp"], r2["mapp"])
+        self.assertEqual(len(os.listdir(r1["mapp"])), 2)
+
+    def test_overlever_att_kortet_forsvinner(self):
+        # Kärnan i buggen: staga kort 1, radera sedan källan (kortet dras ut),
+        # och verifiera att exporten ändå får med kort 1 via arbetskopian.
+        import os
+        import shutil
+        d1, k1 = self._kort(["DSC_0001.NEF"])
+        r1 = self.api.snabbplock_stage(k1)
+        staged1 = r1["stegade"][0]["dst"]
+        shutil.rmtree(d1)  # kort 1 avmonteras
+        self.assertFalse(os.path.exists(k1[0]))
+        self.assertTrue(os.path.isfile(staged1))  # men arbetskopian finns kvar
+        d2, k2 = self._kort(["DSC_0002.NEF"])
+        r2 = self.api.snabbplock_stage(k2, mapp=r1["mapp"])
+        mal = os.path.join(d2, "ut")
+        self.api.oppna_i_lightroom = lambda s="": None
+        exp = self.api.snabbplock_export([staged1, r2["stegade"][0]["dst"]], ut_mapp=mal)
+        self.assertTrue(exp["ok"])
+        self.assertEqual(exp["antal"], 2)  # BÅDA korten med, inte bara kort 2
+
+    def test_filnamnskrock_far_suffix(self):
+        import os
+        _, k1 = self._kort(["DSC_0001.NEF"])
+        _, k2 = self._kort(["DSC_0001.NEF"])  # samma namn, annat kort
+        r1 = self.api.snabbplock_stage(k1)
+        r2 = self.api.snabbplock_stage(k2, mapp=r1["mapp"])
+        namn = sorted(os.listdir(r1["mapp"]))
+        self.assertEqual(len(namn), 2)
+        self.assertNotEqual(r1["stegade"][0]["dst"], r2["stegade"][0]["dst"])
+
+    def test_tom_lista_ar_ok(self):
+        r = self.api.snabbplock_stage([])
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["stegade"], [])
+
+    def test_saknad_kalla_hamnar_i_saknade(self):
+        r = self.api.snabbplock_stage(["/finns/inte.NEF"])
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["saknade"], ["/finns/inte.NEF"])
+        self.assertEqual(r["stegade"], [])
