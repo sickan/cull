@@ -666,11 +666,12 @@ export async function listaMinnesKort() {
 
 // Bildfilerna på ett kort, nyast först (RAW+JPEG-par ihopslagna, RAW föredras)
 // — plockrutnätets källa. Varje ruta hämtar sedan sin preview via thumbForBild.
-export async function listaKortBilder(kortPath, antal = 24) {
+export async function listaKortBilder(kortPath, antal = 0) {
   const api = brygga()
   if (api) return api.lista_kort_bilder(kortPath, antal)
-  return wait({ ok: true, totalt: antal, bilder: Array.from({ length: antal }, (_, i) => ({
-    path: `${kortPath}/DSC_${1000 + i}.NEF`, filnamn: `DSC_${1000 + i}.NEF`, skyddad: false })) })
+  const n = antal || 12 // demo: fast antal när antal=0 (alla)
+  return wait({ ok: true, totalt: n, bilder: Array.from({ length: n }, (_, i) => ({
+    path: `${kortPath}/DSC_${1000 + i}.NEF`, filnamn: `DSC_${1000 + i}.NEF`, skyddad: true })) })
 }
 
 // Snabbplockets skarpa 'Öppna i Lightroom' — kopierar de plockade filerna

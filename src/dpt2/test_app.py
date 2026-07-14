@@ -1756,7 +1756,7 @@ class TestListaKortBilder(unittest.TestCase):
             ("DSC_0002.NEF", 300),                          # nyast
             ("DSC_0003.JPG", 200),                          # ren jpeg
         ])
-        r = self.api.lista_kort_bilder(d)
+        r = self.api.lista_kort_bilder(d, bara_skyddade=False)
         self.assertTrue(r["ok"])
         self.assertEqual(r["totalt"], 3)
         self.assertEqual([b["filnamn"] for b in r["bilder"]],
@@ -1764,9 +1764,26 @@ class TestListaKortBilder(unittest.TestCase):
 
     def test_antal_begransar(self):
         d = self._kort([(f"DSC_{i:04d}.NEF", i) for i in range(5)])
-        r = self.api.lista_kort_bilder(d, antal=2)
+        r = self.api.lista_kort_bilder(d, antal=2, bara_skyddade=False)
         self.assertEqual(len(r["bilder"]), 2)
         self.assertEqual(r["totalt"], 5)
+
+    def test_bara_skyddade_som_standard(self):
+        # Standard = bara kameralåsta. Lås DSC_0002 (rensa skrivbiten) och
+        # verifiera att bara den kommer med.
+        import os
+        import stat as _stat
+        d = self._kort([("DSC_0001.NEF", 100), ("DSC_0002.NEF", 200),
+                        ("DSC_0003.NEF", 300)])
+        las = os.path.join(d, "DCIM", "100NZ_8", "DSC_0002.NEF")
+        os.chmod(las, _stat.S_IREAD)  # skrivbiten bort → _ar_skyddad = True
+        r = self.api.lista_kort_bilder(d)  # default bara_skyddade=True
+        self.assertTrue(r["ok"])
+        self.assertEqual([b["filnamn"] for b in r["bilder"]], ["DSC_0002.NEF"])
+        self.assertEqual(r["totalt"], 1)
+        # Utan filtret kommer alla tre med.
+        alla = self.api.lista_kort_bilder(d, bara_skyddade=False)
+        self.assertEqual(alla["totalt"], 3)
 
     def test_saknad_mapp(self):
         self.assertFalse(self.api.lista_kort_bilder("/finns/inte")["ok"])

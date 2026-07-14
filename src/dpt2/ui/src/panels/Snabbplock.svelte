@@ -164,7 +164,9 @@
     step = 'pick'
     const card = cards[idx]
     if (!card.path) return // demo-kort utan riktig sökväg → platshållar-rutnät
-    const r = await listaKortBilder(card.path, N_THUMBS)
+    // Bara kameralåsta (skyddade) bilder — fotografens keepers — och alla, inte
+    // bara de senaste (antal=0), så hela urvalet på kortet syns.
+    const r = await listaKortBilder(card.path, 0)
     if (r && r.ok && r.bilder) {
       cardFiles = { ...cardFiles, [idx]: r.bilder }
       if (r.totalt != null) cards = cards.map((c, i) => (i === idx ? { ...c, total: r.totalt } : c))
@@ -306,19 +308,23 @@
       <div class="rad-rubrik">
         <span class="grondot"></span>
         <span class="rr-namn scd">{curCard.name}</span>
-        <span class="rr-meta">{curCard.total} bilder på kortet · nyast först</span>
+        <span class="rr-meta">{curCard.total} låsta bilder · nyast först</span>
         <span class="vaxt"></span>
         <span class="rr-plock"><b>{curPickedN}</b> plockade på det här kortet</span>
       </div>
-      <div class="rutnat plock">
-        {#each curThumbs as t}
-          <button class="ruta" class:on={t.on} class:laddar={!t.uri && t.path} style="background-image:{t.uri ? `url(${t.uri})` : tint(cur, t.i)}" on:click={() => togglePick(cur, t.i)}>
-            {#if t.on}<span class="stjarna">★</span>{/if}
-            <span class="dsc">{t.num}</span>
-          </button>
-        {/each}
-      </div>
-      <div class="hjalp">Klicka en bild för att plocka den · klicka igen för att ångra. Visar de senaste — resten av kortet rullar in under genomgången.</div>
+      {#if cardFiles[cur] && cardFiles[cur].length === 0}
+        <div class="tomkort">Inga kameralåsta bilder på det här kortet.<br>Lås dina keepers i kameran (protect-knappen) så dyker de upp här.</div>
+      {:else}
+        <div class="rutnat plock">
+          {#each curThumbs as t}
+            <button class="ruta" class:on={t.on} class:laddar={!t.uri && t.path} style="background-image:{t.uri ? `url(${t.uri})` : tint(cur, t.i)}" on:click={() => togglePick(cur, t.i)}>
+              {#if t.on}<span class="stjarna">★</span>{/if}
+              <span class="dsc">{t.num}</span>
+            </button>
+          {/each}
+        </div>
+        <div class="hjalp">Klicka en bild för att plocka den · klicka igen för att ångra. Visar alla kameralåsta bilder på kortet — nyast först.</div>
+      {/if}
       <div class="fot-rad">
         <button class="btn-mork" on:click={ejectCard}>⏏ Mata ut kortet</button>
         <span class="fot-hjalp">Urvalet ligger kvar — sätt i nästa kort,<br>eller granska när alla kort är genomgångna.</span>
@@ -512,6 +518,7 @@
   .kryss { position: absolute; inset: 0; background: rgba(10, 13, 17, 0.66); display: flex; align-items: center; justify-content: center; font-size: 19px; color: #e0607f; }
   .dsc { position: absolute; left: 7px; bottom: 6px; font-family: 'Saira Condensed', sans-serif; font-size: 10px; color: rgba(255, 255, 255, 0.55); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
   .hjalp { font-size: 11px; color: rgba(243, 245, 247, 0.4); margin-top: 10px; }
+  .tomkort { border: 1.5px dashed rgba(255, 255, 255, 0.14); border-radius: 14px; padding: 40px 30px; text-align: center; font-size: 13px; line-height: 1.6; color: rgba(243, 245, 247, 0.55); }
 
   .fot-rad { display: flex; align-items: center; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); flex-wrap: wrap; }
   .fot-hjalp { font-size: 11.5px; color: rgba(243, 245, 247, 0.45); line-height: 1.45; }

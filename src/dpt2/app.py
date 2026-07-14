@@ -1400,12 +1400,15 @@ class Api:
         return {"ok": True, "path": str(p),
                 "skyddade": sum(1 for f in self._bildfiler(p) if _ar_skyddad(f))}
 
-    def lista_kort_bilder(self, kort_path, antal=24):
+    def lista_kort_bilder(self, kort_path, antal=0, bara_skyddade=True):
         """Bildfilerna på ett kort, nyast först (mtime desc), för Snabbplockets
-        plockrutnät. RAW+JPEG-par med samma stam slås ihop till en post och
-        RAW föredras som källa — då extraheras den inbäddade previewen via
-        thumb_for_bild. Returnerar {ok, bilder:[{path, filnamn, skyddad}],
-        totalt}; `antal` begränsar hur många poster som skickas (0/None = alla).
+        plockrutnät. Som standard BARA kameralåsta (skyddade) bilder — det är
+        fotografens keepers (samma semantik som snabbplock_kortrot/
+        exportera_skyddade); sätt bara_skyddade=False för alla. RAW+JPEG-par med
+        samma stam slås ihop till en post och RAW föredras som källa — då
+        extraheras den inbäddade previewen via thumb_for_bild. Returnerar
+        {ok, bilder:[{path, filnamn, skyddad}], totalt}; `antal` begränsar hur
+        många poster som skickas (0/None = alla).
         OBS: ingen .strip() på kort_path (se lista_minneskort)."""
         if not kort_path:
             return {"ok": False, "fel": "Peka ut kortet."}
@@ -1415,6 +1418,8 @@ class Api:
         _RAW = {".nef", ".dng", ".cr2", ".cr3", ".arw", ".raf", ".orf", ".rw2"}
         per_stam = {}
         for f in self._bildfiler(p):
+            if bara_skyddade and not _ar_skyddad(f):
+                continue
             try:
                 mt = f.stat().st_mtime
             except OSError:
