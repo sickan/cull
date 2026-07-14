@@ -179,11 +179,18 @@
     const fm = p.frontmatter || {}
     if (p.typ === 'match') { laddaMatchPost(p); return }
     if (p.typ === 'sportevent') {
+      // Läs in det redan publicerade galleriet (fm.bilder) i figurer — annars
+      // visas editorn tomt och en RE-publicering skulle skriva ett tomt galleri
+      // och radera de live-bilderna. bild = R2-URL:en; _innehall_md._figbild
+      // behåller http-URL:er oförändrade vid ompublicering (ingen omuppladdning).
+      const seBilder = (fm.bilder || []).map((b) =>
+        ({ bild: typeof b === 'string' ? b : (b?.src || b?.bild || ''),
+           alt: '', bildtext: '', src: '', thumb: '' }))
       cmsSportevent = { ...tomSportevent(), innehallId: p.id, titel: fm.titel || '',
         kategori: fm.kategori || 'Mästerskap',
         period: fm.period || '', plats: fm.plats || '', datum: fm.datum || '',
         ingress: fm.ingress || '', pixieset: fm.pixieset || '', hero: fm.hero || '',
-        heroPosition: fm.heroPosition || 'center center',
+        heroPosition: fm.heroPosition || 'center center', figurer: seBilder,
         underartiklar: (fm.underartiklar || []).map((u) => ({ ...u })) }
       draftId = null; oppnaEditor('sportevent'); return
     }
