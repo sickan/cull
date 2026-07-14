@@ -159,6 +159,28 @@ class TestMatchCRUD(unittest.TestCase):
         rad = next(r for r in store.lista_matcher(self.c) if r["id"] == mid)
         self.assertTrue(rad["event"])
 
+    def test_tennis_inline_skapar_individutovare(self):
+        # En tennismatch där sidorna skrivs in på fri hand (ingen combobox-ref)
+        # ska skapa lag som utövare (kind=individ) med matchens sport — inte som
+        # lag utan sport. Så Lag-registret och Matcher-profilen stämmer direkt.
+        mid = store.spara_match(self.c, {
+            "lag_hemma": "Rebecca Peterson", "lag_borta": "Mirjam Björklund",
+            "datum": "2026-07-15", "sport": "tennis", "liga": ""})
+        m = store.hamta_match(self.c, mid)
+        for namn in ("Rebecca Peterson", "Mirjam Björklund"):
+            lag = next(l for l in store.lista_lag(self.c) if l["namn"] == namn)
+            self.assertEqual(lag["kind"], "individ")
+            self.assertEqual(lag["sport"], "tennis")
+
+    def test_fotboll_inline_forblir_lag(self):
+        # Regressionsskydd: inline-skapade sidor i en LAGSPORT förblir kind=team.
+        mid = store.spara_match(self.c, {
+            "lag_hemma": "Nytt Lag AIK", "lag_borta": "Nytt Lag BK",
+            "datum": "2026-07-15", "sport": "fotboll", "liga": ""})
+        store.hamta_match(self.c, mid)
+        lag = next(l for l in store.lista_lag(self.c) if l["namn"] == "Nytt Lag AIK")
+        self.assertEqual(lag["kind"], "team")
+
     def test_efter_match_lankar_round_trip(self):
         m = dict(self.match)
         m["galleri"] = "https://malmoff.pixieset.com/damallsvenskan-27jun/"

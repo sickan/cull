@@ -98,6 +98,7 @@ const MOCK_LAG = [
   { id: 'malmo-ff', namn: 'Malmö FF', kind: 'team', sport: 'fotboll', gren: 'dam', instagram: '@malmoff_dam', hemsida: 'malmoff.se', logga: null, stall_hemma: '#8fb7de', stall_borta: '#ffffff', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 20, trupp_kalla: 'CSV', comps: ['obos-damallsvenskan'] },
   { id: 'hk-malmo', namn: 'HK Malmö', kind: 'team', sport: 'handboll', gren: 'herr', instagram: '@hkmhandboll', hemsida: '', logga: null, stall_hemma: '#0a2342', stall_borta: '#e23', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 0, trupp_kalla: '', comps: ['handbollsligan'] },
   { id: 'rebecca-peterson', namn: 'Rebecca Peterson', kind: 'individ', sport: 'tennis', gren: 'dam', instagram: '@rebeccapeterson', hemsida: '', logga: null, stall_hemma: '', stall_borta: '', stall_tredje: '', profilfarg: '#2F7CB0', klubb: 'Sverige', comps: [] },
+  { id: 'mirjam-bjorklund', namn: 'Mirjam Björklund', kind: 'individ', sport: 'tennis', gren: 'dam', instagram: '@mirjambjorklund', hemsida: '', logga: null, stall_hemma: '', stall_borta: '', stall_tredje: '', profilfarg: '#C9657F', klubb: 'Sverige', comps: [] },
 ]
 
 const MOCK_TAVLINGAR = [

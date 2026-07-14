@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 
 from dpt2.data import matchlogik
+from dpt2.data import sportprofil
 from dpt2.motorer.gallring import Gallring
 
 
@@ -856,6 +857,9 @@ def spara_match(conn, match):
     tav_id = upsert_tavling(conn, match.get("liga", ""),
                             sport=sport or "fotboll") if match.get("liga") else None
 
+    # Individuell sport (tennis) → inline-skapade sidor blir utövare, inte lag.
+    individ_sport = bool(sportprofil.profil(sport)["individ"]) if sport else False
+
     def _lag_ref(id_nyckel, namn_nyckel):
         # Comboboxens ref (lag-id) vinner över namnet — två lag kan heta lika
         # (Malmö FF dam/herr) och då pekar namn-slugen alltid på fel/en av dem.
@@ -863,7 +867,11 @@ def spara_match(conn, match):
         if lid and conn.execute("SELECT 1 FROM lag WHERE id=?",
                                 (lid,)).fetchone():
             return lid
-        return upsert_lag(conn, match.get(namn_nyckel, ""))
+        # Inline-skapat lag ärver matchens sport; individsport ger kind=individ
+        # (profilfärg + klubb/land, ingen trupp). Namnkrock med annan sport får
+        # ett sport-suffixat id i upsert_lag, så befintliga lag rörs inte.
+        return upsert_lag(conn, match.get(namn_nyckel, ""), sport=sport,
+                          kind="individ" if individ_sport else None)
 
     # p.5: heldagsevent = match utan motståndare. Ingen borta-referens (även om
     # ett namn råkade följa med) och resultat är irrelevant.

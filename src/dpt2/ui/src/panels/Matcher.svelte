@@ -151,10 +151,17 @@
 
   const GREN_ETIKETT = { dam: 'Dam', herr: 'Herr', mixed: 'Mixed' }
   // detalj (gren · sport) skiljer lag med samma namn åt (Malmö FF dam/herr).
-  $: lagVal = (lagForTavling.length ? lagForTavling : lagAlla).map((l) => ({
-    id: l.id, namn: l.namn,
-    detalj: [GREN_ETIKETT[l.gren], SPORT_ETIKETT[l.sport]].filter(Boolean).join(' · '),
-  }))
+  // Väljaren filtreras till matchens sport när den är känd (och till individ-
+  // utövare för tennis), så man inte kan välja ett fotbollslag i en tennismatch.
+  // Lag utan satt sport visas alltid (bakåtkomp. + inline-skapade). Är sporten
+  // okänd (ny match utan tävling) visas allt — första valet sätter sporten.
+  $: lagVal = (lagForTavling.length ? lagForTavling : lagAlla)
+    .filter((l) => !utkast?.sport || !l.sport || l.sport === utkast.sport)
+    .filter((l) => !uttagProfil.individ || !l.kind || l.kind === 'individ')
+    .map((l) => ({
+      id: l.id, namn: l.namn,
+      detalj: [GREN_ETIKETT[l.gren], SPORT_ETIKETT[l.sport]].filter(Boolean).join(' · '),
+    }))
   $: tavlingVal = tavlingar.map((t) => ({ id: t.id, namn: t.namn }))
   $: hemSpelare = (utkast?.spelare || []).filter((p) => p.lag === 'hemma')
   $: bortaSpelare = (utkast?.spelare || []).filter((p) => p.lag === 'borta')
@@ -262,9 +269,18 @@
     await laddaLagForTavling(o.namn)
   }
   const skapaTavling = (namn) => { utkast.liga = namn; lagForTavling = [] }
+  // Utan vald tävling sätts matchens sport av den valda utövaren/laget (tävling
+  // vinner annars, se valjTavling). Så en tennismatch utan tävling får sport=
+  // tennis → rätt profil (individ-etiketter, ingen startelva) i stället för
+  // fotbolls-fallbacken.
+  function arvSportFran(id) {
+    if (utkast.liga) return
+    const l = lagAlla.find((x) => x.id === id)
+    if (l?.sport) utkast = { ...utkast, sport: l.sport }
+  }
   // Spara REF (lag-id), inte bara namnet — två lag kan heta lika (dam/herr).
-  const valjHemma = (o) => { utkast.lag_hemma = o.namn; utkast.lag_hemma_id = o.id }
-  const valjBorta = (o) => { utkast.lag_borta = o.namn; utkast.lag_borta_id = o.id }
+  const valjHemma = (o) => { utkast.lag_hemma = o.namn; utkast.lag_hemma_id = o.id; arvSportFran(o.id) }
+  const valjBorta = (o) => { utkast.lag_borta = o.namn; utkast.lag_borta_id = o.id; arvSportFran(o.id) }
   // p.5: heldagsevent visas utan motståndare (ingen efterhängande "– ").
   const matchnamn = (m) => (m?.event || !(m?.lag_borta || '').trim())
     ? (m?.lag_hemma || '') : `${m.lag_hemma} – ${m.lag_borta}`
@@ -611,13 +627,13 @@
                       <span>Heldagsevent <span class="eventmut">— utan motståndare (t.ex. cup, mästerskap)</span></span>
                     </label>
                     <div class="rad2" class:enkel={utkast.event}>
-                      <label>{utkast.event ? 'Lag / arrangör' : 'Hemmalag'}
-                        <Combobox options={lagVal} value={utkast.lag_hemma} placeholder="Välj lag…"
+                      <label>{utkast.event ? 'Lag / arrangör' : (uttagProfil.individ ? 'Spelare 1' : 'Hemmalag')}
+                        <Combobox options={lagVal} value={utkast.lag_hemma} placeholder={uttagProfil.individ ? 'Välj spelare…' : 'Välj lag…'}
                           on:pick={(e) => valjHemma(e.detail)} on:create={(e) => skapaHemma(e.detail)} />
                       </label>
                       {#if !utkast.event}
-                        <label>Bortalag
-                          <Combobox options={lagVal} value={utkast.lag_borta} placeholder="Välj lag…"
+                        <label>{uttagProfil.individ ? 'Spelare 2' : 'Bortalag'}
+                          <Combobox options={lagVal} value={utkast.lag_borta} placeholder={uttagProfil.individ ? 'Välj spelare…' : 'Välj lag…'}
                             on:pick={(e) => valjBorta(e.detail)} on:create={(e) => skapaBorta(e.detail)} />
                         </label>
                       {/if}
