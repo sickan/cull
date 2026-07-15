@@ -154,7 +154,8 @@ let MOCK_FOTOJOBB = [
 let MOCK_FOTOJOBB_UTKAST = []
 const _utkastTillJobb = (u) => ({ id: u.id, title: u.title, start_at: u.start_at,
   end_at: u.end_at, all_day: u.all_day, location: u.location || '', description: '',
-  category: u.category, status: 'confirmed', google_event_id: null, source: 'dpt', utkast: true })
+  category: u.category, status: 'confirmed', google_event_id: null, source: 'dpt',
+  utkast: true, tavling_id: u.tavling_id })
 
 // Urval (Gallra producerar, Leverera konsumerar). Muteras lokalt i mock-läge.
 let MOCK_URVAL = [

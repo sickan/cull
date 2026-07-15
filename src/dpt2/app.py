@@ -2303,7 +2303,11 @@ def _utkast_till_jobbdict(u):
             "end_at": u["end_at"], "all_day": bool(u["all_day"]),
             "location": u.get("location") or "", "description": "",
             "category": u.get("category"), "status": "confirmed",
-            "google_event_id": None, "source": "dpt", "utkast": True}
+            "google_event_id": None, "source": "dpt", "utkast": True,
+            # Länken till tävlingen (om utkastet skapades ur en) — UI:t slår upp
+            # tävlingens gren/sport så heldagsaktivitet-väljaren kan skilja t.ex.
+            # European League Herr från Dam, SM handboll från SM basket.
+            "tavling_id": u.get("tavling_id")}
 
 
 def _ar_appjobb(j):

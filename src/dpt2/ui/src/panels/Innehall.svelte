@@ -448,7 +448,10 @@
   // ── Sportevent-editorn ──────────────────────────────────────────────────────
   // Skapas från en HELDAGSAKTIVITET i Fotojobb (skiss 1e) — kopplingen
   // förifyller titel/period/plats.
-  $: heldagsJobb = (fotojobb || []).filter((j) => j.all_day)
+  // Heldagsaktivitet = paraply-jobb (mässa, mästerskap, turnering) — INTE en
+  // enskild match. Framtida matcher utan avsparkstid råkar bli all_day, men de
+  // bär match_id (app.py lista_fotojobb) → filtrera bort dem här.
+  $: heldagsJobb = (fotojobb || []).filter((j) => j.all_day && !j.match_id)
   function valjSporteventJobb(e) {
     const id = e.target.value
     cmsSportevent.fotojobbId = id
@@ -925,7 +928,9 @@
         <select class="artval" value={cmsSportevent.fotojobbId} on:change={valjSporteventJobb}>
           <option value="">— Välj heldagsaktivitet…</option>
           {#each heldagsJobb as j (j.id)}
-            <option value={j.id}>{j.title} · {(j.start_at || '').slice(0, 10)}</option>
+            {@const jt = tavlingar.find((t) => t.id === j.tavling_id)}
+            {@const gs = jt ? grenSport(jt.gren, jt.sport) : ''}
+            <option value={j.id}>{j.title} · {(j.start_at || '').slice(0, 10)}{gs ? ` · ${gs}` : ''}</option>
           {/each}
         </select>
         {#if !heldagsJobb.length}<div class="ovtom">Inga heldagsaktiviteter i Fotojobb — skapa en där först.</div>{/if}
