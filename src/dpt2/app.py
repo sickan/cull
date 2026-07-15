@@ -1712,6 +1712,20 @@ class Api:
                      "tema": config.get("tema", "Hav"),
                      "stallning": config.get("stallning", ""), "mellan": config.get("mellan", ""),
                      "mal_rad": config.get("mal_rad", "")}
+        # Turnerings-SoMe: ingen match att hämta fält ur → fyll story-fälten ur
+        # TÄVLINGEN, annars renderas overlayn med rubriken "EVENT" och utan
+        # sport/arena. Tävlingsnamnet blir rubriken (samma p.5-väg som heldags-
+        # event: preview utan motståndare), perioden blir underraden.
+        if tavling_id and not match_id:
+            t = store.hamta_tavling(self.conn, tavling_id) or {}
+            a, b = story_korning._datum_kort(t.get("fran")), \
+                story_korning._datum_kort(t.get("till"))
+            storyfalt.update({
+                "lag_hemma": t.get("namn") or "", "lag_borta": "",
+                "liga": "",                     # namnet är redan rubriken
+                "arena": t.get("arena") or t.get("ort") or "",
+                "sport": t.get("sport") or "", "gren": t.get("gren") or "",
+                "next_when": f"{a} – {b}" if a and b and a != b else a})
         test = bool(config.pop("test", False))
         # p.3: IG "Exportera till disk" postar ALDRIG mot Meta — den renderar
         # (upp till 20) färdiga bilder till en synlig exportmapp som fotografen

@@ -1021,7 +1021,9 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         #    renderaren (medvetet beslut från skarp användning). `competition`
         #    lever kvar för blockens egna underrader (Avspark/Startelva/
         #    Halvtid), inte som watermark.
-        competition = liga or "Damallsvenskan"
+        # Ingen liga → ingen tävlingsrad (tidigare hårdkodad "Damallsvenskan"-
+        # default läckte in på turnerings-/eventposter utan liga).
+        competition = liga or ""
 
         # 5. Botten-scrim
         scrim_h = int(H * 0.68)

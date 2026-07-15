@@ -365,6 +365,44 @@ class TestApi(unittest.TestCase):
             self.assertTrue(r["ok"])
             self.assertEqual(r["antal"], 4)   # inte längre kapad till 1
 
+    def test_publicera_kanal_turnering_fyller_storyfalt_ur_tavlingen(self):
+        # Fas 3 turnerings-SoMe: match_id=None → story-fälten ska komma ur
+        # TÄVLINGEN (namn som rubrik, period+ort som underrad, sport/gren),
+        # inte renderas som "EVENT" utan sport (buggen före fixen).
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        from dpt2.tjanster import story_korning
+        self.api.spara_tavling({
+            "namn": "Nordea Open - ATP", "sport": "tennis", "gren": "herr",
+            "typ": "turnering", "fran": "2026-07-13", "till": "2026-07-19",
+            "ort": "Båstad", "arena": "Båstad Tennisstadion"})
+        tid = self.api.lista_tavlingar()[0]["id"]
+        # Fånga cfg:n som når renderaren i stället för att OCR:a en JPEG.
+        fangad = {}
+        verklig = story_korning._rendera
+        def _spion(conn, cfg, **kw):
+            fangad.update(cfg)
+            return verklig(conn, cfg, **kw)
+        self.addCleanup(setattr, story_korning, "_rendera", verklig)
+        story_korning._rendera = _spion
+        with tempfile.TemporaryDirectory() as d:
+            f = f"{d}/bild.jpg"
+            Image.new("RGB", (400, 700), (60, 90, 130)).save(f, "JPEG")
+            r = self.api.publicera_kanal({
+                "kanal": "ig", "format": "9x16", "moment": "nasta_match",
+                "tavling_id": tid, "bilder": [{"path": f}],
+                "test": True, "test_mapp": f"{d}/ut"})
+            self.assertTrue(r["ok"])
+            self.assertEqual(r["antal"], 1)
+        self.assertEqual(fangad["lag_hemma"], "Nordea Open - ATP")
+        self.assertEqual(fangad["lag_borta"], "")
+        self.assertEqual(fangad["sport"], "tennis")
+        self.assertEqual(fangad["gren"], "herr")
+        self.assertEqual(fangad["arena"], "Båstad Tennisstadion")
+        self.assertEqual(fangad["next_when"], "13 jul – 19 jul")
+        self.assertEqual(fangad["liga"], "")   # namnet är redan rubriken
+
     def test_material_spara_lista_radera_genom_bryggan(self):
         res = self.api.spara_material({
             "kind": "live", "status": "utkast", "moment": "Avspark", "tema": "Hav",
