@@ -3,6 +3,7 @@
   // text). Plattan bakom loggan är medvetet fast ljus (ej temavariabel): lag-
   // loggor är ritade för ljus bakgrund oavsett appens tema.
   import { loggor, begarLogga } from './loggacache.js'
+  import { flaggaForLand } from './lander.js'
   export let namn = ''
   export let farg = '#8A8172'
   export let logga = ''
@@ -30,14 +31,20 @@
 
   $: init = initialer(namn)
   $: harLogga = !!loggaUri
+  // Landslag utan egen uppladdad logga → härled flagga ur namnet (namn = land).
+  // Manuell logga vinner alltid (ligger i harLogga-grenen ovan).
+  $: flaggUri = harLogga ? '' : flaggaForLand(namn)
+  $: harFlagga = !!flaggUri
   $: fgColor = lum(farg) > 0.6 ? 'rgba(24,22,18,.9)' : '#fff'
   $: initSize = Math.round(storlek * (init.length >= 4 ? 0.26 : 0.34))
 </script>
 
 <div class="bricka" title={namn}
-  style="width:{storlek}px;height:{storlek}px;background:{harLogga ? '#FBF8F1' : farg}">
+  style="width:{storlek}px;height:{storlek}px;background:{harLogga ? '#FBF8F1' : (harFlagga ? '#FBF8F1' : farg)}">
   {#if harLogga}
     <img src={loggaUri} alt="" style="width:78%;height:78%" />
+  {:else if harFlagga}
+    <img class="flagga" src={flaggUri} alt="" />
   {:else}
     <span class="scd" style="color:{fgColor};font-size:{initSize}px">{init}</span>
   {/if}
@@ -47,5 +54,7 @@
   .bricka { border-radius: 50%; border: 1px solid var(--div); flex: none;
     display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .bricka img { object-fit: contain; display: block; }
+  /* Flaggan fyller hela discen (cover, cirkelklippt) → tydlig landslags-markör. */
+  .bricka img.flagga { width: 100%; height: 100%; object-fit: cover; }
   .bricka span { font-weight: 700; letter-spacing: 0.02em; line-height: 1; }
 </style>
