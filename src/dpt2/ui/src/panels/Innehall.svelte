@@ -31,6 +31,11 @@
   const EVENT_KAT = ['Porträtt', 'Bröllop', 'Student', 'Företag', 'Mode', 'Övrigt']
   // Editor-typ → export-mapp (content-collection). 'match' = matcher.
   const EDITOR_MAPP = { match: 'matcher', sportevent: 'sportevent', blogg: 'blogg', landskap: 'landskap', event: 'event', film: 'film' }
+  // #28: visa gren · sport i match-/tävlingsväljarna så man ser VILKEN man väljer
+  // (Sverige/European League finns som Dam/Herr + olika sporter).
+  const SPORT_ETIKETT = { fotboll: 'Fotboll', handboll: 'Handboll', innebandy: 'Innebandy', volleyboll: 'Volleyboll', beachvolley: 'Beachvolley', tennis: 'Tennis', friidrott: 'Friidrott' }
+  const GREN_ETIKETT = { dam: 'Dam', herr: 'Herr', mixed: 'Mixed' }
+  const grenSport = (gren, sport) => [GREN_ETIKETT[gren], SPORT_ETIKETT[sport]].filter(Boolean).join(' · ')
 
   let libType = 'sport'               // bibliotekets typ-nav
   let editorMode = false              // false = bibliotek, true = fokuserad editor
@@ -837,7 +842,8 @@
         <div class="caps">Artikel för match</div>
         <select class="artval" value={artMatchId} on:change={cmsPick}>
           {#each matcher as m (m.id)}
-            <option value={m.id}>{m.lag_hemma} – {m.lag_borta} · {datumKort(m.datum) || 'utan datum'}{m.resultat ? ` · ${m.resultat}` : ''}</option>
+            {@const gs = grenSport(m.hem_gren || m.gren, m.sport)}
+            <option value={m.id}>{m.lag_hemma} – {m.lag_borta}{gs ? ` · ${gs}` : ''} · {datumKort(m.datum) || 'utan datum'}{m.resultat ? ` · ${m.resultat}` : ''}</option>
           {/each}
         </select>
       </div>
@@ -947,7 +953,7 @@
           <label>Tävling <span class="lblhint">— matcherna fylls i automatiskt</span></label>
           <select bind:value={cmsSportevent.tavlingId} on:change={valjSporteventTavling}>
             <option value="">— Ingen (välj matcher manuellt)…</option>
-            {#each tavlingar as t (t.id)}<option value={t.id}>{t.namn}</option>{/each}
+            {#each tavlingar as t (t.id)}{@const gs = grenSport(t.gren, t.sport)}<option value={t.id}>{t.namn}{gs ? ` · ${gs}` : ''}</option>{/each}
           </select>
         </div>
         {#each cmsSportevent.underartiklar as u, i (u.match_id)}
