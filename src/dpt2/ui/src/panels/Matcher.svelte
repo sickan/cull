@@ -697,10 +697,10 @@
                       <span class="caps2">Efter match · länkar</span>
                       <div class="rad2">
                         <label>Pixieset-galleri
-                          <input bind:value={utkast.galleri} placeholder="https://…pixieset.com/…" disabled={arMatch()} />
+                          <input bind:value={utkast.galleri} placeholder="https://…pixieset.com/…" />
                         </label>
                         <label>Publicerad hemsideslänk
-                          <input bind:value={utkast.sida_url} placeholder="https://dalecarliaphoto.se/…" disabled={arMatch()} />
+                          <input bind:value={utkast.sida_url} placeholder="https://dalecarliaphoto.se/…" />
                         </label>
                       </div>
                     </div>

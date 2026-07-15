@@ -39,7 +39,17 @@
     setTimeout(() => (sparad = sparad === id ? null : sparad), 1400)
   }
 
-  async function gerLag(l) {
+  // Serialisera lag-sparningar. Annars kan namn-fältets on:change och ett gren-/
+  // kind-val på en NY rad spara samtidigt medan l.id fortfarande är 'nytt-…' →
+  // två parallella upserts av samma slug där den stale (gren=dam-default) kan
+  // vinna → laget blir Dam trots valt Herr. Kedjan gör att första create sätter
+  // id:t innan nästa spar körs (som då blir en update).
+  let sparKo = Promise.resolve()
+  function gerLag(l) {
+    sparKo = sparKo.then(() => _gerLag(l)).catch(() => {})
+    return sparKo
+  }
+  async function _gerLag(l) {
     // Skicka id för befintliga rader — annars kan ett namnbyte aldrig uttryckas
     // (namn-slugen pekar då ut en annan post). Nya rader ('nytt-…') saknar id.
     const arNy = String(l.id).startsWith('nytt-')

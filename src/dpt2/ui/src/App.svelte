@@ -20,7 +20,11 @@
   const ARMOCK = erMock()
 
   let aktiv = 'fotojobb'
-  let tema = 'dark'   // mörkt läge är standard (Matchpublicering-designen är mörk)
+  // Temat följer OS (prefers-color-scheme) tills användaren manuellt växlar.
+  const osTema = () => (typeof window !== 'undefined' && window.matchMedia
+    && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark'
+  let tema = osTema()
+  let temaManuellt = false   // sant efter manuell växling → sluta följa OS
   // Speglar temat till <html data-theme> — körs direkt vid init (ingen ljus
   // blink) och vid varje växling.
   $: if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', tema)
@@ -30,6 +34,12 @@
   let harDelvis = false        // minst ett material är "Delvis publicerad" (nav-punkt)
 
   onMount(async () => {
+    // Följ OS-temat live (tills man växlat manuellt).
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const mq = window.matchMedia('(prefers-color-scheme: light)')
+      const foljOS = () => { if (!temaManuellt) tema = mq.matches ? 'light' : 'dark' }
+      mq.addEventListener ? mq.addEventListener('change', foljOS) : mq.addListener(foljOS)
+    }
     ;[aktivM, aktivU] = await Promise.all([aktivMatch(), aktivtUrval()])
     await uppdateraDelvis()
   })
@@ -43,6 +53,7 @@
     : (u.lag_hemma ? `${u.lag_hemma} – ${u.lag_borta}` : (u.kalla || '').split('/').pop())
 
   function vaxlaTema() {
+    temaManuellt = true                          // sluta följa OS efter manuell växling
     tema = tema === 'light' ? 'dark' : 'light'   // data-theme sätts av det reaktiva blocket ovan
   }
   function aktiveraFranMatcher(m) { aktivMatchData = m; aktivM = m; aktiv = 'gallra' }
