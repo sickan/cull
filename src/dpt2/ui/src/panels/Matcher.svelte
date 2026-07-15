@@ -162,7 +162,10 @@
       id: l.id, namn: l.namn,
       detalj: [GREN_ETIKETT[l.gren], SPORT_ETIKETT[l.sport]].filter(Boolean).join(' · '),
     }))
-  $: tavlingVal = tavlingar.map((t) => ({ id: t.id, namn: t.namn }))
+  // Tävlingar kan finnas för både Dam och Herr (t.ex. European League 2026) →
+  // visa gren · sport så man ser vilken man väljer.
+  $: tavlingVal = tavlingar.map((t) => ({ id: t.id, namn: t.namn,
+    detalj: [GREN_ETIKETT[t.gren], SPORT_ETIKETT[t.sport]].filter(Boolean).join(' · ') }))
   $: hemSpelare = (utkast?.spelare || []).filter((p) => p.lag === 'hemma')
   $: bortaSpelare = (utkast?.spelare || []).filter((p) => p.lag === 'borta')
 
