@@ -1843,13 +1843,39 @@ class Api:
     def lista_innehall(self, typ=None):
         return store.lista_innehall(self.conn, typ)
 
+    def _berika_underartiklar(self, data):
+        """Sportevent bundet till en tävling (`tavling_id`): fyll på
+        underartiklarna med tävlingens matcher automatiskt, så att en match som
+        lagts till i tävlingen hamnar under eventet på sajten utan manuellt
+        "Fyll matcher". Lägger bara TILL matcher som saknas — manuellt tillagda
+        extra-matcher och ordningen rörs inte. Idempotent skyddsnät bakom
+        Innehall.svelte:synkaTavlingsmatcher (som fyller samma sak i editorn).
+
+        Titel/slug speglar matchartikelns (subTitel: en-dash med blanksteg,
+        utövarmatcher utan bortasida faller tillbaka på hemmanamnet) så att
+        underartikellänken pekar rätt."""
+        if not data or data.get("typ") != "sportevent":
+            return data
+        tid = data.get("tavling_id")
+        if not tid:
+            return data
+        under = [dict(u) for u in (data.get("underartiklar") or [])]
+        har = {u.get("match_id") for u in under}
+        for m in store.lista_matcher(self.conn):
+            if m.get("tavling_id") != tid or m["id"] in har:
+                continue
+            borta = (m.get("lag_borta") or "").strip()
+            namn = f'{m["lag_hemma"]} – {borta}' if borta else (m.get("lag_hemma") or "")
+            under.append({"match_id": m["id"], "titel": namn, "slug": AX.slugga(namn)})
+        return {**data, "underartiklar": under}
+
     def forhandsgranska_innehall(self, data):
         """Genererar .md (utan att skriva) för förhandsvisning."""
-        _fm, _b, slug, md = _innehall_md(data or {})
+        _fm, _b, slug, md = _innehall_md(self._berika_underartiklar(data or {}))
         return {"slug": slug, "md": md}
 
     def spara_innehall(self, data):
-        data = data or {}
+        data = self._berika_underartiklar(data or {})
         fm, body, _slug, _md = _innehall_md(data)
         iid = store.spara_innehall(
             self.conn, typ=data.get("typ", "match"),
@@ -1864,7 +1890,7 @@ class Api:
         till test-output/content/<samma undermapp som skarpt>/<slug>.md,
         bildkopieringen till sajtens public/ hoppas (ingen riktig sajt-repo
         pekas ut). Kräver ingen export_dir."""
-        data = data or {}
+        data = self._berika_underartiklar(data or {})
         fm, body, slug, md = _innehall_md(data)
         if test:
             ut_mapp = testlage.innehall_mapp(_INNEHALL_MAPP.get(data.get("typ", "match"), "matcher"))
@@ -1925,7 +1951,7 @@ class Api:
         Testläge: varken R2-uppladdningen eller content-sync-anropet görs —
         samma lokala .md-skrivning som exportera_innehall(test=True), utan
         härledda bild-URL:er (rör aldrig sajten eller dess innehåll-DB-rad)."""
-        data = data or {}
+        data = self._berika_underartiklar(data or {})
         typ = data.get("typ", "match")
         # Matchpublicering webb-kanal: server-crop:a hero-bilden (fokus+zoom+
         # format) i stället för att luta på sajtens object-position. Sker för
@@ -2379,6 +2405,9 @@ def _innehall_md(data, bild_urls=None):
             "pixieset": data.get("pixieset") or None,   # länk till Pixieset-galleriet
             "status": data.get("status") or None,
             "topp": data.get("topp") or None,
+            # Bunden tävling: underartiklarna fylls automatiskt med dess matcher
+            # (se _berika_underartiklar). Sparas så bindningen överlever ompublicering.
+            "tavling_id": data.get("tavling_id") or None,
             "underartiklar": [
                 {"titel": u.get("titel") or "", "slug": u.get("slug") or "",
                  "match_id": u.get("match_id") or None}

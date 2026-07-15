@@ -580,6 +580,43 @@ class TestApi(unittest.TestCase):
                          ["https://r2.example/sportevent/sm-veckan-borlange/1.jpg"])
         self.assertEqual(kwargs["frontmatter"]["underartiklar"][0]["slug"], "a-b")
 
+    def test_sportevent_bunden_tavling_fyller_underartiklar(self):
+        # Sportevent bundet till en tävling (tavling_id): tävlingens matcher
+        # hamnar automatiskt som underartiklar — utan att UI:t skickar dem.
+        self.api.spara_match({"lag_hemma": "Litauen", "lag_borta": "Sverige",
+                              "liga": "European League 2026", "sport": "volleyboll",
+                              "datum": "2026-06-12"})
+        self.api.spara_match({"lag_hemma": "Sverige", "lag_borta": "Bosnien",
+                              "liga": "European League 2026", "sport": "volleyboll",
+                              "datum": "2026-06-14"})
+        tid = self.api.lista_matcher()[0]["tavling_id"]
+        r = self.api.forhandsgranska_innehall({
+            "typ": "sportevent", "titel": "(D) Volleyboll - European League",
+            "tavling_id": tid, "underartiklar": []})
+        self.assertIn("underartiklar:", r["md"])
+        self.assertIn("Litauen – Sverige", r["md"])
+        self.assertIn("litauen-sverige", r["md"])
+        self.assertIn("Sverige – Bosnien", r["md"])
+        # tavling_id sparas i frontmattern så bindningen överlever ompublicering
+        self.assertIn("tavling_id:", r["md"])
+
+    def test_sportevent_bunden_tavling_ror_ej_manuellt_valda(self):
+        # Manuellt tillagd match dupliceras inte, och tavling_id=None gör inget.
+        self.api.spara_match({"lag_hemma": "Litauen", "lag_borta": "Sverige",
+                              "liga": "European League 2026", "sport": "volleyboll",
+                              "datum": "2026-06-12"})
+        rad = self.api.lista_matcher()[0]
+        tid, mid = rad["tavling_id"], rad["id"]
+        r = self.api.forhandsgranska_innehall({
+            "typ": "sportevent", "titel": "EL", "tavling_id": tid,
+            "underartiklar": [{"titel": "Litauen – Sverige",
+                               "slug": "litauen-sverige", "match_id": mid}]})
+        self.assertEqual(r["md"].count(mid), 1)   # inte duplicerad
+        # Utan bindning: inga automatiska pålägg.
+        utan = self.api.forhandsgranska_innehall({
+            "typ": "sportevent", "titel": "EL", "underartiklar": []})
+        self.assertNotIn("Litauen – Sverige", utan["md"])
+
     def test_innehall_md_match_topp_flagga(self):
         # Startside-kureringen: topp följer med frontmattern (och utelämnas
         # när den inte är satt — sajtens zod-schema defaultar till false).

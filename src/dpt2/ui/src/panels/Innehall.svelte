@@ -4,7 +4,7 @@
   import {
     forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall,
     valjMapp, valjFil, thumbForBild, slugga, listaInnehall, raderaInnehall, sparaInnehall,
-    listaMatcher, hamtaMatch, aktivMatch, sportprofiler, listaLag, listaMaterial,
+    listaMatcher, hamtaMatch, aktivMatch, sportprofiler, listaLag, listaMaterial, listaTavlingar,
     listaFotojobb, urvalHojdpunkter, genereraBildsvep, forhandsgranskaBildsvepFraga,
     pagangMatcher, sportTopp, sattSportTopp,
   } from '../lib/api.js'
@@ -60,7 +60,7 @@
   const SPORTEVENT_KAT = ['Mästerskap', 'Turnering', 'Tävling', 'Lopp']
   const tomSportevent = () => ({ innehallId: null, fotojobbId: '', titel: '', kategori: 'Mästerskap',
     period: '', plats: '', datum: '', ingress: '', pixieset: '', hero: '', heroPosition: 'center center',
-    heroKalla: '', figurer: [], underartiklar: [] })
+    heroKalla: '', figurer: [], tavlingId: '', underartiklar: [] })
   let cmsSportevent = tomSportevent()
 
   let md = ''
@@ -77,6 +77,7 @@
 
   // ── Grunddata ───────────────────────────────────────────────────────────────
   let matcher = []
+  let tavlingar = []
   let lagAlla = []
   let profiler = {}
   let materials = []
@@ -110,8 +111,8 @@
 
   onMount(async () => {
     lasUtkast()
-    ;[matcher, lagAlla, profiler, materials, fotojobb] = await Promise.all(
-      [listaMatcher(), listaLag(), sportprofiler(), listaMaterial(), listaFotojobb()])
+    ;[matcher, lagAlla, profiler, materials, fotojobb, tavlingar] = await Promise.all(
+      [listaMatcher(), listaLag(), sportprofiler(), listaMaterial(), listaFotojobb(), listaTavlingar()])
     await Promise.all([laddaOversikt(), laddaPagang(), laddaTopp()])
     // Matchartikeln utgår från aktiv match tills man byter (README §3).
     const am = await aktivMatch()
@@ -191,7 +192,9 @@
         period: fm.period || '', plats: fm.plats || '', datum: fm.datum || '',
         ingress: fm.ingress || '', pixieset: fm.pixieset || '', hero: fm.hero || '',
         heroPosition: fm.heroPosition || 'center center', figurer: seBilder,
+        tavlingId: fm.tavling_id || '',
         underartiklar: (fm.underartiklar || []).map((u) => ({ ...u })) }
+      synkaTavlingsmatcher()   // fånga matcher som tillkommit i tävlingen sen sist
       draftId = null; oppnaEditor('sportevent'); return
     }
     const bas = { titel: fm.titel || '', ingress: fm.ingress || '',
@@ -468,22 +471,26 @@
     subValOppen = false
     forhandsgranska()
   }
-  // Tävlingar som har matcher (härlett ur matchlistan — ingen extra hämtning).
-  // Fyller sporteventet med hela turneringens matcher i ett svep (t.ex. en
-  // tennisveckas alla matcher) i stället för en och en.
-  $: tavlingarMedMatcher = [...new Map(
-    matcher.filter((m) => m.tavling_id).map((m) => [m.tavling_id, m.liga || m.tavling_id])
-  )].map(([id, namn]) => ({ id, namn }))
-  let fyllTavling = ''
-  function fyllFranTavling() {
-    if (!fyllTavling) return
+  // Sporteventet binds till en tävling (cmsSportevent.tavlingId). Då fylls
+  // underartiklarna automatiskt med tävlingens matcher och hålls i synk — en
+  // match som läggs till i tävlingen dyker upp under eventet utan att man kör
+  // "Fyll matcher" för hand. Byter man tävling släpps bindningen (matcherna
+  // ligger kvar som manuellt valda tills man tar bort dem).
+  function valjSporteventTavling() {
+    synkaTavlingsmatcher()
+    forhandsgranska()
+  }
+  // Lägg TILL den bundna tävlingens matcher som saknas (rör inte manuellt
+  // tillagda extra-matcher eller ordningen). Idempotent — servern gör samma
+  // pålägg vid publicering (app._berika_underartiklar) som skyddsnät.
+  function synkaTavlingsmatcher() {
+    const tid = cmsSportevent.tavlingId
+    if (!tid) return
     const nya = matcher
-      .filter((m) => m.tavling_id === fyllTavling)
+      .filter((m) => m.tavling_id === tid)
       .filter((m) => !cmsSportevent.underartiklar.some((u) => u.match_id === m.id))
       .map((m) => ({ match_id: m.id, titel: subTitel(m), slug: slugga(subTitel(m)) }))
-    if (!nya.length) return
-    cmsSportevent.underartiklar = [...cmsSportevent.underartiklar, ...nya]
-    forhandsgranska()
+    if (nya.length) cmsSportevent.underartiklar = [...cmsSportevent.underartiklar, ...nya]
   }
   function taUnderartikel(i) {
     cmsSportevent.underartiklar = cmsSportevent.underartiklar.filter((_, j) => j !== i)
@@ -530,7 +537,7 @@
         titel: c.titel, kategori: c.kategori, period: c.period, plats: c.plats, datum: c.datum,
         ingress: c.ingress, pixieset: c.pixieset, hero: c.hero, heroPosition: c.heroPosition,
         heroKalla: c.heroKalla, figurer: utanThumb(c.figurer),
-        underartiklar: c.underartiklar }
+        tavling_id: c.tavlingId || null, underartiklar: c.underartiklar }
     }
     return { typ: 'blogg', ...cmsBlogg, figurer: utanThumb(cmsBlogg.figurer) }
   }
@@ -935,7 +942,14 @@
       </div>
       <div class="kort">
         <div class="korthuvud"><span class="caps nomarg">Underartiklar</span>
-          <span class="capshint">manuellt valda matcher — egna artiklar, egna gallerier</span></div>
+          <span class="capshint">matcher under tävlingen — egna artiklar, egna gallerier</span></div>
+        <div class="f">
+          <label>Tävling <span class="lblhint">— matcherna fylls i automatiskt</span></label>
+          <select bind:value={cmsSportevent.tavlingId} on:change={valjSporteventTavling}>
+            <option value="">— Ingen (välj matcher manuellt)…</option>
+            {#each tavlingar as t (t.id)}<option value={t.id}>{t.namn}</option>{/each}
+          </select>
+        </div>
         {#each cmsSportevent.underartiklar as u, i (u.match_id)}
           {@const art = subArtikel(u)}
           <div class="subrad">
@@ -949,16 +963,8 @@
               on:click={taBortKlick(`sub-${i}`, () => taUnderartikel(i))}>{$armerad === `sub-${i}` ? 'Ta bort?' : '×'}</button>
           </div>
         {/each}
-        {#if tavlingarMedMatcher.length}
-          <div class="fyllrad">
-            <select bind:value={fyllTavling}>
-              <option value="">Fyll alla matcher från tävling…</option>
-              {#each tavlingarMedMatcher as t (t.id)}
-                <option value={t.id}>{t.namn}</option>
-              {/each}
-            </select>
-            <button class="figadd" on:click={fyllFranTavling} disabled={!fyllTavling}>Fyll matcher</button>
-          </div>
+        {#if cmsSportevent.tavlingId && !cmsSportevent.underartiklar.length}
+          <div class="ovtom">Tävlingen har inga matcher ännu — de dyker upp här automatiskt när du lägger till dem i Matcher.</div>
         {/if}
         <div class="subval">
           <button class="figadd" on:click={() => (subValOppen = !subValOppen)}>+ Lägg till match</button>
@@ -1294,10 +1300,6 @@
   .submitt { flex: 1; min-width: 0; }
   .subtitel { font-size: 12.5px; font-weight: 600; color: var(--t-head); }
   .submeta { font-size: 10.5px; color: var(--t-mut); }
-  .fyllrad { display: flex; gap: 8px; margin-bottom: 8px; align-items: stretch; }
-  .fyllrad select { flex: 1; min-width: 0; border: 1px solid var(--div); border-radius: 10px;
-    background: var(--kort); color: var(--t-head); padding: 10px 11px; font-size: 13px; }
-  .fyllrad .figadd { width: auto; white-space: nowrap; padding: 10px 16px; }
   .subval { position: relative; }
   .sublista { margin-top: 8px; border: 1px solid var(--div); border-radius: 10px; background: var(--kort);
     max-height: 240px; overflow-y: auto; padding: 5px; }
