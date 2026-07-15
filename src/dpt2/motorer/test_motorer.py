@@ -187,6 +187,26 @@ class TestStoryOverlay(unittest.TestCase):
         self.assertIn("Eleda", d["arena"])
         self.assertEqual(d["tid"], "14:00")
 
+    def test_monogram_text(self):
+        # Lagsport: förkortning. Individ-sport: personinitialer.
+        from dpt2.motorer import story_overlay as so
+        self.assertEqual(so.monogram_text("Malmö FF", "HEM"), "MAL")
+        self.assertEqual(so.monogram_text("Rebecca Peterson", "HEM", individ=True), "RP")
+        self.assertEqual(so.monogram_text("Mirjam Björklund", "BORT", individ=True), "MB")
+        self.assertEqual(so.monogram_text("", "HEM", individ=True), "HEM")
+
+    def test_startmoment_i_alla_profiler(self):
+        # Stora ordet i preview-blocket hämtas ur profilen — varje sport ska ha
+        # ett start_moment (fotboll "Avspark", tennis "Matchstart", friidrott
+        # "Start") så tennis-storyn inte säger "AVSPARK".
+        from dpt2.data import sportprofil
+        for sport in ("fotboll", "handboll", "innebandy", "volleyboll",
+                      "beachvolley", "tennis", "friidrott"):
+            self.assertTrue(sportprofil.profil(sport).get("start_moment"),
+                            f"{sport} saknar start_moment")
+        self.assertEqual(sportprofil.profil("tennis")["start_moment"], "Matchstart")
+        self.assertEqual(sportprofil.profil("fotboll")["start_moment"], "Avspark")
+
 
 # ── vision_lager (PyObjC) ─────────────────────────────────────────────────────
 @unittest.skipUnless(HAR_VISION, "Apple Vision saknas")

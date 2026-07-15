@@ -157,6 +157,18 @@ def normera_lag(namn):
     return re.sub(r"[^\w]+", "_", namn.lower()).strip("_")
 
 
+def monogram_text(namn, fallback, individ=False):
+    """Monogrammet i fallback-brickan (när logga saknas). Lagsport: lagnamnets
+    3 första bokstäver ("Malmö FF" → "MAL"). Individ-sport (tennis, friidrott):
+    "lagen" är personer — per-ord-initialer ("Rebecca Peterson" → "RP")."""
+    if not namn:
+        return fallback
+    if individ:
+        init = "".join(o[0] for o in namn.split() if o)[:3]
+        return (init or namn[:3]).upper()
+    return namn[:3].upper()
+
+
 def hitta_logga(lag_namn):
     """Slår upp ~/.config/dpt/loggor/<normaliserat>.(png|jpg) — den GAMLA
     filsystemkonventionen, kvar som fallback när laget saknar en logga i
@@ -1022,9 +1034,12 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         isLineup   = state == "Startelva"
         isScorers  = state == "Målgörare"
 
-        # Härled visade texter (speglar renderVals() i HTML-referensen)
+        # Härled visade texter (speglar renderVals() i HTML-referensen).
+        # Startmomentets stora ord kommer ur sportprofilen: fotboll "Avspark"
+        # (oförändrat), tennis/beachvolley "Matchstart", friidrott "Start".
         venue_up    = arena.upper() if arena else ""
-        big_word    = "AVSPARK" if state == "Avspark" else "NÄSTA\nMATCH"
+        big_word    = (profil.get("start_moment") or "Avspark").upper() \
+            if state == "Avspark" else "NÄSTA\nMATCH"
         if state == "Nästa match":
             sub_line = f"{next_when} · {venue_up}" if next_when else venue_up
             big_word = "NÄSTA MATCH"
@@ -1049,9 +1064,10 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         # A4: målskyttar bara i Slutresultat (Halvtid = enkel underrad).
         slut_scorers = _scorer_units(mal_rad) if state == "Slutresultat" else None
 
-        # Lagbrickor
-        mono_h = (lag_hemma[:3] if lag_hemma else "HEM").upper()
-        mono_b = (lag_borta[:3] if lag_borta else "BORT").upper()
+        # Lagbrickor (monogram_text: individ-sport → personinitialer "RP",
+        # lagsport → förkortning "MAL").
+        mono_h = monogram_text(lag_hemma, "HEM", profil.get("individ", False))
+        mono_b = monogram_text(lag_borta, "BORT", profil.get("individ", False))
 
         if isPreview:
             bricka_h, pad_h = _bricka_med_skugga(_valj_logga(lag_hemma, hem_logga), 84, mono_h)
