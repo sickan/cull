@@ -81,6 +81,27 @@ CREATE TABLE tavling_lag (
   PRIMARY KEY (tavling_id, lag_id)
 );
 
+-- B-001 (friidrott m.fl. individ-sporter): tävlingens GRENAR ("Längd",
+-- "100 m") — "disciplin" i koden eftersom `gren` redan betyder dam/herr/mixed.
+-- `typ` styr resultatformatet i story-overlayn (D2-svarets formattabell).
+CREATE TABLE disciplin (
+  id         TEXT PRIMARY KEY,
+  tavling_id TEXT NOT NULL REFERENCES tavling(id) ON DELETE CASCADE,
+  namn       TEXT NOT NULL,
+  typ        TEXT NOT NULL DEFAULT 'hoppkast'
+               CHECK (typ IN ('sprint','medel','hoppkast','mangkamp')),
+  ordning    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_disciplin_tavling ON disciplin(tavling_id);
+
+-- Deltagare (individ-poster i lag-tabellen) per disciplin — en deltagare kan
+-- ställa upp i flera grenar (Längd + Tresteg).
+CREATE TABLE disciplin_deltagare (
+  disciplin_id TEXT NOT NULL REFERENCES disciplin(id) ON DELETE CASCADE,
+  lag_id       TEXT NOT NULL REFERENCES lag(id) ON DELETE CASCADE,
+  PRIMARY KEY (disciplin_id, lag_id)
+);
+
 CREATE TABLE spelare (
   id        TEXT PRIMARY KEY,
   lag_id    TEXT NOT NULL REFERENCES lag(id) ON DELETE CASCADE,

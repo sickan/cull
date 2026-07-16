@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -706,6 +706,28 @@ def _migrera(conn, fran_version):
         # Additivt, nullbart.
         if _har_tabell(conn, "matchen") and not _har_kolumn(conn, "matchen", "rond"):
             conn.execute("ALTER TABLE matchen ADD COLUMN rond TEXT")
+
+    if fran_version < 29:
+        # v29 (B-001 deltagarhantering): tävlingens grenar/discipliner +
+        # deltagare per disciplin (friidrott: Längd, Tresteg…). Additiva
+        # tabeller — `disciplin` i koden, `gren` betyder redan dam/herr/mixed.
+        if not _har_tabell(conn, "disciplin"):
+            conn.executescript("""
+            CREATE TABLE disciplin (
+              id         TEXT PRIMARY KEY,
+              tavling_id TEXT NOT NULL REFERENCES tavling(id) ON DELETE CASCADE,
+              namn       TEXT NOT NULL,
+              typ        TEXT NOT NULL DEFAULT 'hoppkast'
+                           CHECK (typ IN ('sprint','medel','hoppkast','mangkamp')),
+              ordning    INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX idx_disciplin_tavling ON disciplin(tavling_id);
+            CREATE TABLE disciplin_deltagare (
+              disciplin_id TEXT NOT NULL REFERENCES disciplin(id) ON DELETE CASCADE,
+              lag_id       TEXT NOT NULL REFERENCES lag(id) ON DELETE CASCADE,
+              PRIMARY KEY (disciplin_id, lag_id)
+            );
+            """)
 
 
 def _har_kolumn(conn, tabell, kolumn):

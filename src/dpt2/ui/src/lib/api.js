@@ -247,6 +247,46 @@ export async function listaLagForTavling(tavlingId) {
   return wait(structuredClone(MOCK_LAG.filter((l) => ids.includes(l.id))))
 }
 
+// ── Discipliner (B-001): tävlingens grenar + deltagare per gren ─────────────
+let MOCK_DISCIPLINER = []   // {id, tavling_id, namn, typ, ordning, deltagare:[]}
+
+export async function listaDiscipliner(tavlingId) {
+  const api = brygga()
+  if (api) return api.lista_discipliner(tavlingId)
+  return wait(structuredClone(MOCK_DISCIPLINER.filter((d) => d.tavling_id === tavlingId)))
+}
+
+export async function sparaDisciplin(d) {
+  const api = brygga()
+  if (api) return api.spara_disciplin(d)
+  const fin = MOCK_DISCIPLINER.find((x) => x.id === d.id)
+  if (fin) Object.assign(fin, d)
+  else MOCK_DISCIPLINER.push({ deltagare: [], ordning: MOCK_DISCIPLINER.length,
+    ...d, id: d.id || 'disc_' + Date.now() })
+  return wait({ ok: true, id: d.id || MOCK_DISCIPLINER[MOCK_DISCIPLINER.length - 1].id })
+}
+
+export async function raderaDisciplin(id) {
+  const api = brygga()
+  if (api) return api.radera_disciplin(id)
+  MOCK_DISCIPLINER = MOCK_DISCIPLINER.filter((d) => d.id !== id)
+  return wait({ ok: true })
+}
+
+export async function kopplaDisciplinDeltagare(disciplinId, lagId, pa = true) {
+  const api = brygga()
+  if (api) return api.koppla_disciplin_deltagare(disciplinId, lagId, pa)
+  const d = MOCK_DISCIPLINER.find((x) => x.id === disciplinId)
+  if (d) {
+    d.deltagare = (d.deltagare || []).filter((x) => x.id !== lagId)
+    if (pa) {
+      const l = MOCK_LAG.find((x) => x.id === lagId)
+      if (l) d.deltagare.push({ id: l.id, namn: l.namn, klubb: l.klubb || '' })
+    }
+  }
+  return wait({ ok: true })
+}
+
 export async function listaTavlingar() {
   const api = brygga()
   if (api) return api.lista_tavlingar()

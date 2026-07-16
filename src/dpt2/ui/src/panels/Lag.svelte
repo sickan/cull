@@ -4,6 +4,7 @@
     listaLag, listaTavlingar, sparaLag, sparaTavling, raderaLag, raderaTavling,
     valjFil, lasLagTrupp, hamtaLagTrupp, sparaSpelare, raderaSpelare,
     laggTavlingIKalender, taBortTavlingUrKalender, kopplaLagTavling,
+    listaDiscipliner, sparaDisciplin, raderaDisciplin, kopplaDisciplinDeltagare,
   } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import Lagbricka from '../lib/Lagbricka.svelte'
@@ -225,7 +226,44 @@
     if (compOpen === t.id) { compOpen = null; return }
     compOpen = t.id; teamOpen = null
     radTillToppen(rad)
+    if (INDIVID_SPORTER.includes(t.sport)) laddaDiscipliner(t.id)
   }
+
+  // ── Discipliner (B-001): tävlingens grenar + deltagare (individ-sporter) ──
+  // "disciplin" i koden — gren betyder redan dam/herr/mixed. Typen styr
+  // resultatformatet i story-overlayn (D2-svarets tabell).
+  const INDIVID_SPORTER = ['tennis', 'friidrott']
+  const DISCIPLIN_TYP = { sprint: 'Sprint · tid', medel: 'Medel/lång · tid',
+    hoppkast: 'Hopp/kast · meter', mangkamp: 'Mångkamp · poäng' }
+  let discipliner = {}          // tavling_id → [{id, namn, typ, deltagare[]}]
+  let nyDiscNamn = ''
+  let nyDiscTyp = 'hoppkast'
+  async function laddaDiscipliner(tid) {
+    discipliner[tid] = await listaDiscipliner(tid)
+    discipliner = discipliner
+  }
+  async function laggDisciplin(t) {
+    if (!nyDiscNamn.trim()) return
+    await sparaDisciplin({ tavling_id: t.id, namn: nyDiscNamn.trim(), typ: nyDiscTyp })
+    nyDiscNamn = ''
+    await laddaDiscipliner(t.id)
+  }
+  async function gerDisciplin(t, d, patch) {
+    await sparaDisciplin({ ...d, ...patch, tavling_id: t.id })
+    await laddaDiscipliner(t.id)
+  }
+  async function taDisciplin(t, d) {
+    await raderaDisciplin(d.id)
+    await laddaDiscipliner(t.id)
+  }
+  async function vaxlaDeltagare(t, d, lagId, pa) {
+    await kopplaDisciplinDeltagare(d.id, lagId, pa)
+    await laddaDiscipliner(t.id)
+  }
+  // Deltagarkandidater: individ-utövare i registret med tävlingens sport.
+  const deltagarKandidater = (t, d) => lag.filter((l) =>
+    l.kind === 'individ' && (!l.sport || l.sport === t.sport)
+    && !(d.deltagare || []).some((x) => x.id === l.id))
   function stangRad() { stangLagRedigering(); compOpen = null }
   function onKeydown(e) {
     if (e.key === 'Escape' && (teamOpen != null || compOpen != null)) stangRad()
@@ -664,6 +702,52 @@
                       <input bind:value={t.ackr_dagar} on:change={() => gerTavling(t)} inputmode="numeric" placeholder="Ackr: dagar före match (10)" />
                     </div>
                     {#if sparad === t.id}<span class="flash">✓ sparat</span>{/if}
+
+                    {#if INDIVID_SPORTER.includes(t.sport)}
+                      <!-- B-001: tävlingens grenar + deltagare (friidrott/tennis).
+                           En deltagare kan stå i flera grenar (Längd + Tresteg). -->
+                      <div class="discblock">
+                        <div class="dischead">Grenar &amp; deltagare</div>
+                        {#each discipliner[t.id] || [] as d (d.id)}
+                          <div class="discrad">
+                            <input class="discnamn" value={d.namn}
+                              on:change={(e) => gerDisciplin(t, d, { namn: e.target.value })} />
+                            <select value={d.typ} on:change={(e) => gerDisciplin(t, d, { typ: e.target.value })}>
+                              {#each Object.entries(DISCIPLIN_TYP) as [v, et]}<option value={v}>{et}</option>{/each}
+                            </select>
+                            <button class="x" title="Ta bort grenen"
+                              on:click={() => taDisciplin(t, d)}>×</button>
+                          </div>
+                          <div class="discdelt">
+                            {#each d.deltagare || [] as p (p.id)}
+                              <span class="chip">{p.namn}{p.klubb ? ` · ${p.klubb}` : ''}
+                                <button class="chipx" title="Ta bort ur grenen"
+                                  on:click={() => vaxlaDeltagare(t, d, p.id, false)}>×</button>
+                              </span>
+                            {/each}
+                            {#if deltagarKandidater(t, d).length}
+                              <select class="chipny" value=""
+                                on:change={(e) => { vaxlaDeltagare(t, d, e.target.value, true); e.target.value = '' }}>
+                                <option value="" disabled>+ Deltagare…</option>
+                                {#each deltagarKandidater(t, d) as l (l.id)}
+                                  <option value={l.id}>{l.namn}{l.klubb ? ` · ${l.klubb}` : ''}</option>
+                                {/each}
+                              </select>
+                            {:else if !(d.deltagare || []).length}
+                              <span class="kmeta">Inga utövare i registret — lägg upp dem under Lag &amp; utövare (Individ).</span>
+                            {/if}
+                          </div>
+                        {/each}
+                        <div class="discny">
+                          <input placeholder="Ny gren, t.ex. Längd" bind:value={nyDiscNamn}
+                            on:keydown={(e) => e.key === 'Enter' && laggDisciplin(t)} />
+                          <select bind:value={nyDiscTyp}>
+                            {#each Object.entries(DISCIPLIN_TYP) as [v, et]}<option value={v}>{et}</option>{/each}
+                          </select>
+                          <button class="kalbtn" on:click={() => laggDisciplin(t)}>Lägg till ›</button>
+                        </div>
+                      </div>
+                    {/if}
                     <div class="kalfot">
                       <span class="kalik">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg>
@@ -765,6 +849,17 @@
   .arkivrad .help { font-size: 11px; color: var(--t-help); }
   .datumf { display: flex; flex-direction: column; gap: 4px; }
   .datumf input { width: 100%; box-sizing: border-box; }
+  /* Discipliner (B-001) — grenar + deltagare i tävlingseditorn */
+  .discblock { display: flex; flex-direction: column; gap: 8px; margin-top: 6px;
+    padding: 12px; border: 1px solid var(--div); border-radius: 10px; background: var(--div3); }
+  .dischead { font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--t-caps); }
+  .discrad { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+  .discrad .discnamn { font-weight: 600; }
+  .discdelt { display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+    padding: 0 2px 6px; border-bottom: 1px dashed var(--div); }
+  .discdelt:last-of-type { border-bottom: 0; }
+  .discny { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
   .kalfot { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 10px 12px;
     background: var(--panel); border: 1px solid var(--div3); border-radius: 9px; }
   .kalik { width: 30px; height: 30px; border-radius: 8px; background: var(--acc-soft); color: var(--acc);

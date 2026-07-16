@@ -474,6 +474,40 @@ class TestLagTavling(unittest.TestCase):
         t = store.lista_tavlingar(self.c)[0]
         self.assertEqual(t["hemsida"], "damallsvenskan.se")   # bevarat
 
+    def test_discipliner_med_deltagare(self):
+        # B-001: tävlingens grenar (discipliner) + deltagare per gren — en
+        # deltagare kan stå i flera grenar (Längd + Tresteg).
+        tid = store.upsert_tavling(self.c, "Friidrotts-SM 2026",
+                                   sport="friidrott", typ="masterskap")
+        a = store.upsert_lag(self.c, "Alva Hoppare", kind="individ",
+                             sport="friidrott", klubb="Malmö AI")
+        langd = store.upsert_disciplin(self.c, tid, "Längd", typ="hoppkast")
+        tresteg = store.upsert_disciplin(self.c, tid, "Tresteg", typ="hoppkast")
+        store.koppla_disciplin_deltagare(self.c, langd, a)
+        store.koppla_disciplin_deltagare(self.c, tresteg, a)
+        disc = store.lista_discipliner(self.c, tid)
+        self.assertEqual([d["namn"] for d in disc], ["Längd", "Tresteg"])
+        self.assertEqual(disc[0]["deltagare"][0]["namn"], "Alva Hoppare")
+        self.assertEqual(disc[0]["deltagare"][0]["klubb"], "Malmö AI")
+        self.assertEqual(disc[1]["deltagare"][0]["namn"], "Alva Hoppare")
+        # Deltagaren kopplas automatiskt in i tävlingen (deltagarlistan)
+        self.assertIn(a, [l["id"] for l in store.lista_lag_for_tavling(self.c, tid)])
+        # Urkoppling + namn/typ-uppdatering + radering
+        store.koppla_disciplin_deltagare(self.c, tresteg, a, pa=False)
+        self.assertEqual(store.lista_discipliner(self.c, tid)[1]["deltagare"], [])
+        store.upsert_disciplin(self.c, tid, "Längd — final", typ="hoppkast", id=langd)
+        self.assertEqual(store.lista_discipliner(self.c, tid)[0]["namn"], "Längd — final")
+        store.radera_disciplin(self.c, langd)
+        self.assertEqual(len(store.lista_discipliner(self.c, tid)), 1)
+        # Ogiltig typ faller tillbaka; tomt namn skapar inget
+        d3 = store.upsert_disciplin(self.c, tid, "100 m", typ="ogiltig")
+        self.assertEqual(store.lista_discipliner(self.c, tid)[-1]["typ"], "hoppkast")
+        self.assertIsNone(store.upsert_disciplin(self.c, tid, "  "))
+        # Tävlingsradering städar (CASCADE)
+        store.radera_tavling(self.c, tid)
+        self.assertEqual(store.lista_discipliner(self.c, tid), [])
+        _ = d3
+
     def test_upsert_lag_ackrediteringsregler(self):
         # Klubben äger ackrediteringen för sina hemmamatcher (seriespel) —
         # samma fältkontrakt som på tävling: None rör inte, tom sträng rensar.

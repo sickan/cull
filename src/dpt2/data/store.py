@@ -846,6 +846,81 @@ def koppla_bort_lag_fran_tavling(conn, tavling_id, lag_id):
     conn.commit()
 
 
+# ── Discipliner (B-001) — tävlingens grenar + deltagare per gren ─────────────
+# "disciplin" i koden (gren = dam/herr/mixed). typ styr overlay-formatet
+# (D2-svarets tabell: sprint 10,12 · medel 1.45,32 · hoppkast 6,42 m ·
+# mangkamp 8 421 p).
+
+DISCIPLIN_TYPER = ("sprint", "medel", "hoppkast", "mangkamp")
+
+
+def lista_discipliner(conn, tavling_id):
+    """Tävlingens discipliner med deltagare (individ-poster ur lag-tabellen),
+    i ordning. Deltagare: {id, namn, klubb}."""
+    rader = [dict(r) for r in conn.execute(
+        "SELECT * FROM disciplin WHERE tavling_id=? ORDER BY ordning, namn",
+        (tavling_id,))]
+    for d in rader:
+        d["deltagare"] = [dict(r) for r in conn.execute(
+            "SELECT l.id, l.namn, l.klubb FROM lag l "
+            "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
+            "WHERE dd.disciplin_id=? ORDER BY l.namn", (d["id"],))]
+    return rader
+
+
+def upsert_disciplin(conn, tavling_id, namn, *, typ="hoppkast", id=None,
+                     ordning=None):
+    """Skapar/uppdaterar en disciplin. Returnerar id (None vid tomt namn)."""
+    if not (namn or "").strip() or not tavling_id:
+        return None
+    typ = typ if typ in DISCIPLIN_TYPER else "hoppkast"
+    did = (id or "").strip() or ny_id()
+    fin = conn.execute("SELECT 1 FROM disciplin WHERE id=?", (did,)).fetchone()
+    if fin is None:
+        if ordning is None:
+            ordning = (conn.execute(
+                "SELECT COALESCE(MAX(ordning), -1) + 1 FROM disciplin "
+                "WHERE tavling_id=?", (tavling_id,)).fetchone()[0])
+        conn.execute(
+            "INSERT INTO disciplin(id,tavling_id,namn,typ,ordning) "
+            "VALUES(?,?,?,?,?)", (did, tavling_id, namn.strip(), typ, ordning))
+    else:
+        conn.execute("UPDATE disciplin SET namn=?, typ=? WHERE id=?",
+                     (namn.strip(), typ, did))
+        if ordning is not None:
+            conn.execute("UPDATE disciplin SET ordning=? WHERE id=?",
+                         (ordning, did))
+    conn.commit()
+    return did
+
+
+def radera_disciplin(conn, disciplin_id):
+    conn.execute("DELETE FROM disciplin WHERE id=?", (disciplin_id,))
+    conn.commit()
+
+
+def koppla_disciplin_deltagare(conn, disciplin_id, lag_id, pa=True):
+    """Kopplar i/ur en deltagare för en disciplin. Kopplar också in deltagaren
+    i tävlingen (tavling_lag) så hen syns i tävlingens deltagarlista."""
+    if not (disciplin_id and lag_id):
+        return
+    if pa:
+        conn.execute(
+            "INSERT OR IGNORE INTO disciplin_deltagare(disciplin_id,lag_id) "
+            "VALUES(?,?)", (disciplin_id, lag_id))
+        rad = conn.execute("SELECT tavling_id FROM disciplin WHERE id=?",
+                           (disciplin_id,)).fetchone()
+        if rad:
+            conn.execute(
+                "INSERT OR IGNORE INTO tavling_lag(tavling_id,lag_id) "
+                "VALUES(?,?)", (rad[0], lag_id))
+    else:
+        conn.execute(
+            "DELETE FROM disciplin_deltagare WHERE disciplin_id=? AND lag_id=?",
+            (disciplin_id, lag_id))
+    conn.commit()
+
+
 def radera_lag(conn, lag_id):
     conn.execute("DELETE FROM lag WHERE id=?", (lag_id,))
     conn.commit()

@@ -550,6 +550,25 @@ class Api:
         store.radera_tavling(self.conn, id)
         return {"ok": True}
 
+    # ── Discipliner (B-001) — tävlingens grenar + deltagare ─────────────────
+    def lista_discipliner(self, tavling_id):
+        return store.lista_discipliner(self.conn, tavling_id)
+
+    def spara_disciplin(self, d):
+        did = store.upsert_disciplin(
+            self.conn, d.get("tavling_id"), d.get("namn", ""),
+            typ=d.get("typ") or "hoppkast", id=d.get("id"),
+            ordning=d.get("ordning"))
+        return {"ok": bool(did), "id": did}
+
+    def radera_disciplin(self, id):
+        store.radera_disciplin(self.conn, id)
+        return {"ok": True}
+
+    def koppla_disciplin_deltagare(self, disciplin_id, lag_id, pa=True):
+        store.koppla_disciplin_deltagare(self.conn, disciplin_id, lag_id, pa)
+        return {"ok": True}
+
     def lagg_tavling_i_kalender(self, tavling_id):
         """Skapar ett lokalt fotojobb-utkast (Okategoriserat, EJ synkat) för
         tävlingens period — flerdagarsuppdrag. Kräver att tävlingen redan har
