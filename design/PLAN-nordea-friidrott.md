@@ -6,7 +6,23 @@ Arbetsmodell oförändrad: **alla UX/UI/mall-frågor bryts ut som Design-jobb** 
 prototyper i Claude Design, landat resultat kommer tillbaka hit som handoff.
 Levande dokument.*
 
-## Prioritering (Stigs ordning)
+## ⭐ AKTUELL PRIO — beslutad gemensamt 16 jul (ersätter listan nedan)
+
+*Fullständig backlog: `BACKLOG.md`. Agilt/iterativt — små testade skivor,
+leverera värde löpande.*
+
+1. **Buggar** — BUG-09 (koppla-listan gren·sport) · #26-rest (id-uppslag) ·
+   BUG-02 (döda kort) · BUG-03 (färgklick-reaktivitet) · HDA-a/b
+2. **iOS-trupp** — matchdaguttag → startelva på telefonen (fotbollshelgen)
+3. **iOS väder + restid** — läs-features: väder-aggregat + "när måste jag åka"
+4. **Därefter (enligt Code-förslaget):** Publiceringskedjan v2 (FEAT-13 →
+   dubbletterna → FEAT-09/12, skiva för skiva) · **B-001 deltagare (hård
+   deadline före 24/7 — startas senast måndag)** · B-002/D2-impl · resten per
+   BACKLOG.md
+- **Design parallellt:** D2 UTE · **D4/D7/D8-handoffs UTE 16 jul** · D3/D5/D6
+  på begäran
+
+## Prioritering (Stigs ordning — historisk v3)
 
 1. **Tennis** — Nordea Open, NU i helgen (Båstad)
 2. **iOS telefon** — fältflödena i appen
