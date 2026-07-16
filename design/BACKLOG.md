@@ -120,14 +120,14 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 
 | ID | Vad | Status |
 |----|-----|--------|
-| D2 | Horisont friidrott-mallar | **HANDOFF UTE** (design/HANDOFF-D2-…) — deadline före 24/7 |
-| D3 | iPad-layout Snabbplock | **HANDOFF UTE** (HANDOFF-D3-…) |
-| D4 | Webb-paketet (B-006 + FEAT-WEB-01…04) | **HANDOFF UTE** (HANDOFF-D4-…) |
-| D5 | Lightbox-spec | **HANDOFF UTE** (HANDOFF-D5-…) |
-| D6 | Låsskärm & widgets (UTÖKAT: B-010 + B-009) | **HANDOFF UTE** (HANDOFF-D6-…) |
-| D7 | Startsidans kuratering (FEAT-02 + SPIKE-02) | **HANDOFF UTE** (HANDOFF-D7-…) |
-| D8 | iOS Fotojobb-kalendervy | **HANDOFF UTE** (HANDOFF-D8-…) |
-| D9 | Publiceringsstatus-språket (FEAT-12/09 UI — hur/var status visas) | **HANDOFF UTE** (HANDOFF-D9-…) — behövs före FEAT-12-bygget |
+| D2 | Horisont friidrott-mallar | ✅ **SVAR INNE + IMPLEMENTERAD** |
+| D3 | iPad-layout Snabbplock | ✅ **SVAR INNE** (HANDOFF-D3-SVAR-…) — väntar implementation |
+| D4 | Webb-paketet (B-006 + FEAT-WEB-01…04) | ✅ **SVAR INNE** — väntar implementation |
+| D5 | Lightbox-spec | ✅ **SVAR INNE** (HANDOFF-D5-SVAR-…) — väntar implementation |
+| D6 | Låsskärm & widgets (UTÖKAT: B-010 + B-009) | ✅ **SVAR INNE** (HANDOFF-D6-SVAR-…) — väntar implementation |
+| D7 | Startsidans kuratering (FEAT-02 + SPIKE-02) | ✅ **SVAR INNE** (HANDOFF-D7-SVAR-…) — väntar implementation |
+| D8 | iOS Fotojobb-kalendervy | ✅ **SVAR INNE** (HANDOFF-D8-SVAR-…) — väntar implementation |
+| D9 | Publiceringsstatus-språket | ✅ **SVAR INNE** (komplett spec: StatusChip, hörnbåge i statusfärg, filterchips ersätter flikarna, fel-expansion m per-kanal + Försök igen, puls vid bygge, autospar ersätter utkastknappen, färgtokens ljust/mörkt) — **publiceringskedjan v2 helt oblockerad** |
 
 ## Stig — användarsteg (inget kodande)
 
