@@ -118,12 +118,13 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 | ID | Vad | Status |
 |----|-----|--------|
 | D2 | Horisont friidrott-mallar | **HANDOFF UTE** (design/HANDOFF-D2-…) — deadline före 24/7 |
-| D3 | iPad-layout Snabbplock | Väntar handoff |
+| D3 | iPad-layout Snabbplock | **HANDOFF UTE** (HANDOFF-D3-…) |
 | D4 | Webb-paketet (B-006 + FEAT-WEB-01…04) | **HANDOFF UTE** (HANDOFF-D4-…) |
-| D5 | Lightbox-spec | Väntar handoff |
-| D6 | Låsskärm/Live Activity | Väntar handoff |
+| D5 | Lightbox-spec | **HANDOFF UTE** (HANDOFF-D5-…) |
+| D6 | Låsskärm & widgets (UTÖKAT: B-010 + B-009) | **HANDOFF UTE** (HANDOFF-D6-…) |
 | D7 | Startsidans kuratering (FEAT-02 + SPIKE-02) | **HANDOFF UTE** (HANDOFF-D7-…) |
 | D8 | iOS Fotojobb-kalendervy | **HANDOFF UTE** (HANDOFF-D8-…) |
+| D9 | Publiceringsstatus-språket (FEAT-12/09 UI — hur/var status visas) | **HANDOFF UTE** (HANDOFF-D9-…) — behövs före FEAT-12-bygget |
 
 ## Stig — användarsteg (inget kodande)
 
