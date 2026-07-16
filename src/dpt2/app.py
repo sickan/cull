@@ -880,6 +880,12 @@ class Api:
         mid = store.hamta_installning(self.conn, "aktiv_match_id")
         return store.hamta_match(self.conn, mid) if mid else None
 
+    def stang_aktiv_match(self):
+        """FEAT-05: uttryckligen stäng aktiva matchen (klar för dagen) — ingen
+        match ska kunna ligga kvar som aktiv av misstag."""
+        store.satt_installning(self.conn, "aktiv_match_id", "")
+        return {"ok": True}
+
     # ── Aktivt urval (topbar-chippet; går ①Gallra → ②Leverera → ③Publicera) ──
     def satt_aktivt_urval(self, id):
         store.satt_installning(self.conn, "aktivt_urval_id", id or "")

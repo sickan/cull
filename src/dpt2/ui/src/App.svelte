@@ -14,7 +14,7 @@
   import Trana from './panels/Trana.svelte'
   import Logg from './panels/Logg.svelte'
   import Installningar from './panels/Installningar.svelte'
-  import { erMock, aktivMatch, aktivtUrval, listaMaterial } from './lib/api.js'
+  import { erMock, aktivMatch, aktivtUrval, listaMaterial, stangAktivMatch } from './lib/api.js'
   import { testMode } from './lib/testlage.js'
 
   const ARMOCK = erMock()
@@ -56,6 +56,12 @@
     temaManuellt = true                          // sluta följa OS efter manuell växling
     tema = tema === 'light' ? 'dark' : 'light'   // data-theme sätts av det reaktiva blocket ovan
   }
+  // FEAT-05: uttryckligen stäng aktiva matchen (klar för dagen) — ingen match
+  // ska ligga kvar som aktiv av misstag.
+  async function stangMatch() {
+    await stangAktivMatch()
+    aktivM = null; aktivMatchData = null
+  }
   function aktiveraFranMatcher(m) { aktivMatchData = m; aktivM = m; aktiv = 'gallra' }
   // §2: matchradens statuschips — samma aktivera-mekanism, valfri destination.
   function aktiveraFranMatcherTill(m, dest) { aktivMatchData = m; aktivM = m; aktiv = dest }
@@ -66,13 +72,18 @@
 
   <main>
     <div class="topbar">
-      <button class="widget match" on:click={() => (aktiv = 'matcher')} title="Aktiv match">
-        <span class="dot" class:pa={aktivM}></span>
-        <span class="wtext">
-          <span class="wlbl">Aktiv match</span>
-          <span class="wval scd">{aktivM ? `${aktivM.lag_hemma} – ${aktivM.lag_borta}` : 'Ingen vald'}</span>
-        </span>
-      </button>
+      <div class="matchgrupp">
+        <button class="widget match" on:click={() => (aktiv = 'matcher')} title="Aktiv match">
+          <span class="dot" class:pa={aktivM}></span>
+          <span class="wtext">
+            <span class="wlbl">Aktiv match</span>
+            <span class="wval scd">{aktivM ? `${aktivM.lag_hemma} – ${aktivM.lag_borta}` : 'Ingen vald'}</span>
+          </span>
+        </button>
+        {#if aktivM}
+          <button class="stangmatch" on:click={stangMatch} title="Stäng matchen — klar för dagen">×</button>
+        {/if}
+      </div>
       <button class="widget urval" on:click={() => (aktiv = aktivU ? 'leverera' : 'gallra')}
         title={aktivU ? 'Aktivt urval — gå till Leverera' : 'Inget urval — gå till Gallra'}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="ic"><path d="M3 7.5A2 2 0 015 5.5h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
@@ -148,7 +159,10 @@
   .widget { display: flex; align-items: center; gap: 8px; padding: 4px 2px;
     background: transparent; border: 0; color: var(--t-head); }
   .widget:hover .wval { color: var(--acc); }
-  .widget.match { margin-right: auto; }
+  .matchgrupp { display: flex; align-items: center; gap: 4px; margin-right: auto; }
+  .stangmatch { width: 22px; height: 22px; border: 0; border-radius: 50%; flex: none;
+    background: transparent; color: var(--t-mut); font-size: 14px; line-height: 1; }
+  .stangmatch:hover { background: var(--div3); color: var(--t-head); }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--t-help); flex: none; }
   .dot.pa { background: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
   .ic { width: 15px; height: 15px; color: var(--t-mut); flex: none; }

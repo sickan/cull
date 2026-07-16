@@ -544,6 +544,14 @@ export async function aktivMatch() {
   return wait(_aktivMock)
 }
 
+// FEAT-05: stäng aktiva matchen uttryckligen (klar för dagen).
+export async function stangAktivMatch() {
+  const api = brygga()
+  if (api) return api.stang_aktiv_match()
+  _aktivMock = null
+  return wait({ ok: true })
+}
+
 // ── Arbetsyta — autosparade utkast (Live/SoMe/Webb-Sport, per match) ────────
 const _mockUtkast = {}
 
