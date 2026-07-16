@@ -67,6 +67,15 @@ skiljelinje för dolda jobb, FEAT-10/11 galleri-sökvägs-UI. → Code direkt.
 
 ### Prio 2 — iOS telefon
 
+- [ ] **B-012 Kamerabrygga FTP** (ersätter SPIKE-iOS-01 — designen KLAR:
+      `ios-nef-brygga/design/PLAN-kamera-ftp.md`, `d207bba`): FTP-mottagare i
+      appen (Network.framework, port 2121) → Z8 skickar markerade bilder över
+      iPhone-hotspot (172.20.10.1) → landar på importerade-hyllan → story utan
+      kortdrag. Spår A = RAW+JPEG ("enbart JPEG" via FTP), spår B = NEF +
+      inbäddad preview. Inkl. "Redigera i Lightroom"-knapp (§6b) +
+      Vintage-preset-validering på JPEG (engångs, skiva 3). 3 skivor:
+      motor+loopback-tester → Kameran-segment i Bilder → skarpkörning m.
+      Z8-recept. Medel-stor, fältnytta hög.
 - [ ] **B-003 Röst → action:** inspelning → transkribering → Claude-tolkning →
       bekräftelsevy → händelse. Grundflöde före SM, trimmas efter.
 - [ ] **FEAT-iOS-04 systemstyrt mörkt tema** (samma princip som DPT2 #25). Litet.
@@ -135,7 +144,8 @@ pipeline-problem. FEAT-13 först — den kan lösa BUG-06/08 på köpet.*
       ML/modell-bibliotek · SPIKE-04 PM-mapp · SPIKE-05 platshållare i ML-bildvyer ·
       SPIKE-06 push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar
       (SPIKE-02 flyttad in i D7)
-- [ ] **SPIKE-iOS-01** trådlös Nikon Z8 (stor)
+- [x] ~~**SPIKE-iOS-01** trådlös Nikon Z8 (stor)~~ — löst av design →
+      **B-012 Kamerabrygga FTP** (Prio 2 iOS)
 - [ ] FEAT-iOS-02 (när mobil render-väg finns)
 - [ ] B-009 widgets · B-010/D6 låsskärm · B-011 realtid/batteri-spike
 - [ ] Moln-som-sanning-utbyggnad (arkitekturspecen)
