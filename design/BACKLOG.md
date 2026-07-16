@@ -48,19 +48,11 @@ röst→action är LÅG prio.
 | IPTC | Leverera fas 3: IPTC-bildtexter | Sparad sedan tidigare |
 | C-försl | Beslut om C-förslagen (design/C-FORSLAG.md) | Stig-beslut |
 
-## C · Event/deltagare (friidrott m.m.)
-
-| ID | Vad | Anteckning |
-|----|-----|-----------|
-| B-001 | Deltagarhantering: Event → Deltagare → Grenar (m2m), admin-UI, API till iOS | **Deadline före 24/7** · = skivan av #29 gruppera-under-tävling |
-| B-002 | Friidrotts-overlays i motorn (grentyp → etiketter/resultatformat) | Beroende: B-001 + **D2** (handoff ute) |
-
 ## D · iOS
 
 | ID | Vad | Anteckning |
 |----|-----|-----------|
-| iOS-trupp | Trupp/startelva från arenan | **SKIVA 1 KLAR 16/7** (TruppView: foto-referens + tap-startelva + stryk ur trupp; PUT /roster deployad; ios `e0e6472`). KVAR: installera på telefonen (kräver upplåst lur) + **skiva 2: Vision-OCR förifyller ur fotot** + skiva 3: DPT2-reconciliation av mobilsatt roster |
-| iOS-läs | Läs-features ur arkitekturspecen: **väder-aggregat per dag + restid/"när måste jag åka"** (MapKit) | Stigs "väder, kör nu" — lyft ur B-011/P3 |
+| iOS-trupp-2/3 | Trupp skiva 2: Vision-OCR förifyller ur uppställningsfotot · skiva 3: DPT2-reconciliation av mobilsatt roster | Skiva 1 KLAR + installerad |
 | iOS-notis | Skarp notis-landning ("påminn när matchdata landat" — Stigs knapptryck end-to-end) | Kvar från design-lyftet etapp 3 |
 | iOS-story | Story-text-override | Kvar från lyftet |
 | iOS-lev | Leverans-progress-datakälla | Kvar från lyftet |
@@ -68,7 +60,7 @@ röst→action är LÅG prio.
 | FEAT-iOS-02 | SoMe-inlägg från heldagsevent i Kalendern | Blockerad: mobil render-väg (Pillow är Mac-bunden — se ML-E2) |
 | FEAT-iOS-03 | Kalender som visningsläge under Fotojobb | → **D8** (design först) |
 | FEAT-iOS-04 | Systemstyrt mörkt tema | Litet (samma princip som DPT2 #25) |
-| SPIKE-iOS-01 | Trådlös kommunikation Nikon Z8 | Stor utredning |
+| B-012 | Kamerabrygga FTP: Z8 → telefon utan kortdrag (ersätter SPIKE-iOS-01) | **Design KLAR** (`ios-nef-brygga/design/PLAN-kamera-ftp.md`) — 3 skivor: FTP-motor+tester → Kameran-segment i Bilder → skarpkörning m Z8 |
 | SPIKE-iOS-02 | Översyn "Matchdata klar" | Liten, ihop med notis-flödet |
 | B-003 | Röst → transkribering → action | **LÅG prio (Stig 16 jul)** |
 | B-008 | iPad-spike + D3-implementation | Stigs prio 4-spår |
@@ -136,6 +128,11 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 
 ## ✅ Levererat nyligen (rörligt — flyttas hit när klart)
 
+- 16 jul sen kväll: B-001 deltagarhantering (schema v29 + Grenar & deltagare-
+  editorn) · B-002/D2 friidrotts-overlays + desktop- OCH telefon-publicering
+  (render-container 1.1.0) · tävlings-paket till appen · tennis komplett i appen
+  (matchdata individ, sport-medveten hub + Föra matchen, GAME-förande m auto-set)
+  · individ-gren-kanten · iOS väder+restid ("åk senast")
 - 16 jul kväll: iOS heldag→08:00 + Uppdrag-knappen klickbar (installerade) ·
   ios-repot backat till privat GitHub (sickan/ios-nef-brygga) · B-007 lightbox
   LIVE på sajten (D5-facit) · MP-död avgjord (raderaMaterial väckt,
