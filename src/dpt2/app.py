@@ -2741,6 +2741,22 @@ def main(db_path=None):
     import webview
     _satt_dockikon()
     api = Api(db_path)
+
+    # Mobil Live-premissen är "jag är kanske inte vid datorn" — se till att
+    # telefonen har färska match-paket + fotojobb så fort appen startat, inte
+    # först vid nästa På gång-publicering. Bakgrundstråd, best-effort: utan
+    # nät/nyckel händer inget och starten blockeras aldrig.
+    def _startsynk():
+        try:
+            api.synka_live_paket()
+        except Exception:
+            pass
+        try:
+            api.synka_fotojobb()
+        except Exception:
+            pass
+    threading.Thread(target=_startsynk, daemon=True).start()
+
     webview.create_window(
         "Dalecarlia Photo Tools", url=index_url(), js_api=api,
         width=1180, height=820, min_size=(940, 620))
