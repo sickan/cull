@@ -120,19 +120,35 @@ class Api:
             lag["logga_url"] = url
         return url or ""
 
+    def _lag_uppslagning(self):
+        """Lag-index för paketbygget: nycklat på ID (primärt) och namn
+        (fallback för äldre data). Rent namn-nycklat index kollapsade
+        dubbletter — Malmö FF finns som dam OCH herr, och fel kön kunde vinna
+        (herrspelare i dammatchens roster)."""
+        index = {}
+        for l in store.lista_lag(self.conn):
+            index[l["id"]] = l
+            index.setdefault(l["namn"], l)
+        return index
+
     def _match_till_paket(self, m, lag_index=None):
         """Bygger match-paketet mobilen behöver för att VISA och FÖRA matchen.
         `m` = store.hamta_match-dict (har inline-spelare + hem_gren)."""
         if lag_index is None:
-            lag_index = {l["namn"]: l for l in store.lista_lag(self.conn)}
+            lag_index = self._lag_uppslagning()
 
-        def _farg(namn):
+        def _lag(sida):
+            # Matchens lag-id vinner över namnet (Malmö FF dam ≠ herr).
+            return (lag_index.get(m.get(f"lag_{sida}_id") or "")
+                    or lag_index.get(m.get(f"lag_{sida}") or ""))
+
+        def _farg(sida):
             # Speglar ResultatRemsa.fargForLag — samma färg som desktop visar.
-            l = lag_index.get(namn) or {}
+            l = _lag(sida) or {}
             return l.get("stall_hemma") or l.get("profilfarg") or ""
 
-        def _logga(namn):
-            l = lag_index.get(namn)
+        def _logga(sida):
+            l = _lag(sida)
             return self.logga_url_for_lag(l) if l else ""
 
         pr = sportprofil.profil(m.get("sport") or "") or {}
@@ -141,12 +157,12 @@ class Api:
         return {
             "lag_hemma": m.get("lag_hemma") or "",
             "lag_borta": m.get("lag_borta") or "",
-            "lag_hemma_farg": _farg(m.get("lag_hemma")),
-            "lag_borta_farg": _farg(m.get("lag_borta")),
+            "lag_hemma_farg": _farg("hemma"),
+            "lag_borta_farg": _farg("borta"),
             # Molnrendern hämtar dessa ur R2 och skickar in dem i skapa_story.
             # Tom sträng = laget saknar logga → monogram-badge (korrekt).
-            "lag_hemma_logga_url": _logga(m.get("lag_hemma")),
-            "lag_borta_logga_url": _logga(m.get("lag_borta")),
+            "lag_hemma_logga_url": _logga("hemma"),
+            "lag_borta_logga_url": _logga("borta"),
             "arena": m.get("arena") or "",
             "sport": m.get("sport") or "",
             "liga": m.get("liga") or "",
@@ -164,22 +180,29 @@ class Api:
         }
 
     def _paket_roster(self, m, lag_index):
-        """Roster till match-paketet: matchtruppen om den finns (den bär
-        matchspecifika inhopp/nummer), annars LAGENS egna trupper — matchtruppen
-        skapas först vid "Hämta match", och målskytt-väljaren i mobilen ska ha
-        spelarna även för matcher som inte förberetts vid datorn."""
+        """Roster till match-paketet, PER SIDA: matchtruppen om den har spelare
+        för sidan, annars LAGETS egen trupp — matchtruppen skapas först vid
+        "Hämta match", och målskytt-väljaren i mobilen ska ha spelarna även för
+        matcher som inte förberetts vid datorn. Fallbacken var tidigare
+        alles-eller-inget: en match med bara hemma-spelare gav bortalaget TOM
+        lista i mobilen. Laget slås upp på ID (namn kan finnas som dam+herr)."""
         # Matchtruppen bär `start` (matchdaguttag markerar de 11) + position
         # (sparas i `info` på matchspelare). Mobilens MÅL-flöde delar upp
         # startelva vs bänk på `start`; utan uttag är alla start=False → sökbar lista.
-        roster = [{"nr": s.get("nr") or None, "namn": s.get("namn"),
-                   "lag": s.get("lag"),
-                   "start": bool(s.get("start")),
-                   "position": s.get("info") or s.get("position") or ""}
-                  for s in (m.get("spelare") or []) if s.get("namn")]
-        if roster:
-            return roster
+        ur_matchen = {"hemma": [], "borta": []}
+        for s in (m.get("spelare") or []):
+            if s.get("namn") and s.get("lag") in ur_matchen:
+                ur_matchen[s["lag"]].append(
+                    {"nr": s.get("nr") or None, "namn": s["namn"],
+                     "lag": s["lag"], "start": bool(s.get("start")),
+                     "position": s.get("info") or s.get("position") or ""})
+        roster = []
         for sida in ("hemma", "borta"):
-            l = lag_index.get(m.get(f"lag_{sida}") or "")
+            if ur_matchen[sida]:
+                roster.extend(ur_matchen[sida])
+                continue
+            l = (lag_index.get(m.get(f"lag_{sida}_id") or "")
+                 or lag_index.get(m.get(f"lag_{sida}") or ""))
             if not l or not l.get("id"):
                 continue
             for s in store.lag_trupp(self.conn, l["id"]):
@@ -237,7 +260,7 @@ class Api:
         varje kommande match ska finnas redo i mobilen utan förberedelse."""
         if not self.live_synk.har_nyckel():
             return {"ok": False, "fel": "CONTENT_SYNC_API_KEY saknas."}
-        lag_index = {l["namn"]: l for l in store.lista_lag(self.conn)}
+        lag_index = self._lag_uppslagning()
         lokala, antal, fel = set(), 0, None
         for rad in self._pagang_kommande():
             m = store.hamta_match(self.conn, rad["id"])

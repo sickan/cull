@@ -430,11 +430,18 @@ def upsert_lag(conn, namn, *, id=None, kind=None, sport=None, gren=None,
     if lid is None:
         lid = slug_id(namn)
         fin = conn.execute("SELECT * FROM lag WHERE id=?", (lid,)).fetchone()
-        if fin is not None and sport and fin["sport"] and fin["sport"] != sport:
-            # Namnkrock mellan sporter (Sverige Volleyboll ≠ Sverige Handboll):
-            # den nya posten får sport-suffixat id, originalet behåller sitt.
-            lid = slug_id(f"{namn} {sport}")
-            fin = conn.execute("SELECT * FROM lag WHERE id=?", (lid,)).fetchone()
+        if fin is not None:
+            olika_sport = sport and fin["sport"] and fin["sport"] != sport
+            olika_gren = gren and fin["gren"] and fin["gren"] != gren
+            if olika_sport or olika_gren:
+                # Namnkrock (Sverige Volleyboll ≠ Sverige Handboll, Malmö FF
+                # dam ≠ herr): den nya posten får id suffixat med de skiljande
+                # dimensionerna, originalet behåller sitt (och sina referenser).
+                suffix = " ".join(d for d, olik in ((sport, olika_sport),
+                                                    (gren, olika_gren)) if olik)
+                lid = slug_id(f"{namn} {suffix}")
+                fin = conn.execute("SELECT * FROM lag WHERE id=?",
+                                   (lid,)).fetchone()
     if fin is None:
         conn.execute(
             "INSERT INTO lag(id,namn,kind,sport,gren,hemsida,instagram,logga,"

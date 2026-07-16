@@ -1524,6 +1524,43 @@ class TestMobilLive(unittest.TestCase):
         self.assertFalse(p["sportprofil"]["has_scorers"])
         self.assertEqual(p["sportprofil"]["mid_label"], "Setsiffror")
 
+    def test_paket_roster_ratt_gren_vid_namnkrock(self):
+        # Malmö FF finns som DAM och HERR — namn-nycklat lag-index kollapsade
+        # dubbletterna och herrtruppen kunde hamna i dammatchens paket.
+        dam = self.api.spara_lag({"namn": "Malmö FF", "sport": "fotboll",
+                                  "gren": "dam"})["id"]
+        herr = self.api.spara_lag({"namn": "Malmö FF", "sport": "fotboll",
+                                   "gren": "herr"})["id"]
+        store.upsert_lag(self.api.conn, "Malmö FF", id=dam, stall_hemma="#8fb7de")
+        store.merge_lag_trupp(self.api.conn, dam,
+                              [{"nr": "1", "namn": "Damspelare"}])
+        store.merge_lag_trupp(self.api.conn, herr,
+                              [{"nr": "1", "namn": "Herrspelare"}])
+        mid = self._match(lag_hemma="Malmö FF", lag_hemma_id=dam,
+                          lag_borta="Bröndby IF")
+        m = store.hamta_match(self.api.conn, mid)
+        p = self.api._match_till_paket(m)
+        namn = [s["namn"] for s in p["roster"] if s["lag"] == "hemma"]
+        self.assertEqual(namn, ["Damspelare"])          # inte herrtruppen
+        self.assertEqual(p["lag_hemma_farg"], "#8fb7de")  # dam-lagets färg
+
+    def test_paket_roster_fallback_per_sida(self):
+        # Matchtrupp för BARA hemma får inte lämna bortalaget tomt — borta ska
+        # falla tillbaka till lagets egen trupp (Bröndby-buggen).
+        borta_id = self.api.spara_lag({"namn": "Bröndby IF", "sport": "fotboll",
+                                       "gren": "dam"})["id"]
+        store.merge_lag_trupp(self.api.conn, borta_id,
+                              [{"nr": "9", "namn": "Bortaspelare"}])
+        mid = self._match(lag_borta="Bröndby IF", lag_borta_id=borta_id,
+                          spelare=[{"nr": "1", "namn": "Hemmaspelare",
+                                    "lag": "hemma", "start": True}])
+        m = store.hamta_match(self.api.conn, mid)
+        roster = self.api._match_till_paket(m)["roster"]
+        self.assertEqual([s["namn"] for s in roster if s["lag"] == "hemma"],
+                         ["Hemmaspelare"])
+        self.assertEqual([s["namn"] for s in roster if s["lag"] == "borta"],
+                         ["Bortaspelare"])
+
     def test_paket_utan_tid_faller_tillbaka_pa_midnatt(self):
         mid = self._match(tid="")
         m = store.hamta_match(self.api.conn, mid)
