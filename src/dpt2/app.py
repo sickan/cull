@@ -1803,6 +1803,10 @@ class Api:
             if config.get("friidrott"):
                 storyfalt["friidrott"] = config["friidrott"]
                 storyfalt["event"] = t.get("namn") or ""
+                # Kantfärgen följer INDIVIDEN när den är känd — mästerskapet
+                # är mixed men man tävlar i dam-/herrklass.
+                if config["friidrott"].get("gren"):
+                    storyfalt["gren"] = config["friidrott"]["gren"]
         test = bool(config.pop("test", False))
         # p.3: IG "Exportera till disk" postar ALDRIG mot Meta — den renderar
         # (upp till 20) färdiga bilder till en synlig exportmapp som fotografen

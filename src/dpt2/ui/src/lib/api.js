@@ -113,7 +113,7 @@ const MOCK_TAVLINGAR = [
   { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', gren: 'dam', fran: '2026-04-01', till: '2026-10-31', ort: 'Sverige', arena: '', hemsida: 'svenskelitfotboll.se', logga: null, kalender: 0 },
   { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', gren: 'herr', fran: '2026-09-01', till: '2027-04-30', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
   { id: 'nordea-open', namn: 'Nordea Open', typ: 'turnering', sport: 'tennis', gren: 'dam', fran: '2026-07-13', till: '2026-07-19', ort: 'Båstad', arena: 'Båstad Tennisstadion', hemsida: 'nordeaopen.se', logga: null, kalender: 0 },
-  { id: 'friidrotts-sm', namn: 'Friidrotts-SM 2026', typ: 'masterskap', sport: 'friidrott', gren: 'dam', fran: '2026-07-24', till: '2026-07-26', ort: 'Uppsala', arena: 'Studenternas IP', hemsida: '', logga: null, kalender: 0 },
+  { id: 'friidrotts-sm', namn: 'Friidrotts-SM 2026', typ: 'masterskap', sport: 'friidrott', gren: 'mixed', fran: '2026-07-24', till: '2026-07-26', ort: 'Uppsala', arena: 'Studenternas IP', hemsida: '', logga: null, kalender: 0 },
 ]
 
 // Mock: sportprofiler (statisk fältmodell, speglar dpt2.data.sportprofil).
@@ -252,7 +252,7 @@ export async function listaLagForTavling(tavlingId) {
 // ── Discipliner (B-001): tävlingens grenar + deltagare per gren ─────────────
 let MOCK_DISCIPLINER = [
   { id: 'disc_langd', tavling_id: 'friidrotts-sm', namn: 'Längd', typ: 'hoppkast', ordning: 0,
-    deltagare: [{ id: 'alva-hoppare', namn: 'Alva Hoppare', klubb: 'Malmö AI' }] },
+    deltagare: [{ id: 'alva-hoppare', namn: 'Alva Hoppare', klubb: 'Malmö AI', gren: 'dam' }] },
   { id: 'disc_100m', tavling_id: 'friidrotts-sm', namn: '100 m', typ: 'sprint', ordning: 1,
     deltagare: [] },
 ]
@@ -288,7 +288,7 @@ export async function kopplaDisciplinDeltagare(disciplinId, lagId, pa = true) {
     d.deltagare = (d.deltagare || []).filter((x) => x.id !== lagId)
     if (pa) {
       const l = MOCK_LAG.find((x) => x.id === lagId)
-      if (l) d.deltagare.push({ id: l.id, namn: l.namn, klubb: l.klubb || '' })
+      if (l) d.deltagare.push({ id: l.id, namn: l.namn, klubb: l.klubb || '', gren: l.gren || '' })
     }
   }
   return wait({ ok: true })

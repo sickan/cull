@@ -169,12 +169,18 @@
   function friPayload() {
     const d = friDisc || {}
     const p = (d.deltagare || []).find((x) => x.id === fri.deltagareId) || {}
+    const start = (d.deltagare || []).slice(0, 3)
+    // Kantfärgen följer INDIVIDEN (SM är mixed men man tävlar dam/herr):
+    // resultat/placering = vald deltagares gren; start = fältets gemensamma
+    // gren (blandat fält → tomt → tävlingens gren vinner i backend).
+    const startGren = start.length && start.every((x) => x.gren === start[0].gren)
+      ? (start[0].gren || '') : ''
     return { tillstand: fri.tillstand, gren_namn: d.namn || '',
       grentyp: d.typ || 'hoppkast', moment: fri.moment,
       namn: p.namn || '', klubb: p.klubb || '',
+      gren: fri.tillstand === 'start' ? startGren : (p.gren || ''),
       resultat: fri.resultat, serie: fri.serie, placering: fri.placering,
-      idrottare: (d.deltagare || []).slice(0, 3)
-        .map((x) => ({ namn: x.namn, klubb: x.klubb || '' })) }
+      idrottare: start.map((x) => ({ namn: x.namn, klubb: x.klubb || '' })) }
   }
 
   // ── Steg 1: Innehåll ───────────────────────────────────────────────────────

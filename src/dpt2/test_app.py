@@ -411,7 +411,7 @@ class TestApi(unittest.TestCase):
         from dpt2.motorer import story_overlay
         self.api.spara_tavling({
             "namn": "Friidrotts-SM 2026", "sport": "friidrott",
-            "typ": "masterskap", "gren": "dam"})
+            "typ": "masterskap", "gren": "mixed"})
         tid = self.api.lista_tavlingar()[0]["id"]
         fangad = {}
         verklig = story_overlay.skapa_friidrott_story
@@ -430,6 +430,7 @@ class TestApi(unittest.TestCase):
                 "friidrott": {"tillstand": "placering", "gren_namn": "Längd",
                               "grentyp": "hoppkast", "moment": "Final",
                               "namn": "Alva Hoppare", "klubb": "Malmö AI",
+                              "gren": "dam",
                               "placering": "1", "resultat": "6,42"},
                 "test": True, "test_mapp": f"{d}/ut"})
             self.assertTrue(r["ok"])
@@ -437,7 +438,8 @@ class TestApi(unittest.TestCase):
         self.assertEqual(fangad["tillstand"], "placering")
         self.assertEqual(fangad["gren_namn"], "Längd")
         self.assertEqual(fangad["event"], "Friidrotts-SM 2026")  # uppe höger
-        self.assertEqual(fangad["gren"], "dam")                  # kantfärgen
+        # Kantfärgen följer INDIVIDEN (dam), inte mästerskapet (mixed)
+        self.assertEqual(fangad["gren"], "dam")
         self.assertEqual(fangad["placering"], "1")
 
     def test_material_spara_lista_radera_genom_bryggan(self):

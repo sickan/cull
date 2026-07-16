@@ -861,8 +861,10 @@ def lista_discipliner(conn, tavling_id):
         "SELECT * FROM disciplin WHERE tavling_id=? ORDER BY ordning, namn",
         (tavling_id,))]
     for d in rader:
+        # gren (dam/herr) följer med — overlayens kantfärg ska följa INDIVIDEN,
+        # inte mästerskapet (SM är mixed men man tävlar i dam-/herrklass).
         d["deltagare"] = [dict(r) for r in conn.execute(
-            "SELECT l.id, l.namn, l.klubb FROM lag l "
+            "SELECT l.id, l.namn, l.klubb, l.gren FROM lag l "
             "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
             "WHERE dd.disciplin_id=? ORDER BY l.namn", (d["id"],))]
     return rader
