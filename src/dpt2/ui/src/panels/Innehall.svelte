@@ -450,8 +450,11 @@
   // förifyller titel/period/plats.
   // Heldagsaktivitet = paraply-jobb (mässa, mästerskap, turnering) — INTE en
   // enskild match. Framtida matcher utan avsparkstid råkar bli all_day, men de
-  // bär match_id (app.py lista_fotojobb) → filtrera bort dem här.
-  $: heldagsJobb = (fotojobb || []).filter((j) => j.all_day && !j.match_id)
+  // bär match_id (app.py lista_fotojobb) → filtrera bort dem här. Gamla
+  // "Ackreditering …"-påminnelser (skapade före ACKR-markören) är meta, inte
+  // uppdrag — bort ur väljaren (HDA-b).
+  $: heldagsJobb = (fotojobb || []).filter((j) =>
+    j.all_day && !j.match_id && !/^ackreditering\b/i.test(j.title || ''))
   function valjSporteventJobb(e) {
     const id = e.target.value
     cmsSportevent.fotojobbId = id
