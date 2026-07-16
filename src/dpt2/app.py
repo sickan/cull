@@ -183,6 +183,39 @@ class Api:
             **self._paket_friidrott(m),
         }
 
+    def _tavling_till_paket(self, t, discipliner):
+        """Paket för en TÄVLING med discipliner (friidrott): heldagsevent-form —
+        tävlingsnamnet är rubriken, ingen motståndare, grenarna + deltagarna
+        följer med så telefonen kan bygga story-overlayn på plats."""
+        pr = sportprofil.profil(t.get("sport") or "") or {}
+        fran = t.get("fran") or ""
+        return {
+            "lag_hemma": t.get("namn") or "",
+            "lag_borta": "",
+            "lag_hemma_farg": "", "lag_borta_farg": "",
+            "lag_hemma_logga_url": self.logga_url_for_lag(t) if t.get("logga") else "",
+            "lag_borta_logga_url": "",
+            "arena": t.get("arena") or t.get("ort") or "",
+            "sport": t.get("sport") or "",
+            "liga": "",
+            "avspark": f"{fran}T08:00:00" if fran else None,
+            "gren": t.get("gren") or "",
+            "gren_farg": GREN_FARG.get(t.get("gren") or "", ""),
+            "sportprofil": {
+                "start_moment": pr.get("start_moment") or "Start",
+                "mid_label": pr.get("mid_label") or "Delresultat",
+                "res_label": pr.get("res_label") or "Resultat",
+                "has_scorers": bool(pr.get("has_scorers", False)),
+            },
+            "roster": [],
+            "friidrott": {"discipliner": [
+                {"id": d["id"], "namn": d["namn"], "typ": d["typ"],
+                 "deltagare": [{"namn": p["namn"], "klubb": p.get("klubb") or "",
+                                "gren": p.get("gren") or ""}
+                               for p in d.get("deltagare", [])]}
+                for d in discipliner]},
+        }
+
     def _paket_friidrott(self, m):
         if not m.get("tavling_id"):
             return {}
@@ -289,6 +322,23 @@ class Api:
                 antal += 1
             elif fel is None:
                 fel = r.get("fel") or "Kunde inte pusha match-paket."
+        # Tävlingar med discipliner (friidrott) får EGNA paket — SM ska gå att
+        # öppna i appen utan att en dummy-match skapas. Aktuella = slutdatumet
+        # (eller startdatumet) har inte passerat.
+        idag = datetime.now().strftime("%Y-%m-%d")
+        for t in store.lista_tavlingar(self.conn):
+            slut = t.get("till") or t.get("fran") or ""
+            if not slut or slut < idag:
+                continue
+            disc = store.lista_discipliner(self.conn, t["id"])
+            if not disc:
+                continue
+            lokala.add(t["id"])
+            r = self.live_synk.push_paket(t["id"], self._tavling_till_paket(t, disc))
+            if r.get("ok"):
+                antal += 1
+            elif fel is None:
+                fel = r.get("fel") or "Kunde inte pusha tävlings-paket."
         borttagna = 0
         if fel is None:   # fjärrlistan är opålitlig om pushen själv failade
             for rad in self.live_synk.lista():

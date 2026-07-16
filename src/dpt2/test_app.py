@@ -1600,6 +1600,39 @@ class TestMobilLive(unittest.TestCase):
         self.assertEqual([s["namn"] for s in roster if s["lag"] == "borta"],
                          ["Bortaspelare"])
 
+    def test_tavling_med_discipliner_far_eget_paket(self):
+        # SM ska gå att öppna i appen utan dummy-match: aktuella tävlingar med
+        # discipliner pushas som egna paket (heldagsevent-form + friidrott).
+        self.api.spara_tavling({
+            "namn": "Friidrotts-SM 2026", "sport": "friidrott",
+            "typ": "masterskap", "gren": "mixed",
+            "fran": "2099-07-24", "till": "2099-07-26", "ort": "Uppsala"})
+        tid = self.api.lista_tavlingar()[0]["id"]
+        did = store.upsert_disciplin(self.api.conn, tid, "Längd", typ="hoppkast")
+        a = store.upsert_lag(self.api.conn, "Alva Hoppare", kind="individ",
+                             sport="friidrott", gren="dam", klubb="Malmö AI")
+        store.koppla_disciplin_deltagare(self.api.conn, did, a)
+        r = self.api.synka_live_paket()
+        self.assertTrue(r["ok"])
+        p = dict(self.fake.pushade_paket).get(tid)
+        self.assertIsNotNone(p, "tävlingen fick inget paket")
+        self.assertEqual(p["lag_hemma"], "Friidrotts-SM 2026")
+        self.assertEqual(p["lag_borta"], "")
+        self.assertEqual(p["avspark"], "2099-07-24T08:00:00")
+        disc = p["friidrott"]["discipliner"]
+        self.assertEqual(disc[0]["namn"], "Längd")
+        self.assertEqual(disc[0]["deltagare"][0]["gren"], "dam")
+        # Passerad tävling utan aktualitet ska INTE pushas
+        self.api.spara_tavling({
+            "namn": "Gammalt SM", "sport": "friidrott", "typ": "masterskap",
+            "fran": "2020-01-01", "till": "2020-01-02"})
+        gid = next(t["id"] for t in self.api.lista_tavlingar()
+                   if t["namn"] == "Gammalt SM")
+        store.upsert_disciplin(self.api.conn, gid, "Kula", typ="hoppkast")
+        self.fake.pushade_paket = []
+        self.api.synka_live_paket()
+        self.assertNotIn(gid, dict(self.fake.pushade_paket))
+
     def test_paket_utan_tid_faller_tillbaka_pa_midnatt(self):
         mid = self._match(tid="")
         m = store.hamta_match(self.api.conn, mid)
