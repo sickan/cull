@@ -403,6 +403,43 @@ class TestApi(unittest.TestCase):
         self.assertEqual(fangad["next_when"], "13 jul – 19 jul")
         self.assertEqual(fangad["liga"], "")   # namnet är redan rubriken
 
+    def test_publicera_kanal_friidrott_renderar_d2_overlay(self):
+        # B-002: turneringsmål + friidrott-fält → omslaget renderas med
+        # skapa_friidrott_story (D2-mallarna), inte match-overlayn.
+        import tempfile
+        from PIL import Image
+        from dpt2.motorer import story_overlay
+        self.api.spara_tavling({
+            "namn": "Friidrotts-SM 2026", "sport": "friidrott",
+            "typ": "masterskap", "gren": "dam"})
+        tid = self.api.lista_tavlingar()[0]["id"]
+        fangad = {}
+        verklig = story_overlay.skapa_friidrott_story
+        def _spion(bild, tillstand, **kw):
+            fangad["tillstand"] = tillstand
+            fangad.update(kw)
+            return verklig(bild, tillstand, **kw)
+        self.addCleanup(setattr, story_overlay, "skapa_friidrott_story", verklig)
+        story_overlay.skapa_friidrott_story = _spion
+        with tempfile.TemporaryDirectory() as d:
+            f = f"{d}/bild.jpg"
+            Image.new("RGB", (400, 700), (60, 90, 130)).save(f, "JPEG")
+            r = self.api.publicera_kanal({
+                "kanal": "ig", "format": "9x16", "moment": "nasta_match",
+                "tavling_id": tid, "bilder": [{"path": f}],
+                "friidrott": {"tillstand": "placering", "gren_namn": "Längd",
+                              "grentyp": "hoppkast", "moment": "Final",
+                              "namn": "Alva Hoppare", "klubb": "Malmö AI",
+                              "placering": "1", "resultat": "6,42"},
+                "test": True, "test_mapp": f"{d}/ut"})
+            self.assertTrue(r["ok"])
+            self.assertEqual(r["antal"], 1)
+        self.assertEqual(fangad["tillstand"], "placering")
+        self.assertEqual(fangad["gren_namn"], "Längd")
+        self.assertEqual(fangad["event"], "Friidrotts-SM 2026")  # uppe höger
+        self.assertEqual(fangad["gren"], "dam")                  # kantfärgen
+        self.assertEqual(fangad["placering"], "1")
+
     def test_material_spara_lista_radera_genom_bryggan(self):
         res = self.api.spara_material({
             "kind": "live", "status": "utkast", "moment": "Avspark", "tema": "Hav",

@@ -1713,7 +1713,25 @@ class Api:
         for i, b in enumerate(bilder):
             path, fokus, zoom = b.get("path"), b.get("fokus"), b.get("zoom", 1.0)
             try:
-                if i == 0:                                   # omslag → overlay
+                if i == 0 and storyfalt.get("friidrott"):    # omslag → D2-overlay
+                    f = storyfalt["friidrott"]
+                    p = story_overlay.skapa_friidrott_story(
+                        path, f.get("tillstand") or "resultat",
+                        gren_namn=f.get("gren_namn") or "",
+                        grentyp=f.get("grentyp") or "hoppkast",
+                        moment=f.get("moment") or "",
+                        event=storyfalt.get("event") or "",
+                        idrottare=f.get("idrottare") or [],
+                        namn=f.get("namn") or "", klubb=f.get("klubb") or "",
+                        resultat=f.get("resultat") or "",
+                        serie=f.get("serie") or "",
+                        placering=f.get("placering") or "",
+                        tema=storyfalt.get("tema") or "Hav",
+                        gren=storyfalt.get("gren") or "",
+                        format=fmt, fokus=fokus, zoom=zoom,
+                        ut_path=Path(ut_mapp) / f"{kanal}_1_overlay.jpg")
+                    renderade.append(str(p))
+                elif i == 0:                                 # omslag → overlay
                     cfg = {**storyfalt, "foto": path, "format": fmt,
                            "fokus": fokus, "zoom": zoom}
                     r = story_korning._rendera(
@@ -1778,6 +1796,13 @@ class Api:
                 "arena": t.get("arena") or t.get("ort") or "",
                 "sport": t.get("sport") or "", "gren": t.get("gren") or "",
                 "next_when": f"{a} – {b}" if a and b and a != b else a})
+            # Friidrott (B-002): UI:t skickar disciplin/tillstånd/resultat-
+            # fälten färdiga — omslaget renderas då med skapa_friidrott_story
+            # (D2-mallarna) i stället för match-overlayn. Eventnamnet uppe
+            # till höger = tävlingens namn.
+            if config.get("friidrott"):
+                storyfalt["friidrott"] = config["friidrott"]
+                storyfalt["event"] = t.get("namn") or ""
         test = bool(config.pop("test", False))
         # p.3: IG "Exportera till disk" postar ALDRIG mot Meta — den renderar
         # (upp till 20) färdiga bilder till en synlig exportmapp som fotografen

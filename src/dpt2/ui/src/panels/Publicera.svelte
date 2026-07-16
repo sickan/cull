@@ -9,7 +9,7 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte'
   import {
     listaMatcher, hamtaMatch, aktivMatch, sattAktivMatch, sportprofiler, listaLag,
-    listaTavlingar,
+    listaTavlingar, listaDiscipliner,
     valjMapp, listaSomeBilder, thumbForBild,
     forhandsgranskaStory, publiceraLiveStory, publiceraKanal, nyTestPaketMapp,
     publiceraInnehallNatet, listaMaterial, sparaMaterial, genereraBildsvep,
@@ -152,6 +152,29 @@
     speglaRes(match); galleriUrl = ''; hemsidaUrl = ''
     materialId = (materials || []).find((m) => m.tavling_id === id && m.kind === 'some')?.id || null
     granska = null; genFel = ''; nollstallLive()
+    // Friidrott (B-002): tävlingens grenar driver story-overlayn (D2-mallarna).
+    discipliner = t.sport === 'friidrott' ? await listaDiscipliner(t.id) : []
+    fri = { ...FRI_TOM, disciplinId: discipliner[0]?.id || '' }
+  }
+
+  // ── Friidrotts-story (B-002): disciplin + tillstånd + resultatfält ────────
+  const FRI_TOM = { disciplinId: '', tillstand: 'resultat', moment: '',
+    deltagareId: '', resultat: '', serie: '', placering: '' }
+  let discipliner = []
+  let fri = { ...FRI_TOM }
+  $: friAktiv = arTurnering && match?.sport === 'friidrott'
+  $: friDisc = discipliner.find((d) => d.id === fri.disciplinId)
+  // Payload till publicera_kanal — deltagarens namn/klubb slås upp ur
+  // disciplinen; start-tillståndet tar disciplinens (max 3) deltagare.
+  function friPayload() {
+    const d = friDisc || {}
+    const p = (d.deltagare || []).find((x) => x.id === fri.deltagareId) || {}
+    return { tillstand: fri.tillstand, gren_namn: d.namn || '',
+      grentyp: d.typ || 'hoppkast', moment: fri.moment,
+      namn: p.namn || '', klubb: p.klubb || '',
+      resultat: fri.resultat, serie: fri.serie, placering: fri.placering,
+      idrottare: (d.deltagare || []).slice(0, 3)
+        .map((x) => ({ namn: x.namn, klubb: x.klubb || '' })) }
   }
 
   // ── Steg 1: Innehåll ───────────────────────────────────────────────────────
@@ -414,7 +437,9 @@
     const payload = { kanal: key, format: ch[key].fmt, bilder,
       moment: isEvent ? 'nasta_match' : 'resultat', tema, ...malFalt,
       caption: losText(caption),
-      stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar }
+      stallning: resNu.resultat, mellan: resNu.mellan, mal_rad: resNu.malskyttar,
+      // Friidrott: disciplin/tillstånd/resultat → skapa_friidrott_story (D2)
+      ...(friAktiv && fri.disciplinId ? { friidrott: friPayload() } : {}) }
     // p.3: IG-vägen (direkt via integrationen / export till disk) följer med.
     if (key === 'ig') payload.vag = ch.ig.vag
     return { typ: 'kanal', payload }
@@ -711,6 +736,41 @@
       {forsFran} on:sparat={onResSparat} />
     <div class="remstext">Resultat &amp; målgörare fylls i <b>en gång här</b> — samma värden matas in i story,
       inlägg och webbartikel. Mobilsynken sker <b>automatiskt i bakgrunden</b> — ingen knapp behövs.</div>
+  {:else if match && friAktiv}
+    <!-- Friidrott (B-002): grenens story-fält — driver D2-overlayn på omslaget -->
+    <div class="frirad">
+      {#if !discipliner.length}
+        <span class="remstext eventrem">Inga grenar på tävlingen ännu — lägg upp dem under Lag &amp; tävlingar (Grenar &amp; deltagare).</span>
+      {:else}
+        <select bind:value={fri.disciplinId} title="Gren">
+          {#each discipliner as d (d.id)}<option value={d.id}>{d.namn}</option>{/each}
+        </select>
+        <select bind:value={fri.tillstand} title="Tillstånd">
+          <option value="start">Start</option>
+          <option value="resultat">Resultat</option>
+          <option value="placering">Placering</option>
+        </select>
+        <input bind:value={fri.moment} placeholder="Moment (Kval/Final…)" />
+        {#if fri.tillstand !== 'start'}
+          <select bind:value={fri.deltagareId} title="Deltagare">
+            <option value="">Deltagare…</option>
+            {#each (friDisc?.deltagare || []) as p (p.id)}
+              <option value={p.id}>{p.namn}{p.klubb ? ` · ${p.klubb}` : ''}</option>
+            {/each}
+          </select>
+        {/if}
+        {#if fri.tillstand === 'resultat'}
+          <input bind:value={fri.resultat} placeholder={friDisc?.typ === 'sprint' ? '10,12' : friDisc?.typ === 'medel' ? '1.45,32' : friDisc?.typ === 'mangkamp' ? '8 421' : '6,42'} title="Resultat" />
+          {#if friDisc?.typ === 'hoppkast'}
+            <input class="friserie" bind:value={fri.serie} placeholder="Serie: 6,21 6,42 x 6,38" title="Hoppserie (x = övertramp)" />
+          {/if}
+        {:else if fri.tillstand === 'placering'}
+          <input bind:value={fri.placering} placeholder="1 / DNF" title="Placering (siffra eller DNF/DNS/DQ)" />
+          <input bind:value={fri.resultat} placeholder="Resultat (valfritt)" />
+        {/if}
+      {/if}
+    </div>
+    <div class="remstext eventrem">Friidrott — omslaget renderas med grenens story-mall (start · resultat · placering). Start tar grenens deltagare (max 3) automatiskt.</div>
   {:else if match && arTurnering}
     <div class="remstext eventrem">Turnering — publicering för hela tävlingen (t.ex. dagens matcher eller vecko-svep). Inga resultatsiffror; samma bilder, text och kanaler som en match.</div>
   {:else if match && isEvent}
@@ -1143,6 +1203,11 @@
   .mhint { font-size: 10.5px; color: var(--t-help); }
 
   .remstext { font-size: 11px; color: var(--t-mut); margin: -8px 0 22px 2px; }
+  /* Friidrotts-storyns fältrad (B-002) */
+  .frirad { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 8px; }
+  .frirad select, .frirad input { padding: 7px 10px; font-size: 12.5px; }
+  .frirad input { max-width: 170px; }
+  .frirad .friserie { max-width: 230px; }
   .minilank { border: 0; background: none; color: var(--acc); font-weight: 600; font-size: inherit; padding: 0; cursor: pointer; }
 
   .steg { display: flex; align-items: center; gap: 10px; margin: 26px 0 12px; flex-wrap: wrap; }

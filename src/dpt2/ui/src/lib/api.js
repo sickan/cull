@@ -106,12 +106,14 @@ const MOCK_LAG = [
   { id: 'hk-malmo', namn: 'HK Malmö', kind: 'team', sport: 'handboll', gren: 'herr', instagram: '@hkmhandboll', hemsida: '', logga: null, stall_hemma: '#0a2342', stall_borta: '#e23', stall_tredje: '', profilfarg: '', klubb: '', trupp_n: 0, trupp_kalla: '', comps: ['handbollsligan'] },
   { id: 'rebecca-peterson', namn: 'Rebecca Peterson', kind: 'individ', sport: 'tennis', gren: 'dam', instagram: '@rebeccapeterson', hemsida: '', logga: null, stall_hemma: '', stall_borta: '', stall_tredje: '', profilfarg: '#2F7CB0', klubb: 'Sverige', comps: [] },
   { id: 'mirjam-bjorklund', namn: 'Mirjam Björklund', kind: 'individ', sport: 'tennis', gren: 'dam', instagram: '@mirjambjorklund', hemsida: '', logga: null, stall_hemma: '', stall_borta: '', stall_tredje: '', profilfarg: '#C9657F', klubb: 'Sverige', comps: [] },
+  { id: 'alva-hoppare', namn: 'Alva Hoppare', kind: 'individ', sport: 'friidrott', gren: 'dam', instagram: '', hemsida: '', logga: null, stall_hemma: '', stall_borta: '', stall_tredje: '', profilfarg: '#B5643C', klubb: 'Malmö AI', comps: ['friidrotts-sm'] },
 ]
 
 const MOCK_TAVLINGAR = [
   { id: 'obos-damallsvenskan', namn: 'OBOS Damallsvenskan', typ: 'liga', sport: 'fotboll', gren: 'dam', fran: '2026-04-01', till: '2026-10-31', ort: 'Sverige', arena: '', hemsida: 'svenskelitfotboll.se', logga: null, kalender: 0 },
   { id: 'handbollsligan', namn: 'Handbollsligan', typ: 'liga', sport: 'handboll', gren: 'herr', fran: '2026-09-01', till: '2027-04-30', ort: 'Sverige', arena: '', hemsida: '', logga: null, kalender: 0 },
   { id: 'nordea-open', namn: 'Nordea Open', typ: 'turnering', sport: 'tennis', gren: 'dam', fran: '2026-07-13', till: '2026-07-19', ort: 'Båstad', arena: 'Båstad Tennisstadion', hemsida: 'nordeaopen.se', logga: null, kalender: 0 },
+  { id: 'friidrotts-sm', namn: 'Friidrotts-SM 2026', typ: 'masterskap', sport: 'friidrott', gren: 'dam', fran: '2026-07-24', till: '2026-07-26', ort: 'Uppsala', arena: 'Studenternas IP', hemsida: '', logga: null, kalender: 0 },
 ]
 
 // Mock: sportprofiler (statisk fältmodell, speglar dpt2.data.sportprofil).
@@ -248,7 +250,12 @@ export async function listaLagForTavling(tavlingId) {
 }
 
 // ── Discipliner (B-001): tävlingens grenar + deltagare per gren ─────────────
-let MOCK_DISCIPLINER = []   // {id, tavling_id, namn, typ, ordning, deltagare:[]}
+let MOCK_DISCIPLINER = [
+  { id: 'disc_langd', tavling_id: 'friidrotts-sm', namn: 'Längd', typ: 'hoppkast', ordning: 0,
+    deltagare: [{ id: 'alva-hoppare', namn: 'Alva Hoppare', klubb: 'Malmö AI' }] },
+  { id: 'disc_100m', tavling_id: 'friidrotts-sm', namn: '100 m', typ: 'sprint', ordning: 1,
+    deltagare: [] },
+]
 
 export async function listaDiscipliner(tavlingId) {
   const api = brygga()
