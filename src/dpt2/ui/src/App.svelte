@@ -119,7 +119,8 @@
       <Fotojobb on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'matcher'}
       <Matcher on:aktiverad={(e) => aktiveraFranMatcher(e.detail)}
-        on:gaTill={(e) => aktiveraFranMatcherTill(e.detail.match, e.detail.dest)} />
+        on:gaTill={(e) => aktiveraFranMatcherTill(e.detail.match, e.detail.dest)}
+        on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
     {:else if aktiv === 'lag'}
       <Lag />
     {:else if aktiv === 'gallra'}

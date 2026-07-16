@@ -3,7 +3,7 @@
   import {
     listaMatcher, hamtaMatch, sparaMatch, hamtaTrupp, sattAktivMatch,
     lasUttagFil, valjFil, listaTavlingar, listaLag, listaLagForTavling,
-    listaUrval, raderaMatch, sattMatchSynk, sportprofiler,
+    listaUrval, raderaMatch, sattMatchSynk, sportprofiler, sattAktivtUrval,
     listaMaterial, listaInnehall, sparaMaterial, sparaInnehall, hamtaSpelschema,
   } from '../lib/api.js'
   import Combobox from '../lib/Combobox.svelte'
@@ -467,7 +467,15 @@
     await sattAktivMatch(m.id)      // persistera FÖRE navigering — annars hinner
     dispatch('aktiverad', m)        // Gallra/Leverera/Publicera fråga aktivMatch() för tidigt
   }
-  function aterUppta() { dispatch('navigera', 'gallra') }
+  // BUG-02: projkorten var döda — dispatch('navigera') hade ingen lyssnare i
+  // App, och projektets urval valdes aldrig. Nu: aktivera urvalet → Leverera.
+  async function aterUppta(pr) {
+    if (pr?.id) {
+      await sattAktivtUrval(pr.id)
+      dispatch('urval')                       // uppdatera topbar-widgeten
+    }
+    dispatch('navigera', 'leverera')
+  }
 </script>
 
 <div class="panel">
@@ -553,7 +561,7 @@
       <div class="caps proj">Tidigare projekt</div>
       <div class="projgrid">
         {#each projekt as pr (pr.id)}
-          <button class="projkort" on:click={aterUppta}>
+          <button class="projkort" on:click={() => aterUppta(pr)}>
             <div class="projbild"><span>{(pr.skapad || '').split(' ')[0]}</span></div>
             <div class="projtxt">
               <div class="projnamn">{pr.lag_hemma ? `${pr.lag_hemma} – ${pr.lag_borta}` : (pr.kalla || 'Urval').split('/').pop()}</div>
@@ -828,7 +836,7 @@
       <div class="caps proj">Tidigare projekt</div>
       <div class="projgrid">
         {#each projekt as pr (pr.id)}
-          <button class="projkort" on:click={aterUppta}>
+          <button class="projkort" on:click={() => aterUppta(pr)}>
             <div class="projbild"><span>{(pr.skapad || '').split(' ')[0]}</span></div>
             <div class="projtxt">
               <div class="projnamn">{pr.lag_hemma ? `${pr.lag_hemma} – ${pr.lag_borta}` : (pr.kalla || 'Urval').split('/').pop()}</div>
