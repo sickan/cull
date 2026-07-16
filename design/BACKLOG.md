@@ -59,7 +59,7 @@ röst→action är LÅG prio.
 
 | ID | Vad | Anteckning |
 |----|-----|-----------|
-| iOS-trupp | **Trupp/startelva-hantering på telefonen** — matchdaguttag → startelva (känd kvar-punkt från fältflödet) | **Stigs ②: inför FOTBOLLSHELGEN.** Behöver kort scoping med Stig: exakt flöde han vill ha på plats |
+| iOS-trupp | Trupp/startelva från arenan | **SKIVA 1 KLAR 16/7** (TruppView: foto-referens + tap-startelva + stryk ur trupp; PUT /roster deployad; ios `e0e6472`). KVAR: installera på telefonen (kräver upplåst lur) + **skiva 2: Vision-OCR förifyller ur fotot** + skiva 3: DPT2-reconciliation av mobilsatt roster |
 | iOS-läs | Läs-features ur arkitekturspecen: **väder-aggregat per dag + restid/"när måste jag åka"** (MapKit) | Stigs "väder, kör nu" — lyft ur B-011/P3 |
 | iOS-notis | Skarp notis-landning ("påminn när matchdata landat" — Stigs knapptryck end-to-end) | Kvar från design-lyftet etapp 3 |
 | iOS-story | Story-text-override | Kvar från lyftet |
