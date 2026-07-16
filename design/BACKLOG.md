@@ -23,6 +23,7 @@ röst→action är LÅG prio.
 | BUG-06 | Dubbletter i "Publicerat"-katalogen — ska spegla exakt det som är live | Stigs lista · trolig rot: FEAT-13 |
 | BUG-07 | Dubbletter under "Utkast" — version vs bugg? Gruppera eller rensa | Stigs lista |
 | BUG-08 | Dubbletter under Människor vid ompublicering | Stigs lista · trolig rot: FEAT-13 |
+| BUG-10 | Slug-byte vid ompublicering lämnar föräldralösa rader i live-D1 → dubblettkort (3 st städade manuellt 16/7) | **Full skrivning: design/BUGG-slug-byte-ompublicering.md.** Rot: DPT2 nytt id/slug vid ompublicering (innehall_synk) ELLER reconciling publish saknas för event-typen. Sannolikt den KONKRETA mekanismen bakom BUG-08 — tas ihop med FEAT-13 |
 | HDA-a | Heldagsaktivitet-väljaren: synkade tävlingsjobb saknar tavling_id → inget gren·sport-suffix | Kräver ny länktabell (schema v29) för måttligt visningsvärde → föreslagen P2 |
 | MP-död | Matchpub död kod: `MatchHuvud.svelte` + oanropade `oppnaILightroom`/`raderaMaterial`/`hamtaUtkast`/`sparaUtkast` — de två sista kan vara TAPPADE funktioner (materialradering, autospar). **Beslut Stig:** väck eller radera | Matchpub-regressionen |
 
@@ -60,6 +61,8 @@ röst→action är LÅG prio.
 | ID | Vad | Anteckning |
 |----|-----|-----------|
 | iOS-trupp | Trupp/startelva från arenan | **SKIVA 1 KLAR 16/7** (TruppView: foto-referens + tap-startelva + stryk ur trupp; PUT /roster deployad; ios `e0e6472`). KVAR: installera på telefonen (kräver upplåst lur) + **skiva 2: Vision-OCR förifyller ur fotot** + skiva 3: DPT2-reconciliation av mobilsatt roster |
+| iOS-heldag8 | Heldagsaktivitet räknar ner till MIDNATT på Hem — ska utgå från morgonen (förslag 08:00, som tävlings-paketens avspark) | Stigs test 16/7 · liten (Matchdag.start för heldag) |
+| iOS-hemCTA | Hem-kortets knapp "Uppdrag i kalendern" är DÖD (ren etikett) — heldagsjobb (t.ex. Nordea Open ATP250) har ingen match att öppna. Gör klickbar → Kalender-fliken/jobbet | Stigs test 16/7 |
 | iOS-läs | Läs-features ur arkitekturspecen: **väder-aggregat per dag + restid/"när måste jag åka"** (MapKit) | Stigs "väder, kör nu" — lyft ur B-011/P3 |
 | iOS-notis | Skarp notis-landning ("påminn när matchdata landat" — Stigs knapptryck end-to-end) | Kvar från design-lyftet etapp 3 |
 | iOS-story | Story-text-override | Kvar från lyftet |
