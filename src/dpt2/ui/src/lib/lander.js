@@ -16,7 +16,10 @@ const FLAGG_URL = {}
   }
 }
 
+// '&' normaliseras till 'och' — lag skrivs ofta "Bosnien & Hercegovina" medan
+// Intl.DisplayNames ger "Bosnien och Hercegovina" (BUG-04).
 const norm = (s) => String(s || '').trim().toLowerCase()
+  .replace(/\s*&\s*/g, ' och ').replace(/\s+/g, ' ')
 
 // Namn Intl.DisplayNames inte ger oss rakt av: brittiska landslag (egna
 // flaggor i flag-icons) + vanliga vardagsnamn.
