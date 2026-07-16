@@ -106,6 +106,7 @@ CREATE TABLE matchen (
   resultat     TEXT,                     -- sätts efteråt, t.ex. '6-0'
   mellan       TEXT,                     -- mellanresultat: halvtid/set/perioder beroende på sportprofil
   malskyttar   TEXT,                     -- bara för scorer-sporter (se sportprofil.py)
+  rond         TEXT,                     -- turneringsrond ("Kvartsfinal") — D1: stort ord i tennis-overlayn
   status       TEXT NOT NULL DEFAULT 'kommande'
                  CHECK (status IN ('kommande','pagaende','avslutad')),
   galleri      TEXT,                     -- Pixieset-URL

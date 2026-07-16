@@ -54,9 +54,13 @@ def _matchfalt(conn, config):
                 if sp.get("start") and sp.get("lag") == "hemma" and sp.get("namn")]
         startelva = "\n".join(namn) if namn else None
 
-    def _logga(lag_id):
-        lag = store.hamta_lag(conn, lag_id) if lag_id else None
-        return (lag or {}).get("logga") or None
+    def _lagfalt(lag_id):
+        """(logga, klubb/land) för ett lag/en utövare — en hämtning per sida."""
+        lag = (store.hamta_lag(conn, lag_id) if lag_id else None) or {}
+        return lag.get("logga") or None, lag.get("klubb") or ""
+
+    hem_logga, hem_land = _lagfalt(m.get("lag_hemma_id"))
+    borta_logga, borta_land = _lagfalt(m.get("lag_borta_id"))
 
     # p.5: för heldagsevent (moment Nästa match, ingen motståndare) saknar
     # kanalens config next_when → härled eventdatumet så underraden inte tappar
@@ -75,12 +79,16 @@ def _matchfalt(conn, config):
         "mal_rad": mal_rad,
         "startelva": config.get("startelva") or startelva,
         "gren": m.get("hem_gren") or config.get("gren", ""),
+        # D1 (individ-sporter): turneringsrond + spelarens land (lag.klubb).
+        "rond": config.get("rond") or m.get("rond", ""),
+        "land_hemma": config.get("land_hemma") or hem_land,
+        "land_borta": config.get("land_borta") or borta_land,
         # Loggor som fotografen laddat upp under Lag & tävlingar (lag.logga i
         # databasen) — INTE samma sak som story_overlay.hitta_logga()s gamla
         # filsystemkonvention (~/.config/dpt/loggor/<namn>.png), som bara är
         # en fallback om databasen saknar en logga för laget.
-        "hem_logga": _logga(m.get("lag_hemma_id")),
-        "borta_logga": _logga(m.get("lag_borta_id")),
+        "hem_logga": hem_logga,
+        "borta_logga": borta_logga,
     }
 
 
@@ -103,6 +111,7 @@ def _rendera(conn, config, *, ut_path=None, ut_mapp=None, env=None):
         avspark_tid=config.get("avspark_tid", ""),
         next_when=f.get("next_when", ""),
         tema=config.get("tema", "Hav"), gren=f["gren"],
+        rond=f["rond"], land_hemma=f["land_hemma"], land_borta=f["land_borta"],
         hem_logga=f["hem_logga"], borta_logga=f["borta_logga"],
         format=config.get("format", "9x16"),
         fokus=config.get("fokus"), zoom=config.get("zoom", 1.0),

@@ -62,6 +62,23 @@ class TestMatchfalt(unittest.TestCase):
                                           "datum": "2026-08-01"})
         self.assertEqual(S._matchfalt(self.c, {"match_id": mid2})["next_when"], "")
 
+    def test_rond_och_land_for_individsport(self):
+        # D1 (tennis): rond round-trippas via matchen; land = utövarens
+        # lag.klubb ("Klubb/land"). Config vinner (Live-flödets fritext-läge).
+        mid = store.spara_match(self.c, {
+            "lag_hemma": "Leo Borg", "lag_borta": "Casper Ruud",
+            "sport": "tennis", "rond": "Semifinal"})
+        m = store.hamta_match(self.c, mid)
+        store.upsert_lag(self.c, "Leo Borg", sport="tennis", klubb="Sverige")
+        store.upsert_lag(self.c, "Casper Ruud", sport="tennis", klubb="Norge")
+        f = S._matchfalt(self.c, {"match_id": mid})
+        self.assertEqual(m["rond"], "Semifinal")
+        self.assertEqual(f["rond"], "Semifinal")
+        self.assertEqual(f["land_hemma"], "Sverige")
+        self.assertEqual(f["land_borta"], "Norge")
+        f2 = S._matchfalt(self.c, {"match_id": mid, "rond": "Final"})
+        self.assertEqual(f2["rond"], "Final")
+
     def test_loggor_ur_lagens_databaspost(self):
         # lag.logga (uppladdad under Lag & tävlingar) ska följa med matchfälten
         # — INTE story_overlay.hitta_logga()s gamla filsystemkonvention.

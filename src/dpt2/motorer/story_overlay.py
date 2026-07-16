@@ -540,6 +540,216 @@ def _render_preview(canvas, accent, lag_hemma, lag_borta,
 
 
 # ---------------------------------------------------------------------------
+# INDIVID-block (D1 tennis-handoffen) — spelare i stället för lag+brickor.
+# Facit: design/HANDOFF-D1-SVAR + Horisont Tennis D1.dc.html. Inga klubbmärkes-
+# cirklar i något individ-tillstånd; land är spärrad underrad per spelare.
+# ---------------------------------------------------------------------------
+
+def _spärrad_bredd(d0, text, font, tracking):
+    """Bredden av _spärrad_text (glyfbredder + tracking mellan tecken)."""
+    if not text:
+        return 0
+    w = sum(d0.textlength(ch, font=font) for ch in text)
+    return int(w + tracking * max(0, len(text) - 1))
+
+
+def _turnering_topphoger(canvas, text):
+    """Turneringsnamnet som spärrad text uppe till höger (D1) — samma plats/
+    stil som liga-namnet i fotbollens HTML-referens: 600 27px Saira, .24em,
+    vitt 66 %, högerställt vid W-60, y=52. Tomt → raden utgår (anropas ej)."""
+    Image, ImageDraw, *_ = _pil()
+    W, _H = canvas.size
+    lager = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(lager)
+    fnt = _saira(600, 27)
+    track = 6   # .24em * 27 ≈ 6.5
+    t = text.upper()
+    w = _spärrad_bredd(d, t, fnt, track)
+    x = W - _MARGIN - w
+    # Enkel textskugga (facit: 0 1px 4px) — offsetkopia räcker i JPEG-skala.
+    _spärrad_text(d, (x, 53), t, fnt, (0, 0, 0, 140), track)
+    _spärrad_text(d, (x, 52), t, fnt, (255, 255, 255, 168), track)
+    canvas.alpha_composite(lager)
+
+
+def _render_preview_individ(canvas, accent, spelare_a, spelare_b, land_a, land_b,
+                            etikett, big_word, sub_line):
+    """PREVIEW för individ-sporter: accent-etikett (moment/turnering), stort ord
+    (rond eller moment), underrad tid · plats, avdelare, namnrad utan brickor —
+    spelarnamn med land som spärrad underrad, accentfärgat '–' emellan."""
+    Image, ImageDraw, *_ = _pil()
+    W, H = canvas.size
+    L = _MARGIN
+    BLOCK_W = _CONTENT_W
+
+    tmp = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
+    d0  = ImageDraw.Draw(tmp)
+    fnt_et   = _saira(600, 28)
+    fnt_big  = _saira_cond(700, 150)
+    fnt_sub  = _saira(600, 34)
+    fnt_name = _saira_cond(600, 52)
+    fnt_land = _saira(600, 21)
+    fnt_dash = _saira_cond(600, 40)
+    track_et, track_sub, track_land = 8, 5, 5   # .3em·28 / .16em·34 / .24em·21
+
+    # Lång rond/moment → auto-krymp (samma skydd som event-rubriken).
+    big_size = 150
+    while big_size > 60 and d0.textlength(big_word, font=fnt_big) > BLOCK_W:
+        big_size -= 6
+        fnt_big = _saira_cond(700, big_size)
+
+    h_et  = d0.textbbox((0, 0), etikett.upper(), fnt_et)[3] if etikett else 0
+    h_big = d0.textbbox((0, 0), big_word, fnt_big)[3]
+    h_sub = d0.textbbox((0, 0), sub_line.upper(), fnt_sub)[3]
+    bb_na = d0.textbbox((0, 0), spelare_a or "", fnt_name)
+    bb_nb = d0.textbbox((0, 0), spelare_b or "", fnt_name)
+    bb_da = d0.textbbox((0, 0), "–", fnt_dash)
+    h_name = max(bb_na[3], bb_nb[3])
+    h_land = d0.textbbox((0, 0), "X", fnt_land)[3] if (land_a or land_b) else 0
+    rad_h  = h_name + (8 + h_land if h_land else 0)
+
+    total_h = (h_et + 14 if etikett else 0) + h_big + 18 + h_sub + 34 + 3 + 34 + rad_h
+    y = H - _MARGIN - total_h
+
+    lager = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(lager)
+
+    # 1. Etikett (momentet när rond är stora ordet; annars turneringen)
+    if etikett:
+        _spärrad_text(d, (L, y), etikett.upper(), fnt_et, accent, track_et)
+        y += h_et + 14
+    # 2. Stort ord (rond eller moment)
+    _spärrad_text(d, (L, y), big_word, fnt_big, _VIT, 0)
+    y += h_big + 18
+    # 3. Underrad (tid · plats)
+    _spärrad_text(d, (L, y), sub_line.upper(), fnt_sub, _VIT80, track_sub)
+    y += h_sub + 34
+    # 4. Avdelare
+    y = _divider(d, L, y, BLOCK_W, alpha=56)
+    y += 34
+    # 5. Namnrad — centrerad, namn baseline-linjerade med accentfärgat '–'.
+    GAP = 34
+    w_na = int(d.textlength(spelare_a or "", font=fnt_name))
+    w_nb = int(d.textlength(spelare_b or "", font=fnt_name))
+    la, lb = (land_a or "").upper(), (land_b or "").upper()
+    w_la = _spärrad_bredd(d0, la, fnt_land, track_land)
+    w_lb = _spärrad_bredd(d0, lb, fnt_land, track_land)
+    kol_a = max(w_na, w_la)
+    kol_b = max(w_nb, w_lb)
+    w_dash = int(d.textlength("–", font=fnt_dash))
+    row_w  = kol_a + GAP + w_dash + GAP + kol_b
+    rx = L + (BLOCK_W - row_w) // 2
+
+    # Kolumn A: namn centrerat över land
+    d.text((rx + (kol_a - w_na) // 2, y), spelare_a or "", font=fnt_name, fill=_VIT)
+    if la:
+        _spärrad_text(d, (rx + (kol_a - w_la) // 2, y + h_name + 8),
+                      la, fnt_land, (255, 255, 255, 148), track_land)
+    rx += kol_a + GAP
+    # '–' centrerad mot namnens visuella mitt (samma teknik som lagraden)
+    ac_85 = accent[:3] + (int(accent[3] * 0.85),)
+    namn_ctr = (bb_na[1] + bb_na[3]) // 2
+    dash_ctr = (bb_da[1] + bb_da[3]) // 2
+    d.text((rx, y + namn_ctr - dash_ctr), "–", font=fnt_dash, fill=ac_85)
+    rx += w_dash + GAP
+    # Kolumn B
+    d.text((rx + (kol_b - w_nb) // 2, y), spelare_b or "", font=fnt_name, fill=_VIT)
+    if lb:
+        _spärrad_text(d, (rx + (kol_b - w_lb) // 2, y + h_name + 8),
+                      lb, fnt_land, (255, 255, 255, 148), track_land)
+
+    canvas.alpha_composite(lager)
+
+
+def _render_score_individ(canvas, accent, spelare_a, spelare_b,
+                          score_label, set_a, set_b, games, avgjord):
+    """SCORE för individ-sporter (centrerad): etikett (t.ex. "RESULTAT I SET ·
+    SEMIFINAL"), stor set-siffra med tunna mellanrum, namnrad (vinnare i accent
+    när avgjord), avdelare 78 %, gamesiffror under. Inga brickor."""
+    Image, ImageDraw, *_ = _pil()
+    W, H = canvas.size
+    L = _MARGIN
+    BLOCK_W = _CONTENT_W
+
+    tmp = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
+    d0  = ImageDraw.Draw(tmp)
+    fnt_lbl   = _saira(600, 30)
+    fnt_score = _saira_cond(700, 220)
+    fnt_name  = _saira_cond(600, 48)
+    fnt_dash  = _saira_cond(600, 38)
+    fnt_games = _saira_cond(600, 38)
+    track_lbl, track_games = 9, 3   # .3em·30 / .08em·38
+
+    # Set-siffran ritas i tre delar (SairaCondensed-Bold saknar space-glyf →
+    # facit-mallens U+2009-mellanrum blir manuella 20px-gap i stället).
+    THIN = 20
+    w_sa = int(d0.textlength(str(set_a), font=fnt_score))
+    w_sd = int(d0.textlength("–", font=fnt_score))
+    w_sb = int(d0.textlength(str(set_b), font=fnt_score))
+    w_score = w_sa + THIN + w_sd + THIN + w_sb
+    h_score = d0.textbbox((0, 0), f"{set_a}–{set_b}", fnt_score)[3]
+
+    h_lbl = d0.textbbox((0, 0), score_label.upper(), fnt_lbl)[3] if score_label else 0
+    bb_na = d0.textbbox((0, 0), spelare_a or "", fnt_name)
+    bb_nb = d0.textbbox((0, 0), spelare_b or "", fnt_name)
+    h_name = max(bb_na[3], bb_nb[3])
+    h_games = d0.textbbox((0, 0), games, fnt_games)[3] if games else 0
+
+    total_h = ((h_lbl + 24 if score_label else 0) + h_score + 14 + h_name
+               + (36 + 3 + 26 + h_games if games else 0))
+    y = H - _MARGIN - total_h
+
+    lager = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(lager)
+
+    # 1. Etikett
+    if score_label:
+        t = score_label.upper()
+        w = _spärrad_bredd(d0, t, fnt_lbl, track_lbl)
+        _spärrad_text(d, (L + (BLOCK_W - w) // 2, y), t, fnt_lbl, accent, track_lbl)
+        y += h_lbl + 24
+    # 2. Set-siffran (tre delar med manuella tunna gap)
+    sx = L + (BLOCK_W - w_score) // 2
+    d.text((sx, y), str(set_a), font=fnt_score, fill=_VIT); sx += w_sa + THIN
+    d.text((sx, y), "–", font=fnt_score, fill=_VIT);        sx += w_sd + THIN
+    d.text((sx, y), str(set_b), font=fnt_score, fill=_VIT)
+    y += h_score + 14
+    # 3. Namnrad — vinnaren i accent, förloraren dämpad (bara när avgjord).
+    vit_dim = (255, 255, 255, 153)   # rgba(255,255,255,.6)
+    if avgjord == "a":
+        farg_a, farg_b = accent, vit_dim
+    elif avgjord == "b":
+        farg_a, farg_b = vit_dim, accent
+    else:
+        farg_a = farg_b = _VIT
+    GAP = 22
+    w_na = int(d.textlength(spelare_a or "", font=fnt_name))
+    w_nb = int(d.textlength(spelare_b or "", font=fnt_name))
+    w_dash = int(d.textlength("–", font=fnt_dash))
+    bb_da = d0.textbbox((0, 0), "–", fnt_dash)
+    row_w = w_na + GAP + w_dash + GAP + w_nb
+    rx = L + (BLOCK_W - row_w) // 2
+    namn_ctr = (bb_na[1] + bb_na[3]) // 2
+    dash_ctr = (bb_da[1] + bb_da[3]) // 2
+    d.text((rx, y), spelare_a or "", font=fnt_name, fill=farg_a); rx += w_na + GAP
+    d.text((rx, y + namn_ctr - dash_ctr), "–", font=fnt_dash,
+           fill=(255, 255, 255, 128)); rx += w_dash + GAP
+    d.text((rx, y), spelare_b or "", font=fnt_name, fill=farg_b)
+    y += h_name
+    # 4. Avdelare (78 % centrerad) + gamesiffror
+    if games:
+        y += 36
+        div_w = int(BLOCK_W * 0.78)
+        y = _divider(d, L + (BLOCK_W - div_w) // 2, y, div_w, alpha=56)
+        y += 26
+        w_g = _spärrad_bredd(d0, games, fnt_games, track_games)
+        _spärrad_text(d, (L + (BLOCK_W - w_g) // 2, y), games, fnt_games,
+                      (255, 255, 255, 217), track_games)
+
+    canvas.alpha_composite(lager)
+
+
+# ---------------------------------------------------------------------------
 # A4 · Målskyttelistan under Slutresultatet — dynamisk layout
 # ---------------------------------------------------------------------------
 # Tre layouter (speglar Tweaks-proppen `scorersLayout` i prototypen):
@@ -958,7 +1168,8 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                 tema="Hav", gren="", hem_logga=None, borta_logga=None,
                 ut_path=None, ut_mapp=None,
                 format="9x16", fokus=None, zoom=1.0, env=None,
-                overlay=True, scorers_layout="auto"):
+                overlay=True, scorers_layout="auto",
+                rond="", land_hemma="", land_borta=""):
     """
     Renderar en JPEG med Horisont-overlay.
 
@@ -985,6 +1196,10 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
     scorers_layout: "auto"|"rad"|"chips"|"spalter" — hur målskyttelistan ritas
         under Slutresultatet (A4). "auto" = en rad om den ryms i ~940px, annars
         chips.
+    rond: turneringsrond ("Semifinal") — individ-sporter (D1): stora ordet i
+        preview, del av score-etiketten. Tom = fallbacks, inget hål.
+    land_hemma/land_borta: spelarens land (lag.klubb) — individ-sporter (D1):
+        spärrad underrad per spelare i preview. Tom = raden utgår.
     Returnerar Path till output-filen.
     """
     Image, ImageDraw, ImageFont, ImageOps = _pil()
@@ -1066,12 +1281,36 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         # A4: målskyttar bara i Slutresultat (Halvtid = enkel underrad).
         slut_scorers = _scorer_units(mal_rad) if state == "Slutresultat" else None
 
+        # D1: individ-sporter (tennis) har egna preview/score-block — spelare i
+        # stället för lag+brickor, rond som stort ord, turnering uppe höger.
+        # Heldagsevent (turnerings-SoMe, ingen "motståndare") tar dock p.5-vägen
+        # även för individ-sporter: eventnamnet är rubriken.
+        individ = bool(profil.get("individ")) and (lag_borta or "").strip()
+        rond_ren = (rond or "").strip()
+
+        if individ and liga:
+            _turnering_topphoger(canvas, liga)
+
         # Lagbrickor (monogram_text: individ-sport → personinitialer "RP",
         # lagsport → förkortning "MAL").
         mono_h = monogram_text(lag_hemma, "HEM", profil.get("individ", False))
         mono_b = monogram_text(lag_borta, "BORT", profil.get("individ", False))
 
-        if isPreview:
+        if isPreview and individ:
+            # Ronden är det stora ordet, momentet blir etiketten. Saknas rond:
+            # momentet stort och turneringen som etikett (design-svaret: topp-
+            # högern står alltid; i fallbacken dubbleras turneringen medvetet).
+            moment_ord = big_word   # "MATCHSTART"/"NÄSTA MATCH" (profildrivet)
+            if rond_ren:
+                etikett, stort = moment_ord, rond_ren.upper()
+            else:
+                etikett, stort = (liga or ""), moment_ord
+            _render_preview_individ(canvas, accent,
+                                    lag_hemma or "", lag_borta or "",
+                                    land_hemma or "", land_borta or "",
+                                    etikett, stort, sub_line)
+
+        elif isPreview:
             bricka_h, pad_h = _bricka_med_skugga(_valj_logga(lag_hemma, hem_logga), 84, mono_h)
             bricka_b, pad_b = _bricka_med_skugga(_valj_logga(lag_borta, borta_logga), 84, mono_b)
             # Crop bort skugg-padding för att använda ren bricka vid placering
@@ -1081,6 +1320,27 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
                             lag_hemma or "", lag_borta or "",
                             bricka_h_ren, bricka_b_ren,
                             competition, big_word, sub_line)
+
+        elif isScore and individ:
+            # Etiketten: sportprofilens label + rond ("RESULTAT I SET ·
+            # SEMIFINAL"). Vinnaren härleds ur set-siffrorna — markeras bara
+            # vid Slutresultat (facit: aldrig vid mellanställning).
+            etikett = f"{score_label} · {rond_ren}" if rond_ren else score_label
+            set_a, set_b = (score_text.split("–", 1) + [""])[:2] \
+                if "–" in score_text else (score_text, "")
+            avgjord = ""
+            if state == "Slutresultat":
+                try:
+                    a_i, b_i = int(set_a), int(set_b)
+                    if a_i != b_i:
+                        avgjord = "a" if a_i > b_i else "b"
+                except ValueError:
+                    pass
+            _render_score_individ(canvas, accent,
+                                  lag_hemma or "", lag_borta or "",
+                                  etikett, set_a.strip(), set_b.strip(),
+                                  mal_rad if state == "Slutresultat" else (mal_rad or ""),
+                                  avgjord)
 
         elif isScore:
             bricka_h, pad_h = _bricka_med_skugga(_valj_logga(lag_hemma, hem_logga), 128, mono_h)

@@ -258,7 +258,7 @@
   }
 
   function nyMatch() {
-    const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '', event: false }
+    const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '', rond: '', event: false }
     matcher = [{ ...tmp, trupp_n: 0 }, ...matcher]
     matchStatus = 'kommande'                 // nya utkast bor under Kommande
     oppen = tmp.id; utkast = { ...tmp, spelare: [] }; lagForTavling = []
@@ -645,6 +645,12 @@
                       <Combobox options={tavlingVal} value={utkast.liga} placeholder="Välj tävling…"
                         on:pick={(e) => valjTavling(e.detail)} on:create={(e) => skapaTavling(e.detail)} />
                     </label>
+                    {#if uttagProfil.individ}
+                      <!-- D1: turneringsrond — stora ordet i story-overlayn (visas versalt). -->
+                      <label class="full">Rond
+                        <input bind:value={utkast.rond} placeholder="t.ex. Åttondel, Kvartsfinal, Semifinal, Final" />
+                      </label>
+                    {/if}
                     <div class="rad3">
                       <input type="date" bind:value={utkast.datum} />
                       <input type="time" bind:value={utkast.tid} />

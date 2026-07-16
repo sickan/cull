@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -699,6 +699,13 @@ def _migrera(conn, fran_version):
             if problem:
                 raise RuntimeError(
                     f"v27-migrering: FK-integritet trasig efter ombyggnad: {problem}")
+
+    if fran_version < 28:
+        # v28 (D1 tennis-overlay): turneringsrond på matchen ("Åttondel",
+        # "Semifinal"…) — stort ord i individ-sporternas Horisont-overlay.
+        # Additivt, nullbart.
+        if _har_tabell(conn, "matchen") and not _har_kolumn(conn, "matchen", "rond"):
+            conn.execute("ALTER TABLE matchen ADD COLUMN rond TEXT")
 
 
 def _har_kolumn(conn, tabell, kolumn):
