@@ -19,15 +19,11 @@ röst→action är LÅG prio.
 
 | ID | Vad | Källa/anteckning |
 |----|-----|------------------|
-| BUG-02 | Kort under Matcher "Tidigare projekt" reagerar inte på klick | Stigs lista. Definiera förväntat flöde + fixa |
-| BUG-03 | Färgklickar på Fotojobb uppdateras inte reaktivt (kräver flikbyte) | Stigs lista |
+| BUG-03 | Färgklickar på Fotojobb uppdateras inte reaktivt (kräver flikbyte) | **KAN EJ REPRODUCERAS i mock** — hela kedjan verifierad färsk (D1 skrivs synkront, ingen klient-cache, laddaOm körs). Behöver Stigs exakta repro: vilken åtgärd + vilken färgklick |
 | BUG-06 | Dubbletter i "Publicerat"-katalogen — ska spegla exakt det som är live | Stigs lista · trolig rot: FEAT-13 |
 | BUG-07 | Dubbletter under "Utkast" — version vs bugg? Gruppera eller rensa | Stigs lista |
 | BUG-08 | Dubbletter under Människor vid ompublicering | Stigs lista · trolig rot: FEAT-13 |
-| BUG-09 | "+ Koppla till…"-listan + chips i Lag-editorn visar inte gren·sport — likanamnade tävlingar (möjliga efter BUG-01-fixen) går inte att skilja | NY 16 jul (Stigs skärmdump) |
-| #26-rest | Namn-baserade uppslag `loggaForLag`/`truppStorlek` tvetydiga (Sverige dam+herr → fel logga/trupp) — gör id-baserade | Bugglistan 15 jul |
-| HDA-a | Heldagsaktivitet-väljaren: synkade (Google-) tävlingsjobb saknar tavling_id → inget gren·sport-suffix | Denna session |
-| HDA-b | Heldagsaktivitet-väljaren: "Ackreditering …"-jobb ska filtreras bort | Denna session |
+| HDA-a | Heldagsaktivitet-väljaren: synkade tävlingsjobb saknar tavling_id → inget gren·sport-suffix | Kräver ny länktabell (schema v29) för måttligt visningsvärde → föreslagen P2 |
 | MP-död | Matchpub död kod: `MatchHuvud.svelte` + oanropade `oppnaILightroom`/`raderaMaterial`/`hamtaUtkast`/`sparaUtkast` — de två sista kan vara TAPPADE funktioner (materialradering, autospar). **Beslut Stig:** väck eller radera | Matchpub-regressionen |
 
 ## B · DPT2 — features/changes
@@ -141,6 +137,9 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 
 ## ✅ Levererat nyligen (rörligt — flyttas hit när klart)
 
+- 16 jul em (steg 1): BUG-09 (gren·sport i koppla-chips/-lista) · #26-rest
+  (id-baserade lag-uppslag i matchdaguttaget) · BUG-02 (Tidigare projekt-korten
+  aktiverar nu urvalet → Leverera) · HDA-b (Ackreditering-filter)
 - 15–16 jul: Track 0 (#23 #24 #25 · #27 flagga · #28 · sportevent↔tävling ·
   heldagsaktivitet-fixen) · tennis-paketet (profildriven motor, turneringskanal-
   buggen, D1-overlayn, schema v28 rond) · BUG-01 (unika tävlingar + match-spar
