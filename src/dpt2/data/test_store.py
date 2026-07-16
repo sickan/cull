@@ -389,12 +389,75 @@ class TestLagTavling(unittest.TestCase):
         self.assertEqual(len(store.lista_tavlingar(self.c)), 1)
 
     def test_upsert_tavling_uppdaterar(self):
-        store.upsert_tavling(self.c, "EM Volley", sport="fotboll", typ="liga")
+        # Samma namn + SAMMA sport/gren = samma post (uppdateras).
+        store.upsert_tavling(self.c, "EM Volley", sport="volleyboll", typ="liga")
         store.upsert_tavling(self.c, "EM Volley", sport="volleyboll", typ="masterskap")
         t = store.lista_tavlingar(self.c)[0]
-        self.assertEqual(t["sport"], "volleyboll")     # uppdaterat
-        self.assertEqual(t["typ"], "masterskap")
+        self.assertEqual(t["typ"], "masterskap")       # uppdaterat
         self.assertEqual(len(store.lista_tavlingar(self.c)), 1)   # ingen dubblett
+
+    def test_upsert_tavling_samma_namn_annan_gren_eller_sport(self):
+        # BUG-01: samma namn med annan gren/sport är SKILDA poster — tidigare
+        # skrevs originalet över (European League 2026 dam raderades av herr).
+        dam = store.upsert_tavling(self.c, "European League 2026",
+                                   sport="volleyboll", typ="masterskap",
+                                   gren="dam", fran="2026-06-12")
+        herr = store.upsert_tavling(self.c, "European League 2026",
+                                    sport="volleyboll", typ="masterskap",
+                                    gren="herr")
+        self.assertNotEqual(dam, herr)
+        d = store.hamta_tavling(self.c, dam)
+        self.assertEqual(d["gren"], "dam")             # originalet orört
+        self.assertEqual(d["fran"], "2026-06-12")
+        self.assertEqual(store.hamta_tavling(self.c, herr)["gren"], "herr")
+        # Annan sport likaså ("SM" handboll ≠ "SM" basket-analogt)
+        a = store.upsert_tavling(self.c, "SM 2026", sport="handboll")
+        b = store.upsert_tavling(self.c, "SM 2026", sport="volleyboll")
+        self.assertNotEqual(a, b)
+        # Samma kombination igen → träffar sin egen (suffixade) post
+        self.assertEqual(store.upsert_tavling(
+            self.c, "European League 2026", sport="volleyboll",
+            gren="herr"), herr)
+
+    def test_upsert_tavling_id_byter_namn(self):
+        # Med id kan namnet bytas på rätt rad (referenser följer id:t).
+        tid = store.upsert_tavling(self.c, "Nordea Open", sport="tennis",
+                                   typ="turnering", gren="herr")
+        tid2 = store.upsert_tavling(self.c, "Nordea Open ATP250", id=tid,
+                                    sport="tennis", typ="turnering")
+        self.assertEqual(tid2, tid)
+        self.assertEqual(store.hamta_tavling(self.c, tid)["namn"],
+                         "Nordea Open ATP250")
+        self.assertEqual(len(store.lista_tavlingar(self.c)), 1)
+
+    def test_spara_match_ror_inte_tavlingens_metadata(self):
+        # BUG-01 (värsta delen): varje match-spar nollade tävlingens typ/datum/
+        # kalender (spara_match körde full upsert med bara namn+sport).
+        store.upsert_tavling(self.c, "Nordea Open - ATP", sport="tennis",
+                             typ="turnering", gren="herr", fran="2026-07-13",
+                             till="2026-07-19", ort="Båstad",
+                             arena="Båstad Tennisstadion", kalender=True)
+        store.spara_match(self.c, {"lag_hemma": "Leo Borg",
+                                   "lag_borta": "Casper Ruud",
+                                   "sport": "tennis",
+                                   "liga": "Nordea Open - ATP"})
+        t = store.hamta_tavling(self.c, "nordea-open-atp")
+        self.assertEqual(t["typ"], "turnering")
+        self.assertEqual(t["fran"], "2026-07-13")
+        self.assertEqual(t["arena"], "Båstad Tennisstadion")
+        self.assertEqual(t["kalender"], 1)
+
+    def test_spara_match_tavling_id_vinner_over_namnet(self):
+        # Två tävlingar med samma namn → Comboboxens id-ref pekar rätt.
+        store.upsert_tavling(self.c, "European League 2026",
+                             sport="volleyboll", gren="dam")
+        herr = store.upsert_tavling(self.c, "European League 2026",
+                                    sport="volleyboll", gren="herr")
+        mid = store.spara_match(self.c, {
+            "lag_hemma": "Sverige", "lag_borta": "Litauen",
+            "sport": "volleyboll", "liga": "European League 2026",
+            "tavling_id": herr})
+        self.assertEqual(store.hamta_match(self.c, mid)["tavling_id"], herr)
 
     def test_radera_lag_och_tavling(self):
         store.upsert_lag(self.c, "HK Malmö")

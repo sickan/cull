@@ -253,12 +253,15 @@
     slutFran(utkast)
   }
   async function laddaLagForTavling(ligaNamn) {
-    const t = tavlingar.find((x) => x.namn === ligaNamn)
+    // Id-refen vinner (BUG-01: två tävlingar kan heta lika) — namnet är
+    // fallback för äldre matcher utan tavling_id.
+    const t = tavlingar.find((x) => x.id === utkast?.tavling_id)
+      || tavlingar.find((x) => x.namn === ligaNamn)
     lagForTavling = t ? await listaLagForTavling(t.id) : []
   }
 
   function nyMatch() {
-    const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '', rond: '', event: false }
+    const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '', tavling_id: null, rond: '', event: false }
     matcher = [{ ...tmp, trupp_n: 0 }, ...matcher]
     matchStatus = 'kommande'                 // nya utkast bor under Kommande
     oppen = tmp.id; utkast = { ...tmp, spelare: [] }; lagForTavling = []
@@ -267,11 +270,14 @@
 
   async function valjTavling(o) {
     utkast.liga = o.namn
+    // BUG-01: referera tävlingen med ID — två tävlingar kan heta lika
+    // (European League dam/herr), namnet räcker inte för att peka rätt.
+    utkast.tavling_id = o.id
     const t = tavlingar.find((x) => x.id === o.id)
     if (t?.sport) utkast.sport = t.sport
     await laddaLagForTavling(o.namn)
   }
-  const skapaTavling = (namn) => { utkast.liga = namn; lagForTavling = [] }
+  const skapaTavling = (namn) => { utkast.liga = namn; utkast.tavling_id = null; lagForTavling = [] }
   // Utan vald tävling sätts matchens sport av den valda utövaren/laget (tävling
   // vinner annars, se valjTavling). Så en tennismatch utan tävling får sport=
   // tennis → rätt profil (individ-etiketter, ingen startelva) i stället för

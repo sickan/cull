@@ -566,18 +566,42 @@ def _heltal(v):
         return None
 
 
-def upsert_tavling(conn, namn, *, sport, typ="liga", gren=None, logga=None,
-                   fran=None, till=None, ort=None, arena=None, hemsida=None,
-                   kalender=False, press_email=None, ackr_dagar=None):
-    """Skapar/uppdaterar en tävling (id = slug av namnet). Uppdaterar typ/sport/
-    ort/arena/hemsida/logga/kalender på en befintlig; gren ('dam'|'herr'|'mixed')
-    bara när den anges. press_email/ackr_dagar (ackreditering) uppdateras när
-    de anges — tom sträng/0 rensar (None = rör inte). Returnerar tävlings-id."""
+def upsert_tavling(conn, namn, *, id=None, sport, typ="liga", gren=None,
+                   logga=None, fran=None, till=None, ort=None, arena=None,
+                   hemsida=None, kalender=False, press_email=None,
+                   ackr_dagar=None):
+    """Skapar/uppdaterar en tävling. Uppdaterar typ/sport/ort/arena/hemsida/
+    logga/kalender på en befintlig; gren ('dam'|'herr'|'mixed') bara när den
+    anges. press_email/ackr_dagar uppdateras när de anges — tom sträng/0 rensar
+    (None = rör inte). Returnerar tävlings-id.
+
+    id: uttrycklig rad att uppdatera (tävlings-editorn skickar den) — då kan
+    namnet bytas på rätt rad. Utan id slås raden upp på namn-slugen. BUG-01:
+    samma namn med OLIKA gren/sport är SKILDA poster (European League 2026
+    finns för både dam och herr) — den nya posten får då suffixat id i stället
+    för att skriva över originalet (samma mönster som upsert_lag)."""
     if not (namn or "").strip():
         return None
     gren = _enum(gren, GRENAR)
-    tid = slug_id(namn)
-    fin = conn.execute("SELECT 1 FROM tavling WHERE id=?", (tid,)).fetchone()
+    tid = fin = None
+    if id:
+        fin = conn.execute("SELECT * FROM tavling WHERE id=?", (id,)).fetchone()
+        if fin is not None:
+            tid = id
+    if tid is None:
+        tid = slug_id(namn)
+        fin = conn.execute("SELECT * FROM tavling WHERE id=?", (tid,)).fetchone()
+        if fin is not None:
+            olika_sport = sport and fin["sport"] and fin["sport"] != sport
+            olika_gren = gren and fin["gren"] and fin["gren"] != gren
+            if olika_sport or olika_gren:
+                # Namnkrock: ny post med de skiljande dimensionerna i id:t —
+                # originalet behåller sitt id (och alla referenser).
+                suffix = " ".join(d for d, olik in ((sport, olika_sport),
+                                                    (gren, olika_gren)) if olik)
+                tid = slug_id(f"{namn} {suffix}")
+                fin = conn.execute("SELECT * FROM tavling WHERE id=?",
+                                   (tid,)).fetchone()
     if fin is None:
         conn.execute(
             "INSERT INTO tavling(id,typ,sport,gren,namn,hemsida,fran,till,ort,"
@@ -588,9 +612,10 @@ def upsert_tavling(conn, namn, *, sport, typ="liga", gren=None, logga=None,
              (press_email or "").strip() or None, _heltal(ackr_dagar)))
     else:
         conn.execute(
-            "UPDATE tavling SET typ=?,sport=?,fran=?,till=?,ort=?,arena=?,"
-            "kalender=? WHERE id=?",
-            (typ, sport, fran, till, ort, arena, 1 if kalender else 0, tid))
+            "UPDATE tavling SET namn=?,typ=?,sport=?,fran=?,till=?,ort=?,"
+            "arena=?,kalender=? WHERE id=?",
+            (namn, typ, sport, fran, till, ort, arena,
+             1 if kalender else 0, tid))
         if gren:
             conn.execute("UPDATE tavling SET gren=? WHERE id=?", (gren, tid))
         if hemsida:
@@ -854,8 +879,35 @@ def spara_match(conn, match):
             mellan, malskyttar, galleri, sida_url, omslag, spelare[], id?, status?}
     """
     sport = (match.get("sport") or "").strip().lower() or None
-    tav_id = upsert_tavling(conn, match.get("liga", ""),
-                            sport=sport or "fotboll") if match.get("liga") else None
+
+    def _tavling_ref():
+        """Matchens tävlingskoppling är en LÄNK — den får aldrig skriva över
+        tävlingens metadata (typ/datum/kalender nollades tidigare vid varje
+        match-spar, BUG-01). Comboboxens ref (tavling_id) vinner över namnet —
+        två tävlingar kan heta lika (European League dam/herr)."""
+        tid = (match.get("tavling_id") or "").strip() or None
+        if tid and conn.execute("SELECT 1 FROM tavling WHERE id=?",
+                                (tid,)).fetchone():
+            return tid
+        namn = (match.get("liga") or "").strip()
+        if not namn:
+            return None
+        rader = conn.execute(
+            "SELECT id, sport FROM tavling WHERE namn=?", (namn,)).fetchall()
+        if rader:
+            # Befintlig: matcha på sport när den är känd — okänd sport tar
+            # första raden. Känd sport utan träff faller igenom till skapa
+            # (samma namn + annan sport = skild post, suffixat id).
+            for r in rader:
+                if sport and r["sport"] == sport:
+                    return r["id"]
+            if not sport:
+                return rader[0]["id"]
+        # Ny (fritt inskrivet namn) → skapa minimal post; namnkrock med annan
+        # sport/gren får suffixat id i upsert_tavling.
+        return upsert_tavling(conn, namn, sport=sport or "fotboll")
+
+    tav_id = _tavling_ref()
 
     # Individuell sport (tennis) → inline-skapade sidor blir utövare, inte lag.
     individ_sport = bool(sportprofil.profil(sport)["individ"]) if sport else False

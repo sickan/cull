@@ -69,9 +69,25 @@
     }
     flash(l.id)
   }
-  async function gerTavling(t) {
-    const res = await sparaTavling(t)
-    if (res?.ok) flash(t.id)
+  // Samma spar-kö + id-återmappning som lagen (BUG-01): nya rader ('ny-…')
+  // skickas utan id → backend skapar (suffixat id vid namnkrock med annan
+  // gren/sport); raden tar sedan sitt riktiga id så nästa spar blir en update
+  // på RÄTT rad (namnbyte + dam/herr-dubbletter fungerar).
+  function gerTavling(t) {
+    sparKo = sparKo.then(() => _gerTavling(t)).catch(() => {})
+    return sparKo
+  }
+  async function _gerTavling(t) {
+    const arNy = String(t.id).startsWith('ny-')
+    const res = await sparaTavling({ ...t, id: arNy ? null : t.id })
+    if (!res?.ok) return
+    if (res.id && res.id !== t.id) {
+      const gammalt = t.id
+      t.id = res.id
+      if (compOpen === gammalt) compOpen = res.id
+      tavlingar = tavlingar
+    }
+    flash(t.id)
   }
 
   function sattKind(l, kind) {

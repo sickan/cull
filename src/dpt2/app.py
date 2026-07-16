@@ -453,8 +453,12 @@ class Api:
         return {"ok": bool(lid), "id": lid}
 
     def spara_tavling(self, tavling):
+        # Editor-raden bär sitt id ('ny-…' = ännu ej skapad → inget id) så
+        # namnbyte träffar rätt rad och samma namn kan finnas per gren/sport.
+        rid = (tavling.get("id") or "").strip()
         tid = store.upsert_tavling(
             self.conn, tavling.get("namn", ""),
+            id=None if rid.startswith("ny-") else rid or None,
             sport=(tavling.get("sport") or "fotboll"),
             typ=(tavling.get("typ") or "liga"), gren=tavling.get("gren"),
             ort=tavling.get("ort"),
@@ -554,7 +558,7 @@ class Api:
         """Skriver om tävlingens kalender-flagga (övriga fält round-trippas
         oförändrade — upsert_tavling kräver dem, men rör bara det som ändras)."""
         store.upsert_tavling(
-            self.conn, t["namn"], sport=t["sport"], typ=t["typ"],
+            self.conn, t["namn"], id=t["id"], sport=t["sport"], typ=t["typ"],
             fran=t.get("fran"), till=t.get("till"), ort=t.get("ort"),
             arena=t.get("arena"), hemsida=t.get("hemsida"), logga=t.get("logga"),
             kalender=pa)
