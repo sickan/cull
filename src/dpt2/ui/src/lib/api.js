@@ -602,6 +602,9 @@ export async function stangAktivMatch() {
 // ── Arbetsyta — autosparade utkast (Live/SoMe/Webb-Sport, per match) ────────
 const _mockUtkast = {}
 
+// OBS: hamtaUtkast/sparaUtkast är just nu oanropade men BEHÅLLS — D9-svaret
+// (publiceringsstatus) ersätter utkastknappen med AUTOSPAR, och det bygget
+// (FEAT-12 i publiceringskedjan v2) tar de här som grund.
 export async function hamtaUtkast(matchId) {
   const api = brygga()
   if (api) return api.hamta_utkast(matchId)
@@ -1016,11 +1019,6 @@ export async function statusInnehall(typ, id) {
 }
 
 // ── Publicera → Live (snabb story) ───────────────────────────────────────────
-export async function oppnaILightroom(sokvag = '') {
-  const api = brygga()
-  if (api) return api.oppna_i_lightroom(sokvag)
-  return wait({ ok: true, app: 'Adobe Lightroom Classic (mock)' })
-}
 
 export async function publiceraLiveStory(config) {
   const api = brygga()

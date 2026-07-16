@@ -12,7 +12,7 @@
     listaTavlingar, listaDiscipliner,
     valjMapp, listaSomeBilder, thumbForBild,
     forhandsgranskaStory, publiceraLiveStory, publiceraKanal, nyTestPaketMapp,
-    publiceraInnehallNatet, listaMaterial, sparaMaterial, genereraBildsvep,
+    publiceraInnehallNatet, listaMaterial, sparaMaterial, raderaMaterial, genereraBildsvep,
     forhandsgranskaBildsvepFraga,
     listaMinneskort, exporteraSkyddade,
     hamtaLive,
@@ -428,6 +428,18 @@
     if (r?.ok) materialId = r.id
     materials = await listaMaterial()
     pubFlash = true; setTimeout(() => (pubFlash = false), 1800)
+  }
+
+  // Radera en materialrad (MP-död: raderaMaterial var en tappad funktion —
+  // väckt med två-klicks-armering).
+  let raderaArm = null
+  async function taBortMaterial(mt) {
+    if (raderaArm !== mt.id) { raderaArm = mt.id; setTimeout(() => { if (raderaArm === mt.id) raderaArm = null }, 2600); return }
+    raderaArm = null
+    await raderaMaterial(mt.id)
+    if (materialId === mt.id) materialId = null
+    materials = await listaMaterial()
+    dispatch('materialAndrat')
   }
 
   // ── Ett kanalanrop, byggt som ÅTERKÖRBAR config ────────────────────────────
@@ -1021,6 +1033,9 @@
                 </button>
               {/if}
               <span class="matnar">{mt.nar}</span>
+              <button class="matx" class:armerad={raderaArm === mt.id}
+                title={raderaArm === mt.id ? 'Klicka igen för att ta bort' : 'Ta bort materialet'}
+                on:click={() => taBortMaterial(mt)}>{raderaArm === mt.id ? 'Ta bort?' : '×'}</button>
             </div>
             <div class="matsub">{mt.match_namn || '—'}</div>
 
@@ -1209,6 +1224,10 @@
   .mhint { font-size: 10.5px; color: var(--t-help); }
 
   .remstext { font-size: 11px; color: var(--t-mut); margin: -8px 0 22px 2px; }
+  .matx { border: 0; background: transparent; color: var(--t-help); font-size: 15px;
+    padding: 2px 7px; border-radius: 6px; flex: none; }
+  .matx:hover { color: var(--fel, #c0492f); background: var(--div3); }
+  .matx.armerad { color: #fff; background: var(--fel, #c0492f); font-size: 11.5px; font-weight: 700; }
   /* Friidrotts-storyns fältrad (B-002) */
   .frirad { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 8px; }
   .frirad select, .frirad input { padding: 7px 10px; font-size: 12.5px; }
