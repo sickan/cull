@@ -50,6 +50,25 @@ class TestRendera(unittest.TestCase):
         ut = rendera(BAS, foto=_jpeg())
         self.assertEqual(self._bild(ut).size, (1080, 1920))
 
+    def test_friidrott(self):
+        # B-002: spec.friidrott → skapa_friidrott_story-vägen (D2-mallarna).
+        spec = {"friidrott": {"tillstand": "placering", "gren_namn": "Längd",
+                              "grentyp": "hoppkast", "moment": "Final",
+                              "namn": "Alva Hoppare", "klubb": "Malmö AI",
+                              "placering": "1", "resultat": "6,42"},
+                "tema": "Hav", "gren": "dam"}
+        ut = rendera(spec, foto=_jpeg())
+        self.assertEqual(self._bild(ut).size, (1080, 1920))
+        # Annan deltagare/placering → annan bild (fälten når overlayen)
+        spec2 = {**spec, "friidrott": {**spec["friidrott"], "placering": "DNF"}}
+        self.assertNotEqual(_sig(ut), _sig(rendera(spec2, foto=_jpeg())))
+        # Valideringar → RenderFel (400), inte 500
+        with self.assertRaises(RenderFel):
+            rendera({"friidrott": {"tillstand": "banzai", "gren_namn": "Längd"}},
+                    foto=_jpeg())
+        with self.assertRaises(RenderFel):
+            rendera({"friidrott": {"tillstand": "start"}}, foto=_jpeg())
+
     def test_format_4x5(self):
         ut = rendera({**BAS, "format": "4x5"}, foto=_jpeg())
         self.assertEqual(self._bild(ut).size, (1080, 1350))

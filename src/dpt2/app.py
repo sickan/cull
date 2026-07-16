@@ -177,7 +177,24 @@ class Api:
             },
             # Rostern driver målskytt-väljaren.
             "roster": self._paket_roster(m, lag_index),
+            # Friidrott (B-001 skiva 2): tävlingens grenar + deltagare följer
+            # med paketet så telefonen kan bygga story-overlayn på plats.
+            # Tom lista utelämnas (matcher utan discipliner berörs inte).
+            **self._paket_friidrott(m),
         }
+
+    def _paket_friidrott(self, m):
+        if not m.get("tavling_id"):
+            return {}
+        disc = store.lista_discipliner(self.conn, m["tavling_id"])
+        if not disc:
+            return {}
+        return {"friidrott": {"discipliner": [
+            {"id": d["id"], "namn": d["namn"], "typ": d["typ"],
+             "deltagare": [{"namn": p["namn"], "klubb": p.get("klubb") or "",
+                            "gren": p.get("gren") or ""}
+                           for p in d.get("deltagare", [])]}
+            for d in disc]}}
 
     def _paket_roster(self, m, lag_index):
         """Roster till match-paketet, PER SIDA: matchtruppen om den har spelare

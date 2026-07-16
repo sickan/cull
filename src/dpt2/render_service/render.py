@@ -47,15 +47,53 @@ def _skriv_temp(katalog, namn, data):
     return str(p)
 
 
+_FRI_GENOMSLAPP = ("gren_namn", "grentyp", "moment", "event", "namn", "klubb",
+                   "resultat", "serie", "placering", "idrottare")
+
+
+def _rendera_friidrott(spec, foto):
+    """Friidrotts-story (B-002/D2): spec.friidrott bär tillstånd + fälten;
+    tema/gren/format/fokus/zoom delas med matchvägen på spec-toppnivån."""
+    f = spec["friidrott"]
+    tillstand = (f.get("tillstand") or "").strip()
+    if tillstand not in ("start", "resultat", "placering"):
+        raise RenderFel("friidrott.tillstand måste vara start/resultat/placering")
+    if not (f.get("gren_namn") or "").strip():
+        raise RenderFel("friidrott.gren_namn krävs")
+    with tempfile.TemporaryDirectory(prefix="dpt-render-") as tmp:
+        foto_p = _skriv_temp(tmp, "foto.jpg", foto)
+        ut_p = Path(tmp) / "story.jpg"
+        kwargs = {k: f[k] for k in _FRI_GENOMSLAPP if f.get(k) not in (None, "")}
+        for k in ("tema", "gren", "format", "zoom"):
+            if spec.get(k) not in (None, ""):
+                kwargs[k] = spec[k]
+        fokus = spec.get("fokus")
+        if isinstance(fokus, dict) and "x" in fokus and "y" in fokus:
+            kwargs["fokus"] = fokus
+        try:
+            story_overlay.skapa_friidrott_story(foto_p, tillstand,
+                                                ut_path=str(ut_p), **kwargs)
+        except RenderFel:
+            raise
+        except Exception as e:
+            raise RenderFel(f"kunde inte rendera: {e}") from e
+        if not ut_p.exists():
+            raise RenderFel("renderaren skrev ingen fil")
+        return ut_p.read_bytes()
+
+
 def rendera(spec, *, foto, hem_logga=None, borta_logga=None):
     """Renderar en Horisont-story och returnerar bildens bytes.
 
-    `spec` är matchdata (se _GENOMSLAPP + moment/lag_hemma/lag_borta/fokus).
+    `spec` är matchdata (se _GENOMSLAPP + moment/lag_hemma/lag_borta/fokus) —
+    eller friidrott (spec.friidrott, se _rendera_friidrott).
     `foto`, `hem_logga`, `borta_logga` är RÅA BYTES (workern har hämtat dem ur
     R2). Loggor är valfria — utan dem ritar renderaren monogram-badge.
     """
     if not foto:
         raise RenderFel("foto krävs")
+    if spec.get("friidrott"):
+        return _rendera_friidrott(spec, foto)
     moment = (spec.get("moment") or "").strip()
     if not moment:
         raise RenderFel("moment krävs")
