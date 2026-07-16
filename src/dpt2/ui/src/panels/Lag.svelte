@@ -241,6 +241,16 @@
   function tavlingNamn(tid) {
     return tavlingar.find((t) => t.id === tid)?.namn || tid
   }
+  // BUG-09: två tävlingar kan heta lika (European League 2026 dam/herr) —
+  // etiketten i chips + Koppla till…-listan måste bära gren·sport.
+  function tavlingEtikett(t) {
+    const gs = [GREN_ETIKETT[t.gren], SPORT_ETIKETT[t.sport]].filter(Boolean).join(' · ')
+    return gs ? `${t.namn} · ${gs}` : t.namn
+  }
+  function tavlingChip(tid) {
+    const t = tavlingar.find((x) => x.id === tid)
+    return t ? tavlingEtikett(t) : tid
+  }
   function kopplingsText(l) {
     const namn = (l.comps || []).map(tavlingNamn)
     return namn.length ? namn.join(' · ') : ''
@@ -569,7 +579,7 @@
                       <div class="truppcaps">Kopplad till liga / tävling / mästerskap</div>
                       <div class="chips">
                         {#each l.comps || [] as tid (tid)}
-                          <span class="chip">{tavlingNamn(tid)}
+                          <span class="chip">{tavlingChip(tid)}
                             <button class="chipx" title="Koppla bort" on:click={() => kopplaBort(l, tid)}>×</button>
                           </span>
                         {/each}
@@ -577,7 +587,7 @@
                           <select class="chipny" value="" on:change={(e) => { kopplaTill(l, e.target.value); e.target.value = '' }}>
                             <option value="" disabled>+ Koppla till…</option>
                             {#each tavlingar.filter((t) => !(l.comps || []).includes(t.id)) as t (t.id)}
-                              <option value={t.id}>{t.namn}</option>
+                              <option value={t.id}>{tavlingEtikett(t)}</option>
                             {/each}
                           </select>
                         {:else if !(l.comps || []).length}
