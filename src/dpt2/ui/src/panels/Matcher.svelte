@@ -197,11 +197,16 @@
   function initialer(namn) {
     return (namn || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
   }
-  function fargForLag(namn) {
-    const l = lagAlla.find((x) => x.namn === namn)
+  // #26: id-referensen vinner över namnet — Sverige finns som dam+herr (och
+  // per sport), namn-uppslag kan träffa fel post (fel logga/färg/trupp).
+  function lagPost(namn, id) {
+    return (id && lagAlla.find((x) => x.id === id)) || lagAlla.find((x) => x.namn === namn)
+  }
+  function fargForLag(namn, id = null) {
+    const l = lagPost(namn, id)
     return l ? (l.stall_hemma || l.profilfarg) : ''
   }
-  function loggaForLag(namn) { return lagAlla.find((x) => x.namn === namn)?.logga || '' }
+  function loggaForLag(namn, id = null) { return lagPost(namn, id)?.logga || '' }
 
   function grupperaLiga(lista) {
     const m = new Map()
@@ -404,14 +409,14 @@
     hamtar = false
     if (res?.ok && res.match) utkast = res.match
   }
-  const truppStorlek = (namn) => lagAlla.find((x) => x.namn === namn)?.trupp_n || 0
-  const truppNot = (namn) => {
-    const n = truppStorlek(namn)
+  const truppStorlek = (namn, id = null) => lagPost(namn, id)?.trupp_n || 0
+  const truppNot = (namn, id = null) => {
+    const n = truppStorlek(namn, id)
     return n ? `ur trupp · ${n} spelare` : 'ingen trupp i Lag & tävlingar'
   }
-  const startelvaEtikett = (namn, nStart) => {
+  const startelvaEtikett = (namn, nStart, id = null) => {
     if (!nStart) return 'ej uppladdad'
-    const n = truppStorlek(namn)
+    const n = truppStorlek(namn, id)
     return n ? `${nStart} av ${n}` : `${nStart} spelare`
   }
   async function hamtaTruppen() {
@@ -670,20 +675,20 @@
                     {#if uttagProfil.squad}
                       <div class="uttagrad"><span class="caps2">Matchdaguttag</span><span class="uttagnot">kopplat till matchen</span></div>
                       <div class="lagbox2">
-                        {#each (utkast.event ? [{ sida: 'hemma', namn: utkast.lag_hemma, lista: hemSpelare }] : [{ sida: 'hemma', namn: utkast.lag_hemma, lista: hemSpelare }, { sida: 'borta', namn: utkast.lag_borta, lista: bortaSpelare }]) as kol}
+                        {#each (utkast.event ? [{ sida: 'hemma', namn: utkast.lag_hemma, id: utkast.lag_hemma_id, lista: hemSpelare }] : [{ sida: 'hemma', namn: utkast.lag_hemma, id: utkast.lag_hemma_id, lista: hemSpelare }, { sida: 'borta', namn: utkast.lag_borta, id: utkast.lag_borta_id, lista: bortaSpelare }]) as kol}
                           {@const nStart = kol.lista.filter((p) => p.start).length}
                           <div class="lbox">
                             <div class="lhuvud">
-                              <Lagbricka namn={kol.namn} farg={fargForLag(kol.namn)} logga={loggaForLag(kol.namn)} storlek={30} />
+                              <Lagbricka namn={kol.namn} farg={fargForLag(kol.namn, kol.id)} logga={loggaForLag(kol.namn, kol.id)} storlek={30} />
                               <div class="lnamn-wrap">
                                 <div class="lnamn scd">{kol.namn || (kol.sida === 'hemma' ? 'Hemmalag' : 'Bortalag')}</div>
-                                <div class="lsub">{kol.sida === 'hemma' ? 'Hemma' : 'Borta'} · {truppNot(kol.namn)}</div>
+                                <div class="lsub">{kol.sida === 'hemma' ? 'Hemma' : 'Borta'} · {truppNot(kol.namn, kol.id)}</div>
                               </div>
                             </div>
                             <div class="grupplbl">{uttagProfil.lineup} <span class="grupplbl-sub">· delmängd av truppen</span></div>
                             <button class="lbtn" class:i={nStart > 0} on:click={() => lasUttag(kol.sida)} disabled={hamtar || arMatch()}>
                               <span>{nStart ? 'Byt fil…' : 'Ladda upp startelva…'}</span>
-                              <span class="lbtn-n">{startelvaEtikett(kol.namn, nStart)}</span>
+                              <span class="lbtn-n">{startelvaEtikett(kol.namn, nStart, kol.id)}</span>
                             </button>
                           </div>
                         {/each}
