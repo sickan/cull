@@ -25,7 +25,6 @@ röst→action är LÅG prio.
 | BUG-08 | Dubbletter under Människor vid ompublicering | Stigs lista · trolig rot: FEAT-13 |
 | BUG-10 | Slug-byte vid ompublicering lämnar föräldralösa rader i live-D1 → dubblettkort (3 st städade manuellt 16/7) | **Full skrivning: design/BUGG-slug-byte-ompublicering.md.** Rot: DPT2 nytt id/slug vid ompublicering (innehall_synk) ELLER reconciling publish saknas för event-typen. Sannolikt den KONKRETA mekanismen bakom BUG-08 — tas ihop med FEAT-13 |
 | HDA-a | Heldagsaktivitet-väljaren: synkade tävlingsjobb saknar tavling_id → inget gren·sport-suffix | Kräver ny länktabell (schema v29) för måttligt visningsvärde → föreslagen P2 |
-| MP-död | Matchpub död kod: `MatchHuvud.svelte` + oanropade `oppnaILightroom`/`raderaMaterial`/`hamtaUtkast`/`sparaUtkast` — de två sista kan vara TAPPADE funktioner (materialradering, autospar). **Beslut Stig:** väck eller radera | Matchpub-regressionen |
 
 ## B · DPT2 — features/changes
 
@@ -61,8 +60,6 @@ röst→action är LÅG prio.
 | ID | Vad | Anteckning |
 |----|-----|-----------|
 | iOS-trupp | Trupp/startelva från arenan | **SKIVA 1 KLAR 16/7** (TruppView: foto-referens + tap-startelva + stryk ur trupp; PUT /roster deployad; ios `e0e6472`). KVAR: installera på telefonen (kräver upplåst lur) + **skiva 2: Vision-OCR förifyller ur fotot** + skiva 3: DPT2-reconciliation av mobilsatt roster |
-| iOS-heldag8 | Heldagsaktivitet räknar ner till MIDNATT på Hem — ska utgå från morgonen (förslag 08:00, som tävlings-paketens avspark) | Stigs test 16/7 · liten (Matchdag.start för heldag) |
-| iOS-hemCTA | Hem-kortets knapp "Uppdrag i kalendern" är DÖD (ren etikett) — heldagsjobb (t.ex. Nordea Open ATP250) har ingen match att öppna. Gör klickbar → Kalender-fliken/jobbet | Stigs test 16/7 |
 | iOS-läs | Läs-features ur arkitekturspecen: **väder-aggregat per dag + restid/"när måste jag åka"** (MapKit) | Stigs "väder, kör nu" — lyft ur B-011/P3 |
 | iOS-notis | Skarp notis-landning ("påminn när matchdata landat" — Stigs knapptryck end-to-end) | Kvar från design-lyftet etapp 3 |
 | iOS-story | Story-text-override | Kvar från lyftet |
@@ -79,7 +76,6 @@ röst→action är LÅG prio.
 | B-010 | Låsskärm som startsida (Live Activity) | → **D6** |
 | B-011 | Realtid utan batteridränering (spike) | Läs-features utbrutna till iOS-läs ovan |
 | IG-schema | ev. instagram-stories://-scheme för direktdelning | Gammal ev-punkt |
-| iOS-remote | **ios-nef-brygga saknar git-remote** — backup-risk för hela appen | Infra, billig försäkring |
 
 ## E · Webb/sajt
 
@@ -91,7 +87,6 @@ röst→action är LÅG prio.
 | FEAT-WEB-03 | Nyhetsindikator "Sport" på startsidan | → **D4** |
 | FEAT-WEB-04 | Standardisera mörkt tema | → **D4** |
 | B-006 | Sportsidans struktur (galleri/matcher-ordning enhetlig) | → **D4** |
-| B-007 | Lightbox i gallerier (Sport/Landskap/Människor/Film) | → **D5** |
 | W-friidrott | Verifiera att Mästerskap/kategori+Friidrott-sajtkoden är deployad (var "EJ deployat" 14/7) | Status osäker — kolla |
 
 ## F · Mobil-live
@@ -141,6 +136,10 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 
 ## ✅ Levererat nyligen (rörligt — flyttas hit när klart)
 
+- 16 jul kväll: iOS heldag→08:00 + Uppdrag-knappen klickbar (installerade) ·
+  ios-repot backat till privat GitHub (sickan/ios-nef-brygga) · B-007 lightbox
+  LIVE på sajten (D5-facit) · MP-död avgjord (raderaMaterial väckt,
+  MatchHuvud/oppnaILightroom bort, utkast-paret sparat åt D9-autosparen)
 - 16 jul em (steg 1): BUG-09 (gren·sport i koppla-chips/-lista) · #26-rest
   (id-baserade lag-uppslag i matchdaguttaget) · BUG-02 (Tidigare projekt-korten
   aktiverar nu urvalet → Leverera) · HDA-b (Ackreditering-filter)
