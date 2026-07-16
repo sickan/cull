@@ -195,6 +195,25 @@ class TestStoryOverlay(unittest.TestCase):
         self.assertEqual(so.monogram_text("Mirjam Björklund", "BORT", individ=True), "MB")
         self.assertEqual(so.monogram_text("", "HEM", individ=True), "HEM")
 
+    def test_friidrott_hjalpare(self):
+        # D2-svarets regler: serie med decimalkomma + × för övertramp,
+        # svenska ordinaler (11/12 → :e), stort ord-trösklar, enheter.
+        from dpt2.motorer import story_overlay as so
+        self.assertEqual(so.formattera_serie("6,21, 6,42, x, 6,38"),
+                         "6,21 · 6,42 · × · 6,38")
+        self.assertEqual(so.formattera_serie("6,21 6,42 X 6,38"),
+                         "6,21 · 6,42 · × · 6,38")
+        self.assertEqual([str(n) + so.ordinal_text(n)
+                          for n in (1, 2, 3, 11, 12, 21)],
+                         ["1:a", "2:a", "3:e", "11:e", "12:e", "21:a"])
+        self.assertEqual(so.friidrott_stort_ord_storlek("LÄNGD"), 150)
+        self.assertEqual(so.friidrott_stort_ord_storlek("KULSTÖTNING F"), 118)
+        self.assertEqual(so.friidrott_stort_ord_storlek("MARATONLÖPNING"), 96)
+        self.assertEqual(so.resultat_enhet("hoppkast"), "m")
+        self.assertEqual(so.resultat_enhet("mangkamp"), "p")
+        self.assertEqual(so.resultat_enhet("sprint"), "")
+        self.assertEqual(so.MEDALJ_FARG[1][:3], (217, 178, 76))   # guld #D9B24C
+
     def test_startmoment_i_alla_profiler(self):
         # Stora ordet i preview-blocket hämtas ur profilen — varje sport ska ha
         # ett start_moment (fotboll "Avspark", tennis "Matchstart", friidrott

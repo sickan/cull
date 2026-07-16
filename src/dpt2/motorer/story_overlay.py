@@ -750,6 +750,283 @@ def _render_score_individ(canvas, accent, spelare_a, spelare_b,
 
 
 # ---------------------------------------------------------------------------
+# FRIIDROTT (D2-handoffen) — Start / Resultat / Placering.
+# Facit: design/HANDOFF-D2-SVAR + Horisont Friidrott D2.dc.html. En idrottare
+# + ett resultat; eventnamnet uppe till höger; gren-kanten som alltid.
+# ---------------------------------------------------------------------------
+
+# Medaljfärger (D2): Guld #D9B24C · Silver #C7CDD4 · Brons #C08A5A. 4+ = vit.
+MEDALJ_FARG = {1: (217, 178, 76, 255), 2: (199, 205, 212, 255),
+               3: (192, 138, 90, 255)}
+_DISCIPLIN_ENHET = {"hoppkast": "m", "mangkamp": "p"}
+
+
+def friidrott_stort_ord_storlek(text):
+    """Grennamnets fontstorlek — D2: ≤9 tecken 150px · 10–13 118px · >13 96px,
+    alltid en rad."""
+    n = len(text or "")
+    return 150 if n <= 9 else (118 if n <= 13 else 96)
+
+
+def ordinal_text(placering):
+    """Svensk ordinal för placering: 1:a, 2:a, 3:e … 21:a (11/12 → :e)."""
+    try:
+        n = int(placering)
+    except (TypeError, ValueError):
+        return ""
+    return ":a" if n % 10 in (1, 2) and n % 100 not in (11, 12) else ":e"
+
+
+def formattera_serie(serie):
+    """Hoppserien som D2-sträng: '6,21 · 6,42 · × · 6,38' — övertramp (x/X)
+    blir tecknet ×. Tar rå inmatning separerad med mellanslag/·/;/komma —
+    men komma direkt följt av siffra är DECIMALKOMMA (6,42), inte separator."""
+    delar = [d.strip(", ") for d in
+             re.split(r"[·;]+|\s+|,(?!\d)", serie or "") if d.strip(", ")]
+    return " · ".join("×" if d.lower() == "x" else d for d in delar)
+
+
+def resultat_enhet(grentyp):
+    """Dämpad enhet efter stora siffran: hopp/kast 'm', mångkamp 'p' — tid
+    (sprint/medel) och placering saknar enhet."""
+    return _DISCIPLIN_ENHET.get(grentyp or "", "")
+
+
+def _fri_namnrad(d, d0, lager_w, y, namn, klubb, fnt_namn, fnt_klubb,
+                 x0, block_w):
+    """Namn (centrerat) + klubb som spärrad underrad. Returnerar ny y."""
+    track_klubb = 5   # .24em * 21
+    w_n = int(d.textlength(namn or "", font=fnt_namn))
+    h_n = d0.textbbox((0, 0), namn or "X", fnt_namn)[3]
+    d.text((x0 + (block_w - w_n) // 2, y), namn or "", font=fnt_namn, fill=_VIT)
+    y += h_n
+    if klubb:
+        k = klubb.upper()
+        w_k = _spärrad_bredd(d0, k, fnt_klubb, track_klubb)
+        _spärrad_text(d, (x0 + (block_w - w_k) // 2, y + 8), k, fnt_klubb,
+                      (255, 255, 255, 148), track_klubb)
+        y += 8 + d0.textbbox((0, 0), "X", fnt_klubb)[3]
+    return y
+
+
+def _render_friidrott_preview(canvas, accent, etikett, stort_ord, sub_line,
+                              idrottare):
+    """START: etikett ("START · KVAL") över grennamnet (stort ord ensamt),
+    underrad tid · plats, avdelare, 1–3 idrottare som namnkolumner."""
+    Image, ImageDraw, *_ = _pil()
+    W, H = canvas.size
+    L = _MARGIN
+    BLOCK_W = _CONTENT_W
+
+    tmp = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
+    d0  = ImageDraw.Draw(tmp)
+    fnt_et   = _saira(600, 28)
+    fnt_big  = _saira_cond(700, friidrott_stort_ord_storlek(stort_ord))
+    fnt_sub  = _saira(600, 34)
+    fnt_namn = _saira_cond(600, 52)
+    fnt_klubb = _saira(600, 21)
+    track_et, track_sub, track_klubb = 8, 5, 5
+
+    pers = [p for p in (idrottare or []) if (p.get("namn") or "").strip()][:3]
+
+    h_et  = d0.textbbox((0, 0), etikett.upper(), fnt_et)[3] if etikett else 0
+    h_big = d0.textbbox((0, 0), stort_ord.upper(), fnt_big)[3]
+    h_sub = d0.textbbox((0, 0), sub_line.upper(), fnt_sub)[3] if sub_line else 0
+    h_namn = d0.textbbox((0, 0), "X", fnt_namn)[3]
+    h_klubb = d0.textbbox((0, 0), "X", fnt_klubb)[3]
+    har_klubb = any(p.get("klubb") for p in pers)
+    rad_h = h_namn + (8 + h_klubb if har_klubb else 0) if pers else 0
+
+    total_h = ((h_et + 14 if etikett else 0) + h_big
+               + (18 + h_sub if sub_line else 0)
+               + (34 + 3 + 34 + rad_h if pers else 0))
+    y = H - _MARGIN - total_h
+
+    lager = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(lager)
+
+    if etikett:
+        _spärrad_text(d, (L, y), etikett.upper(), fnt_et, accent, track_et)
+        y += h_et + 14
+    _spärrad_text(d, (L, y), stort_ord.upper(), fnt_big, _VIT, 0)
+    y += h_big
+    if sub_line:
+        y += 18
+        _spärrad_text(d, (L, y), sub_line.upper(), fnt_sub, _VIT80, track_sub)
+        y += h_sub
+    if pers:
+        y += 34
+        y = _divider(d, L, y, BLOCK_W, alpha=56)
+        y += 34
+        # 1–3 namnkolumner, gap 26 — kolumnbredd = max(namn, klubb).
+        GAP = 26
+        kol = []
+        for p in pers:
+            w_n = int(d.textlength(p["namn"], font=fnt_namn))
+            w_k = _spärrad_bredd(d0, (p.get("klubb") or "").upper(),
+                                 fnt_klubb, track_klubb)
+            kol.append(max(w_n, w_k))
+        row_w = sum(kol) + GAP * (len(pers) - 1)
+        rx = L + (BLOCK_W - row_w) // 2
+        for p, kw in zip(pers, kol):
+            _fri_namnrad(d, d0, W, y, p["namn"], p.get("klubb") or "",
+                         fnt_namn, fnt_klubb, rx, kw)
+            rx += kw + GAP
+
+    canvas.alpha_composite(lager)
+
+
+def _render_friidrott_score(canvas, accent, etikett, tal, tal_farg, suffix,
+                            suffix_fnt, suffix_farg, namn, klubb, under_rad):
+    """Gemensamt RESULTAT/PLACERING-block (centrerat): etikett, stor siffra
+    med ev. baseline-linjerat suffix (enhet/ordinal), namn + klubb, ev.
+    avdelare + underrad (serie eller resultat)."""
+    Image, ImageDraw, *_ = _pil()
+    W, H = canvas.size
+    L = _MARGIN
+    BLOCK_W = _CONTENT_W
+
+    tmp = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
+    d0  = ImageDraw.Draw(tmp)
+    fnt_lbl   = _saira(600, 30)
+    fnt_tal   = _saira_cond(700, 220)
+    fnt_namn  = _saira_cond(600, 48)
+    fnt_klubb = _saira(600, 21)
+    fnt_under = _saira_cond(600, 38)
+    track_lbl, track_under = 9, 3
+    SUF_GAP = 16 if suffix_fnt and suffix_fnt.size >= 80 else 6
+
+    h_lbl = d0.textbbox((0, 0), etikett.upper(), fnt_lbl)[3] if etikett else 0
+    bb_tal = d0.textbbox((0, 0), tal, fnt_tal)
+    w_tal, h_tal = int(d0.textlength(tal, font=fnt_tal)), bb_tal[3]
+    w_suf = int(d0.textlength(suffix, font=suffix_fnt)) if suffix else 0
+    h_namn = d0.textbbox((0, 0), "X", fnt_namn)[3] if namn else 0
+    h_klubb = d0.textbbox((0, 0), "X", fnt_klubb)[3]
+    h_under = d0.textbbox((0, 0), under_rad, fnt_under)[3] if under_rad else 0
+
+    namn_h = (h_namn + (8 + h_klubb if klubb else 0)) if namn else 0
+    total_h = ((h_lbl + 24 if etikett else 0) + h_tal
+               + (14 + namn_h if namn else 0)
+               + (36 + 3 + 26 + h_under if under_rad else 0))
+    y = H - _MARGIN - total_h
+
+    lager = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(lager)
+
+    if etikett:
+        t = etikett.upper()
+        w = _spärrad_bredd(d0, t, fnt_lbl, track_lbl)
+        _spärrad_text(d, (L + (BLOCK_W - w) // 2, y), t, fnt_lbl, accent, track_lbl)
+        y += h_lbl + 24
+    # Stor siffra + baseline-linjerat suffix (enhet 80px gap 16 / ordinal 90px gap 6)
+    grupp_w = w_tal + (SUF_GAP + w_suf if suffix else 0)
+    sx = L + (BLOCK_W - grupp_w) // 2
+    d.text((sx, y), tal, font=fnt_tal, fill=tal_farg)
+    if suffix:
+        h_suf = d0.textbbox((0, 0), suffix, suffix_fnt)[3]
+        d.text((sx + w_tal + SUF_GAP, y + h_tal - h_suf), suffix,
+               font=suffix_fnt, fill=suffix_farg)
+    y += h_tal
+    if namn:
+        y += 14
+        _fri_namnrad(d, d0, W, y, namn, klubb, fnt_namn, fnt_klubb, L, BLOCK_W)
+        y += namn_h
+    if under_rad:
+        y += 36
+        div_w = int(BLOCK_W * 0.78)
+        y = _divider(d, L + (BLOCK_W - div_w) // 2, y, div_w, alpha=56)
+        y += 26
+        w_u = _spärrad_bredd(d0, under_rad, fnt_under, track_under)
+        _spärrad_text(d, (L + (BLOCK_W - w_u) // 2, y), under_rad, fnt_under,
+                      (255, 255, 255, 217), track_under)
+
+    canvas.alpha_composite(lager)
+
+
+def skapa_friidrott_story(bild_path, tillstand, *, gren_namn, grentyp="hoppkast",
+                          moment="", event="", idrottare=None,
+                          namn="", klubb="", resultat="", serie="",
+                          placering="", start_when="", venue="",
+                          tema="Hav", gren="", format="9x16",
+                          fokus=None, zoom=1.0, env=None,
+                          ut_path=None, ut_mapp=None):
+    """Friidrotts-story (D2): tillstand = "start" | "resultat" | "placering".
+
+    gren_namn: "Längd", "100 m" — stort ord i start, del av etiketten annars.
+    grentyp:   sprint|medel|hoppkast|mangkamp — styr enhet (m/p) + serie.
+    event:     "Friidrotts-SM 2026" — spärrad text uppe till höger.
+    idrottare: [{namn, klubb}] 1–3 st (start-tillståndet).
+    namn/klubb: idrottaren i resultat/placering.
+    placering: heltal (1 → "1:a" i guld) eller "DNF"/"DNS"/"DQ" (dämpat ord).
+    serie:     hoppserie (bara hoppkast) — formatteras till '6,21 · × · 6,42'.
+    """
+    Image, ImageDraw, ImageFont, ImageOps = _pil()
+    tema_data = TEMAN.get(tema, TEMAN["Hav"])
+    accent = tema_data["accent"]
+    frame_h = FORMAT_H.get(format, FORMAT_H["9x16"])
+    W, H = CANVAS_W, frame_h
+
+    foto = _cover_crop(_ladda_foto(bild_path, env), W, H, fokus, zoom, Image)
+    canvas = foto.convert("RGBA")
+    canvas.alpha_composite(_topp_scrim(W))
+    lager = _tema_logga_lager(W, H, tema)
+    if lager:
+        canvas.alpha_composite(lager)
+    if event:
+        _turnering_topphoger(canvas, event)
+    canvas.alpha_composite(_botten_scrim(W, H), (0, H - int(H * 0.68)))
+
+    mom = (moment or "").strip()
+    if tillstand == "start":
+        etikett = f"Start · {mom}" if mom else "Start"
+        sub = " · ".join(x for x in ((start_when or "").strip(),
+                                     (venue or "").strip()) if x)
+        _render_friidrott_preview(canvas, accent, etikett,
+                                  (gren_namn or "").strip(), sub,
+                                  idrottare or [])
+    else:
+        grendel = f"{gren_namn} — {mom}" if mom else (gren_namn or "")
+        if tillstand == "placering":
+            etikett = f"Placering · {grendel}" if grendel else "Placering"
+            p = str(placering or "").strip()
+            if p.upper() in ("DNF", "DNS", "DQ"):
+                # Dämpat stort ord — ingen ordinal/medalj/resultatrad (D2 §5).
+                _render_friidrott_score(canvas, accent, etikett, p.upper(),
+                                        (255, 255, 255, 153), "", None, None,
+                                        namn, klubb, "")
+            else:
+                farg = MEDALJ_FARG.get(int(p) if p.isdigit() else 0, _VIT)
+                suf_farg = farg[:3] + (int(farg[3] * 0.75),)
+                enh = resultat_enhet(grentyp)
+                under = f"{resultat} {enh}".strip() if resultat else ""
+                _render_friidrott_score(canvas, accent, etikett, p, farg,
+                                        ordinal_text(p), _saira_cond(600, 90),
+                                        suf_farg, namn, klubb, under)
+        else:
+            etikett = f"Resultat · {grendel}" if grendel else "Resultat"
+            enh = resultat_enhet(grentyp)
+            under = formattera_serie(serie) if grentyp == "hoppkast" else ""
+            _render_friidrott_score(canvas, accent, etikett,
+                                    (resultat or "").strip(), _VIT,
+                                    enh, _saira_cond(600, 80) if enh else None,
+                                    (255, 255, 255, 140), namn, klubb, under)
+
+    kant = _gren_kant_lager(W, H, gren)
+    if kant:
+        canvas.alpha_composite(kant)
+
+    result = canvas.convert("RGB")
+    if ut_path is None:
+        ut_dir = (Path(ut_mapp).expanduser() if ut_mapp
+                  else Path(bild_path).parent / "Story")
+        ut_dir.mkdir(parents=True, exist_ok=True)
+        prefix = FORMAT_PREFIX.get(format, "story")
+        ut_path = ut_dir / f"{prefix}_friidrott_{tillstand}.jpg"
+    result.save(ut_path, "JPEG", quality=92, optimize=True)
+    return Path(ut_path)
+
+
+# ---------------------------------------------------------------------------
 # A4 · Målskyttelistan under Slutresultatet — dynamisk layout
 # ---------------------------------------------------------------------------
 # Tre layouter (speglar Tweaks-proppen `scorersLayout` i prototypen):
