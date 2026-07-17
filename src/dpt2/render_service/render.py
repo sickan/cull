@@ -48,7 +48,11 @@ def _skriv_temp(katalog, namn, data):
 
 
 _FRI_GENOMSLAPP = ("gren_namn", "grentyp", "moment", "event", "namn", "klubb",
-                   "resultat", "serie", "placering", "idrottare")
+                   "resultat", "serie", "placering", "idrottare",
+                   # V2-20: rekordmarkering + tid/plats för start-tillståndet
+                   # ("Nästa gren/pass") — renderaren kunde dem redan, men de
+                   # släpptes aldrig igenom molnvägen.
+                   "rekord", "start_when", "venue")
 
 
 def _rendera_friidrott(spec, foto):

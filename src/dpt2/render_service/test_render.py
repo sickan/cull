@@ -69,6 +69,26 @@ class TestRendera(unittest.TestCase):
         with self.assertRaises(RenderFel):
             rendera({"friidrott": {"tillstand": "start"}}, foto=_jpeg())
 
+    def test_friidrott_rekord_och_start_falt(self):
+        # V2-20: rekord + start_when/venue ska nå overlayen genom molnvägen —
+        # de fanns i renderaren men släpptes aldrig igenom _FRI_GENOMSLAPP.
+        spec = {"friidrott": {"tillstand": "resultat", "gren_namn": "Längd",
+                              "grentyp": "hoppkast", "namn": "Alva Hoppare",
+                              "resultat": "6,42"}, "tema": "Hav", "gren": "dam"}
+        utan = rendera(spec, foto=_jpeg())
+        med = rendera({**spec, "friidrott": {**spec["friidrott"],
+                                             "rekord": "SM-rekord"}},
+                      foto=_jpeg())
+        self.assertNotEqual(_sig(utan), _sig(med))
+        start = {"friidrott": {"tillstand": "start", "gren_namn": "100 m",
+                               "grentyp": "sprint"}, "tema": "Hav"}
+        utan_tid = rendera(start, foto=_jpeg())
+        med_tid = rendera({**start, "friidrott": {**start["friidrott"],
+                                                  "start_when": "14:30",
+                                                  "venue": "Studenternas"}},
+                          foto=_jpeg())
+        self.assertNotEqual(_sig(utan_tid), _sig(med_tid))
+
     def test_format_4x5(self):
         ut = rendera({**BAS, "format": "4x5"}, foto=_jpeg())
         self.assertEqual(self._bild(ut).size, (1080, 1350))

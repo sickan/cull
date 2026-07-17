@@ -882,10 +882,12 @@ def _render_friidrott_preview(canvas, accent, etikett, stort_ord, sub_line,
 
 
 def _render_friidrott_score(canvas, accent, etikett, tal, tal_farg, suffix,
-                            suffix_fnt, suffix_farg, namn, klubb, under_rad):
+                            suffix_fnt, suffix_farg, namn, klubb, under_rad,
+                            rekord_rad=""):
     """Gemensamt RESULTAT/PLACERING-block (centrerat): etikett, stor siffra
-    med ev. baseline-linjerat suffix (enhet/ordinal), namn + klubb, ev.
-    avdelare + underrad (serie eller resultat)."""
+    med ev. baseline-linjerat suffix (enhet/ordinal), ev. rekord-rad i guld
+    (V2-20: "SM-REKORD"/"PERSONBÄSTA"), namn + klubb, ev. avdelare + underrad
+    (serie eller resultat)."""
     Image, ImageDraw, *_ = _pil()
     W, H = canvas.size
     L = _MARGIN
@@ -908,9 +910,13 @@ def _render_friidrott_score(canvas, accent, etikett, tal, tal_farg, suffix,
     h_namn = d0.textbbox((0, 0), "X", fnt_namn)[3] if namn else 0
     h_klubb = d0.textbbox((0, 0), "X", fnt_klubb)[3]
     h_under = d0.textbbox((0, 0), under_rad, fnt_under)[3] if under_rad else 0
+    fnt_rek = _saira(600, 28)
+    track_rek = 8
+    h_rek = d0.textbbox((0, 0), rekord_rad.upper(), fnt_rek)[3] if rekord_rad else 0
 
     namn_h = (h_namn + (8 + h_klubb if klubb else 0)) if namn else 0
     total_h = ((h_lbl + 24 if etikett else 0) + h_tal
+               + (16 + h_rek if rekord_rad else 0)
                + (14 + namn_h if namn else 0)
                + (36 + 3 + 26 + h_under if under_rad else 0))
     y = H - _MARGIN - total_h
@@ -932,6 +938,15 @@ def _render_friidrott_score(canvas, accent, etikett, tal, tal_farg, suffix,
         d.text((sx + w_tal + SUF_GAP, y + h_tal - h_suf), suffix,
                font=suffix_fnt, fill=suffix_farg)
     y += h_tal
+    if rekord_rad:
+        # V2-20: rekordmarkering — spärrad guldrad ("SM-REKORD", "PERSONBÄSTA")
+        # mellan siffran och namnet. Guldet delas med 1:a-placeringens medalj.
+        y += 16
+        t = rekord_rad.upper()
+        w = _spärrad_bredd(d0, t, fnt_rek, track_rek)
+        _spärrad_text(d, (L + (BLOCK_W - w) // 2, y), t, fnt_rek,
+                      MEDALJ_FARG[1], track_rek)
+        y += h_rek
     if namn:
         y += 14
         _fri_namnrad(d, d0, W, y, namn, klubb, fnt_namn, fnt_klubb, L, BLOCK_W)
@@ -951,7 +966,7 @@ def _render_friidrott_score(canvas, accent, etikett, tal, tal_farg, suffix,
 def skapa_friidrott_story(bild_path, tillstand, *, gren_namn, grentyp="hoppkast",
                           moment="", event="", idrottare=None,
                           namn="", klubb="", resultat="", serie="",
-                          placering="", start_when="", venue="",
+                          placering="", start_when="", venue="", rekord="",
                           tema="Hav", gren="", format="9x16",
                           fokus=None, zoom=1.0, env=None,
                           ut_path=None, ut_mapp=None):
@@ -964,6 +979,8 @@ def skapa_friidrott_story(bild_path, tillstand, *, gren_namn, grentyp="hoppkast"
     namn/klubb: idrottaren i resultat/placering.
     placering: heltal (1 → "1:a" i guld) eller "DNF"/"DNS"/"DQ" (dämpat ord).
     serie:     hoppserie (bara hoppkast) — formatteras till '6,21 · × · 6,42'.
+    rekord:    "SM-rekord"/"Personbästa"/… — guldrad under siffran (V2-20);
+               gäller resultat/placering, ignoreras för start och DNF/DNS/DQ.
     """
     Image, ImageDraw, ImageFont, ImageOps = _pil()
     tema_data = TEMAN.get(tema, TEMAN["Hav"])
@@ -1006,7 +1023,8 @@ def skapa_friidrott_story(bild_path, tillstand, *, gren_namn, grentyp="hoppkast"
                 under = f"{resultat} {enh}".strip() if resultat else ""
                 _render_friidrott_score(canvas, accent, etikett, p, farg,
                                         ordinal_text(p), _saira_cond(600, 90),
-                                        suf_farg, namn, klubb, under)
+                                        suf_farg, namn, klubb, under,
+                                        rekord_rad=rekord)
         else:
             etikett = f"Resultat · {grendel}" if grendel else "Resultat"
             enh = resultat_enhet(grentyp)
@@ -1014,7 +1032,8 @@ def skapa_friidrott_story(bild_path, tillstand, *, gren_namn, grentyp="hoppkast"
             _render_friidrott_score(canvas, accent, etikett,
                                     (resultat or "").strip(), _VIT,
                                     enh, _saira_cond(600, 80) if enh else None,
-                                    (255, 255, 255, 140), namn, klubb, under)
+                                    (255, 255, 255, 140), namn, klubb, under,
+                                    rekord_rad=rekord)
 
     kant = _gren_kant_lager(W, H, gren)
     if kant:
