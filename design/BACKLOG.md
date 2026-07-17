@@ -20,17 +20,17 @@ röst→action är LÅG prio.
 | ID | Vad | Källa/anteckning |
 |----|-----|------------------|
 | BUG-03 | Färgklickar på Fotojobb uppdateras inte reaktivt (kräver flikbyte) | **KAN EJ REPRODUCERAS i mock** — hela kedjan verifierad färsk (D1 skrivs synkront, ingen klient-cache, laddaOm körs). Behöver Stigs exakta repro: vilken åtgärd + vilken färgklick |
-| BUG-06 | Dubbletter i "Publicerat"-katalogen — ska spegla exakt det som är live | Stigs lista · trolig rot: FEAT-13 |
+| BUG-06 | Dubbletter i "Publicerat"-katalogen — ska spegla exakt det som är live | ✅ **LÖST 17/7** (`1c0abe7`): rot = id-trådning saknades; lokala dubbletter städade (29/29-spegel mot live) |
 | BUG-07 | Dubbletter under "Utkast" — version vs bugg? Gruppera eller rensa | Stigs lista |
-| BUG-08 | Dubbletter under Människor vid ompublicering | Stigs lista · trolig rot: FEAT-13 |
-| BUG-10 | Slug-byte vid ompublicering lämnar föräldralösa rader i live-D1 → dubblettkort (3 st städade manuellt 16/7) | **Full skrivning: design/BUGG-slug-byte-ompublicering.md.** Rot: DPT2 nytt id/slug vid ompublicering (innehall_synk) ELLER reconciling publish saknas för event-typen. Sannolikt den KONKRETA mekanismen bakom BUG-08 — tas ihop med FEAT-13 |
+| BUG-08 | Dubbletter under Människor vid ompublicering | ✅ **LÖST 17/7** (`1c0abe7`): samma rot som BUG-10 (id-trådning) |
+| BUG-10 | Slug-byte vid ompublicering lämnar föräldralösa rader i live-D1 | ✅ **LÖST 17/7** (`1c0abe7`): editorn trådar innehallId för ALLA typer + reconciling publish + radering propagerar; live-D1 engångsstädad (1:1-spegel verifierad) |
 | HDA-a | Heldagsaktivitet-väljaren: synkade tävlingsjobb saknar tavling_id → inget gren·sport-suffix | Kräver ny länktabell (schema v29) för måttligt visningsvärde → föreslagen P2 |
 
 ## B · DPT2 — features/changes
 
 | ID | Vad | Anteckning |
 |----|-----|-----------|
-| FEAT-13 | Purge/spegling av bygg-repot före publicering | **Rotorsak-kandidat för BUG-06/08** — tas först i publiceringskedjan |
+| FEAT-13 | Purge/spegling av bygg-repot före publicering | ✅ **KLAR 17/7** (`1c0abe7`): reconciling publish per typ (skyddsvakt mot tom lokal DB) + radera_innehall propagerar till live |
 | FEAT-09 | Auto-status efter publicering (polla → realtid) | Bygger mot FEAT-12 |
 | FEAT-12 | Statusfärger 🔵utkast 🟡publicerad 🟢live 🔴fel + fasa ut utkastknappen | Färger specade av Stig → code direkt |
 | FEAT-08 | Avpublicera match/tävling från DPT2 | Raderaflöde finns för vissa typer — utöka |
@@ -58,7 +58,7 @@ röst→action är LÅG prio.
 | iOS-lev | Leverans-progress-datakälla | Kvar från lyftet |
 | FEAT-iOS-01 | Logotyp på lag i appen | Blockerare: **loggor → R2** (delas med mobil-live E2 + #27-polish) |
 | FEAT-iOS-02 | SoMe-inlägg från heldagsevent i Kalendern | Blockerad: mobil render-väg (Pillow är Mac-bunden — se ML-E2) |
-| FEAT-iOS-03 | Kalender som visningsläge under Fotojobb | → **D8** (design först) |
+| FEAT-iOS-03 | Kalender som visningsläge under Fotojobb | ✅ **SKIVA 1 KLAR 17/7** (ios `99973cd`): Lista\|Kalender-segment, månadsgrid + dag-panel, Kalender-fliken BORT (4 flikar). Skiva 2 kvar: deadline-ringar + krock (kräver /api/jobb-data) |
 | FEAT-iOS-04 | Systemstyrt mörkt tema | Litet (samma princip som DPT2 #25) |
 | B-012 | Kamerabrygga FTP: Z8 → telefon utan kortdrag (ersätter SPIKE-iOS-01) | **Design KLAR** (`ios-nef-brygga/design/PLAN-kamera-ftp.md`) — 3 skivor: FTP-motor+tester → Kameran-segment i Bilder → skarpkörning m Z8 |
 | SPIKE-iOS-02 | Översyn "Matchdata klar" | Liten, ihop med notis-flödet |
@@ -113,7 +113,7 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 | D5 | Lightbox-spec | ✅ **SVAR INNE** (HANDOFF-D5-SVAR-…) — väntar implementation |
 | D6 | Låsskärm & widgets (UTÖKAT: B-010 + B-009) | ✅ **SVAR INNE** (HANDOFF-D6-SVAR-…) — väntar implementation |
 | D7 | Startsidans kuratering (FEAT-02 + SPIKE-02) | ✅ **SVAR INNE** (HANDOFF-D7-SVAR-…) — väntar implementation |
-| D8 | iOS Fotojobb-kalendervy | ✅ **SVAR INNE** (HANDOFF-D8-SVAR-…) — väntar implementation |
+| D8 | iOS Fotojobb-kalendervy | ✅ **IMPLEMENTERAD skiva 1 17/7** (ios `99973cd`); skiva 2 = deadline/krock-datat genom bron |
 | D9 | Publiceringsstatus-språket | ✅ **SVAR INNE** (komplett spec: StatusChip, hörnbåge i statusfärg, filterchips ersätter flikarna, fel-expansion m per-kanal + Försök igen, puls vid bygge, autospar ersätter utkastknappen, färgtokens ljust/mörkt) — **publiceringskedjan v2 helt oblockerad** |
 
 ## Stig — användarsteg (inget kodande)
