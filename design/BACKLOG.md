@@ -133,6 +133,7 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 | GR-opencv | Ogmergad gren `fix/opencv5-cascade` (opencv-pin <5 — gallra kraschar utan) |
 | GR-kortrot | Ogmergad gren `fix/gallra-kortrot` (gallra från kortets rot) |
 | #27-polish | Backend-flagghärledning (renderare + iOS får landslagsflaggan) + vajande vimpel — delar loggor→R2-vägen |
+| P15 | Sportanpassade moment + poänglogik i Ny story (iOS) — fältobs Nordea Open | ✅ **LÖST 17/7** (dpt `6258e98` + sajt `a75b9bc` + ios `3ae9090`, dpt-render 1.2.0 deployad): sportstyrda momentknappar (tennis: Matchstart·Set klart·Tiebreak·Slutresultat·Nästa match), overlay-etikett ur rätt nivå (Setsiffror/gamesiffror; Tiebreak-läge), byggSpec skickar mellan för icke-scorer-sporter. Skarpt E2E-verifierad mot Borges–Darderi |
 
 ## Design-jobb (Claude Design)
 
