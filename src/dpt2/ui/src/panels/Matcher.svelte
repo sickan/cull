@@ -5,6 +5,7 @@
     lasUttagFil, valjFil, listaTavlingar, listaLag, listaLagForTavling,
     listaUrval, raderaMatch, sattMatchSynk, sportprofiler, sattAktivtUrval,
     listaMaterial, listaInnehall, sparaMaterial, sparaInnehall, hamtaSpelschema,
+    listaEventer, sparaTavling,
   } from '../lib/api.js'
   import Combobox from '../lib/Combobox.svelte'
   import Lagbricka from '../lib/Lagbricka.svelte'
@@ -49,9 +50,9 @@
   let innehallAlla = []
 
   onMount(async () => {
-    ;[matcher, tavlingar, lagAlla, projekt, profiler, materialAlla, innehallAlla] = await Promise.all(
+    ;[matcher, tavlingar, lagAlla, projekt, profiler, materialAlla, innehallAlla, eventer] = await Promise.all(
       [listaMatcher(), listaTavlingar(), listaLag(), listaUrval(), sportprofiler(),
-       listaMaterial(), listaInnehall('match')])
+       listaMaterial(), listaInnehall('match'), listaEventer()])
     laddar = false
   })
 
@@ -266,7 +267,7 @@
   }
 
   function nyMatch() {
-    const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '', tavling_id: null, rond: '', event: false }
+    const tmp = { id: 'ny-' + Date.now(), datum: '', tid: '', arena: '', status: 'kommande', resultat: '', sport: '', lag_hemma: '', lag_borta: '', lag_hemma_id: null, lag_borta_id: null, liga: '', tavling_id: null, event_id: null, rond: '', event: false }
     matcher = [{ ...tmp, trupp_n: 0 }, ...matcher]
     matchStatus = 'kommande'                 // nya utkast bor under Kommande
     oppen = tmp.id; utkast = { ...tmp, spelare: [] }; lagForTavling = []
@@ -283,6 +284,23 @@
     await laddaLagForTavling(o.namn)
   }
   const skapaTavling = (namn) => { utkast.liga = namn; utkast.tavling_id = null; lagForTavling = [] }
+
+  // ── Event-dörren (V5-C §2: "samma data, två dörrar") ─────────────────────
+  // Tävlingsfältet ovan är liga-dörren (bär tavling_id som idag); det här
+  // fältet sätter matchens event_id direkt — båda kan vara satta samtidigt
+  // (seriematch som ingår i ett slutspels-event). "Skapa nytt" gör ett
+  // event via tävlings-skrivytan (typ ovrigt — justeras sen i Event-sektionen).
+  let eventer = []
+  $: eventVal = eventer.map((e) => ({ id: e.id, namn: e.namn,
+    sub: [e.typ, e.sport, e.fran].filter(Boolean).join(' · ') }))
+  $: eventNamn = eventer.find((e) => e.id === utkast?.event_id)?.namn || ''
+  const valjEvent = (o) => { utkast.event_id = o.id; utkast = utkast }
+  const rensaEvent = () => { utkast.event_id = null; utkast = utkast }
+  async function skapaEvent(namn) {
+    const r = await sparaTavling({ namn, sport: utkast.sport || 'fotboll',
+      typ: 'ovrigt' })
+    if (r?.ok) { utkast.event_id = r.id; eventer = await listaEventer() }
+  }
   // Utan vald tävling sätts matchens sport av den valda utövaren/laget (tävling
   // vinner annars, se valjTavling). Så en tennismatch utan tävling får sport=
   // tennis → rätt profil (individ-etiketter, ingen startelva) i stället för
@@ -660,9 +678,21 @@
                         </label>
                       {/if}
                     </div>
-                    <label class="full">Tävling
+                    <label class="full">Liga / Tävling
                       <Combobox options={tavlingVal} value={utkast.liga} placeholder="Välj tävling…"
                         on:pick={(e) => valjTavling(e.detail)} on:create={(e) => skapaTavling(e.detail)} />
+                    </label>
+                    <!-- V5-C: andra dörren — matchen kan ingå i ett event
+                         (mästerskap/cup/turnering) oberoende av ligan -->
+                    <label class="full">Event
+                      <div class="eventdorr">
+                        <Combobox options={eventVal} value={eventNamn} placeholder="Del av event…"
+                          on:pick={(e) => valjEvent(e.detail)} on:create={(e) => skapaEvent(e.detail)} />
+                        {#if utkast.event_id}
+                          <button type="button" class="eventrensa" title="Koppla bort eventet"
+                            on:click={rensaEvent}>✕</button>
+                        {/if}
+                      </div>
                     </label>
                     {#if uttagProfil.individ}
                       <!-- D1: turneringsrond — stora ordet i story-overlayn (visas versalt). -->
@@ -980,6 +1010,11 @@
   .eventtogg input { width: 15px; height: 15px; accent-color: var(--acc); }
   .eventmut { font-weight: 400; color: var(--t-mut); }
   .rad3 { display: flex; gap: 10px; }
+  .eventdorr { display: flex; align-items: center; gap: 6px; }
+  .eventdorr :global(.cb) { flex: 1; min-width: 0; }
+  .eventrensa { flex: none; border: 0; background: none; color: var(--t-mut);
+    cursor: pointer; font-size: 12px; padding: 4px 6px; }
+  .eventrensa:hover { color: var(--krock, #b03838); }
   .rad3 input:nth-of-type(1) { width: 150px; flex: none; }
   .rad3 input:nth-of-type(2) { width: 104px; flex: none; }
   .rad3 input:nth-of-type(3) { flex: 1; min-width: 0; }

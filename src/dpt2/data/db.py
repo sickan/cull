@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -831,6 +831,53 @@ def _migrera(conn, fran_version):
             from dpt2.data import store as _store
             for r in conn.execute("SELECT id FROM tavling").fetchall():
                 _store.spegla_tavling_v5(conn, r[0])
+
+    if fran_version < 32:
+        # v32 (V5-C skiva 2): tävlings-typerna utökas med eventmodellens
+        # etiketter (cup, varldscup, ovrigt) så event-editorn kan använda samma
+        # skrivyta som allt annat under övergången (spegeln mappar typerna till
+        # event-registret). CHECK kan inte ändras i SQLite → tabell-rebuild
+        # (samma mönster som lag/matchen-rebuilden). Refererande tabeller
+        # (matchen, disciplin, tavling_lag, fotojobb_utkast …) pekar på namnet
+        # och tar den nya tabellen när den byter namn tillbaka. Guardad som
+        # v13-rebuilden: uråldriga (test-)scheman utan typ/sport hoppar över.
+        if (_har_tabell(conn, "tavling")
+                and _har_kolumn(conn, "tavling", "typ")
+                and _har_kolumn(conn, "tavling", "sport")
+                and _har_kolumn(conn, "tavling", "pagang_dold")):
+            conn.execute("PRAGMA foreign_keys=OFF")
+            conn.executescript("""
+            CREATE TABLE tavling_ny (
+              id        TEXT PRIMARY KEY,
+              typ       TEXT NOT NULL CHECK (typ IN ('liga','turnering','masterskap','cup','varldscup','ovrigt')),
+              sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
+              gren      TEXT CHECK (gren IN ('dam','herr','mixed')),
+              namn      TEXT NOT NULL,
+              hemsida   TEXT,
+              fran      TEXT,
+              till      TEXT,
+              ort       TEXT,
+              arena     TEXT,
+              logga     TEXT,
+              kalender  INTEGER NOT NULL DEFAULT 0,
+              press_email TEXT,
+              ackr_dagar  INTEGER,
+              pagang_dold INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT INTO tavling_ny (id,typ,sport,gren,namn,hemsida,fran,till,
+                                    ort,arena,logga,kalender,press_email,
+                                    ackr_dagar,pagang_dold)
+              SELECT id,typ,sport,gren,namn,hemsida,fran,till,
+                     ort,arena,logga,kalender,press_email,
+                     ackr_dagar,pagang_dold FROM tavling;
+            DROP TABLE tavling;
+            ALTER TABLE tavling_ny RENAME TO tavling;
+            """)
+            conn.execute("PRAGMA foreign_keys=ON")
+            problem = conn.execute("PRAGMA foreign_key_check").fetchall()
+            if problem:
+                raise RuntimeError(
+                    f"v32-migreringen lämnade brutna referenser: {problem[:5]}")
 
 
 def _har_kolumn(conn, tabell, kolumn):

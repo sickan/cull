@@ -16,7 +16,9 @@
 
 CREATE TABLE tavling (
   id        TEXT PRIMARY KEY,
-  typ       TEXT NOT NULL CHECK (typ IN ('liga','turnering','masterskap')),
+  -- v32: typerna utökade med eventmodellens etiketter (V5-C) — spegeln mappar
+  -- turnering/masterskap/cup/varldscup/ovrigt → event, liga → liga.
+  typ       TEXT NOT NULL CHECK (typ IN ('liga','turnering','masterskap','cup','varldscup','ovrigt')),
   sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
   gren      TEXT CHECK (gren IN ('dam','herr','mixed')),
   namn      TEXT NOT NULL,

@@ -1448,6 +1448,45 @@ class TestV5Datamodell(unittest.TestCase):
         self.assertEqual([h["id"] for h in store.individ_historik(self.c, iid)],
                          [sm])
 
+    def test_v32_alla_eventtyper_ryms_i_skrivytan(self):
+        # v32: cup/varldscup/ovrigt ryms i tavling-CHECK:en och speglas med
+        # bevarad typ till event-registret.
+        for typ in ("cup", "varldscup", "ovrigt"):
+            tid = store.upsert_tavling(self.c, f"Test {typ}", sport="fotboll",
+                                       typ=typ)
+            self.assertEqual(store.hamta_event(self.c, tid)["typ"], typ)
+
+    def test_matchens_tva_dorrar(self):
+        # V5-C §2: liga-dörren (tävlingsfältet) + event-dörren (event_id) —
+        # båda kan vara satta samtidigt; tom sträng kopplar bort eventet.
+        liga = store.upsert_tavling(self.c, "Allsvenskan", sport="fotboll",
+                                    typ="liga")
+        cup = store.upsert_tavling(self.c, "Svenska Cupen", sport="fotboll",
+                                   typ="cup")
+        mid = store.spara_match(self.c, {"lag_hemma": "MFF", "lag_borta": "AIK",
+                                         "sport": "fotboll", "tavling_id": liga,
+                                         "event_id": cup})
+        m = store.hamta_match(self.c, mid)
+        self.assertEqual(m["liga_id"], liga)      # ur tävlingsfältet
+        self.assertEqual(m["event_id"], cup)      # ur event-dörren
+        self.assertEqual(m["tavling_id"], liga)   # legacy-bäraren orörd
+        # Spara om utan event_id-nyckel → dörren rörs inte
+        store.spara_match(self.c, {"id": mid, "lag_hemma": "MFF",
+                                   "lag_borta": "AIK", "sport": "fotboll",
+                                   "tavling_id": liga})
+        self.assertEqual(store.hamta_match(self.c, mid)["event_id"], cup)
+        # Ligan sparas om (spegeln kör) → event-dörren överlever
+        store.upsert_tavling(self.c, "Allsvenskan", id=liga, sport="fotboll",
+                             typ="liga", ort="Sverige")
+        self.assertEqual(store.hamta_match(self.c, mid)["event_id"], cup)
+        # Tom sträng kopplar bort
+        store.spara_match(self.c, {"id": mid, "lag_hemma": "MFF",
+                                   "lag_borta": "AIK", "sport": "fotboll",
+                                   "tavling_id": liga, "event_id": ""})
+        m = store.hamta_match(self.c, mid)
+        self.assertIsNone(m["event_id"])
+        self.assertEqual(m["liga_id"], liga)
+
     # ── kategoriregistret ────────────────────────────────────────────────────
     def test_kategori_upsert_och_statisk_topp(self):
         kid = store.upsert_kategori(self.c, "Konsert", topp="manniskor",

@@ -7,7 +7,7 @@
   import { listaEventer, hamtaEventDetalj, sattEventPagangLage,
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
     kopplaEventIndividGren, kopplaBortEventIndivid,
-    sparaDisciplin, raderaDisciplin } from '../lib/api.js'
+    sparaDisciplin, raderaDisciplin, sparaTavling } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
 
@@ -149,6 +149,37 @@
 
   const initialer = (namn) => (namn || '').split(/\s+/).map((d) => d[0]).slice(0, 2).join('').toUpperCase()
   const matchNar = (m) => [m.datum, m.tid].filter(Boolean).join(' · ')
+
+  // ── Event-editorn (V5-C skiva 2) ─────────────────────────────────────────
+  // Skriver via tävlings-skrivytan (v32: alla fem typerna ryms) → spegeln
+  // håller event-registret i synk. Samma editor för nytt + redigering.
+  const SPORTER = ['fotboll', 'handboll', 'innebandy', 'volleyboll', 'beachvolley', 'tennis', 'friidrott']
+  const EVENTTYPER = [['masterskap', 'Mästerskap'], ['cup', 'Cup'],
+    ['turnering', 'Turnering'], ['varldscup', 'Världscup'], ['ovrigt', 'Övrigt']]
+  let editorOppen = false
+  let ev = null
+  function nyttEvent() {
+    ev = { id: null, namn: '', typ: 'turnering', sport: 'fotboll', gren: '',
+      fran: '', till: '', ort: '', arena: '' }
+    editorOppen = true
+  }
+  function redigeraEvent() {
+    const e = detalj.event
+    ev = { id: e.id, namn: e.namn, typ: e.typ, sport: e.sport,
+      gren: e.gren || '', fran: e.fran || '', till: e.till || '',
+      ort: e.ort || '', arena: e.arena || '' }
+    editorOppen = true
+  }
+  async function sparaEvent() {
+    if (!ev?.namn?.trim()) return
+    const r = await sparaTavling({ ...ev, id: ev.id || undefined })
+    editorOppen = false
+    if (r?.ok) {
+      await ladda()
+      if (vald) detalj = await hamtaEventDetalj(vald)
+      else if (r.id) await oppna(r.id)
+    }
+  }
 </script>
 
 <div class="panel">
@@ -158,9 +189,30 @@
         <span class="kicker">Planera</span>
         <h1 class="scd">Event <span class="sub">Mästerskap, cuper, turneringar — tidsbegränsade samlingar av matcher och grenar</span></h1>
       </div>
-      <!-- Skapas i tävlings-editorn tills eventet får egen editor (V5-C skiva 2) -->
-      <button class="prim" on:click={() => dispatch('navigera', 'lag')}>+ Nytt event</button>
+      <button class="prim" on:click={nyttEvent}>+ Nytt event</button>
     </div>
+
+    {#if editorOppen && ev}
+      <div class="kort editor">
+        <span class="caps">{ev.id ? 'Redigera event' : 'Nytt event'}</span>
+        <div class="edrad">
+          <label class="edfalt vaxa">Namn<input bind:value={ev.namn} placeholder="EuroVolley 2026" /></label>
+          <label class="edfalt">Typ<select bind:value={ev.typ}>{#each EVENTTYPER as [v, n]}<option value={v}>{n}</option>{/each}</select></label>
+          <label class="edfalt">Sport<select bind:value={ev.sport}>{#each SPORTER as s}<option value={s}>{s}</option>{/each}</select></label>
+          <label class="edfalt">Gren<select bind:value={ev.gren}><option value="">—</option><option value="dam">dam</option><option value="herr">herr</option><option value="mixed">mixed</option></select></label>
+        </div>
+        <div class="edrad">
+          <label class="edfalt">Från<input type="date" bind:value={ev.fran} /></label>
+          <label class="edfalt">Till<input type="date" bind:value={ev.till} /></label>
+          <label class="edfalt vaxa">Ort<input bind:value={ev.ort} placeholder="Uppsala" /></label>
+          <label class="edfalt vaxa">Arena<input bind:value={ev.arena} placeholder="Uppsala Friidrottsarena" /></label>
+        </div>
+        <div class="edknappar">
+          <button class="prim liten" on:click={sparaEvent} disabled={!ev.namn.trim()}>Spara</button>
+          <button class="avbryt" on:click={() => (editorOppen = false)}>Avbryt</button>
+        </div>
+      </div>
+    {/if}
 
     <div class="chips">
       {#each [['alla', 'Alla'], ['pagaende', 'Pågående'], ['kommande', 'Kommande'], ['avslutade', 'Avslutade']] as [id, namn]}
@@ -200,7 +252,30 @@
       <h1 class="scd">{e.namn}</h1>
       <span class="typbadge stor" style="color:{t.farg};border-color:{t.farg}">{t.namn}</span>
       <span class="pill" class:amber={s.id === 'pagaende'}>{s.namn}</span>
+      <button class="plus" on:click={redigeraEvent}>Redigera</button>
     </div>
+
+    {#if editorOppen && ev}
+      <div class="kort editor">
+        <span class="caps">Redigera event</span>
+        <div class="edrad">
+          <label class="edfalt vaxa">Namn<input bind:value={ev.namn} /></label>
+          <label class="edfalt">Typ<select bind:value={ev.typ}>{#each EVENTTYPER as [v, n]}<option value={v}>{n}</option>{/each}</select></label>
+          <label class="edfalt">Sport<select bind:value={ev.sport}>{#each SPORTER as sp}<option value={sp}>{sp}</option>{/each}</select></label>
+          <label class="edfalt">Gren<select bind:value={ev.gren}><option value="">—</option><option value="dam">dam</option><option value="herr">herr</option><option value="mixed">mixed</option></select></label>
+        </div>
+        <div class="edrad">
+          <label class="edfalt">Från<input type="date" bind:value={ev.fran} /></label>
+          <label class="edfalt">Till<input type="date" bind:value={ev.till} /></label>
+          <label class="edfalt vaxa">Ort<input bind:value={ev.ort} /></label>
+          <label class="edfalt vaxa">Arena<input bind:value={ev.arena} /></label>
+        </div>
+        <div class="edknappar">
+          <button class="prim liten" on:click={sparaEvent} disabled={!ev.namn.trim()}>Spara</button>
+          <button class="avbryt" on:click={() => (editorOppen = false)}>Avbryt</button>
+        </div>
+      </div>
+    {/if}
     <p class="dmeta">{[e.sport, period(e), e.ort, e.arena].filter(Boolean).join(' · ')}</p>
 
     <div class="kort pagang">
@@ -411,6 +486,20 @@
   .bricka { flex: none; width: 26px; height: 26px; border-radius: 50%; display: inline-flex;
     align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700;
     background: color-mix(in srgb, var(--acc) 18%, transparent); color: var(--acc); }
+
+  /* Event-editorn (skiva 2) */
+  .editor { margin: 0 0 16px; }
+  .edrad { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .edfalt { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px;
+    font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-caps, var(--t-mut)); }
+  .edfalt.vaxa { flex: 1; min-width: 160px; }
+  .edfalt input, .edfalt select { padding: 8px 10px; border: 1px solid var(--div); border-radius: 8px;
+    background: var(--panel); color: var(--t-head); font-size: 13px; font-family: inherit;
+    font-weight: 400; letter-spacing: 0; text-transform: none; }
+  .edfalt input:focus, .edfalt select:focus { border-color: var(--acc); outline: none; }
+  .edknappar { display: flex; gap: 8px; margin-top: 12px; }
+  .avbryt { border: 1px solid var(--div); background: var(--kort); border-radius: 8px;
+    padding: 7px 12px; font-size: 12.5px; font-weight: 600; color: var(--t-mut); cursor: pointer; }
 
   /* Deltagarrad m gren-chips (skiva 1.5) */
   .drad { border: 1px solid var(--div3, var(--div)); border-radius: 9px; padding: 8px 10px;

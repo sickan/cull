@@ -972,8 +972,11 @@ def spegla_tavling_v5(conn, tavling_id):
             "ackr_dagar=excluded.ackr_dagar, pagang_dold=excluded.pagang_dold",
             (tavling_id, *falt))
         conn.execute("DELETE FROM event WHERE id=?", (tavling_id,))
-        conn.execute("UPDATE matchen SET liga_id=?, event_id=NULL "
-                     "WHERE tavling_id=?", (tavling_id, tavling_id))
+        # event_id rörs INTE här: en Event-dörr-koppling på ligans matcher ska
+        # överleva att ligan sparas om. (Typbyte event→liga städas ändå — då
+        # raderas event-raden ovan och FK:n SET NULL:ar matchernas event_id.)
+        conn.execute("UPDATE matchen SET liga_id=? WHERE tavling_id=?",
+                     (tavling_id, tavling_id))
     else:
         typ = t["typ"] if t["typ"] in _EVENT_TYPER else "ovrigt"
         conn.execute(
@@ -1336,11 +1339,21 @@ def spara_match(conn, match):
     # Event-sektionen (V5-C, direkt på event_id) får inte nollas av att matchen
     # sparas om i matchformuläret.
     if tav_id:
+        # event_id COALESCE:as — pekar tävlingsfältet på en LIGA får det inte
+        # nolla en event-koppling som satts via Event-dörren/Event-sektionen.
         conn.execute(
             "UPDATE matchen SET "
             "liga_id=(SELECT id FROM liga WHERE id=?), "
-            "event_id=(SELECT id FROM event WHERE id=?) WHERE id=?",
+            "event_id=COALESCE((SELECT id FROM event WHERE id=?), event_id) "
+            "WHERE id=?",
             (tav_id, tav_id, mid))
+    # V5-C (matchformulärets andra dörr): uttryckligt event_id vinner —
+    # nyckeln FINNS bara när editorn skickar den (tom sträng = koppla bort).
+    # Liga-dörren är tävlingsfältet ovan; båda kan därmed vara satta samtidigt.
+    if "event_id" in match:
+        conn.execute(
+            "UPDATE matchen SET event_id=(SELECT id FROM event WHERE id=?) "
+            "WHERE id=?", ((match.get("event_id") or "").strip() or None, mid))
 
     # Spelare → trupp: bygg om länkarna (så borttagna spelare försvinner).
     conn.execute("DELETE FROM match_trupp WHERE match_id=?", (mid,))
