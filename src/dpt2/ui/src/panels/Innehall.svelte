@@ -15,6 +15,7 @@
   import BildvaljareFokuspunkt from '../lib/BildvaljareFokuspunkt.svelte'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
   import ResultatRemsa from '../lib/ResultatRemsa.svelte'
+  import StatusChip from '../lib/StatusChip.svelte'
 
   // ── Handoff "sportsidor & menyer" (11 jul 2026) ─────────────────────────────
   // Innehåll är ett BIBLIOTEK (typ-nav Sport · Landskap · Människor · Blogg, en
@@ -140,13 +141,15 @@
   const TYP_NAMN = { match: 'Matchartikel', sportevent: 'Event/mästerskap',
     blogg: 'Blogg', event: 'Människor', landskap: 'Landskap', film: 'Film' }
   const DRAFTS_KEY = 'dpt2.drafts.v1'
-  let overviewTab = 'publicerat'
   let poster = []                     // alla innehåll-rader (DB via listaInnehall)
   let utkast = []                     // localStorage-utkast
   let draftId = null                  // id på utkastet som redigeras nu
   let sparTimer
 
-  async function laddaOversikt() { poster = (await listaInnehall()) || [] }
+  async function laddaOversikt() {
+    poster = (await listaInnehall()) || []
+    laddaDeploy()                       // FEAT-12: rad-status behöver senaste deployen
+  }
   function lasUtkast() {
     try { utkast = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '[]') } catch (_) { utkast = [] }
     // BUG-07-sanering: historiskt fick samma post ETT NYTT utkast per
@@ -175,6 +178,68 @@
     if (!iso) return ''
     try { return `${prefix} ${new Date(iso).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}` } catch (_) { return '' }
   }
+
+  // ── FEAT-12/D9: status per rad i biblioteket ────────────────────────────────
+  // Senaste Pages-deployen hämtas en gång per biblioteksladdning (workern
+  // exponerar den på status-svaret) → per rad: publicerad efter senaste
+  // lyckade bygget = "bygger", annars "live"; deploy-fel efter publicering =
+  // "fel". Utan CF-nycklar (deploy=null) → neutral "publicerad".
+  let senasteDeploy = null
+  async function laddaDeploy() {
+    const pub = poster.find((p) => publiceradPost(p))
+    senasteDeploy = pub
+      ? (await statusInnehall(pub.typ, pub.id))?.deploy || null : null
+  }
+  const D9_FARG = { utkast: '#3E7CB0', publicerad: '#B07A2A', bygger: '#B07A2A',
+                    live: '#5C8F4A', fel: '#C0492F' }
+  // Reaktiv closure (inte vanlig funktion): `$:` spårar inte closure-vars i
+  // en anropad funktion — omskapa den när deps ändras (Svelte-gotcha:t).
+  $: radStatusAv = (p) => {
+    if (statusLage === 'fel' && p.id === publiceradId) return 'fel'
+    if (!publiceradPost(p)) return 'utkast'
+    const d = senasteDeploy
+    if (!d?.skapad || !p.synkad_tid) return 'publicerad'
+    const efter = new Date(d.skapad).getTime()
+      >= new Date(p.synkad_tid).getTime() - 60_000
+    if (efter && d.status === 'success') return 'live'
+    if (efter && (d.status === 'failure' || d.status === 'canceled')) return 'fel'
+    return 'bygger'
+  }
+  function klockan(iso) {
+    try { return new Date(iso).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }) }
+    catch (_) { return '' }
+  }
+  // Metaraden bär tid/kontext (D9 §1) i stället för statisk "Publicerad <dag>".
+  $: radMetaAv = (r) => {
+    if (r.status === 'utkast') {
+      const t = r.utkast ? datumText(r.utkast.sparad, 'Redigerad')
+        : datumText(r.post.skapad, 'Redigerad')
+      return (t || 'Redigerad nyss') + ' · sparas löpande'
+    }
+    const p = r.post
+    if (r.status === 'bygger') return `Publicerad ${klockan(p.synkad_tid)} · bygget pågår ~2 min`
+    if (r.status === 'live') return `Live sedan ${datumText(p.synkad_tid, '').trim()} ${klockan(p.synkad_tid)}`
+    if (r.status === 'fel') return 'Publicering misslyckades'
+    return datumText(p.synkad_tid || p.frontmatter?.datum, 'Publicerad')
+  }
+  // Filterchips ersätter Publicerat/Utkast-flikarna (D9 §1); fel sorteras
+  // överst tills de är åtgärdade (D9 §2). Bygger räknas till Live-chipen.
+  let statusFilter = 'alla'
+  const D9_ORDNING = { fel: 0, bygger: 1, publicerad: 1, live: 2, utkast: 3 }
+  $: libRader = [
+    ...libPoster.map((p) => ({ id: `p-${p.id}`, post: p, status: radStatusAv(p) })),
+    ...libUtkastDb.map((p) => ({ id: `p-${p.id}`, post: p, status: 'utkast' })),
+    ...libUtkast.map((u) => ({ id: `u-${u.id}`, utkast: u, status: 'utkast' })),
+  ].sort((a, b) => (D9_ORDNING[a.status] ?? 9) - (D9_ORDNING[b.status] ?? 9))
+  $: libAntal = {
+    alla: libRader.length,
+    live: libRader.filter((r) => ['live', 'bygger', 'publicerad'].includes(r.status)).length,
+    utkast: libRader.filter((r) => r.status === 'utkast').length,
+    fel: libRader.filter((r) => r.status === 'fel').length,
+  }
+  $: libFiltrerade = libRader.filter((r) => statusFilter === 'alla'
+    || (statusFilter === 'live' ? ['live', 'bygger', 'publicerad'].includes(r.status)
+      : r.status === statusFilter))
 
   // Enkeltyps-vyer (Landskap/Människor/Blogg): rader av vald typ.
   $: libPoster = poster.filter((p) => p.typ === libType && publiceradPost(p))
@@ -548,19 +613,8 @@
     else if (ctyp === 'film') cmsFilm.innehallId = id
     else if (ctyp === 'blogg') cmsBlogg.innehallId = id
   }
-  async function sparaUtkastDb() {
-    const r = await sparaInnehall(data())
-    if (r?.ok) {
-      sattInnehallId(r.id)
-      // Utkastet bor nu i DB-raden — flytta sessionen till postens
-      // deterministiska slot så listan inte visar tvillingar. (BUG-07)
-      if (draftId && draftId !== `p-${r.id}`) raderaUtkast(draftId)
-      draftId = `p-${r.id}`
-      sparadDb = true; setTimeout(() => (sparadDb = false), 2400)
-      await laddaOversikt()
-    }
-  }
-  let sparadDb = false
+  // D9 §4: "Spara utkast"-knappen (och dess DB-spar-väg sparaUtkastDb) är
+  // borttagen — autospar täcker utkasten, Publicera är enda aktiva handlingen.
 
   // ── Gemensam editor-mekanik (befintlig) ────────────────────────────────────
   const utanThumb = (arr) => (arr || []).map(({ thumb, ...r }) => r)
@@ -866,57 +920,48 @@
         </div>
       </div>
     {:else}
-      <!-- ── Enkeltyps-bibliotek (Landskap / Människor / Blogg) ── -->
+      <!-- ── Enkeltyps-bibliotek (Landskap / Människor / Blogg) ──
+           D9: EN lista med status på raden (hörnbåge + chip + metarad);
+           filterchips ersätter Publicerat/Utkast-flikarna, fel sorteras överst. -->
       <div class="kort oversikt">
         <div class="ovhuvud">
           <span class="caps nomarg">Publicerat &amp; utkast</span>
-          <div class="ovtabs">
-            <button class:on={overviewTab === 'publicerat'} on:click={() => (overviewTab = 'publicerat')}>Publicerat {#if libPoster.length}<span class="ovn">{libPoster.length}</span>{/if}</button>
-            <button class:on={overviewTab === 'utkast'} on:click={() => (overviewTab = 'utkast')}>Utkast {#if libUtkast.length + libUtkastDb.length}<span class="ovn ac">{libUtkast.length + libUtkastDb.length}</span>{/if}</button>
+          <div class="stfilter">
+            {#each [['alla', 'Alla'], ['live', 'Live'], ['utkast', 'Utkast'], ['fel', 'Fel']] as [id, namn]}
+              <button class="stchip" class:on={statusFilter === id} class:rod={id === 'fel' && libAntal.fel > 0}
+                on:click={() => (statusFilter = id)}>{namn}{#if libAntal[id]}<span class="ovn" class:ac={id !== 'alla'}>{libAntal[id]}</span>{/if}</button>
+            {/each}
           </div>
         </div>
 
-        {#if overviewTab === 'publicerat'}
-          {#each libPoster as p (p.id)}
-            <div class="ovrad" role="button" tabindex="0" title="Klicka för att ändra"
-              on:click={() => laddaPost(p)} on:keydown={(e) => e.key === 'Enter' && laddaPost(p)}>
-              <Hornmarkor farg="#6FB35A" r={10} titel="Publicerad" />
-              <div class="ovthumb">{#if heroBildUrl(p)}<img src={heroBildUrl(p)} alt="" loading="lazy" />{/if}</div>
-              <div class="ovmitt"><div class="ovtitel">{titelAv(p)}</div><div class="ovmeta">{datumText(p.synkad_tid || p.frontmatter?.datum, 'Publicerad')}</div></div>
-              <button class="ovx" class:armerad={$armerad === `pub-${p.id}`}
-                title={$armerad === `pub-${p.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                on:click|stopPropagation={taBortKlick(`pub-${p.id}`, () => raderaPost(p))}>
-                {#if $armerad === `pub-${p.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
-              </button>
+        {#each libFiltrerade as r (r.id)}
+          <div class="ovrad" role="button" tabindex="0"
+            title={r.status === 'utkast' ? 'Klicka för att fortsätta' : 'Klicka för att ändra'}
+            on:click={() => (r.utkast ? laddaUtkast(r.utkast) : laddaPost(r.post))}
+            on:keydown={(e) => e.key === 'Enter' && (r.utkast ? laddaUtkast(r.utkast) : laddaPost(r.post))}>
+            <Hornmarkor farg={D9_FARG[r.status]} r={10}
+              titel={r.status[0].toUpperCase() + r.status.slice(1)} />
+            <div class="ovthumb">{#if r.post && heroBildUrl(r.post)}<img src={heroBildUrl(r.post)} alt="" loading="lazy" />{/if}</div>
+            <div class="ovmitt">
+              <div class="ovtitel">{r.post ? titelAv(r.post) : (r.utkast.titel || '(utan titel)')}</div>
+              <div class="ovmeta">{radMetaAv(r)}</div>
             </div>
-          {:else}<div class="ovtom">Inget publicerat ännu.</div>{/each}
+            {#if ['live', 'bygger', 'fel'].includes(r.status)}
+              <StatusChip status={r.status} />
+            {/if}
+            <button class="ovx" class:armerad={$armerad === `rad-${r.id}`}
+              title={$armerad === `rad-${r.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
+              on:click|stopPropagation={taBortKlick(`rad-${r.id}`,
+                () => (r.utkast ? raderaUtkast(r.utkast.id) : raderaPost(r.post)))}>
+              {#if $armerad === `rad-${r.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
+            </button>
+          </div>
         {:else}
-          {#each libUtkast as u (u.id)}
-            <div class="ovrad" role="button" tabindex="0" title="Klicka för att fortsätta"
-              on:click={() => laddaUtkast(u)} on:keydown={(e) => e.key === 'Enter' && laddaUtkast(u)}>
-              <div class="ovthumb"></div>
-              <div class="ovmitt"><div class="ovtitel">{u.titel || '(utan titel)'}</div><div class="ovmeta">{datumText(u.sparad, 'Sparad')}</div></div>
-              <button class="ovx" class:armerad={$armerad === `utk-${u.id}`}
-                title={$armerad === `utk-${u.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
-                on:click|stopPropagation={taBortKlick(`utk-${u.id}`, () => raderaUtkast(u.id))}>
-                {#if $armerad === `utk-${u.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
-              </button>
-            </div>
-          {/each}
-          {#each libUtkastDb as p (p.id)}
-            <div class="ovrad" role="button" tabindex="0" title="Klicka för att fortsätta"
-              on:click={() => laddaPost(p)} on:keydown={(e) => e.key === 'Enter' && laddaPost(p)}>
-              <div class="ovthumb">{#if heroBildUrl(p)}<img src={heroBildUrl(p)} alt="" loading="lazy" />{/if}</div>
-              <div class="ovmitt"><div class="ovtitel">{titelAv(p)}</div><div class="ovmeta">{datumText(p.skapad, 'Skapad')} · utkast</div></div>
-              <button class="ovx" class:armerad={$armerad === `pub-${p.id}`}
-                on:click|stopPropagation={taBortKlick(`pub-${p.id}`, () => raderaPost(p))}>
-                {#if $armerad === `pub-${p.id}`}Ta bort?{:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>{/if}
-              </button>
-            </div>
-          {/each}
-          {#if !libUtkast.length && !libUtkastDb.length}<div class="ovtom">Inga sparade utkast.</div>{/if}
-        {/if}
-        <div class="ovfot">Status = grön hörnmarkering (publicerad) · klick på raden öppnar för ändring · utkast sparas löpande.</div>
+          <div class="ovtom">{statusFilter === 'alla' ? 'Inget innehåll ännu.'
+            : statusFilter === 'fel' ? 'Inga fel — allt är i ordning.'
+            : `Inget under ${statusFilter === 'live' ? 'Live' : 'Utkast'}.`}</div>
+        {/each}
+        <div class="ovfot">Hörnfärgen är radens status (blå utkast · gul bygger · grön live · röd fel) · klick på raden öppnar för ändring · utkast sparas löpande.</div>
       </div>
     {/if}
   {:else}
@@ -1231,10 +1276,8 @@
       <div class="mdhuvud"><span class="caps">Markdown · förhandsvisning</span></div>
       <pre>{md}</pre>
       <div class="mdfot">
-        {#if ctyp === 'match' || ctyp === 'sportevent'}
-          <button class="statusbtn" on:click={sparaUtkastDb}>Spara utkast</button>
-          {#if sparadDb}<span class="ok">✓ Utkast sparat</span>{/if}
-        {/if}
+        <!-- D9 §4: "Spara utkast"-knappen borttagen — autospar sparar löpande,
+             Publicera är den enda aktiva handlingen. -->
         <button class="prim" on:click={spara}>Spara .md-fil</button>
         {#if sparad}
           {#if $testMode}<span class="ok testhint">✓ Test — exempelfil: <span class="testpath">{sparadPath}</span> · rensas vid omstart</span>
@@ -1291,10 +1334,14 @@
   .oversikt { margin-top: 14px; }
   .ovhuvud { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
   .ovhuvud.mt14 { margin-top: 18px; }
-  .ovtabs { display: flex; gap: 3px; background: var(--div3); border-radius: 9px; padding: 3px; }
-  .ovtabs button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border: 0; border-radius: 7px;
-    background: transparent; color: var(--t-mut); font-size: 12px; font-weight: 600; }
-  .ovtabs button.on { background: var(--kort); color: var(--t-head); box-shadow: var(--skugga); }
+  /* D9 §1: filterchips (Alla · Live · Utkast · Fel) ersätter flikarna */
+  .stfilter { display: flex; gap: 6px; flex-wrap: wrap; }
+  .stchip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px;
+    border: 1px solid var(--div); border-radius: 999px; background: var(--panel);
+    color: var(--t-mut); font-size: 12px; font-weight: 600; }
+  .stchip.on { background: var(--kort); color: var(--t-head); border-color: var(--acc); box-shadow: var(--skugga); }
+  .stchip.rod { color: #C0492F; border-color: rgba(192, 73, 47, 0.35); }
+  .stchip.rod.on { border-color: #C0492F; }
   .ovn { font-size: 10px; font-weight: 700; color: var(--t-mut); background: var(--div); border-radius: 999px; padding: 1px 6px; }
   .ovn.ac { color: var(--ink); background: var(--acc); }
   .ovrad { position: relative; overflow: hidden; display: flex; align-items: center; gap: 11px; cursor: pointer;
