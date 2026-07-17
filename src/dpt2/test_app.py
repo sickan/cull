@@ -2110,6 +2110,76 @@ class TestListaKortBilder(unittest.TestCase):
         self.assertFalse(self.api.lista_kort_bilder("")["ok"])
 
 
+class TestEventSektion(unittest.TestCase):
+    """V5-C skiva 1: Event-sektionens API — listan med antal, detaljvyn,
+    match-koppling (två dörrar), På gång-läget och individ-deltagarna."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.sm = self.api.spara_tavling({
+            "namn": "Friidrotts-SM 2026", "sport": "friidrott",
+            "typ": "masterskap", "fran": "2026-07-24", "till": "2026-07-26",
+            "ort": "Uppsala"})["id"]
+
+    def test_lista_med_antal(self):
+        ev = self.api.lista_eventer()
+        self.assertEqual(len(ev), 1)
+        e = ev[0]
+        self.assertEqual(e["namn"], "Friidrotts-SM 2026")
+        self.assertEqual((e["antal_matcher"], e["antal_grenar"],
+                          e["antal_deltagare"]), (0, 0, 0))
+
+    def test_detalj_koppling_och_okopplade(self):
+        mid = self.api.spara_match({"lag_hemma": "Heat 1", "lag_borta": "",
+                                    "sport": "friidrott"})["id"]
+        d = self.api.hamta_event_detalj(self.sm)
+        self.assertEqual(d["event"]["id"], self.sm)
+        self.assertTrue(d["kan_grenar"])          # speglad ur tävling
+        self.assertEqual([m["id"] for m in d["okopplade"]], [mid])
+        self.assertEqual(d["matcher"], [])
+        # Koppla → matchen flyttar från okopplade till matcher; tavling_id
+        # följer med (övergången: eventet är speglat ur en tävling).
+        self.assertTrue(self.api.koppla_match_event(mid, self.sm)["ok"])
+        d = self.api.hamta_event_detalj(self.sm)
+        self.assertEqual([m["id"] for m in d["matcher"]], [mid])
+        self.assertEqual(d["okopplade"], [])
+        m = self.api.hamta_match(mid)
+        self.assertEqual(m["event_id"], self.sm)
+        self.assertEqual(m["tavling_id"], self.sm)
+        # Omsparning i matchformuläret UTAN tävling nollar inte kopplingen
+        self.api.spara_match({"id": mid, "lag_hemma": "Heat 1",
+                              "lag_borta": "", "sport": "friidrott"})
+        self.assertEqual(self.api.hamta_match(mid)["event_id"], self.sm)
+        # Koppla bort → båda referenserna släpper
+        self.assertTrue(self.api.koppla_match_event(mid, None)["ok"])
+        m = self.api.hamta_match(mid)
+        self.assertIsNone(m["event_id"])
+        self.assertIsNone(m["tavling_id"])
+        self.assertFalse(self.api.koppla_match_event(mid, "finns-ej")["ok"])
+
+    def test_pagang_lage(self):
+        self.assertTrue(self.api.satt_event_pagang_lage(self.sm, "heldag")["ok"])
+        self.assertEqual(self.api.hamta_event_detalj(self.sm)["event"]
+                         ["pagang_lage"], "heldag")
+        self.assertFalse(self.api.satt_event_pagang_lage(self.sm, "x")["ok"])
+
+    def test_individ_deltagare(self):
+        r = self.api.spara_individ({"namn": "Armand Duplantis",
+                                    "sport": "friidrott", "klubb": "Upsala IF"})
+        self.assertTrue(r["ok"])
+        self.assertTrue(self.api.koppla_event_deltagare(
+            self.sm, r["id"], ["stav"])["ok"])
+        d = self.api.hamta_event_detalj(self.sm)
+        self.assertEqual(d["deltagare"][0]["namn"], "Armand Duplantis")
+        self.assertEqual(d["deltagare"][0]["grenar"], ["stav"])
+        self.assertEqual(self.api.lista_eventer()[0]["antal_deltagare"], 1)
+        self.api.koppla_bort_event_deltagare(self.sm, r["id"])
+        self.assertEqual(self.api.hamta_event_detalj(self.sm)["deltagare"], [])
+        self.assertEqual(len(self.api.lista_individer()), 1)
+        self.api.radera_individ(r["id"])
+        self.assertEqual(self.api.lista_individer(), [])
+
+
 class TestSnabbplockExport(unittest.TestCase):
     """snabbplock_export — kopierar explicit plockade filer + öppnar LR."""
 

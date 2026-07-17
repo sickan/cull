@@ -643,6 +643,100 @@ class Api:
         store.koppla_disciplin_deltagare(self.conn, disciplin_id, lag_id, pa)
         return {"ok": True}
 
+    # ── Event-sektionen (V5-C skiva 1, handoff §2) ───────────────────────────
+    # Läser event-registret (speglas ur tavling under övergången — V5-B).
+    # Skapa/redigera event-metadata sker än så länge i tävlings-editorn;
+    # sektionen äger kopplingarna (matcher, deltagare) + På gång-läget.
+
+    def lista_eventer(self):
+        """Eventlistan med antal (grenar/matcher/deltagare) för metaraden.
+        Status (kommande/pågående/avslutad) härleds i UI:t ur perioden."""
+        ut = []
+        for e in store.lista_eventer(self.conn):
+            eid = e["id"]
+            e["antal_matcher"] = self.conn.execute(
+                "SELECT COUNT(*) FROM matchen WHERE event_id=?", (eid,)
+            ).fetchone()[0]
+            e["antal_grenar"] = self.conn.execute(
+                "SELECT COUNT(*) FROM disciplin WHERE tavling_id=?", (eid,)
+            ).fetchone()[0]
+            e["antal_deltagare"] = self.conn.execute(
+                "SELECT COUNT(*) FROM event_deltagare WHERE event_id=?", (eid,)
+            ).fetchone()[0]
+            ut.append(e)
+        return ut
+
+    def hamta_event_detalj(self, event_id):
+        """Detaljvyn: eventet + kopplade matcher + grenar (m deltagarantal) +
+        deltagare (individregistret) + okopplade matcher i samma sport (för
+        'Koppla ›'-listan)."""
+        e = store.hamta_event(self.conn, event_id)
+        if not e:
+            return None
+        alla = store.lista_matcher(self.conn)
+        matcher = [m for m in alla if m.get("event_id") == event_id]
+        okopplade = [m for m in alla
+                     if not m.get("event_id") and m.get("sport") == e["sport"]
+                     and m.get("status") != "avslutad"]
+        grenar = store.lista_discipliner(self.conn, event_id)
+        for g in grenar:
+            g["antal_deltagare"] = self.conn.execute(
+                "SELECT COUNT(*) FROM disciplin_deltagare WHERE disciplin_id=?",
+                (g["id"],)).fetchone()[0]
+        return {"event": e, "matcher": matcher, "okopplade": okopplade,
+                "grenar": grenar,
+                "deltagare": store.lista_event_deltagare(self.conn, event_id),
+                # Grenar skapas via disciplin-tabellen som (ännu) kräver att
+                # eventet finns som tävling — sant för alla speglade event.
+                "kan_grenar": bool(store.hamta_tavling(self.conn, event_id))}
+
+    def satt_event_pagang_lage(self, event_id, lage):
+        """På gång-läget (skiss 1h): auto | heldag | matcher."""
+        return {"ok": store.satt_pagang_lage(self.conn, event_id, lage)}
+
+    def koppla_match_event(self, match_id, event_id):
+        """Kopplar en match till ett event (event_id=None kopplar bort).
+        Under övergången sätts även tavling_id när eventet är speglat ur en
+        tävling (samma id) — då ser alla befintliga flöden kopplingen."""
+        if event_id and not store.hamta_event(self.conn, event_id):
+            return {"ok": False, "fel": "Okänt event."}
+        if event_id:
+            har_tavling = bool(store.hamta_tavling(self.conn, event_id))
+            self.conn.execute(
+                "UPDATE matchen SET event_id=?, liga_id=NULL, "
+                "tavling_id=CASE WHEN ? THEN ? ELSE tavling_id END WHERE id=?",
+                (event_id, 1 if har_tavling else 0, event_id, match_id))
+        else:
+            self.conn.execute(
+                "UPDATE matchen SET event_id=NULL, "
+                "tavling_id=CASE WHEN tavling_id IN (SELECT id FROM event) "
+                "THEN NULL ELSE tavling_id END WHERE id=?", (match_id,))
+        self.conn.commit()
+        return {"ok": True}
+
+    # ── Individregistret (V5-B/C) ────────────────────────────────────────────
+    def lista_individer(self):
+        return store.lista_individer(self.conn)
+
+    def spara_individ(self, d):
+        iid = store.upsert_individ(
+            self.conn, d.get("namn", ""), id=d.get("id"),
+            sport=d.get("sport") or None, klubb=d.get("klubb") or None,
+            instagram=d.get("instagram") or None, bild=d.get("bild") or None)
+        return {"ok": bool(iid), "id": iid}
+
+    def radera_individ(self, individ_id):
+        store.radera_individ(self.conn, individ_id)
+        return {"ok": True}
+
+    def koppla_event_deltagare(self, event_id, individ_id, grenar=None):
+        store.satt_event_deltagare(self.conn, event_id, individ_id, grenar)
+        return {"ok": True}
+
+    def koppla_bort_event_deltagare(self, event_id, individ_id):
+        store.koppla_bort_event_deltagare(self.conn, event_id, individ_id)
+        return {"ok": True}
+
     def lagg_tavling_i_kalender(self, tavling_id):
         """Skapar ett lokalt fotojobb-utkast (Okategoriserat, EJ synkat) för
         tävlingens period — flerdagarsuppdrag. Kräver att tävlingen redan har

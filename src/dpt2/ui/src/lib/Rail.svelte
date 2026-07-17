@@ -11,7 +11,8 @@
     { rubrik: 'Planera', poster: [
       { id: 'fotojobb', namn: 'Fotojobb' },
       { id: 'matcher', namn: 'Matcher' },
-      { id: 'lag', namn: 'Lag & tävlingar' },
+      { id: 'eventsektion', namn: 'Event' },              // V5-C (handoff §2)
+      { id: 'lag', namn: 'Lag & ligor' },                 // V5-C: omdöpt
     ] },
     { rubrik: 'Efter match', poster: [
       { id: 'gallra', namn: 'Gallra', nr: 1 },

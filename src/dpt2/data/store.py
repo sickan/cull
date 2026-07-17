@@ -1272,11 +1272,15 @@ def spara_match(conn, match):
 
     # V5-B: dubbelskriv referensen till de nya registren — liga/event delar id
     # med tavling under övergången, så subfrågorna ger rätt sida (eller NULL).
-    conn.execute(
-        "UPDATE matchen SET "
-        "liga_id=(SELECT id FROM liga WHERE id=?), "
-        "event_id=(SELECT id FROM event WHERE id=?) WHERE id=?",
-        (tav_id, tav_id, mid))
+    # UTAN tavling-ref lämnas liga_id/event_id ORÖRDA: en koppling gjord i
+    # Event-sektionen (V5-C, direkt på event_id) får inte nollas av att matchen
+    # sparas om i matchformuläret.
+    if tav_id:
+        conn.execute(
+            "UPDATE matchen SET "
+            "liga_id=(SELECT id FROM liga WHERE id=?), "
+            "event_id=(SELECT id FROM event WHERE id=?) WHERE id=?",
+            (tav_id, tav_id, mid))
 
     # Spelare → trupp: bygg om länkarna (så borttagna spelare försvinner).
     conn.execute("DELETE FROM match_trupp WHERE match_id=?", (mid,))
@@ -1382,7 +1386,7 @@ def lista_matcher(conn):
     """Matchlista (utan spelare) för kalender/översikt, nyast först."""
     rader = conn.execute(
         "SELECT m.id,m.datum,m.tid,m.arena,m.status,m.resultat,m.sport,m.event,"
-        "m.tavling_id,m.pagang_dold, "
+        "m.tavling_id,m.liga_id,m.event_id,m.pagang_dold, "
         "h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga, "
         "h.gren AS hem_gren, "
         "h.stall_hemma AS hemfarg, b.stall_hemma AS bortafarg, "

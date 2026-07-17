@@ -3,6 +3,7 @@
   import Rail from './lib/Rail.svelte'
   import Fotojobb from './panels/Fotojobb.svelte'
   import Matcher from './panels/Matcher.svelte'
+  import EventSektion from './panels/EventSektion.svelte'
   import Lag from './panels/Lag.svelte'
   import Gallra from './panels/Gallra.svelte'
   import Leverera from './panels/Leverera.svelte'
@@ -121,6 +122,8 @@
       <Matcher on:aktiverad={(e) => aktiveraFranMatcher(e.detail)}
         on:gaTill={(e) => aktiveraFranMatcherTill(e.detail.match, e.detail.dest)}
         on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
+    {:else if aktiv === 'eventsektion'}
+      <EventSektion on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'lag'}
       <Lag />
     {:else if aktiv === 'gallra'}
