@@ -3133,6 +3133,12 @@ def _pagang_match_md(m):
         # V5-C §3-invarianten: en match med event visas aldrig lösryckt —
         # sajtens kort visar "Del av {event}". (Schemat utökat på sajtsidan.)
         "del_av": m.get("del_av") or None,
+        # V5-E (§7): slug för länken till eventsidan (/sportevent/{slug}) +
+        # gren för matchradens 4px-stapel i låsta paletten. Sporteventets
+        # sajt-id är slugga(titel) — namngivningen förutsätter att sport-
+        # eventets titel är eventets namn.
+        "del_av_slug": AX.slugga(m["del_av"]) if m.get("del_av") else None,
+        "gren": (m.get("hem_gren") or "").capitalize() or None,
     }
     return fm, "", slug, AX.render_md(fm, "")
 

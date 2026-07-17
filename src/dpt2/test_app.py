@@ -2485,12 +2485,16 @@ class TestPagangAutomatik(unittest.TestCase):
         rad = [m for m in api.pagang_matcher()["matcher"] if m["id"] == mid][0]
         self.assertTrue(rad["auto_dold"])
         self.assertEqual(rad["del_av"], "SM 2126")
-        # Matchens .md bär del_av (sajtens "Del av {event}"-rad)
+        # Matchens .md bär del_av (sajtens "Del av {event}"-rad) + slug för
+        # eventsidelänken + gren för stapeln (V5-E §7)
         fm, _b, _s, md = _pagang_match_md({"lag_hemma": "Sverige",
                                            "lag_borta": "Polen",
                                            "datum": "2126-07-24",
+                                           "hem_gren": "dam",
                                            "del_av": "SM 2126"})
         self.assertEqual(fm["del_av"], "SM 2126")
+        self.assertEqual(fm["del_av_slug"], "sm-2126")
+        self.assertEqual(fm["gren"], "Dam")
         self.assertIn("del_av: SM 2126", md)
 
 
