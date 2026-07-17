@@ -5,30 +5,28 @@
 och prioriterade som helhet. Arbetsmodell oförändrad: **alla UX/UI/mall-frågor
 bryts ut som Design-jobb**. Levande dokument.*
 
-## ⭐ AKTUELL PRIO v5 — BESLUTAD med Stig 17/7 kväll
+## ⭐ AKTUELL PRIO v6 — BESLUTAD med Stig 17/7 sen kväll
 
-*Fullständig backlog: `BACKLOG.md`. Agilt/iterativt — små testade skivor,
-leverera värde löpande. P0 (V2-19/16/05) LEVERERAT + app installerad på
-telefonen 17/7 kväll. Deadline som styr: Friidrotts-SM 24–26/7 (Uppsala).*
+*Fullständig backlog: `BACKLOG.md`. 17/7 blev en stordag: P0 (V2-19/16/05) +
+P1 (V2-20 friidrott, dpt-render 1.3.0 deployad + W-friidrott) + V5-A (mergad
+till main) + BUG-CULL-01 (skarpverifierad) + logg/progress-live ALLT levererat.
+Fotbollshelgen + SM är kodmässigt redo.*
 
-### 1 · V2-20 friidrotts-verifiering — nästa kodjobb (senast måndag)
+### 1 · V5-B datamodellen — nästa stora kodjobb
 
-End-to-end-test av hela SoMe-flödet för friidrott (moment: Grenstart/Kval/
-Final/Resultat/Rekord · resultat-etiketter i stället för ställning · inga
-två-lags-antaganden, inkl. matchfakta-pålägget). P15-tennisfixen är grunden;
-det som brister fixas direkt. + **W-friidrott**: kolla att Mästerskap/
-Friidrott-sajtkoden faktiskt är deployad. **Har företräde vid tidskonflikt
-med allt annat — SM-deadlinen är hård.**
+Liga/Event/Individ/kategori-registren + matchens `liga:`+`event:` + migration
+av `tavling:` (handoff §1 + `DATAMODELL v5.md`). Grunden som V5-C/D/E, På
+gång-automatiken OCH lathunds-spåret väntar på. Skivvis på grenen
+`v5-eventmodell` (worktree `~/Claude/dpt-v5`), löpande merge. Därefter
+**V5-C → V5-D → V5-E + V5-UX** enligt handoffens ordning.
 
-### 2 · V5-epiken — HELA startar NU, egen branch (Stigs beslut)
+### 2 · SM-lathund som MANUELLT underlag (Stig-beslut 17/7)
 
-Egen gren (`v5-eventmodell`) i dpt + motsvarande i ios/sajt, löpande merge
-till main allteftersom skivor blir klara (handoffens leveransordning):
-**V5-A** (målmappar + original utan overlay — fristående, kan mergas direkt)
-→ **V5-B** datamodellen (Liga/Event/Individ/kategori + migration) →
-**V5-C** Event-sektionen + På gång → **V5-D** iOS restid/bakgrund →
-**V5-E** webb-eventsidan, med **V5-UX** §-vis insprängt. Körs parallellt med
-SM-förberedelserna men viker för punkt 1.
+Ingen kod före SM — i stället ett gediget dokument för Friidrotts-SM 24–26/7
+(Uppsala): betydelse, aktiva att följa, praktiskt, foto-inställningar, arenan/
+solen. Levereras som `design/LATHUND-friidrotts-sm-2026.md`; väder +
+startlistor kompletteras ~23/7. V2-17-epiken byggs sen enligt plan (efter
+V5-B/C), med detta dokument som facit för innehållet.
 
 ### 3 · v3-rester — Stigs fallande ordning, vävs in mellan skivorna
 
@@ -38,15 +36,19 @@ SM-förberedelserna men viker för punkt 1.
 3. **FEAT-14 ackr-svar skiva 1–2** (trådspårning + läsväg)
 - *Nedprioriterat (ej valt):* B-012 kamerabrygga FTP — tas efter ovanstående.
 
-### 4 · Lathunds-spåret — första nya spåret efter V5-grunden
+### 4 · Mellanjobb — godkända att vävas in när det passar (Stig 17/7)
+
+- **Småputs-paketet DPT2:** FEAT-04 större färgklickar · FEAT-06 skiljelinje
+  dolda jobb · FEAT-10/11 galleri-sökvägar + kopiera-knapp.
+- **V2-01 versionsvisning** (bokstaverat namn + byggnr, alla tre appar).
+- *Ej valda som mellanjobb:* V2-04 mobil På gång-notis · T-auto · SP-pers.
+
+### 5 · Lathunds-spåret som KOD — första nya spåret efter V5-B/C
 
 V2-17 matchlathund (epic) → V2-18 nyckelspelare, med V2-02 väderväxling +
-V2-12 packmallar + V2-06 noteringar som underlag. **V2-06-beslut (Stig 17/7):
-TVÅVÄGS synk iOS ↔ DPT2** — snabbnotering i fält, utförligt efteråt, samma
-anteckning överallt. Lathunden hänger på V5:s event/deltillfällen → startas
-när V5-B/C ligger.
+V2-12 packmallar + V2-06 noteringar som underlag (V2-06-beslut: TVÅVÄGS synk).
 
-### 5 · Därefter
+### 6 · Därefter
 
 - **Kund-spåret (V2-KUND):** V2-03 godkännande/eventpublicering (kräver V5-UX
   §10 some-flaggan + publik endpoint) → V2-14 kundregister → V2-07 SpeedLedger
