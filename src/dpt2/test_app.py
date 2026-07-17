@@ -2405,6 +2405,77 @@ class TestSnabbplockStage(unittest.TestCase):
         self.assertEqual(r["stegade"], [])
 
 
+class TestPagangAutomatik(unittest.TestCase):
+    """V5-C §3 (skiss 1h): pagang_lage per event styr På gång — auto (före:
+    heldagskort, under: matcherna), heldag, matcher — + del_av-invarianten."""
+
+    def test_pagang_auto_lagen(self):
+        from dpt2.app import _pagang_auto
+
+        def data(lage):
+            ev = [{"id": "sm", "namn": "SM 2126", "pagang_lage": lage,
+                   "fran": "2126-07-24", "till": "2126-07-26"}]
+            m = [{"id": "m1", "event_id": "sm"}, {"id": "m2"}]
+            t = [{"id": "sm"}, {"id": "ligan"}]
+            return ev, m, t
+
+        # AUTO · före perioden: heldagskortet täcker → matchen döljs
+        ev, m, t = data("auto")
+        _pagang_auto(m, t, ev, "2126-07-01")
+        self.assertTrue(m[0]["auto_dold"])
+        self.assertEqual(m[0]["del_av"], "SM 2126")   # invarianten: alltid med
+        self.assertNotIn("auto_dold", m[1])           # match utan event orörd
+        self.assertFalse(t[0]["auto_dold"])           # heldagskortet visas
+        self.assertNotIn("auto_dold", t[1])           # liga/ej-event orörd
+        # AUTO · under perioden: matcherna tar över, heldagskortet bort
+        ev, m, t = data("auto")
+        _pagang_auto(m, t, ev, "2126-07-25")
+        self.assertFalse(m[0]["auto_dold"])
+        self.assertTrue(t[0]["auto_dold"])
+        # HELDAG-override: heldagskortet även under perioden
+        ev, m, t = data("heldag")
+        _pagang_auto(m, t, ev, "2126-07-25")
+        self.assertTrue(m[0]["auto_dold"])
+        self.assertFalse(t[0]["auto_dold"])
+        # MATCHER-override: matcherna även före perioden
+        ev, m, t = data("matcher")
+        _pagang_auto(m, t, ev, "2126-07-01")
+        self.assertFalse(m[0]["auto_dold"])
+        self.assertTrue(t[0]["auto_dold"])
+
+    def test_publicera_foljer_automatiken_och_md_bar_del_av(self):
+        from unittest import mock
+        from dpt2.app import _pagang_match_md
+        api = Api(db_path=":memory:")
+        tid = api.spara_tavling({"namn": "SM 2126", "sport": "volleyboll",
+                                 "typ": "masterskap", "fran": "2126-07-24",
+                                 "till": "2126-07-26"})["id"]
+        mid = api.spara_match({"lag_hemma": "Sverige", "lag_borta": "Polen",
+                               "sport": "volleyboll", "datum": "2126-07-24",
+                               "tavling_id": tid})["id"]
+        fejk = mock.MagicMock()
+        fejk.publicera.return_value = {"ok": True}
+        fejk.lista.return_value = []
+        api.innehall_synk = fejk
+        # Idag (2026) är FÖRE perioden → heldagskortet publiceras, matchen inte
+        r = api.publicera_pagang_matcher()
+        self.assertTrue(r["ok"])
+        publicerade = [c.args[1] for c in fejk.publicera.call_args_list]
+        self.assertIn("tavling-" + tid, publicerade)
+        self.assertNotIn("match-" + mid, publicerade)
+        # Panelen ser automatikens beslut
+        rad = [m for m in api.pagang_matcher()["matcher"] if m["id"] == mid][0]
+        self.assertTrue(rad["auto_dold"])
+        self.assertEqual(rad["del_av"], "SM 2126")
+        # Matchens .md bär del_av (sajtens "Del av {event}"-rad)
+        fm, _b, _s, md = _pagang_match_md({"lag_hemma": "Sverige",
+                                           "lag_borta": "Polen",
+                                           "datum": "2126-07-24",
+                                           "del_av": "SM 2126"})
+        self.assertEqual(fm["del_av"], "SM 2126")
+        self.assertIn("del_av: SM 2126", md)
+
+
 class TestPagangTavlingar(unittest.TestCase):
     """På gång: heldagsaktiviteter ur tävlingarnas från/till-datum (Nordea
     Open, Friidrotts-SM, EuroVolley …) vid sidan av de kommande matcherna."""

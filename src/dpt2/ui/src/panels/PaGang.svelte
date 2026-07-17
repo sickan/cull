@@ -73,7 +73,7 @@
     </div>
     <div class="pglista">
       {#each pagang as m (m.art + m.id)}
-        <div class="pgkort" class:dold={m.pagang_dold}>
+        <div class="pgkort" class:dold={m.pagang_dold || m.auto_dold}>
           {#if m.art === 'tavling'}
             {@const iv = intervall(m.fran, m.till)}
             <div class="pgdatum"><span class="pgdag scd">{iv.dag}</span>
@@ -85,11 +85,19 @@
             <div class="pgdatum"><span class="pgdag scd">{(m.datum || '').split('-')[2] || '–'}</span>
               <span class="pgmon">{MK[(Number((m.datum || '').split('-')[1]) || 1) - 1]?.toUpperCase()}</span></div>
             <span class="grendot" style="background:{grenFarg(m.hem_gren)}"></span>
-            <div class="pgi"><div class="pgf">{m.lag_hemma}{m.lag_borta ? ` – ${m.lag_borta}` : ''}</div><div class="pgl">{m.liga || ''}</div></div>
+            <div class="pgi"><div class="pgf">{m.lag_hemma}{m.lag_borta ? ` – ${m.lag_borta}` : ''}</div>
+              <div class="pgl">{[m.liga, m.del_av ? `Del av ${m.del_av}` : ''].filter(Boolean).join(' · ')}</div></div>
           {/if}
-          <button class="visaruta" title={m.pagang_dold ? 'Visas inte på sajten — tryck för att visa' : 'Visas på sajten — tryck för att dölja'}
-            on:click={() => toggleDold(m)}>
-            <span class="chk" class:pa={!m.pagang_dold}>{m.pagang_dold ? '' : '✓'}</span>Visa</button>
+          {#if m.auto_dold}
+            <!-- V5-C §3: automatikens beslut (pagang_lage på eventet) — inte
+                 den manuella kryssrutan. Ändras i Event-sektionens På gång-kort. -->
+            <span class="autobadge" title="Styrs av eventets På gång-läge (Event-sektionen)">
+              {m.art === 'tavling' ? 'Matcherna visas' : 'Heldagskortet täcker'}</span>
+          {:else}
+            <button class="visaruta" title={m.pagang_dold ? 'Visas inte på sajten — tryck för att visa' : 'Visas på sajten — tryck för att dölja'}
+              on:click={() => toggleDold(m)}>
+              <span class="chk" class:pa={!m.pagang_dold}>{m.pagang_dold ? '' : '✓'}</span>Visa</button>
+          {/if}
         </div>
       {/each}
       {#if !pagang.length}<div class="tom">Inget kommande — matcher läggs till i Matcher, tävlingsperioder får från/till-datum i Lag &amp; tävlingar.</div>{/if}
@@ -126,6 +134,10 @@
   .pgkort.dold .pgdatum, .pgkort.dold .grendot, .pgkort.dold .pgi { opacity: 0.38; }
   .visaruta { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; flex: none;
     background: none; border: none; padding: 4px 2px; font-size: 11px; font-weight: 600; color: var(--t-mut); cursor: pointer; }
+  .autobadge { margin-left: auto; flex: none; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase; color: var(--acc);
+    background: color-mix(in srgb, var(--acc) 13%, transparent);
+    border-radius: 999px; padding: 3px 9px; }
   .pgdatum { display: flex; flex-direction: column; align-items: center; min-width: 40px; }
   .pgdag { font-size: 17px; font-weight: 700; color: var(--t-head); font-family: var(--font-c); line-height: 1; }
   .pgmon { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; color: var(--t-mut); }

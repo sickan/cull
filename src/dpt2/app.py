@@ -2503,10 +2503,15 @@ class Api:
     def pagang_matcher(self):
         """Panelens 'På gång'-vy: kommande matcher + tävlingsperioder +
         av/på-flaggan. Ingen kuraterad lista längre — matcherna kommer ur
-        Matcher, heldagsaktiviteterna ur tävlingarnas från/till-datum."""
+        Matcher, heldagsaktiviteterna ur tävlingarnas från/till-datum.
+        V5-C §3: posterna annoteras med automatikens beslut (auto_dold +
+        del_av) så panelen kan VISA varför något inte publiceras."""
+        matcher, tavlingar = _pagang_auto(
+            self._pagang_kommande(), self._pagang_tavlingar(),
+            store.lista_eventer(self.conn),
+            datetime.now().strftime("%Y-%m-%d"))
         return {"ok": True, "visa": store.hamta_installning(self.conn, "pagang_visa") != "0",
-                "matcher": self._pagang_kommande(),
-                "tavlingar": self._pagang_tavlingar()}
+                "matcher": matcher, "tavlingar": tavlingar}
 
     def satt_pagang_visa(self, pa):
         """Slår på/av 'Visa på sajten' för På gång-widgeten."""
@@ -2534,10 +2539,16 @@ class Api:
         visa = store.hamta_installning(self.conn, "pagang_visa") != "0"
         kommande = self._pagang_kommande() if visa else []
         tavlingar = self._pagang_tavlingar() if visa else []
-        # Per-post-kryssrutan: dolda poster publiceras inte — och plockas
-        # bort från workern av reconciliationen nedan (de lämnar lokala_ids).
-        kommande = [m for m in kommande if not m.get("pagang_dold")]
-        tavlingar = [t for t in tavlingar if not t.get("pagang_dold")]
+        # V5-C §3: automatiken (pagang_lage per event) avgör vad som täcks av
+        # heldagskortet resp. matcherna; annoterar även del_av (invarianten).
+        _pagang_auto(kommande, tavlingar, store.lista_eventer(self.conn),
+                     datetime.now().strftime("%Y-%m-%d"))
+        # Per-post-kryssrutan (manuell) + automatiken: dolda poster publiceras
+        # inte — och plockas bort från workern av reconciliationen nedan.
+        kommande = [m for m in kommande
+                    if not m.get("pagang_dold") and not m.get("auto_dold")]
+        tavlingar = [t for t in tavlingar
+                     if not t.get("pagang_dold") and not t.get("auto_dold")]
         poster = ([("match-" + m["id"], _pagang_match_md(m)) for m in kommande] +
                   [("tavling-" + t["id"], _pagang_tavling_md(t)) for t in tavlingar])
         if test:
@@ -3056,6 +3067,42 @@ def _ar_skyddad(p):
         return False
 
 
+def _pagang_auto(kommande, tavlingar, eventer, idag):
+    """På gång-automatiken (V5-C §3, skiss 1h) — per event styr `pagang_lage`
+    vad som visas. Annoterar posterna (färska dictar ur store):
+
+    - match med event: `del_av` = eventnamnet (invarianten: en match med event
+      visas aldrig lösryckt) + `auto_dold` när heldagskortet täcker den
+      (läge heldag, eller auto FÖRE perioden)
+    - tävlingspost som är ett event: `auto_dold` när matcherna täcker
+      (läge matcher, eller auto UNDER perioden)
+
+    Ligor/övriga tävlingsposter och matcher utan event berörs inte. Manuella
+    per-post-kryssrutan (pagang_dold) ligger kvar ovanpå och vinner alltid.
+    'Efter → resultat' täcks av att posterna faller ur listorna som idag —
+    resultatet bor i matcharkivet (resultatkort på På gång = senare skiva)."""
+    ev = {e["id"]: e for e in eventer or []}
+    for m in kommande:
+        e = ev.get(m.get("event_id") or "")
+        if not e:
+            continue
+        m["del_av"] = e.get("namn") or ""
+        lage = e.get("pagang_lage") or "auto"
+        fran = (e.get("fran") or "").strip()
+        under = not fran or fran <= idag          # utan period → matcherna gäller
+        m["auto_dold"] = lage == "heldag" or (lage == "auto" and not under)
+    for t in tavlingar:
+        e = ev.get(t.get("id"))
+        if not e:
+            continue
+        lage = e.get("pagang_lage") or "auto"
+        fran = (e.get("fran") or "").strip()
+        till = (e.get("till") or fran or "").strip()
+        under = bool(fran) and fran <= idag <= till
+        t["auto_dold"] = lage == "matcher" or (lage == "auto" and under)
+    return kommande, tavlingar
+
+
 def _pagang_match_md(m):
     """En kommande match → (frontmatter, body, slug, .md) för webbens 'På gång'.
     Frontmattern har samma form som sajtens pagang-collection förväntar sig
@@ -3077,6 +3124,9 @@ def _pagang_match_md(m):
         "plats": m.get("arena") or None,
         "publicerad": True,
         "heldag": False,
+        # V5-C §3-invarianten: en match med event visas aldrig lösryckt —
+        # sajtens kort visar "Del av {event}". (Schemat utökat på sajtsidan.)
+        "del_av": m.get("del_av") or None,
     }
     return fm, "", slug, AX.render_md(fm, "")
 
