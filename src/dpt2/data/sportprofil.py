@@ -48,6 +48,7 @@ PROFILER = {
         "res_label": "Resultat i set", "res_ph": "3–1",
         "mid_label": "Setsiffror", "mid_ph": "25–21, 23–25, 25–19, 25–17", "mid_moment": "Mellan set",
         "mid_token": "setsiffror",
+        "res_overlay_label": "Slutresultat",   # story-rubrik; fältet heter "Resultat i set"
         "start_moment": "Matchstart",
         "has_scorers": False, "scorers_label": "",
         "lineup": "Startsexa", "lineup_n": "(6)",
@@ -59,6 +60,7 @@ PROFILER = {
         "res_label": "Resultat i set", "res_ph": "2–0",
         "mid_label": "Setsiffror", "mid_ph": "21–18, 21–15", "mid_moment": "Mellan set",
         "mid_token": "setsiffror",
+        "res_overlay_label": "Slutresultat",   # story-rubrik; fältet heter "Resultat i set"
         "start_moment": "Matchstart",
         "has_scorers": False, "scorers_label": "",
         "lineup": "Par", "lineup_n": "(2)",
@@ -75,6 +77,10 @@ PROFILER = {
         # avdelaren) — skild från formulärfältets etikett mid_label, som
         # beskriver vad man MATAR IN (gamesiffror-strängen).
         "mid_overlay_label": "Setsiffror",
+        # …och slutresultatets overlay-rubrik är generiska "Slutresultat" —
+        # "Resultat i set" är formulärfältets namn, inte en story-rubrik
+        # (fältobs Nordea Open).
+        "res_overlay_label": "Slutresultat",
         "start_moment": "Matchstart",
         "has_scorers": False, "scorers_label": "",
         "lineup": "", "lineup_n": "",

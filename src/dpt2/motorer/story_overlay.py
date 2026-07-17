@@ -1560,7 +1560,7 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         elif state == "Tiebreak":
             score_label = "Tiebreak"
         else:
-            score_label = profil["res_label"]
+            score_label = profil.get("res_overlay_label") or profil["res_label"]
         # SairaCondensed-Bold saknar space-glyf — rendera utan mellanslag
         if stallning and "-" in stallning:
             delar = stallning.split("-", 1)
