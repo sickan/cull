@@ -109,7 +109,7 @@ men ingen trådautomatik; dokumenterad som plan B.*
 | FEAT-WEB-02 | Arkiv-/landningssida Matcher | → **D4** |
 | FEAT-WEB-03 | Nyhetsindikator "Sport" på startsidan | → **D4** |
 | FEAT-WEB-04 | Standardisera mörkt tema | → **D4** |
-| B-006 | Sportsidans struktur (galleri/matcher-ordning enhetlig) | → **D4** |
+| B-006 | Sportsidans struktur (webb) | ✅ **D4 SKIVA 1+2 LIVE 17/7** (sajt `517feac` + dpt `536a18c` gren-fält): tvåkolumn m match-rail, MatchRad m grenkant, Matcharkivet + Ligor-arkivet. Skiva 3 kvar: uppdaterad-rad/Montserrat/mörkt default (kräver index→Astro) |
 | W-friidrott | Verifiera att Mästerskap/kategori+Friidrott-sajtkoden är deployad (var "EJ deployat" 14/7) | Status osäker — kolla |
 
 ## F · Mobil-live
