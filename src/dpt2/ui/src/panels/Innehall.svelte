@@ -1,5 +1,5 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte'
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte'
   const dispatch = createEventDispatcher()
   import {
     forhandsgranskaInnehall, exporteraInnehall, publiceraInnehallNatet, statusInnehall,
@@ -82,7 +82,6 @@
   let synkadPath = ''
   let publiceradId = ''
   let statusInfo = null
-  let statusLaddar = false
 
   // ── Grunddata ───────────────────────────────────────────────────────────────
   let matcher = []
@@ -677,16 +676,56 @@
       skrivUtkast()
       draftId = null
       if (!$testMode) await laddaOversikt()
+      if (!$testMode) startaStatusPoll()
       setTimeout(() => (synkad = false), 2600)
     } else synkFel = r?.fel || 'Kunde inte publicera — kontrollera anslutningen.'
   }
 
-  async function kollaStatus() {
-    if (!publiceradId) return
-    statusLaddar = true
-    statusInfo = await statusInnehall(ctyp === 'match' ? 'match' : ctyp, publiceradId)
-    statusLaddar = false
+  // ── FEAT-09: auto-status efter publicering ─────────────────────────────────
+  // Ersätter den manuella "Kolla status"-knappen: efter en lyckad publicering
+  // pollas deploy-statusen var 10:e sekund tills bygget är Live eller har
+  // fallerat. D9 §3: pulserande prick under bygget (ingen spinner), skiftet
+  // till Live är belöningen, >5 min utan svar → Fel "Bygget svarar inte".
+  let statusLage = null           // 'bygger' | 'live' | 'fel' | null (ingen poll)
+  let statusOrsak = ''
+  let statusTid = ''
+  let statusTimer = null
+  let publiceradVid = 0
+
+  function stoppaStatusPoll() { clearTimeout(statusTimer); statusTimer = null }
+  function startaStatusPoll() {
+    stoppaStatusPoll()
+    publiceradVid = Date.now()
+    statusLage = 'bygger'; statusOrsak = ''; statusTid = ''
+    pollaStatus()
   }
+  async function pollaStatus() {
+    if (!publiceradId) { statusLage = null; return }
+    const r = await statusInnehall(ctyp === 'match' ? 'match' : ctyp, publiceradId)
+    statusInfo = r
+    const d = r?.deploy
+    if (r && !d) { statusLage = null; return }   // CF-nycklar saknas → deployText-fallback
+    // Bara en deploy som startats EFTER publiceringen räknas — den senaste
+    // raden kan vara ett äldre bygge (60s slack för klockskillnad worker/lokal).
+    const nyare = d?.skapad ? new Date(d.skapad).getTime() >= publiceradVid - 60_000 : false
+    if (d && nyare && d.status === 'success') {
+      statusLage = 'live'
+      statusTid = new Date(d.skapad).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
+      return
+    }
+    if (d && nyare && (d.status === 'failure' || d.status === 'canceled')) {
+      statusLage = 'fel'
+      statusOrsak = d.status === 'canceled' ? 'Bygget avbröts' : 'Bygget misslyckades'
+      return
+    }
+    if (Date.now() - publiceradVid > 5 * 60_000) {
+      statusLage = 'fel'; statusOrsak = 'Bygget svarar inte'
+      return
+    }
+    statusLage = 'bygger'
+    statusTimer = setTimeout(pollaStatus, 10_000)
+  }
+  onDestroy(stoppaStatusPoll)
 
   const DEPLOY_ETI = { success: 'Live', building: 'Bygger…', queued: 'Köad', failure: 'Fel', canceled: 'Avbruten' }
   $: deployText = statusInfo?.deploy
@@ -1208,9 +1247,17 @@
           {:else}<span class="ok">✓ Publicerad</span>{/if}
         {/if}
         {#if synkFel}<span class="synkfel">{synkFel}</span>{/if}
-        {#if publiceradId}
-          <button class="statusbtn" on:click={kollaStatus} disabled={statusLaddar}>{statusLaddar ? 'Kollar…' : 'Kolla status'}</button>
-          {#if deployText}<span class="deploystatus">{deployText}</span>{/if}
+        <!-- FEAT-09: statusen kommer av sig själv — pulserande prick under
+             bygget, Live när deployen bekräftats, Fel med orsak + Försök igen. -->
+        {#if statusLage === 'bygger'}
+          <span class="deploystatus st-bygger"><span class="stprick puls"></span>Publicerad · bygger…</span>
+        {:else if statusLage === 'live'}
+          <span class="deploystatus st-live"><span class="stprick"></span>Live sedan {statusTid}</span>
+        {:else if statusLage === 'fel'}
+          <span class="deploystatus st-fel"><span class="stprick"></span>{statusOrsak}</span>
+          <button class="statusbtn" on:click={publicera} disabled={synkar}>Försök igen</button>
+        {:else if publiceradId && deployText}
+          <span class="deploystatus">{deployText}</span>
         {/if}
       </div>
     </div>
@@ -1471,4 +1518,13 @@
   .statusbtn:disabled { opacity: 0.5; }
   .statusbtn.sm { padding: 6px 11px; font-size: 11.5px; }
   .deploystatus { font-size: 12.5px; color: var(--t-mut); font-weight: 600; }
+  /* FEAT-09/D9: statusfärger (ljusa temats jordton) + pulserande bygg-prick */
+  .deploystatus .stprick { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor; margin-right: 6px; vertical-align: 1px; }
+  .st-bygger { color: #B07A2A; }
+  .st-live { color: #5C8F4A; }
+  .st-fel { color: #C0492F; }
+  .stprick.puls { animation: d9puls 1.6s ease-in-out infinite; }
+  @keyframes d9puls { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .stprick.puls { animation: none; } }
 </style>
