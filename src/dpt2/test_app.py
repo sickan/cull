@@ -1584,6 +1584,43 @@ class TestFotojobbSynk(unittest.TestCase):
         self.api.live_synk = FejkLiveSynk(nyckel=False)
         self.assertFalse(self.api.synka_fotojobb()["ok"])
 
+    def test_minutprecisa_tider_far_sekunder_i_bron(self):
+        # V2-19: Fotojobb-formulärets datetime-local ger "2026-07-18T14:00"
+        # (utan sekunder) — mobilen tolkade inte formatet och matchen försvann
+        # ur kalendervyn. Bron ska alltid leverera sekundade tider; datum-only
+        # (heldag) och zonade Google-tider rörs inte.
+        self.api.lista_fotojobb = lambda: [
+            {"id": "g1", "title": "Malmö FF – Bröndby IF",
+             "start_at": "2026-07-18T14:00", "end_at": "2026-07-18T16:00",
+             "all_day": False, "location": "Eleda Stadion",
+             "category": "Sport", "utkast": False},
+            {"id": "g2", "title": "Heldag", "start_at": "2026-07-24",
+             "end_at": "2026-07-26", "all_day": True, "location": "",
+             "category": "Sport", "utkast": False},
+            {"id": "g3", "title": "Bröllop", "all_day": False,
+             "start_at": "2026-08-15T13:30:00+02:00",
+             "end_at": "2026-08-15T17:30:00+02:00",
+             "category": "Event", "utkast": False},
+        ]
+        self.assertTrue(self.api.synka_fotojobb()["ok"])
+        pushat = self.fake.pushade_jobb[0]
+        self.assertEqual(pushat[0]["start_at"], "2026-07-18T14:00:00")
+        self.assertEqual(pushat[0]["end_at"], "2026-07-18T16:00:00")
+        self.assertEqual(pushat[1]["start_at"], "2026-07-24")          # orörd
+        self.assertEqual(pushat[2]["start_at"], "2026-08-15T13:30:00+02:00")
+
+    def test_spara_fotojobb_normaliserar_mot_tjansten(self):
+        # Samma normalisering vid KÄLLAN: formulärets minutprecisa värden ska
+        # inte ens nå Calendar Sync-tjänsten/Google oformaterade.
+        kal = _FakeKalender()
+        self.api.kalender = kal
+        self.api.spara_fotojobb({"title": "Malmö FF – Bröndby IF",
+                                 "start_at": "2026-07-18T14:00",
+                                 "end_at": "2026-07-18T16:00",
+                                 "all_day": False, "category": "Sport"})
+        self.assertEqual(kal.skapade[-1]["start_at"], "2026-07-18T14:00:00")
+        self.assertEqual(kal.skapade[-1]["end_at"], "2026-07-18T16:00:00")
+
     def _skapa_utkast(self, category="Sport"):
         """Skapar ett riktigt fotojobb-utkast (tävling → kalender-utkast) och
         stubbar bort Google-kalendern så lista_fotojobb inte når nätet. Sätter en

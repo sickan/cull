@@ -784,6 +784,9 @@ class Api:
         match") är lokal; notering synkas som Google-description (tvåvägs,
         ägarens beslut 2026-07-11) med ev. resultatblock från kopplad match."""
         if jobb.get("utkast") and jobb.get("id"):
+            for k in ("start_at", "end_at"):
+                if k in jobb:
+                    jobb[k] = _iso_sekunder(jobb[k])
             store.spara_fotojobb_utkast_falt(self.conn, jobb["id"], jobb)
             if "match_id" in jobb:
                 store.lanka_fotojobb_match(self.conn, jobb["id"], jobb.get("match_id"))
@@ -794,6 +797,9 @@ class Api:
         data = {k: jobb.get(k) for k in
                 ("title", "start_at", "end_at", "location", "description",
                  "category", "all_day") if k in jobb}
+        for k in ("start_at", "end_at"):
+            if k in data:
+                data[k] = _iso_sekunder(data[k])
         if "notering" in jobb:
             # description byggs alltid om ur noteringen (+ resultatblock när en
             # kopplad match har resultat) — den lästa description i `jobb` kan
@@ -851,8 +857,8 @@ class Api:
         match_id = store.matchref_for_fotojobb(
             self.conn, [utkast_id]).get(utkast_id)
         m = store.hamta_match(self.conn, match_id) if match_id else None
-        data = {"title": u["title"], "start_at": u["start_at"],
-                "end_at": u["end_at"], "all_day": bool(u["all_day"]),
+        data = {"title": u["title"], "start_at": _iso_sekunder(u["start_at"]),
+                "end_at": _iso_sekunder(u["end_at"]), "all_day": bool(u["all_day"]),
                 "location": u.get("location"), "category": u.get("category"),
                 "description": _bygg_beskrivning(notering, m)}
         try:
@@ -2564,6 +2570,15 @@ def _utkast_till_jobbdict(u):
             "tavling_id": u.get("tavling_id")}
 
 
+def _iso_sekunder(s):
+    """Fotojobb-formulärets datetime-local-värden är minutprecisa
+    ("2026-07-18T14:00") — mobilens datumtolkning kräver sekunder. Komplettera
+    till ":00"; datum-utan-tid och redan sekundade/zonade strängar rörs inte."""
+    if isinstance(s, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", s):
+        return s + ":00"
+    return s
+
+
 def _ar_appjobb(j):
     """Vilka kalenderjobb som ska nå appens Kalender/Jobb. Stigs Google-kalender
     bär hela livet — ~2 års matchfixturer (okategoriserade "Lag – Lag") + privat.
@@ -2589,8 +2604,10 @@ def _jobb_till_app(j):
         "id": j.get("id"),
         "titel": j.get("title") or "",
         "kund": None,                      # titeln bär kunden idag; separat fält saknas
-        "start_at": j.get("start_at"),
-        "end_at": j.get("end_at"),
+        # Normalisera även här — tjänsten/Google bär redan minutprecisa värden
+        # från äldre sparningar, och bron är enda vägen till appen.
+        "start_at": _iso_sekunder(j.get("start_at")),
+        "end_at": _iso_sekunder(j.get("end_at")),
         "all_day": bool(j.get("all_day")),
         "plats": j.get("location") or None,
         "kategori": j.get("category") or None,
