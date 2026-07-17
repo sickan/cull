@@ -249,6 +249,101 @@ export async function listaLagForTavling(tavlingId) {
   return wait(structuredClone(MOCK_LAG.filter((l) => ids.includes(l.id))))
 }
 
+// ── Event-sektionen (V5-C, handoff §2): listan + detaljvyn + kopplingar ─────
+let MOCK_EVENTER = [
+  { id: 'friidrotts-sm-2026', typ: 'masterskap', sport: 'friidrott', gren: null,
+    namn: 'Friidrotts-SM 2026', fran: '2026-07-24', till: '2026-07-26',
+    ort: 'Uppsala', arena: 'Uppsala Friidrottsarena', pagang_lage: 'auto',
+    antal_matcher: 1, antal_grenar: 2, antal_deltagare: 1 },
+  { id: 'eurovolley-2026', typ: 'masterskap', sport: 'volleyboll', gren: null,
+    namn: 'CEV EuroVolley 2026', fran: '2026-08-21', till: '2026-08-28',
+    ort: 'Göteborg', arena: 'Scandinavium', pagang_lage: 'auto',
+    antal_matcher: 0, antal_grenar: 0, antal_deltagare: 0 },
+  { id: 'nordea-open', typ: 'turnering', sport: 'tennis', gren: 'herr',
+    namn: 'Nordea Open', fran: '2026-07-13', till: '2026-07-19',
+    ort: 'Båstad', arena: null, pagang_lage: 'matcher',
+    antal_matcher: 2, antal_grenar: 0, antal_deltagare: 0 },
+]
+let MOCK_INDIVIDER = [
+  { id: 'a-duplantis', namn: 'Armand Duplantis', sport: 'friidrott',
+    klubb: 'Upsala IF', instagram: '@mondo_duplantis' },
+  { id: 'e-andersson', namn: 'E. Andersson', sport: 'friidrott', klubb: 'Malmö AI' },
+]
+let MOCK_EVENT_DELTAGARE = { 'friidrotts-sm-2026': [
+  { id: 'a-duplantis', namn: 'Armand Duplantis', klubb: 'Upsala IF', grenar: ['stav'] }] }
+let MOCK_EVENT_MATCHER = { 'friidrotts-sm-2026': [
+  { id: 'sm-heat1', lag_hemma: '100 m · Heat 1', lag_borta: '', datum: '2026-07-24',
+    tid: '14:30', resultat: '', status: 'kommande' }] }
+
+export async function listaEventer() {
+  const api = brygga()
+  if (api) return api.lista_eventer()
+  return wait(structuredClone(MOCK_EVENTER))
+}
+
+export async function hamtaEventDetalj(eventId) {
+  const api = brygga()
+  if (api) return api.hamta_event_detalj(eventId)
+  const e = MOCK_EVENTER.find((x) => x.id === eventId)
+  if (!e) return wait(null)
+  return wait(structuredClone({
+    event: e,
+    matcher: MOCK_EVENT_MATCHER[eventId] || [],
+    okopplade: eventId === 'friidrotts-sm-2026'
+      ? [{ id: 'sm-heat2', lag_hemma: '200 m · Heat 2', lag_borta: '',
+           datum: '2026-07-25', tid: '11:00', status: 'kommande' }] : [],
+    grenar: (MOCK_DISCIPLINER || []).filter((d) => d.tavling_id === 'friidrotts-sm')
+      .map((d) => ({ ...d, antal_deltagare: (d.deltagare || []).length })),
+    deltagare: MOCK_EVENT_DELTAGARE[eventId] || [],
+    kan_grenar: true,
+  }))
+}
+
+export async function sattEventPagangLage(eventId, lage) {
+  const api = brygga()
+  if (api) return api.satt_event_pagang_lage(eventId, lage)
+  const e = MOCK_EVENTER.find((x) => x.id === eventId)
+  if (e) e.pagang_lage = lage
+  return wait({ ok: true })
+}
+
+export async function kopplaMatchEvent(matchId, eventId) {
+  const api = brygga()
+  if (api) return api.koppla_match_event(matchId, eventId)
+  return wait({ ok: true })
+}
+
+export async function listaIndivider() {
+  const api = brygga()
+  if (api) return api.lista_individer()
+  return wait(structuredClone(MOCK_INDIVIDER))
+}
+
+export async function sparaIndivid(d) {
+  const api = brygga()
+  if (api) return api.spara_individ(d)
+  const id = d.id || d.namn.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+  MOCK_INDIVIDER.push({ ...d, id })
+  return wait({ ok: true, id })
+}
+
+export async function kopplaEventDeltagare(eventId, individId, grenar = []) {
+  const api = brygga()
+  if (api) return api.koppla_event_deltagare(eventId, individId, grenar)
+  const i = MOCK_INDIVIDER.find((x) => x.id === individId)
+  MOCK_EVENT_DELTAGARE[eventId] = [...(MOCK_EVENT_DELTAGARE[eventId] || [])
+    .filter((x) => x.id !== individId), { ...i, grenar }]
+  return wait({ ok: true })
+}
+
+export async function kopplaBortEventDeltagare(eventId, individId) {
+  const api = brygga()
+  if (api) return api.koppla_bort_event_deltagare(eventId, individId)
+  MOCK_EVENT_DELTAGARE[eventId] = (MOCK_EVENT_DELTAGARE[eventId] || [])
+    .filter((x) => x.id !== individId)
+  return wait({ ok: true })
+}
+
 // ── Discipliner (B-001): tävlingens grenar + deltagare per gren ─────────────
 let MOCK_DISCIPLINER = [
   { id: 'disc_langd', tavling_id: 'friidrotts-sm', namn: 'Längd', typ: 'hoppkast', ordning: 0,
