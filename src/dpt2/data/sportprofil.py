@@ -68,8 +68,13 @@ PROFILER = {
     "tennis": {
         "namn": "Tennis",
         "res_label": "Resultat i set", "res_ph": "2–1",
-        "mid_label": "Gamesiffror", "mid_ph": "6–4, 3–6, 7–5", "mid_moment": "Mellan set",
+        "mid_label": "Gamesiffror", "mid_ph": "6–4, 3–6, 7–5", "mid_moment": "Set klart",
         "mid_token": "gamesiffror",
+        # P15: overlayns etikett vid mellanställningen är SETNIVÅN (stora
+        # siffran är setställningen; gamesiffrorna är komplementet under
+        # avdelaren) — skild från formulärfältets etikett mid_label, som
+        # beskriver vad man MATAR IN (gamesiffror-strängen).
+        "mid_overlay_label": "Setsiffror",
         "start_moment": "Matchstart",
         "has_scorers": False, "scorers_label": "",
         "lineup": "", "lineup_n": "",

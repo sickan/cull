@@ -46,6 +46,10 @@ TEMAN = {
 _STATE_MAP = {
     "avspark": "Avspark",
     "paus": "Halvtid", "halvtid": "Halvtid",
+    # P15: tennisens "Set klart" delar mellanställnings-läget (Halvtid-staten);
+    # Tiebreak är ett eget läge — gamesiffrorna i pågående set är stora siffran.
+    "set_klart": "Halvtid",
+    "tiebreak": "Tiebreak",
     "resultat": "Slutresultat", "slutresultat": "Slutresultat",
     "startelva": "Startelva",
     "malgorare": "Målgörare", "målgörare": "Målgörare",
@@ -56,6 +60,7 @@ _STATE_MAP = {
 _SLUG = {
     "Avspark": "avspark", "Halvtid": "halvtid", "Slutresultat": "resultat",
     "Startelva": "startelva", "Målgörare": "malgorare", "Nästa match": "nastamatch",
+    "Tiebreak": "tiebreak",
 }
 
 # Designkonstanter
@@ -1524,7 +1529,7 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
 
         # 6. Innehållsblock
         isPreview  = state in ("Avspark", "Nästa match")
-        isScore    = state in ("Halvtid", "Slutresultat")
+        isScore    = state in ("Halvtid", "Slutresultat", "Tiebreak")
         isLineup   = state == "Startelva"
         isScorers  = state == "Målgörare"
 
@@ -1546,8 +1551,16 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
 
         # Halvtid/Slutresultat — etikett styrs av sportprofilen (fotboll:
         # "Halvtid"/"Slutresultat" oförändrat, andra sporter: t.ex.
-        # "Periodsiffror"/"Resultat i set").
-        score_label = profil["mid_label"] if state == "Halvtid" else profil["res_label"]
+        # "Periodsiffror"/"Resultat i set"). P15: mellanställningens
+        # overlay-etikett kan skilja sig från formulärfältets (tennis: stora
+        # siffran är SETSTÄLLNINGEN → "Setsiffror", medan fältet man fyller i
+        # heter "Gamesiffror") — mid_overlay_label vinner när den finns.
+        if state == "Halvtid":
+            score_label = profil.get("mid_overlay_label") or profil["mid_label"]
+        elif state == "Tiebreak":
+            score_label = "Tiebreak"
+        else:
+            score_label = profil["res_label"]
         # SairaCondensed-Bold saknar space-glyf — rendera utan mellanslag
         if stallning and "-" in stallning:
             delar = stallning.split("-", 1)
@@ -1603,8 +1616,21 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
             # SEMIFINAL"). Vinnaren härleds ur set-siffrorna — markeras bara
             # vid Slutresultat (facit: aldrig vid mellanställning).
             etikett = f"{score_label} · {rond_ren}" if rond_ren else score_label
-            set_a, set_b = (score_text.split("–", 1) + [""])[:2] \
-                if "–" in score_text else (score_text, "")
+            if state == "Tiebreak":
+                # P15: stora siffran är PÅGÅENDE setets gamesiffror (sista
+                # segmentet av gamesiffror-strängen, "6–4, 6–6" → "6–6");
+                # setställningen flyttar ner till komplementraden. Saknas
+                # gamesiffror faller vi tillbaka på setställningen — hellre
+                # rätt nivå-etikett med grova siffror än fel nivå.
+                seg = [s.strip() for s in (mal_rad or "").replace(";", ",").split(",")
+                       if s.strip()]
+                stor = seg[-1] if seg else score_text
+                games_rad = f"Set {score_text}" if score_text and score_text != "?–?" else ""
+            else:
+                stor = score_text
+                games_rad = mal_rad or ""
+            set_a, set_b = (stor.split("–", 1) + [""])[:2] \
+                if "–" in stor else (stor, "")
             avgjord = ""
             if state == "Slutresultat":
                 try:
@@ -1616,8 +1642,7 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
             _render_score_individ(canvas, accent,
                                   lag_hemma or "", lag_borta or "",
                                   etikett, set_a.strip(), set_b.strip(),
-                                  mal_rad if state == "Slutresultat" else (mal_rad or ""),
-                                  avgjord)
+                                  games_rad, avgjord)
 
         elif isScore:
             bricka_h, pad_h = _bricka_med_skugga(_valj_logga(lag_hemma, hem_logga), 128, mono_h)

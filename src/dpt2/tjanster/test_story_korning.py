@@ -116,6 +116,48 @@ class TestMatchfalt(unittest.TestCase):
         self.assertFalse(S.kor_story(
             self.c, {"moment": "Avspark", "foto": "/finns/inte.jpg"})["ok"])
 
+    def test_p15_tennis_mellanstallning_etikett_och_tiebreak(self):
+        # P15 (Nordea Open, Borges–Darderi): mellan set ska etiketten vara
+        # SETNIVÅN ("Setsiffror", inte "Gamesiffror" som är formulärfältets
+        # namn) — och Tiebreak är ett eget moment där pågående setets
+        # gamesiffror är stora siffran och setställningen komplementet.
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        from PIL import Image
+        from dpt2.motorer import story_overlay
+        fangad = {}
+        riktig = story_overlay._render_score_individ
+
+        def spion(canvas, accent, a, b, etikett, sa, sb, games, avgjord):
+            fangad[fangad.get("_state", "x")] = {
+                "etikett": etikett, "set": (sa, sb), "games": games}
+            return riktig(canvas, accent, a, b, etikett, sa, sb, games, avgjord)
+
+        with tempfile.TemporaryDirectory() as d:
+            foto = f"{d}/f.jpg"
+            Image.new("RGB", (900, 1600), (40, 80, 110)).save(foto, "JPEG")
+            with mock.patch.object(story_overlay, "_render_score_individ", spion):
+                # Mellan set / "Set klart": stort = setställning, etikett Setsiffror
+                fangad["_state"] = "mellan"
+                ut = story_overlay.skapa_story(
+                    foto, "set_klart", "Borges", "Darderi",
+                    liga="Nordea Open", sport="tennis", stallning="0-1",
+                    mal_rad="4–6", rond="Kvartsfinal", ut_path=f"{d}/a.jpg")
+                self.assertTrue(Path(ut).exists())
+                # Tiebreak: stort = sista gamesegmentet, setställningen under
+                fangad["_state"] = "tiebreak"
+                story_overlay.skapa_story(
+                    foto, "tiebreak", "Borges", "Darderi",
+                    liga="Nordea Open", sport="tennis", stallning="1-0",
+                    mal_rad="6–4, 6–6", ut_path=f"{d}/b.jpg")
+        self.assertEqual(fangad["mellan"]["etikett"], "Setsiffror · Kvartsfinal")
+        self.assertEqual(fangad["mellan"]["set"], ("0", "1"))
+        self.assertEqual(fangad["mellan"]["games"], "4–6")
+        self.assertEqual(fangad["tiebreak"]["etikett"], "Tiebreak")
+        self.assertEqual(fangad["tiebreak"]["set"], ("6", "6"))
+        self.assertEqual(fangad["tiebreak"]["games"], "Set 1–0")
+
     def test_p5_event_utan_motstandare_renderar(self):
         # p.5: heldagsevent (ingen lag_borta) ska rendera en ren story utan
         # tom borta-bricka / tankstreck — och aldrig krascha.
