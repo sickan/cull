@@ -169,6 +169,12 @@ class Api:
             "avspark": avspark,
             "gren": m.get("hem_gren") or "",      # molnrendern vill ha grenen, inte färgen
             "gren_farg": GREN_FARG.get(m.get("hem_gren") or "", ""),
+            # V5-C/D-invarianten: en match som ingår i ett event visas aldrig
+            # lösryckt — appen visar "Del av {event}" och Hem kan rikta
+            # restiden mot matchen som NÄSTA DELTILLFÄLLE under eventet.
+            "event_id": m.get("event_id") or None,
+            "del_av": ((store.hamta_event(self.conn, m["event_id"]) or {})
+                       .get("namn") if m.get("event_id") else None),
             "sportprofil": {
                 "start_moment": pr.get("start_moment") or "Avspark",
                 "mid_label": pr.get("mid_label") or "Halvtid",

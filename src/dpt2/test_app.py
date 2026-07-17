@@ -1503,6 +1503,24 @@ class TestLagLoggaTillR2(unittest.TestCase):
             self.assertEqual(p["lag_hemma_logga_url"], self.synk._url)
             self.assertEqual(p["lag_borta_logga_url"], "")
 
+    def test_paket_bar_event_kopplingen(self):
+        # V5-D: mobilen behöver event_id + del_av för "Del av {event}" och
+        # nästa deltillfälle-riktningen på Hem.
+        ev = self.api.spara_tavling({"namn": "EuroVolley", "sport": "volleyboll",
+                                     "typ": "masterskap"})["id"]
+        mid = self.api.spara_match({"lag_hemma": "Sverige", "lag_borta": "Polen",
+                                    "sport": "volleyboll", "datum": "2099-08-21",
+                                    "tavling_id": ev})["id"]
+        p = self.api._match_till_paket(store.hamta_match(self.api.conn, mid))
+        self.assertEqual(p["event_id"], ev)
+        self.assertEqual(p["del_av"], "EuroVolley")
+        # Utan eventkoppling: None (ligamatch)
+        m2 = self.api.spara_match({"lag_hemma": "Sverige", "lag_borta": "Norge",
+                                   "sport": "volleyboll", "datum": "2099-08-22"})["id"]
+        p2 = self.api._match_till_paket(store.hamta_match(self.api.conn, m2))
+        self.assertIsNone(p2["event_id"])
+        self.assertIsNone(p2["del_av"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
