@@ -635,6 +635,8 @@ def upsert_tavling(conn, namn, *, id=None, sport, typ="liga", gren=None,
         if ackr_dagar is not None:
             conn.execute("UPDATE tavling SET ackr_dagar=? WHERE id=?",
                          (_heltal(ackr_dagar), tid))
+    # V5-B: tavling är skrivytan under övergången — spegla in i liga/event.
+    spegla_tavling_v5(conn, tid)
     conn.commit()
     return tid
 
@@ -930,6 +932,216 @@ def radera_lag(conn, lag_id):
 
 def radera_tavling(conn, tavling_id):
     conn.execute("DELETE FROM tavling WHERE id=?", (tavling_id,))
+    # V5-B: spegelbilden i liga/event följer med (matchens liga_id/event_id
+    # nollas av ON DELETE SET NULL).
+    conn.execute("DELETE FROM liga WHERE id=?", (tavling_id,))
+    conn.execute("DELETE FROM event WHERE id=?", (tavling_id,))
+    conn.commit()
+
+
+# ── V5-B (eventmodell-epiken): Liga · Event · Individ · Kategori ─────────────
+# Tävling delas i två register (DATAMODELL v5). Under övergången är `tavling`
+# skrivytan: varje sparning speglas hit med SAMMA id så matchers/disciplinernas
+# referenser förblir giltiga. V5-C flyttar läsarna och pensionerar tavling.
+
+_EVENT_TYPER = ("masterskap", "cup", "turnering", "varldscup", "ovrigt")
+
+
+def spegla_tavling_v5(conn, tavling_id):
+    """Speglar en tavling-rad in i liga (typ 'liga') eller event (övriga).
+    Typ-byte flyttar posten mellan registren; matchens liga_id/event_id följer
+    med. pagang_lage (eventets På gång-läge, skiss 1h) ägs av event-registret
+    och skrivs ALDRIG över av speglingen. Ingen commit — anroparen äger den."""
+    r = conn.execute("SELECT * FROM tavling WHERE id=?", (tavling_id,)).fetchone()
+    if r is None:
+        return
+    t = dict(r)
+    falt = (t["sport"], t["gren"], t["namn"], t["hemsida"], t["fran"],
+            t["till"], t["ort"], t["arena"], t["logga"], t["kalender"],
+            t["press_email"], t["ackr_dagar"], t.get("pagang_dold", 0))
+    if t["typ"] == "liga":
+        conn.execute(
+            "INSERT INTO liga(id,sport,gren,namn,hemsida,fran,till,ort,arena,"
+            "logga,kalender,press_email,ackr_dagar,pagang_dold) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(id) DO UPDATE SET sport=excluded.sport, "
+            "gren=excluded.gren, namn=excluded.namn, hemsida=excluded.hemsida, "
+            "fran=excluded.fran, till=excluded.till, ort=excluded.ort, "
+            "arena=excluded.arena, logga=excluded.logga, "
+            "kalender=excluded.kalender, press_email=excluded.press_email, "
+            "ackr_dagar=excluded.ackr_dagar, pagang_dold=excluded.pagang_dold",
+            (tavling_id, *falt))
+        conn.execute("DELETE FROM event WHERE id=?", (tavling_id,))
+        conn.execute("UPDATE matchen SET liga_id=?, event_id=NULL "
+                     "WHERE tavling_id=?", (tavling_id, tavling_id))
+    else:
+        typ = t["typ"] if t["typ"] in _EVENT_TYPER else "ovrigt"
+        conn.execute(
+            "INSERT INTO event(id,typ,sport,gren,namn,hemsida,fran,till,ort,"
+            "arena,logga,kalender,press_email,ackr_dagar,pagang_dold) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(id) DO UPDATE SET typ=excluded.typ, "
+            "sport=excluded.sport, gren=excluded.gren, namn=excluded.namn, "
+            "hemsida=excluded.hemsida, fran=excluded.fran, till=excluded.till, "
+            "ort=excluded.ort, arena=excluded.arena, logga=excluded.logga, "
+            "kalender=excluded.kalender, press_email=excluded.press_email, "
+            "ackr_dagar=excluded.ackr_dagar, pagang_dold=excluded.pagang_dold",
+            (tavling_id, typ, *falt))
+        conn.execute("DELETE FROM liga WHERE id=?", (tavling_id,))
+        conn.execute("UPDATE matchen SET event_id=?, liga_id=NULL "
+                     "WHERE tavling_id=?", (tavling_id, tavling_id))
+
+
+def lista_ligor(conn):
+    return [dict(r) for r in conn.execute("SELECT * FROM liga ORDER BY namn")]
+
+
+def hamta_liga(conn, liga_id):
+    r = conn.execute("SELECT * FROM liga WHERE id=?", (liga_id,)).fetchone()
+    return dict(r) if r else None
+
+
+def lista_eventer(conn):
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM event ORDER BY fran DESC, namn")]
+
+
+def hamta_event(conn, event_id):
+    r = conn.execute("SELECT * FROM event WHERE id=?", (event_id,)).fetchone()
+    return dict(r) if r else None
+
+
+def satt_pagang_lage(conn, event_id, lage):
+    """Eventets På gång-läge (skiss 1h): auto | heldag | matcher."""
+    if lage not in ("auto", "heldag", "matcher"):
+        return False
+    conn.execute("UPDATE event SET pagang_lage=? WHERE id=?", (lage, event_id))
+    conn.commit()
+    return True
+
+
+def upsert_individ(conn, namn, *, id=None, sport=None, klubb=None,
+                   instagram=None, bild=None):
+    """Skapar/uppdaterar en individ (register som Lag). Namnkrock med annan
+    sport ger suffixat id — samma mönster som upsert_tavling/upsert_lag."""
+    if not (namn or "").strip():
+        return None
+    namn = namn.strip()
+    iid = id or slug_id(namn)
+    fin = conn.execute("SELECT * FROM individ WHERE id=?", (iid,)).fetchone()
+    if fin is not None and not id and sport and fin["sport"] \
+            and fin["sport"] != sport:
+        iid = slug_id(f"{namn} {sport}")
+        fin = conn.execute("SELECT * FROM individ WHERE id=?", (iid,)).fetchone()
+    conn.execute(
+        "INSERT INTO individ(id,namn,sport,klubb,instagram,bild) "
+        "VALUES(?,?,?,?,?,?) "
+        "ON CONFLICT(id) DO UPDATE SET namn=excluded.namn, "
+        "sport=COALESCE(excluded.sport, individ.sport), "
+        "klubb=COALESCE(excluded.klubb, individ.klubb), "
+        "instagram=COALESCE(excluded.instagram, individ.instagram), "
+        "bild=COALESCE(excluded.bild, individ.bild)",
+        (iid, namn, sport, klubb, instagram, bild))
+    conn.commit()
+    return iid
+
+
+def lista_individer(conn):
+    return [dict(r) for r in conn.execute("SELECT * FROM individ ORDER BY namn")]
+
+
+def hamta_individ(conn, individ_id):
+    r = conn.execute("SELECT * FROM individ WHERE id=?", (individ_id,)).fetchone()
+    return dict(r) if r else None
+
+
+def radera_individ(conn, individ_id):
+    conn.execute("DELETE FROM individ WHERE id=?", (individ_id,))
+    conn.commit()
+
+
+def satt_event_deltagare(conn, event_id, individ_id, grenar=None):
+    """Kopplar en individ till ett event med gren-lista (n:n via json).
+    Upsert — ny gren-lista ersätter den gamla."""
+    conn.execute(
+        "INSERT INTO event_deltagare(event_id,individ_id,grenar) VALUES(?,?,?) "
+        "ON CONFLICT(event_id,individ_id) DO UPDATE SET grenar=excluded.grenar",
+        (event_id, individ_id, json.dumps(grenar or [])))
+    conn.commit()
+
+
+def koppla_bort_event_deltagare(conn, event_id, individ_id):
+    conn.execute("DELETE FROM event_deltagare WHERE event_id=? AND individ_id=?",
+                 (event_id, individ_id))
+    conn.commit()
+
+
+def lista_event_deltagare(conn, event_id):
+    """Eventets deltagare med individdata + gren-listan uppackad."""
+    ut = []
+    for r in conn.execute(
+            "SELECT i.*, ed.grenar AS _grenar FROM event_deltagare ed "
+            "JOIN individ i ON i.id=ed.individ_id "
+            "WHERE ed.event_id=? ORDER BY i.namn", (event_id,)):
+        d = dict(r)
+        d["grenar"] = json.loads(d.pop("_grenar") or "[]")
+        ut.append(d)
+    return ut
+
+
+def individ_historik(conn, individ_id):
+    """Individens eventhistorik — HÄRLEDD ur event_deltagare (skrivs aldrig
+    på individen, kan aldrig komma i osynk). Nyast först."""
+    ut = []
+    for r in conn.execute(
+            "SELECT e.*, ed.grenar AS _grenar FROM event_deltagare ed "
+            "JOIN event e ON e.id=ed.event_id "
+            "WHERE ed.individ_id=? ORDER BY e.fran DESC, e.namn", (individ_id,)):
+        d = dict(r)
+        d["grenar"] = json.loads(d.pop("_grenar") or "[]")
+        ut.append(d)
+    return ut
+
+
+KATEGORI_TOPP = ("sport", "landskap", "manniskor", "film")
+
+
+def lista_kategorier(conn, topp=None):
+    q = "SELECT * FROM kategori"
+    args = ()
+    if topp:
+        q += " WHERE topp=?"
+        args = (topp,)
+    ut = []
+    for r in conn.execute(q + " ORDER BY topp, ordning, namn", args):
+        d = dict(r)
+        d["some_moment"] = json.loads(d["some_moment"] or "[]")
+        ut.append(d)
+    return ut
+
+
+def upsert_kategori(conn, namn, *, topp, id=None, gallringsprofil=None,
+                    some_moment=None, ordning=None):
+    """Skapar/uppdaterar en underkategori. Toppnivån är statisk (KATEGORI_TOPP)."""
+    if topp not in KATEGORI_TOPP or not (namn or "").strip():
+        return None
+    kid = id or slug_id(namn.strip())
+    conn.execute(
+        "INSERT INTO kategori(id,topp,namn,gallringsprofil,some_moment,ordning) "
+        "VALUES(?,?,?,?,?,COALESCE(?, (SELECT COUNT(*) FROM kategori WHERE topp=?))) "
+        "ON CONFLICT(id) DO UPDATE SET topp=excluded.topp, namn=excluded.namn, "
+        "gallringsprofil=excluded.gallringsprofil, "
+        "some_moment=excluded.some_moment, "
+        "ordning=COALESCE(?, kategori.ordning)",
+        (kid, topp, namn.strip(), gallringsprofil,
+         json.dumps(some_moment) if some_moment is not None else None,
+         ordning, topp, ordning))
+    conn.commit()
+    return kid
+
+
+def radera_kategori(conn, kategori_id):
+    conn.execute("DELETE FROM kategori WHERE id=?", (kategori_id,))
     conn.commit()
 
 
@@ -1058,6 +1270,14 @@ def spara_match(conn, match):
          match.get("galleri") or None, match.get("sida_url") or None,
          match.get("omslag") or None, event, skapad))
 
+    # V5-B: dubbelskriv referensen till de nya registren — liga/event delar id
+    # med tavling under övergången, så subfrågorna ger rätt sida (eller NULL).
+    conn.execute(
+        "UPDATE matchen SET "
+        "liga_id=(SELECT id FROM liga WHERE id=?), "
+        "event_id=(SELECT id FROM event WHERE id=?) WHERE id=?",
+        (tav_id, tav_id, mid))
+
     # Spelare → trupp: bygg om länkarna (så borttagna spelare försvinner).
     conn.execute("DELETE FROM match_trupp WHERE match_id=?", (mid,))
     for sp in matchlogik.rensa_spelare(match.get("spelare")):
@@ -1143,6 +1363,9 @@ def hamta_match(conn, match_id):
         "lag_borta": _namn(m["lag_borta_id"]),
         "lag_hemma_id": m["lag_hemma_id"], "lag_borta_id": m["lag_borta_id"],
         "hem_gren": _gren(m["lag_hemma_id"]), "tavling_id": m["tavling_id"],
+        # V5-B: de nya valfria referenserna (dubbelskrivna ur tavling_id under
+        # övergången; egna dörrar i matchformuläret kommer i V5-C).
+        "liga_id": m.get("liga_id"), "event_id": m.get("event_id"),
         "datum": m["datum"] or "",
         "tid": m["tid"] or "", "arena": m["arena"] or "", "liga": liga,
         "sport": m["sport"] or "", "resultat": m["resultat"] or "",

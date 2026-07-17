@@ -32,6 +32,95 @@ CREATE TABLE tavling (
   pagang_dold INTEGER NOT NULL DEFAULT 0 -- v30: dölj i webbens På gång (heldagsaktiviteten)
 );
 
+-- ── V5-B (eventmodell-epiken): Liga + Event ersätter Tävling ────────────────
+-- Tävling delas i två register (DATAMODELL v5): LIGA (långlivad struktur —
+-- säsongs-HISTORIK byggs på sikt, fran/till bär aktuell säsong så länge) och
+-- EVENT (tidsbegränsat; typ är en ETIKETT, ingen typ-styrd logik). Under
+-- övergången är `tavling` kvar som skrivyta: store speglar varje sparning hit
+-- med SAMMA id (matchers/disciplinernas referenser förblir giltiga), och
+-- V5-C flyttar läsarna. Migrering: v31.
+
+CREATE TABLE liga (
+  id        TEXT PRIMARY KEY,
+  sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
+  gren      TEXT CHECK (gren IN ('dam','herr','mixed')),
+  namn      TEXT NOT NULL,
+  hemsida   TEXT,
+  fran      TEXT,                       -- ISO-datum (aktuell säsong)
+  till      TEXT,
+  ort       TEXT,
+  arena     TEXT,
+  logga     TEXT,
+  kalender  INTEGER NOT NULL DEFAULT 0,
+  press_email TEXT,
+  ackr_dagar  INTEGER,
+  pagang_dold INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE event (
+  id        TEXT PRIMARY KEY,
+  typ       TEXT NOT NULL DEFAULT 'ovrigt'
+              CHECK (typ IN ('masterskap','cup','turnering','varldscup','ovrigt')),
+  sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
+  gren      TEXT CHECK (gren IN ('dam','herr','mixed')),
+  namn      TEXT NOT NULL,
+  hemsida   TEXT,
+  fran      TEXT,                       -- ISO-datum (period.från)
+  till      TEXT,
+  ort       TEXT,
+  arena     TEXT,
+  logga     TEXT,
+  liga_id   TEXT REFERENCES liga(id) ON DELETE SET NULL,  -- t.ex. SM-slutspel i en liga
+  kalender  INTEGER NOT NULL DEFAULT 0,
+  pagang_lage TEXT NOT NULL DEFAULT 'auto'
+                CHECK (pagang_lage IN ('auto','heldag','matcher')),  -- skiss 1h
+  press_email TEXT,
+  ackr_dagar  INTEGER,
+  pagang_dold INTEGER NOT NULL DEFAULT 0
+);
+
+-- Individ: eget register (som Lag) — långlivad mellan event. Historiken
+-- HÄRLEDS genom att fråga event_deltagare; inget skrivs på individen.
+CREATE TABLE individ (
+  id        TEXT PRIMARY KEY,
+  namn      TEXT NOT NULL,
+  sport     TEXT CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
+  klubb     TEXT,
+  instagram TEXT,
+  bild      TEXT
+);
+
+-- Kopplingen individ ⟂ gren lagras på EVENTET (en källa, ingen dubblering).
+CREATE TABLE event_deltagare (
+  event_id   TEXT NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+  individ_id TEXT NOT NULL REFERENCES individ(id) ON DELETE CASCADE,
+  grenar     TEXT,                      -- json-lista med gren-/disciplin-id:n
+  PRIMARY KEY (event_id, individ_id)
+);
+CREATE INDEX idx_event_deltagare_individ ON event_deltagare(individ_id);
+
+-- Kategorier: toppnivån är STATISK (sport/landskap/manniskor/film — checks i
+-- kod), underkategorierna ett redigerbart register (läggs till/döps om utan
+-- kodändring). gallringsprofil styr Gallra-signalerna (4d), some_moment är
+-- momentmallen (4c) som json-lista.
+CREATE TABLE kategori (
+  id     TEXT PRIMARY KEY,
+  topp   TEXT NOT NULL CHECK (topp IN ('sport','landskap','manniskor','film')),
+  namn   TEXT NOT NULL,
+  gallringsprofil TEXT CHECK (gallringsprofil IN ('sport','brollop','landskap','portratt')),
+  some_moment TEXT,
+  ordning INTEGER NOT NULL DEFAULT 0
+);
+
+-- Dagens set under Människor (DATAMODELL v5) — redigerbart efteråt.
+INSERT OR IGNORE INTO kategori(id, topp, namn, gallringsprofil, some_moment, ordning) VALUES
+  ('portratt', 'manniskor', 'Porträtt', 'portratt', '["tjuvkik","leverans-klar"]', 0),
+  ('brollop',  'manniskor', 'Bröllop',  'brollop',  '["tjuvkik","leverans-klar"]', 1),
+  ('student',  'manniskor', 'Student',  'portratt', '["tjuvkik","leverans-klar"]', 2),
+  ('foretag',  'manniskor', 'Företag',  NULL,       '["tjuvkik","leverans-klar"]', 3),
+  ('mode',     'manniskor', 'Mode',     NULL,       '["tjuvkik","leverans-klar"]', 4),
+  ('ovrigt-manniskor', 'manniskor', 'Övrigt', NULL, '["tjuvkik","leverans-klar"]', 5);
+
 -- Lokalt fotojobb-utkast (tävling → "Lägg i Google Calendar"). Väntar på att
 -- fotografen kategoriserar och uttryckligen aktiverar synk i Fotojobb-panelen
 -- — pushas ALDRIG till Calendar Sync-tjänsten (och därmed Google) förrän dess.
@@ -136,10 +225,14 @@ CREATE TABLE matchen (
   omslag       TEXT,                     -- omslagsbild (filsökväg)
   event        INTEGER NOT NULL DEFAULT 0, -- p.5: heldagsevent = match utan motståndare
   pagang_dold  INTEGER NOT NULL DEFAULT 0, -- v30: dölj i webbens På gång (t.ex. turneringens delmatcher)
+  liga_id      TEXT REFERENCES liga(id)  ON DELETE SET NULL, -- v31 (V5-B): valfri ligakoppling
+  event_id     TEXT REFERENCES event(id) ON DELETE SET NULL, -- v31 (V5-B): valfri eventkoppling
   skapad       TEXT NOT NULL
 );
 CREATE INDEX idx_match_datum   ON matchen(datum);
 CREATE INDEX idx_match_tavling ON matchen(tavling_id);
+CREATE INDEX idx_match_liga    ON matchen(liga_id);
+CREATE INDEX idx_match_event   ON matchen(event_id);
 
 -- Fotojobb → match ("Koppla till match" när kategori=Sport). Lokal länk,
 -- fristående från Calendar Sync-tjänsten (som inte känner till matcher).

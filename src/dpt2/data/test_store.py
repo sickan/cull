@@ -1312,5 +1312,193 @@ class TestTradsakerAnslutning(unittest.TestCase):
         self.assertEqual(errors, [])
 
 
+class TestV5Datamodell(unittest.TestCase):
+    """V5-B (eventmodell-epiken): Liga + Event ersätter Tävling — speglingen
+    från tavling (skrivytan under övergången), match-referenserna, individ-/
+    kategori-registren och den härledda individhistoriken."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+
+    # ── schema + seed ────────────────────────────────────────────────────────
+    def test_tabeller_och_kategoriseed(self):
+        t = db.tabeller(self.c)
+        for tabell in ("liga", "event", "individ", "event_deltagare", "kategori"):
+            self.assertIn(tabell, t)
+        manniskor = store.lista_kategorier(self.c, topp="manniskor")
+        self.assertEqual([k["id"] for k in manniskor],
+                         ["portratt", "brollop", "student", "foretag", "mode",
+                          "ovrigt-manniskor"])
+        self.assertEqual(manniskor[1]["gallringsprofil"], "brollop")
+        self.assertEqual(manniskor[0]["some_moment"], ["tjuvkik", "leverans-klar"])
+
+    # ── spegling tavling → liga/event ────────────────────────────────────────
+    def test_liga_speglas_med_samma_id(self):
+        tid = store.upsert_tavling(self.c, "OBOS Damallsvenskan",
+                                   sport="fotboll", typ="liga", gren="dam")
+        liga = store.hamta_liga(self.c, tid)
+        self.assertEqual(liga["namn"], "OBOS Damallsvenskan")
+        self.assertEqual(liga["gren"], "dam")
+        self.assertIsNone(store.hamta_event(self.c, tid))
+
+    def test_turnering_och_masterskap_blir_event(self):
+        t1 = store.upsert_tavling(self.c, "Nordea Open", sport="tennis",
+                                  typ="turnering")
+        t2 = store.upsert_tavling(self.c, "Friidrotts-SM 2026",
+                                  sport="friidrott", typ="masterskap",
+                                  fran="2026-07-24", till="2026-07-26",
+                                  ort="Uppsala")
+        self.assertEqual(store.hamta_event(self.c, t1)["typ"], "turnering")
+        e2 = store.hamta_event(self.c, t2)
+        self.assertEqual(e2["typ"], "masterskap")
+        self.assertEqual(e2["pagang_lage"], "auto")        # default (skiss 1h)
+        self.assertIsNone(store.hamta_liga(self.c, t1))
+
+    def test_typbyte_flyttar_mellan_registren(self):
+        tid = store.upsert_tavling(self.c, "European League", sport="handboll",
+                                   typ="liga")
+        mid = store.spara_match(self.c, {"lag_hemma": "Sverige",
+                                         "lag_borta": "Norge",
+                                         "sport": "handboll",
+                                         "tavling_id": tid})
+        self.assertEqual(store.hamta_match(self.c, mid)["liga_id"], tid)
+        store.upsert_tavling(self.c, "European League", id=tid,
+                             sport="handboll", typ="turnering")
+        self.assertIsNone(store.hamta_liga(self.c, tid))
+        self.assertEqual(store.hamta_event(self.c, tid)["typ"], "turnering")
+        m = store.hamta_match(self.c, mid)
+        self.assertIsNone(m["liga_id"])
+        self.assertEqual(m["event_id"], tid)
+
+    def test_pagang_lage_overlever_spegling(self):
+        tid = store.upsert_tavling(self.c, "EuroVolley", sport="volleyboll",
+                                   typ="masterskap")
+        self.assertTrue(store.satt_pagang_lage(self.c, tid, "heldag"))
+        store.upsert_tavling(self.c, "EuroVolley", id=tid, sport="volleyboll",
+                             typ="masterskap", ort="Göteborg")
+        self.assertEqual(store.hamta_event(self.c, tid)["pagang_lage"], "heldag")
+        self.assertEqual(store.hamta_event(self.c, tid)["ort"], "Göteborg")
+        self.assertFalse(store.satt_pagang_lage(self.c, tid, "banzai"))
+
+    def test_spara_match_satter_ratt_referens(self):
+        liga = store.upsert_tavling(self.c, "Allsvenskan", sport="fotboll",
+                                    typ="liga")
+        ev = store.upsert_tavling(self.c, "Svenska Cupen", sport="fotboll",
+                                  typ="turnering")
+        m1 = store.spara_match(self.c, {"lag_hemma": "MFF", "lag_borta": "AIK",
+                                        "sport": "fotboll", "tavling_id": liga})
+        m2 = store.spara_match(self.c, {"lag_hemma": "MFF", "lag_borta": "BP",
+                                        "sport": "fotboll", "tavling_id": ev})
+        m3 = store.spara_match(self.c, {"lag_hemma": "MFF", "lag_borta": "HIF",
+                                        "sport": "fotboll"})   # träningsmatch
+        self.assertEqual(store.hamta_match(self.c, m1)["liga_id"], liga)
+        self.assertIsNone(store.hamta_match(self.c, m1)["event_id"])
+        self.assertEqual(store.hamta_match(self.c, m2)["event_id"], ev)
+        self.assertIsNone(store.hamta_match(self.c, m3)["liga_id"])
+        self.assertIsNone(store.hamta_match(self.c, m3)["event_id"])
+
+    def test_radera_tavling_stadar_spegeln(self):
+        tid = store.upsert_tavling(self.c, "Nordea Open", sport="tennis",
+                                   typ="turnering")
+        mid = store.spara_match(self.c, {"lag_hemma": "Borges",
+                                         "lag_borta": "Darderi",
+                                         "sport": "tennis", "tavling_id": tid})
+        store.radera_tavling(self.c, tid)
+        self.assertIsNone(store.hamta_event(self.c, tid))
+        self.assertIsNone(store.hamta_match(self.c, mid)["event_id"])
+
+    # ── individ + härledd historik ───────────────────────────────────────────
+    def test_individ_crud_och_sportkrock(self):
+        i1 = store.upsert_individ(self.c, "Armand Duplantis", sport="friidrott",
+                                  klubb="Upsala IF", instagram="@mondo")
+        self.assertEqual(store.hamta_individ(self.c, i1)["klubb"], "Upsala IF")
+        # Uppdatering: None rör inte befintliga fält
+        store.upsert_individ(self.c, "Armand Duplantis", id=i1,
+                             instagram="@mondo_duplantis")
+        i = store.hamta_individ(self.c, i1)
+        self.assertEqual(i["instagram"], "@mondo_duplantis")
+        self.assertEqual(i["klubb"], "Upsala IF")
+        # Namnkrock med annan sport → suffixat id, originalet orört
+        i2 = store.upsert_individ(self.c, "Armand Duplantis", sport="tennis")
+        self.assertNotEqual(i1, i2)
+        store.radera_individ(self.c, i2)
+        self.assertIsNone(store.hamta_individ(self.c, i2))
+
+    def test_event_deltagare_och_harledd_historik(self):
+        sm = store.upsert_tavling(self.c, "Friidrotts-SM 2026",
+                                  sport="friidrott", typ="masterskap",
+                                  fran="2026-07-24")
+        vc = store.upsert_tavling(self.c, "Skid-VC Falun 2026", sport="friidrott",
+                                  typ="turnering", fran="2026-02-01")
+        iid = store.upsert_individ(self.c, "E. Andersson", sport="friidrott")
+        store.satt_event_deltagare(self.c, sm, iid, ["hojd", "langd"])
+        store.satt_event_deltagare(self.c, vc, iid, ["sprint"])
+        deltagare = store.lista_event_deltagare(self.c, sm)
+        self.assertEqual(deltagare[0]["namn"], "E. Andersson")
+        self.assertEqual(deltagare[0]["grenar"], ["hojd", "langd"])
+        # Historiken härleds ur eventen — nyast först, aldrig lagrad på individen
+        hist = store.individ_historik(self.c, iid)
+        self.assertEqual([h["id"] for h in hist], [sm, vc])
+        self.assertEqual(hist[0]["grenar"], ["hojd", "langd"])
+        # Ny gren-lista ersätter (upsert), bortkoppling försvinner ur historiken
+        store.satt_event_deltagare(self.c, sm, iid, ["hojd"])
+        self.assertEqual(store.lista_event_deltagare(self.c, sm)[0]["grenar"],
+                         ["hojd"])
+        store.koppla_bort_event_deltagare(self.c, vc, iid)
+        self.assertEqual([h["id"] for h in store.individ_historik(self.c, iid)],
+                         [sm])
+
+    # ── kategoriregistret ────────────────────────────────────────────────────
+    def test_kategori_upsert_och_statisk_topp(self):
+        kid = store.upsert_kategori(self.c, "Konsert", topp="manniskor",
+                                    some_moment=["tjuvkik"])
+        k = [x for x in store.lista_kategorier(self.c, "manniskor")
+             if x["id"] == kid][0]
+        self.assertEqual(k["some_moment"], ["tjuvkik"])
+        self.assertIsNone(store.upsert_kategori(self.c, "X", topp="musik"))
+        store.radera_kategori(self.c, kid)
+        self.assertNotIn(kid, [x["id"] for x in
+                               store.lista_kategorier(self.c)])
+
+    # ── migrering v30 → v31 (backfill) ───────────────────────────────────────
+    def test_migrering_backfillar_liga_event_och_matchrefs(self):
+        import sqlite3
+        raa = sqlite3.connect(":memory:")
+        raa.row_factory = sqlite3.Row
+        raa.executescript("""
+        CREATE TABLE tavling (
+          id TEXT PRIMARY KEY, typ TEXT NOT NULL, sport TEXT NOT NULL,
+          gren TEXT, namn TEXT NOT NULL, hemsida TEXT, fran TEXT, till TEXT,
+          ort TEXT, arena TEXT, logga TEXT, kalender INTEGER NOT NULL DEFAULT 0,
+          press_email TEXT, ackr_dagar INTEGER,
+          pagang_dold INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE matchen (
+          id TEXT PRIMARY KEY, tavling_id TEXT, skapad TEXT NOT NULL);
+        INSERT INTO tavling(id,typ,sport,namn) VALUES
+          ('allsvenskan','liga','fotboll','Allsvenskan'),
+          ('nordea-open','turnering','tennis','Nordea Open'),
+          ('friidrotts-sm','masterskap','friidrott','Friidrotts-SM');
+        INSERT INTO matchen(id,tavling_id,skapad) VALUES
+          ('m1','allsvenskan','x'), ('m2','nordea-open','x'), ('m3',NULL,'x');
+        PRAGMA user_version = 30;
+        """)
+        conn = db.SafeConnection(raa)
+        db.init_db(conn)
+        self.assertEqual(db.schemaversion(conn), db.SCHEMA_VERSION)
+        self.assertEqual(store.hamta_liga(conn, "allsvenskan")["namn"],
+                         "Allsvenskan")
+        self.assertEqual(store.hamta_event(conn, "nordea-open")["typ"],
+                         "turnering")
+        self.assertEqual(store.hamta_event(conn, "friidrotts-sm")["typ"],
+                         "masterskap")
+        rader = {r["id"]: dict(r) for r in conn.execute("SELECT * FROM matchen")}
+        self.assertEqual(rader["m1"]["liga_id"], "allsvenskan")
+        self.assertIsNone(rader["m1"]["event_id"])
+        self.assertEqual(rader["m2"]["event_id"], "nordea-open")
+        self.assertIsNone(rader["m3"]["liga_id"])
+        # Kategori-seeden följer med migreringen
+        self.assertEqual(len(store.lista_kategorier(conn, "manniskor")), 6)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
