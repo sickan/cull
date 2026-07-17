@@ -150,6 +150,21 @@
   async function laddaOversikt() { poster = (await listaInnehall()) || [] }
   function lasUtkast() {
     try { utkast = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '[]') } catch (_) { utkast = [] }
+    // BUG-07-sanering: historiskt fick samma post ETT NYTT utkast per
+    // redigeringssession (draftId nollades i laddaPost) → dubbletter.
+    // Rensa: behåll nyaste per post-identitet (innehallId när den finns,
+    // annars typ+titel — samma titel & typ är i praktiken samma post).
+    const nyckel = (u) => u.data?.innehallId
+      ? `${u.typ}#${u.data.innehallId}` : `${u.typ}|${u.titel || u.id}`
+    const sedda = new Map()
+    for (const u of utkast) {                     // utkast ligger nyast först
+      const k = nyckel(u)
+      if (!sedda.has(k)) sedda.set(k, u)
+    }
+    if (sedda.size !== utkast.length) {
+      utkast = [...sedda.values()]
+      skrivUtkast()
+    }
   }
   function skrivUtkast() { try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(utkast)) } catch (_) {} }
 
@@ -164,7 +179,10 @@
 
   // Enkeltyps-vyer (Landskap/Människor/Blogg): rader av vald typ.
   $: libPoster = poster.filter((p) => p.typ === libType && publiceradPost(p))
-  $: libUtkastDb = poster.filter((p) => p.typ === libType && !publiceradPost(p))
+  // DB-utkast med en localStorage-tvilling (samma post, sparad i båda lagren)
+  // visas som EN rad — utkastet vinner (det bär de senaste ändringarna).
+  $: libUtkastDb = poster.filter((p) => p.typ === libType && !publiceradPost(p)
+    && !utkast.some((u) => u.typ === p.typ && (u.data?.innehallId === p.id || u.id === `p-${p.id}`)))
   $: libUtkast = utkast.filter((u) => u.typ === libType)
 
   // Autospar (debounce) → localStorage, så en påbörjad post överlever omstart.
@@ -204,7 +222,7 @@
         tavlingId: fm.tavling_id || '',
         underartiklar: (fm.underartiklar || []).map((u) => ({ ...u })) }
       synkaTavlingsmatcher()   // fånga matcher som tillkommit i tävlingen sen sist
-      draftId = null; oppnaEditor('sportevent'); return
+      draftId = `p-${p.id}`; oppnaEditor('sportevent'); return
     }
     const bas = { innehallId: p.id, titel: fm.titel || '', ingress: fm.ingress || '',
                   hero: fm.hero || '', heroPosition: fm.heroPosition || 'center center', heroKalla: '', figurer: [] }
@@ -213,7 +231,9 @@
     else if (p.typ === 'landskap') cmsLandskap = { ...cmsLandskap, ...bas, plats: fm.plats || '', period: fm.period || '', figurer: bilderTillFig }
     else if (p.typ === 'film') cmsFilm = { ...cmsFilm, ...bas, figurer: bilderTillFig }
     else cmsBlogg = { ...cmsBlogg, ...bas, kategori: fm.kategori || '', datum: fm.datum || '', body: fm.body || p.body || '', platser: [], figurer: bilderTillFig }
-    draftId = null
+    // Deterministiskt utkast-id per post (BUG-07): alla redigeringssessioner
+    // av samma post autosparar i SAMMA slot — nyaste vinner, inga dubbletter.
+    draftId = `p-${p.id}`
     oppnaEditor(p.typ)
   }
   function laddaUtkast(u) {
@@ -323,6 +343,7 @@
       if (rad) {
         const fm = rad.frontmatter || {}
         cmsMatch.innehallId = rad.id
+        draftId = `p-${rad.id}`           // återupptagen artikel → samma utkast-slot
         cmsMatch.heroPosition = fm.heroPosition || 'center center'
         if (fm.pixieset) cmsMatch.pixieset = fm.pixieset
         // Referatet bor i body — utan galleri-markdownen (![…]-raderna).
@@ -335,7 +356,7 @@
   }
   function laddaMatchPost(p) {
     artMatchId = p.match_id || artMatchId
-    draftId = null
+    draftId = `p-${p.id}`                 // en post = ett utkast (BUG-07)
     const fm = p.frontmatter || {}
     cmsMatch = { ...tomMatchArt(), innehallId: p.id,
       hem: fm.hem || '', borta: fm.borta || '', resultat: fm.resultat || '',
@@ -532,6 +553,10 @@
     const r = await sparaInnehall(data())
     if (r?.ok) {
       sattInnehallId(r.id)
+      // Utkastet bor nu i DB-raden — flytta sessionen till postens
+      // deterministiska slot så listan inte visar tvillingar. (BUG-07)
+      if (draftId && draftId !== `p-${r.id}`) raderaUtkast(draftId)
+      draftId = `p-${r.id}`
       sparadDb = true; setTimeout(() => (sparadDb = false), 2400)
       await laddaOversikt()
     }
@@ -644,7 +669,13 @@
     if (synkad) {
       publiceradId = r.id
       sattInnehallId(r.id)
-      if (draftId) { raderaUtkast(draftId); draftId = null }
+      // Städa ALLA utkast som pekar på den publicerade posten — inte bara
+      // sessionens (historiska dubbletter från före det deterministiska
+      // utkast-id:t kan annars ligga kvar). (BUG-07)
+      utkast = utkast.filter((u) => u.id !== draftId
+        && u.data?.innehallId !== r.id && u.id !== `p-${r.id}`)
+      skrivUtkast()
+      draftId = null
       if (!$testMode) await laddaOversikt()
       setTimeout(() => (synkad = false), 2600)
     } else synkFel = r?.fel || 'Kunde inte publicera — kontrollera anslutningen.'
