@@ -70,10 +70,10 @@
     eventer = await listaEventer().catch(() => [])
     laddar = false
   }
-  // Grenar & individer hör till INDIVIDSPORTERNA (tennis, friidrott) — för
-  // lagsport (volleyboll, fotboll …) är matcherna programmet (Stigs fynd:
-  // EuroVolley ska inte visa gren-/individkort).
-  $: arIndividSport = !!profiler[detalj?.event?.sport]?.individ
+  // Grenar & individer hör till GRENSPORTERNA (friidrott; skid-VC när den
+  // kommer) — profilens grenar-flagga. Lagsport OCH matchbaserad individsport
+  // (tennis: spelarna ÄR matcherna) visar bara Matcher (Stigs fynd ×2).
+  $: arIndividSport = !!profiler[detalj?.event?.sport]?.grenar
 
   async function oppna(id) {
     vald = id

@@ -96,6 +96,10 @@ PROFILER = {
         "has_scorers": False, "scorers_label": "",
         "lineup": "", "lineup_n": "",
         "squad": False, "individ": True,
+        # Grensport (V5): eventet bär grenar + deltagare per gren (B-001) —
+        # tennis är individ men MATCHBASERAD (spelarna är matcherna, inga
+        # grenar). Skid-VC får också True när den kommer.
+        "grenar": True,
         "md_key": "placering", "farg": "#B5643C",
     },
 }
