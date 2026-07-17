@@ -21,7 +21,7 @@ röst→action är LÅG prio.
 |----|-----|------------------|
 | BUG-03 | Färgklickar på Fotojobb uppdateras inte reaktivt (kräver flikbyte) | **KAN EJ REPRODUCERAS i mock** — hela kedjan verifierad färsk (D1 skrivs synkront, ingen klient-cache, laddaOm körs). Behöver Stigs exakta repro: vilken åtgärd + vilken färgklick |
 | BUG-06 | Dubbletter i "Publicerat"-katalogen — ska spegla exakt det som är live | ✅ **LÖST 17/7** (`1c0abe7`): rot = id-trådning saknades; lokala dubbletter städade (29/29-spegel mot live) |
-| BUG-07 | Dubbletter under "Utkast" — version vs bugg? Gruppera eller rensa | Stigs lista |
+| BUG-07 | Dubbletter under "Utkast" — version vs bugg? Gruppera eller rensa | ✅ **LÖST 17/7** (`8ee7e37`): bugg, inte versioner — nytt utkast per redigeringssession; nu deterministiskt utkast-id per post + sanering vid inläsning + publicering städar postens alla utkast |
 | BUG-08 | Dubbletter under Människor vid ompublicering | ✅ **LÖST 17/7** (`1c0abe7`): samma rot som BUG-10 (id-trådning) |
 | BUG-10 | Slug-byte vid ompublicering lämnar föräldralösa rader i live-D1 | ✅ **LÖST 17/7** (`1c0abe7`): editorn trådar innehallId för ALLA typer + reconciling publish + radering propagerar; live-D1 engångsstädad (1:1-spegel verifierad) |
 | HDA-a | Heldagsaktivitet-väljaren: synkade tävlingsjobb saknar tavling_id → inget gren·sport-suffix | Kräver ny länktabell (schema v29) för måttligt visningsvärde → föreslagen P2 |
