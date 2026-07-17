@@ -42,13 +42,17 @@
   let ctyp = 'match'                  // editorns typ: match|sportevent|blogg|landskap|event
 
   // ── Editor-state per typ ────────────────────────────────────────────────────
-  let cmsEvent = { kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '',
+  // innehallId trådas för ALLA typer (inte bara match/sportevent): utan den
+  // fick backend inget id vid ompublicering → ny DB-rad + ny worker-rad varje
+  // gång → dubbletter i Publicerat och (vid titelbyte) föräldralösa kort på
+  // sajten (BUG-06/08/10).
+  let cmsEvent = { innehallId: null, kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '',
     ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
-  let cmsLandskap = { titel: '', plats: '', period: '', ingress: '',
+  let cmsLandskap = { innehallId: null, titel: '', plats: '', period: '', ingress: '',
     hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
-  let cmsBlogg = { kategori: '', titel: '', datum: '', ingress: '', body: '',
+  let cmsBlogg = { innehallId: null, kategori: '', titel: '', datum: '', ingress: '', body: '',
     hero: '', heroPosition: 'center center', heroKalla: '', platser: [], figurer: [] }
-  let cmsFilm = { titel: '', ingress: '',
+  let cmsFilm = { innehallId: null, titel: '', ingress: '',
     hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
   // Blogg inline-bilder: högerklicksmeny som infogar en [bild N]-token vid
   // markören i brödtexten. blImgMeny = {x, y, pos} när menyn är öppen.
@@ -202,7 +206,7 @@
       synkaTavlingsmatcher()   // fånga matcher som tillkommit i tävlingen sen sist
       draftId = null; oppnaEditor('sportevent'); return
     }
-    const bas = { titel: fm.titel || '', ingress: fm.ingress || '',
+    const bas = { innehallId: p.id, titel: fm.titel || '', ingress: fm.ingress || '',
                   hero: fm.hero || '', heroPosition: fm.heroPosition || 'center center', heroKalla: '', figurer: [] }
     const bilderTillFig = (fm.bilder || []).map((url) => ({ bild: url, alt: '', bildtext: '', src: '', thumb: '' }))
     if (p.typ === 'event') cmsEvent = { ...cmsEvent, ...bas, kategori: fm.kategori || 'Porträtt', kund: fm.kund || '', datum: fm.datum || '', plats: fm.plats || '', figurer: bilderTillFig }
@@ -513,11 +517,21 @@
     autospar()
     await oppnaMatchArtikel(u.match_id, subArtikel(u) || null)
   }
+  // Backendens rad-id tillbaka in i editorn — nästa spar/publicering av samma
+  // post återanvänder då raden i stället för att skapa en ny (BUG-06/08/10).
+  function sattInnehallId(id) {
+    if (!id) return
+    if (ctyp === 'match') cmsMatch.innehallId = id
+    else if (ctyp === 'sportevent') cmsSportevent.innehallId = id
+    else if (ctyp === 'event') cmsEvent.innehallId = id
+    else if (ctyp === 'landskap') cmsLandskap.innehallId = id
+    else if (ctyp === 'film') cmsFilm.innehallId = id
+    else if (ctyp === 'blogg') cmsBlogg.innehallId = id
+  }
   async function sparaUtkastDb() {
     const r = await sparaInnehall(data())
     if (r?.ok) {
-      if (ctyp === 'match') cmsMatch.innehallId = r.id
-      else if (ctyp === 'sportevent') cmsSportevent.innehallId = r.id
+      sattInnehallId(r.id)
       sparadDb = true; setTimeout(() => (sparadDb = false), 2400)
       await laddaOversikt()
     }
@@ -527,9 +541,9 @@
   // ── Gemensam editor-mekanik (befintlig) ────────────────────────────────────
   const utanThumb = (arr) => (arr || []).map(({ thumb, ...r }) => r)
   function data() {
-    if (ctyp === 'event') return { typ: 'event', ...cmsEvent, figurer: utanThumb(cmsEvent.figurer) }
-    if (ctyp === 'landskap') return { typ: 'landskap', ...cmsLandskap, figurer: utanThumb(cmsLandskap.figurer) }
-    if (ctyp === 'film') return { typ: 'film', ...cmsFilm,
+    if (ctyp === 'event') return { typ: 'event', ...cmsEvent, id: cmsEvent.innehallId || undefined, figurer: utanThumb(cmsEvent.figurer) }
+    if (ctyp === 'landskap') return { typ: 'landskap', ...cmsLandskap, id: cmsLandskap.innehallId || undefined, figurer: utanThumb(cmsLandskap.figurer) }
+    if (ctyp === 'film') return { typ: 'film', ...cmsFilm, id: cmsFilm.innehallId || undefined,
       bilder: cmsFilm.figurer.map((f) => f.bild).filter(Boolean), figurer: utanThumb(cmsFilm.figurer) }
     if (ctyp === 'match') {
       const c = cmsMatch
@@ -550,7 +564,7 @@
         heroKalla: c.heroKalla, figurer: utanThumb(c.figurer),
         tavling_id: c.tavlingId || null, underartiklar: c.underartiklar }
     }
-    return { typ: 'blogg', ...cmsBlogg, figurer: utanThumb(cmsBlogg.figurer) }
+    return { typ: 'blogg', ...cmsBlogg, id: cmsBlogg.innehallId || undefined, figurer: utanThumb(cmsBlogg.figurer) }
   }
 
   async function forhandsgranska() {
@@ -629,7 +643,7 @@
     synkadPath = r?.path || ''
     if (synkad) {
       publiceradId = r.id
-      if (ctyp === 'match' && r.id) cmsMatch.innehallId = r.id
+      sattInnehallId(r.id)
       if (draftId) { raderaUtkast(draftId); draftId = null }
       if (!$testMode) await laddaOversikt()
       setTimeout(() => (synkad = false), 2600)
@@ -678,10 +692,10 @@
       </div>
       {#if libType !== 'sport'}
         <button class="nyknapp" on:click={() => {
-          if (libType === 'blogg') cmsBlogg = { kategori: '', titel: '', datum: '', ingress: '', body: '', hero: '', heroPosition: 'center center', heroKalla: '', platser: [], figurer: [] }
-          else if (libType === 'landskap') cmsLandskap = { titel: '', plats: '', period: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
-          else if (libType === 'film') cmsFilm = { titel: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
-          else cmsEvent = { kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
+          if (libType === 'blogg') cmsBlogg = { innehallId: null, kategori: '', titel: '', datum: '', ingress: '', body: '', hero: '', heroPosition: 'center center', heroKalla: '', platser: [], figurer: [] }
+          else if (libType === 'landskap') cmsLandskap = { innehallId: null, titel: '', plats: '', period: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
+          else if (libType === 'film') cmsFilm = { innehallId: null, titel: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
+          else cmsEvent = { innehallId: null, kategori: 'Porträtt', titel: '', kund: '', datum: '', plats: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
           draftId = null
           oppnaEditor(libType)
         }}>+ Ny {libType === 'blogg' ? 'blogg' : libType === 'landskap' ? 'landskap' : libType === 'film' ? 'film' : 'människa'}</button>

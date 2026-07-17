@@ -2093,8 +2093,21 @@ class Api:
                 _spara_export_bild(kalla, mal_dir / f"{i}.jpg")
 
     def radera_innehall(self, id):
+        """Tar bort ett innehåll lokalt OCH på content-sync-workern — utan
+        propageringen låg posten kvar i live-D1 (och därmed på sajten) för
+        alltid efter att den försvunnit ur Publicerat-katalogen (FEAT-13:
+        katalogen ska spegla live). Workeranropet är best-effort: lokal
+        radering genomförs alltid, live-utfallet rapporteras separat."""
+        rad = store.hamta_innehall(self.conn, id)
         store.radera_innehall(self.conn, id)
-        return {"ok": True}
+        live = None
+        if rad and rad.get("typ"):
+            r = self.innehall_synk.radera(rad["typ"], id)
+            live = r.get("ok", False)
+            if not live:
+                self._logg.append({"typ": "fel",
+                                   "text": f"radera innehåll: kvar på live ({r.get('fel') or r.get('status')})"})
+        return {"ok": True, "live": live}
 
     def publicera_innehall_natet(self, data, test=False):
         """Sparar innehållet lokalt (som spara_innehall) och publicerar det
@@ -2201,7 +2214,33 @@ class Api:
             match_id=data.get("match_id") or None)
         if r.get("ok"):
             store.satt_synkad(self.conn, iid, datetime.now().isoformat(timespec="seconds"))
+            # FEAT-13 spegling: workern ska bara ha rader som finns lokalt.
+            # Historiskt skapade ompubliceringar nya id:n (draft-id trådades
+            # inte) → föräldralösa rader i live-D1 → dubblettkort på sajten
+            # (BUG-08/10). Städa dem i samma veva som en lyckad publicering.
+            self._reconcilera_innehall(typ)
         return {"ok": r.get("ok", False), "id": iid, "fel": r.get("fel")}
+
+    def _reconcilera_innehall(self, typ):
+        """Reconciling publish för en innehållstyp (pagang-mönstret i
+        publicera_pagang_matcher): rader på workern vars id inte finns i den
+        lokala innehåll-tabellen raderas. Skyddsvakt: en tom lokal lista
+        (färsk/återställd databas) får ALDRIG svepa bort hela typen på live —
+        då hoppas städningen över. Best-effort; returnerar antal borttagna."""
+        try:
+            lokala = {rad.get("id") for rad in store.lista_innehall(self.conn, typ)}
+            lokala.discard(None)
+            if not lokala:
+                return 0
+            borttagna = 0
+            for rad in self.innehall_synk.lista(typ):
+                rid = rad.get("id")
+                if rid and rid not in lokala:
+                    if self.innehall_synk.radera(typ, rid).get("ok"):
+                        borttagna += 1
+            return borttagna
+        except Exception:
+            return 0
 
     # ── Sport-startsidan: hero-kurering ("topp") ──────────────────────────────
     def sport_topp(self):

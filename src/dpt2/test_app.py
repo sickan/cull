@@ -769,6 +769,76 @@ class TestApi(unittest.TestCase):
                           "https://r2.example/event/maya-i-lund/2.jpg"])
         self.assertNotIn(b1, kwargs["body"])                    # ingen lokal läcka
 
+    def test_publicera_natet_ompublicering_ateranvander_id(self):
+        # BUG-10-roten: ompublicering MED id (editorn trådar innehallId) ska
+        # återanvända raden — även vid titelbyte (ny slug) — inte skapa en ny
+        # lokal rad + ny worker-rad.
+        from unittest import mock
+        fejk = mock.MagicMock()
+        fejk.publicera.return_value = {"ok": True}
+        fejk.lista.return_value = []
+        self.api.innehall_synk = fejk
+        r1 = self.api.publicera_innehall_natet({"typ": "event", "titel": "Maya i Lund"})
+        r2 = self.api.publicera_innehall_natet({"typ": "event", "titel": "Maya vid havet",
+                                                "id": r1["id"]})
+        self.assertEqual(r1["id"], r2["id"])
+        rader = self.api.lista_innehall("event")
+        self.assertEqual(len(rader), 1)
+        self.assertEqual(rader[0]["frontmatter"]["titel"], "Maya vid havet")
+        # workern PUT:ades båda gångerna med SAMMA id (upsert på raden)
+        ids = [c.args[1] for c in fejk.publicera.call_args_list]
+        self.assertEqual(ids, [r1["id"], r1["id"]])
+
+    def test_publicera_natet_reconcilerar_foraldralosa(self):
+        # FEAT-13 spegling: rader på workern vars id inte finns lokalt städas
+        # bort vid en lyckad publicering — men lokala rader lämnas i fred.
+        from unittest import mock
+        fejk = mock.MagicMock()
+        fejk.publicera.return_value = {"ok": True}
+        fejk.radera.return_value = {"ok": True}
+        self.api.innehall_synk = fejk
+        r = self.api.publicera_innehall_natet({"typ": "event", "titel": "Maya i Lund"})
+        fejk.lista.return_value = [{"id": r["id"], "slug": "maya-i-lund"},
+                                   {"id": "orphan-1", "slug": "gammal-titel"}]
+        self.api.publicera_innehall_natet({"typ": "event", "titel": "Maya i Lund",
+                                           "id": r["id"]})
+        fejk.radera.assert_called_once_with("event", "orphan-1")
+
+    def test_reconcilera_hoppar_over_tom_lokal_lista(self):
+        # Skyddsvakten: tom lokal tabell (färsk/återställd DB) får inte svepa
+        # bort typen på live — ingen radering, inga worker-anrop.
+        from unittest import mock
+        fejk = mock.MagicMock()
+        fejk.lista.return_value = [{"id": "x", "slug": "nagot-live"}]
+        self.api.innehall_synk = fejk
+        self.assertEqual(self.api._reconcilera_innehall("event"), 0)
+        fejk.radera.assert_not_called()
+
+    def test_radera_innehall_propagerar_till_workern(self):
+        # FEAT-13: radering i Publicerat-katalogen ska avpublicera på live —
+        # tidigare raderades bara den lokala raden och posten låg kvar i D1.
+        from unittest import mock
+        fejk = mock.MagicMock()
+        fejk.radera.return_value = {"ok": True}
+        self.api.innehall_synk = fejk
+        iid = self.api.spara_innehall({"typ": "event", "titel": "Maya i Lund"})["id"]
+        r = self.api.radera_innehall(iid)
+        self.assertTrue(r["ok"])
+        self.assertTrue(r["live"])
+        fejk.radera.assert_called_once_with("event", iid)
+        self.assertEqual(self.api.lista_innehall("event"), [])
+
+    def test_radera_innehall_lokal_aven_om_workern_felar(self):
+        # Workerfel får inte blockera lokal radering — utfallet rapporteras.
+        from unittest import mock
+        fejk = mock.MagicMock()
+        fejk.radera.return_value = {"ok": False, "status": 500}
+        self.api.innehall_synk = fejk
+        iid = self.api.spara_innehall({"typ": "event", "titel": "Maya i Lund"})["id"]
+        r = self.api.radera_innehall(iid)
+        self.assertTrue(r["ok"])
+        self.assertFalse(r["live"])
+        self.assertEqual(self.api.lista_innehall("event"), [])
 
     def test_modell_bibliotek_och_vaxling(self):
         a = store.spara_modell(self.api.conn, typ="din_smak",
