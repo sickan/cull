@@ -1,6 +1,6 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte'
-  import { startaCull, startaGallring, valjMapp, aktivMatch, listaLag, sattAktivtUrval } from '../lib/api.js'
+  import { startaCull, startaGallring, valjMapp, aktivMatch, listaLag, sattAktivtUrval, hamtaLogg } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
 
   const dispatch = createEventDispatcher()
@@ -56,20 +56,38 @@
           behall: ai.keep, enhet: ai.unit, burst: ai.burst, trojnummer: ai.ocr,
           nummer: ai.nums, hemmafarg: hemFarg, avspark: ai.kick, modell: ai.model,
           match_id: aktiv?.id || null }
-    kor[vilket] = true; prog[vilket] = 25; res[vilket] = ''
-    const c = await startaCull(cfg)
-    prog[vilket] = 60
-    if (c?.urval_id) {
-      const g = await startaGallring(c.urval_id)
-      res[vilket] = g?.meddelande || (g?.resultat ? `behåller ${g.resultat.behall} av ${g.resultat.totalt}` : 'Klar')
-      if (g?.ok) {
-        await sattAktivtUrval(c.urval_id)   // nya urvalet blir det aktiva
-        dispatch('urval')                   // topbar-chippet uppdaterar sig
+    kor[vilket] = true; prog[vilket] = 5; res[vilket] = ''
+    // Riktig progress: startaGallring blockar tills workern är klar, men
+    // events (5% Laddar modeller… → 95% Extraherar) strömmar löpande in i
+    // loggen — polla den och spegla senaste progress-eventet i baren.
+    const poll = setInterval(async () => {
+      const ev = await hamtaLogg().catch(() => null)
+      if (!ev) return
+      for (let i = ev.length - 1; i >= 0; i--) {
+        const e = ev[i]
+        if (e.typ === 'start' || e.typ === 'klar') break
+        if (e.typ === 'progress') {
+          prog[vilket] = Math.max(prog[vilket], Math.round((e.andel || 0) * 100))
+          break
+        }
       }
-    } else {
-      res[vilket] = c?.meddelande || 'Urval skapat'
+    }, 800)
+    try {
+      const c = await startaCull(cfg)
+      if (c?.urval_id) {
+        const g = await startaGallring(c.urval_id)
+        res[vilket] = g?.meddelande || (g?.resultat ? `behåller ${g.resultat.behall} av ${g.resultat.totalt}` : 'Klar')
+        if (g?.ok) {
+          await sattAktivtUrval(c.urval_id)   // nya urvalet blir det aktiva
+          dispatch('urval')                   // topbar-chippet uppdaterar sig
+        }
+      } else {
+        res[vilket] = c?.meddelande || 'Urval skapat'
+      }
+    } finally {
+      clearInterval(poll)
+      prog[vilket] = 100; kor[vilket] = false
     }
-    prog[vilket] = 100; kor[vilket] = false
   }
 </script>
 

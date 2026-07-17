@@ -1,19 +1,41 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy, tick } from 'svelte'
   import { hamtaLogg, rensaLogg, korDemoJobb } from '../lib/api.js'
 
   let events = []
   let kor = false
   let kopierad = false
+  let konsol = null            // .console-elementet (autoscroll)
+  let timer = null
 
   $: senasteProgress = [...events].reverse().find((e) => e.typ === 'progress')
 
-  onMount(async () => { events = await hamtaLogg() })
+  // Panelen visade tidigare bara en ögonblicksbild från mount — pågick en
+  // gallring syntes ingenting förrän man lämnade och kom tillbaka. Polla
+  // loggen löpande (billigt list-anrop) och följ med till botten så länge
+  // användaren inte har scrollat upp för att läsa.
+  async function uppdatera() {
+    const nya = await hamtaLogg().catch(() => null)
+    if (!nya || nya.length === events.length) return
+    const foljer = !konsol
+      || konsol.scrollHeight - konsol.scrollTop - konsol.clientHeight < 80
+    events = nya
+    await tick()
+    if (konsol && foljer) konsol.scrollTop = konsol.scrollHeight
+  }
+
+  onMount(async () => {
+    events = await hamtaLogg()
+    await tick()
+    if (konsol) konsol.scrollTop = konsol.scrollHeight
+    timer = setInterval(uppdatera, 1000)
+  })
+  onDestroy(() => timer && clearInterval(timer))
 
   async function demo() {
     kor = true
     await korDemoJobb(6)
-    events = await hamtaLogg()
+    await uppdatera()
     kor = false
   }
 
@@ -60,7 +82,7 @@
     {/if}
   </div>
 
-  <div class="console">
+  <div class="console" bind:this={konsol}>
     {#if events.length === 0}
       <div class="tom">Tom konsol. Kör demo-jobbet för att se worker-event-strömmen.</div>
     {:else}
