@@ -7,7 +7,7 @@
   import { listaEventer, hamtaEventDetalj, sattEventPagangLage,
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
     kopplaEventIndividGren, kopplaBortEventIndivid,
-    sparaDisciplin, raderaDisciplin, sparaTavling } from '../lib/api.js'
+    sparaDisciplin, raderaDisciplin, sparaTavling, sportprofiler } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
 
@@ -60,12 +60,20 @@
     a[status(e).id] = (a[status(e).id] || 0) + 1; return a
   }, {})
 
-  onMount(ladda)
+  let profiler = {}
+  onMount(async () => {
+    profiler = await sportprofiler().catch(() => ({}))
+    await ladda()
+  })
   async function ladda() {
     laddar = true
     eventer = await listaEventer().catch(() => [])
     laddar = false
   }
+  // Grenar & individer hör till INDIVIDSPORTERNA (tennis, friidrott) — för
+  // lagsport (volleyboll, fotboll …) är matcherna programmet (Stigs fynd:
+  // EuroVolley ska inte visa gren-/individkort).
+  $: arIndividSport = !!profiler[detalj?.event?.sport]?.individ
 
   async function oppna(id) {
     vald = id
@@ -289,7 +297,7 @@
         En match med event visas aldrig utan "Del av {e.namn}".</span>
     </div>
 
-    <div class="tvakol">
+    <div class="tvakol" class:enkol={!arIndividSport}>
       <div class="kort">
         <div class="krubrik"><span class="caps">Matcher</span><span class="khint">kopplas här eller från matchen</span></div>
         {#if detalj.matcher.length}
@@ -316,6 +324,7 @@
         {/if}
       </div>
 
+      {#if arIndividSport}
       <div class="hoger">
         <div class="kort">
           <div class="krubrik"><span class="caps">Grenar</span>
@@ -391,6 +400,7 @@
           <p class="fotnot">Gren-chipsen delar koppling med Grenar &amp; deltagare-editorn — appens tävlingspaket ser samma sak. Historiken härleds ur eventen, aldrig lagrad på individen.</p>
         </div>
       </div>
+      {/if}
     </div>
   {:else}
     <p class="tom">Laddar…</p>
@@ -452,6 +462,7 @@
   .lagetext { flex: 1; min-width: 220px; font-size: 12px; color: var(--t-help); line-height: 1.5; }
 
   .tvakol { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
+  .tvakol.enkol { grid-template-columns: 1fr; max-width: 640px; }   /* lagsport: bara Matcher */
   @media (max-width: 900px) { .tvakol { grid-template-columns: 1fr; } }
 
   .mrad { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--div3, var(--div));
