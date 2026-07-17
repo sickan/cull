@@ -75,14 +75,60 @@
     speglaRes(match)
     galleriUrl = match?.galleri || galleriUrl
     hemsidaUrl = match?.sida_url || hemsidaUrl
-    // Materialraden följer matchen. Återanvänd matchens senaste SoMe-rad så att
+    // Materialraden följer matchen. Återanvänd matchens SENASTE SoMe-rad så att
     // spara/publicera uppdaterar den i stället för att lämna dubbletter efter sig.
-    materialId = (materials || []).find((m) => m.match_id === id && m.kind === 'some')?.id || null
+    const mt = (materials || [])
+      .filter((m) => m.match_id === id && m.kind === 'some')
+      .sort((a, b) => (b.uppdaterad || '').localeCompare(a.uppdaterad || ''))[0] || null
+    materialId = mt?.id || null
+    await aterstallFranMaterial(mt)
     // En öppen prompt-granskning hör till FÖRRA matchen — annars skulle man
     // godkänna en fråga och skicka en annan.
     granska = null; genFel = ''
     nollstallLive()
     pollaLive()          // visa mobilens tillstånd direkt vid matchbyte
+  }
+
+  // BUGG (Stig 17/7): panelen SPARADE material (caption, kanaler, bildval)
+  // men läste aldrig tillbaka det — öppnade man samma match igen efter
+  // publicering var allt borta och man fick börja om. Återställ hela
+  // arbetsytan ur matchens senaste materialrad.
+  async function aterstallFranMaterial(mt) {
+    // Utan material: nollställ texten till mallen — förra matchens caption
+    // ska inte läcka in i en färsk match. (Kanal-/bildval lämnas som de är —
+    // fotografens arbetsinställningar, inte innehåll.)
+    if (!mt) { caption = CAPTION_DEFAULT; return }
+    if (mt.caption) caption = mt.caption
+    const banor = mt.banor || {}
+    const kanaler = mt.channels || []
+    if (kanaler.length) {
+      for (const k of Object.keys(ch)) {
+        ch[k].on = kanaler.includes(k)
+        const cfg = banor[k]?.payload
+        if (cfg?.format) ch[k].fmt = cfg.format
+        if (cfg?.bilder?.length) ch[k].antal = cfg.bilder.length
+        if (k === 'ig' && cfg?.vag) ch.ig.vag = cfg.vag
+      }
+      ch = ch
+    }
+    // Bildvalet: största kanal-listan är ordnadeFoton från sparningen
+    // (omslaget först). Ladda katalogen igen och applicera sel/cover/crop.
+    const bilder = Object.values(banor)
+      .map((c) => c?.payload?.bilder || [])
+      .sort((a, b) => b.length - a.length)[0] || []
+    const forsta = bilder[0]?.path || mt.foto
+    if (!forsta) return
+    const mapp = forsta.split('/').slice(0, -1).join('/')
+    if (mapp && mapp !== folderPath) { folderPath = mapp; await lasKatalog() }
+    if (!bilder.length) return
+    const perPath = new Map(bilder.map((b, i) => [b.path, { ...b, i }]))
+    photos = photos.map((p) => {
+      const b = perPath.get(p.path)
+      return b
+        ? { ...p, sel: true, cover: b.i === 0,
+            fokus: b.fokus || p.fokus, zoom: b.zoom || p.zoom }
+        : { ...p, sel: false, cover: false }
+    })
   }
 
   // ── Mobil Live: poll + fältvis merge in i remsan ────────────────────────────
@@ -277,7 +323,8 @@
   function fokusUpp() { _drar = false }
 
   // Text + tokens
-  let caption = 'Stabil hemmaseger på {arena}! {resultat}. Mål: {målskyttar}. {@lag} {#liga} #dalecarliaphoto'
+  const CAPTION_DEFAULT = 'Stabil hemmaseger på {arena}! {resultat}. Mål: {målskyttar}. {@lag} {#liga} #dalecarliaphoto'
+  let caption = CAPTION_DEFAULT
   let capEl
   const TOKENS = ['{resultat}', '{målskyttar}', '{arena}', '{@lag}', '{galleri}', '{hemsida}']
   function insertToken(tok) {
@@ -424,7 +471,10 @@
     // gav en json-sträng inuti en json-sträng).
     const r = await sparaMaterial({ id: materialId || undefined,
       kind: 'some', status: 'utkast', ...malFalt,
-      match_namn: fixtur, caption, channels: aktiva.map((k) => k.key), foto: coverPath })
+      match_namn: fixtur, caption, channels: aktiva.map((k) => k.key), foto: coverPath,
+      // Bildval + kanalconfig följer med även i UTKAST (tidigare bara vid
+      // publicering) — annars går bildvalet inte att återställa vid återbesök.
+      banor: Object.fromEntries(aktiva.map((k) => [k.key, kanalConfig(k.key)])) })
     if (r?.ok) materialId = r.id
     materials = await listaMaterial()
     pubFlash = true; setTimeout(() => (pubFlash = false), 1800)
@@ -1023,7 +1073,9 @@
         {#each matVy as mt (mt.id)}
           <div class="matrad">
             <div class="matrad1">
-              <span class="matnamn">{mt.titel}</span>
+              <!-- Klick öppnar materialets match med arbetsytan återställd -->
+              <button class="matnamn" title="Öppna i arbetsytan"
+                on:click={async () => { if (mt.match_id) { await valjMatch(mt.match_id); mpTab = 'innehall' } }}>{mt.titel}</button>
               <span class="matstatus" class:pub={mt.status === 'publicerad'} class:delvis={mt.status === 'delvis'}>
                 {STATUSTEXT[mt.status] || mt.status}
               </span>
@@ -1295,7 +1347,9 @@
   .matlista { display: flex; flex-direction: column; gap: 9px; margin-top: 12px; }
   .matrad { background: var(--panel); border: 1px solid var(--div); border-radius: 11px; padding: 11px 13px; }
   .matrad1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .matnamn { font-size: 13px; font-weight: 600; color: var(--t-head); }
+  .matnamn { font-size: 13px; font-weight: 600; color: var(--t-head);
+    border: 0; background: none; padding: 0; font-family: inherit; text-align: left; cursor: pointer; }
+  .matnamn:hover { color: var(--acc); }
   .matnar { margin-left: auto; font-size: 10.5px; color: var(--t-help); }
   .matsub { font-size: 11.5px; color: var(--t-mut); margin-top: 2px; }
   .matstatus { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
