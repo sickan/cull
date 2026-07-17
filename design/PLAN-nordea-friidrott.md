@@ -11,15 +11,14 @@ bryts ut som Design-jobb**. Levande dokument.*
 leverera värde löpande. Deadlines styr: fotbollshelg 18–19/7, Friidrotts-SM
 24–26/7 (Uppsala).*
 
-### P0 — NU (matchen är imorgon)
+### P0 — ✅ LEVERERAT 17/7 kväll (ios `9f24628` + dpt `02410b1`, pushade)
 
-1. **V2-19 kalendervy-buggen** — MFF–Bröndby (lör 18/7!) saknas i iOS-kalendern
-   + väder: laga datumfältet/parsningen, samma fält i lista+kalender, synlig
-   flagga för poster utan giltigt datum.
-2. **V2-16 IG Stories-delningen** — interim "Spara till Bilder"-knapp FÖRST
-   (minuter, räddar helgen), därefter riktiga fixen
-   (`instagram-stories://`-schemat + UIPasteboard-data). Ta **V2-05**
-   (förhandsgransknings-scrollen) i samma veva — samma flöde.
+1. ~~**V2-19 kalendervy-buggen**~~ — rotorsak: minutprecisa datetime-local-tider;
+   fixad i parser + källa/bro + synlig datumflagga. Bron-datat normaliserat
+   live → matchen syns i INSTALLERADE appen redan imorgon.
+2. ~~**V2-16 IG Stories** + **V2-05 preview-scroll**~~ — schemat + pasteboard,
+   Spara till Bilder, autoscroll. **Stig: installera om appen** för V2-16/05
+   (V2-19 funkar utan) — skarptesta Stories-delningen mot riktiga Instagram.
 
 ### P1 — före Friidrotts-SM 24/7
 
