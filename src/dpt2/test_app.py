@@ -769,6 +769,18 @@ class TestApi(unittest.TestCase):
                           "https://r2.example/event/maya-i-lund/2.jpg"])
         self.assertNotIn(b1, kwargs["body"])                    # ingen lokal läcka
 
+    def test_radera_match_propagerar_paketradering(self):
+        # P16-uppföljning: raderad match ska försvinna ur mobilens matchlista
+        # DIREKT (paket-radering i molnet), inte vid nästa appstart-synk.
+        from unittest import mock
+        self.api.spara_match({"lag_hemma": "A", "lag_borta": "B",
+                              "liga": "X", "datum": "2026-07-20"})
+        mid = self.api.lista_matcher()[0]["id"]
+        fejk = mock.MagicMock()
+        self.api.live_synk = fejk
+        self.assertTrue(self.api.radera_match(mid)["ok"])
+        fejk.radera_paket.assert_called_once_with(mid)
+
     def test_innehall_md_match_gren_berikas(self):
         # D4: matchartikelns frontmatter bär gren (hemmalagets, explicit fält —
         # aldrig härledd ur serienamnet). Server-berikas i alla _innehall_md-

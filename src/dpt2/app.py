@@ -411,12 +411,19 @@ class Api:
 
     def radera_match(self, id):
         """Raderar matchen + alla kopplade fotojobb (utkast lokalt, riktiga
-        jobb hos tjänsten → Google Calendar-eventet försvinner med)."""
+        jobb hos tjänsten → Google Calendar-eventet försvinner med) + match-
+        paketet i molnet (P16-uppföljning: utan propageringen låg matchen kvar
+        i mobilens matchlista tills nästa appstart-synks reconciliation).
+        Molnraderingen är best-effort — lokal radering genomförs alltid."""
         for jid in store.fotojobb_for_match(self.conn, id):
             self.radera_fotojobb(jid)
         store.radera_match(self.conn, id)
         if store.hamta_installning(self.conn, "aktiv_match_id") == id:
             store.satt_installning(self.conn, "aktiv_match_id", "")
+        try:
+            self.live_synk.radera_paket(id)
+        except Exception:
+            pass
         return {"ok": True}
 
     def satt_match_synk(self, match_id, pa):
