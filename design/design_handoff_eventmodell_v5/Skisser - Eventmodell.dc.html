@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shantell+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#f0eee9;font-family:'Shantell Sans',system-ui,sans-serif}a{color:#8a6a1f}a:hover{color:#C9871F}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 'Shantell Sans',sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start;margin-bottom:30px}.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:500 11.5px/1.3 'Shantell Sans',sans-serif;color:rgba(0,0,0,.6)}.dv-card{max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;padding:14px}.dv-opt:target .dv-oid{background:#C9871F;color:#fff}.dv-next{margin:22px 0 0;font:12px/1.5 'Shantell Sans',sans-serif;color:rgba(0,0,0,.5)}.dv-grp{font:700 11px 'Shantell Sans',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:rgba(0,0,0,.45);margin:0 0 12px;padding-top:6px}</style></helmet>
+
+<section class="dv-turn" id="t5">
+<div class="dv-thd"><a class="dv-tid" href="#t5">5</a><span class="dv-tname">Helheten — DPT2 v5 med UX-lyftet som delar av samma arbetsflöde</span></div>
+
+<div class="dv-opts">
+
+<div class="dv-opt" id="5a"><div class="dv-olabel"><a class="dv-oid" href="#5a">5a</a>Sidopanelen v3 → v5 — vad flyttar, vad försvinner</div>
+<div class="dv-card" style="width:420px;font-size:11px;color:#333;">
+  <div style="display:flex;gap:14px;">
+    <div style="flex:1;">
+      <div style="font-size:9px;color:#888;font-weight:700;margin-bottom:5px;">IDAG (v3)</div>
+      <div style="border:1px solid #999;border-radius:7px;padding:8px;display:flex;flex-direction:column;gap:3px;font-size:10px;color:#666;">
+        <div style="font-size:8px;color:#aaa;">PLANERA</div>
+        <div>Fotojobb</div><div>Matcher</div><div>Lag &amp; tävlingar</div>
+        <div style="font-size:8px;color:#aaa;margin-top:4px;">EFTER MATCH</div>
+        <div>Snabbplock</div><div>① Gallra</div><div>② Leverera</div><div>③ Matchpublicering</div>
+        <div style="font-size:8px;color:#aaa;margin-top:4px;">WEBB</div>
+        <div>Innehåll</div><div>På gång</div>
+        <div style="font-size:8px;color:#aaa;margin-top:4px;">SYSTEM</div>
+        <div style="text-decoration:line-through;color:#B0483A;">Träna</div><div>Logg</div><div>Inställningar</div>
+      </div>
+    </div>
+    <div style="align-self:center;color:#999;">→</div>
+    <div style="flex:1;">
+      <div style="font-size:9px;color:#8a6a1f;font-weight:700;margin-bottom:5px;">V5</div>
+      <div style="border:1.5px solid #333;border-radius:7px;padding:8px;display:flex;flex-direction:column;gap:3px;font-size:10px;">
+        <div style="font-size:8px;color:#aaa;">PLANERA</div>
+        <div>Fotojobb</div><div>Matcher</div><div style="background:#fdf6ea;border-radius:4px;padding:1px 4px;color:#8a6a1f;font-weight:700;">Event ← ny</div><div>Lag &amp; ligor <span style="color:#8a6a1f;">+ Individer</span></div>
+        <div style="font-size:8px;color:#aaa;margin-top:4px;">EFTER JOBB <span style="color:#8a6a1f;">← inte "match"</span></div>
+        <div>Snabbplock</div><div style="background:#fdf6ea;border-radius:4px;padding:1px 4px;color:#8a6a1f;">① Gallra — ett flöde (<a class="dv-oid" href="#3a">3a</a>, granska = träna <a class="dv-oid" href="#3b">3b</a>)</div><div>② Leverera <span style="color:#8a6a1f;">+ ★ iOS-bakgrund</span></div><div style="background:#fdf6ea;border-radius:4px;padding:1px 4px;color:#8a6a1f;">③ Publicera — momentkö (<a class="dv-oid" href="#3c">3c</a>) + kö (<a class="dv-oid" href="#3d">3d</a>)</div>
+        <div style="font-size:8px;color:#aaa;margin-top:4px;">WEBB</div>
+        <div style="background:#fdf6ea;border-radius:4px;padding:1px 4px;color:#8a6a1f;">Innehåll — granskningskö (<a class="dv-oid" href="#3e">3e</a>)</div><div>På gång <span style="color:#8a6a1f;">+ eventläge (<a class="dv-oid" href="#1h">1h</a>)</span></div>
+        <div style="font-size:8px;color:#aaa;margin-top:4px;">SYSTEM</div>
+        <div>Logg</div><div>Inställningar <span style="color:#8a6a1f;">+ Modell + Målmappar</span></div>
+      </div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;margin-top:9px;">Samma karta, fyra sektioner kvar. Träna försvinner som nav-post; "Aktiv match" i toppraden blir "Aktivt jobb" (<a class="dv-oid" href="#4a">4a</a>).</div>
+</div></div>
+
+<div class="dv-opt" id="5b"><div class="dv-olabel"><a class="dv-oid" href="#5b">5b</a>Jobbets livscykel — allt hänger på samma kedja</div>
+<div class="dv-card" style="width:520px;font-size:11px;color:#333;">
+  <div style="display:flex;gap:5px;align-items:stretch;margin-bottom:9px;">
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:6px 7px;"><b>Fotojobb</b><div style="font-size:9px;color:#888;">kategori + ev. match/event-lager</div></div>
+    <span style="align-self:center;color:#999;">→</span>
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:6px 7px;"><b>Snabbplock</b><div style="font-size:9px;color:#888;">→ målmapp/backup</div></div>
+    <span style="align-self:center;color:#999;">→</span>
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:6px 7px;background:#fdf6ea;"><b>Gallra</b><div style="font-size:9px;color:#888;">mål → kör (profil per kategori <a class="dv-oid" href="#4d">4d</a>) → granska (=träna)</div></div>
+    <span style="align-self:center;color:#999;">→</span>
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:6px 7px;"><b>Leverera</b><div style="font-size:9px;color:#888;">galleri · ★ iOS-bakgrund</div></div>
+  </div>
+  <div style="display:flex;gap:5px;align-items:stretch;">
+    <div style="flex:1.2;border:1.5px solid #333;border-radius:6px;padding:6px 7px;background:#fdf6ea;"><b>Publicera</b><div style="font-size:9px;color:#888;">momentmall per kategori (<a class="dv-oid" href="#4c">4c</a>) → paket → publiceringskö med schema</div></div>
+    <span style="align-self:center;color:#999;">→</span>
+    <div style="flex:1.2;border:1.5px solid #333;border-radius:6px;padding:6px 7px;background:#fdf6ea;"><b>Innehåll</b><div style="font-size:9px;color:#888;">auto-utkast (sport/leverans) → granska → publicera; eventsidor auto-uppdateras</div></div>
+    <span style="align-self:center;color:#999;">→</span>
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:6px 7px;"><b>Hemsida + På gång</b><div style="font-size:9px;color:#888;">toppmeny ur statiska kategorier; event håller ihop matcher</div></div>
+  </div>
+  <div style="display:flex;gap:5px;margin-top:9px;">
+    <div style="flex:1;border:1px dashed #999;border-radius:6px;padding:5px 8px;color:#888;font-size:9.5px;">📱 iOS läser samma kedja: nästa jobb/deltillfälle, restid, väder 08–20, ★-bakgrund, leveransstatus</div>
+    <div style="flex:1;border:1px dashed #999;border-radius:6px;padding:5px 8px;color:#888;font-size:9.5px;">🧠 Modellen tränas tyst av granskningsvalen — status &amp; omträning under Inställningar</div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;margin-top:9px;">Sport är ett jobb med extra lager (match/event/gren) — inte ett eget system. Bröllop/student/landskap går genom exakt samma kedja med sin profil och momentmall.</div>
+</div></div>
+
+<div class="dv-opt" id="5c"><div class="dv-olabel"><a class="dv-oid" href="#5c">5c</a>Etappkarta — separata delar, ett jobb</div>
+<div class="dv-card" style="width:300px;font-size:11px;color:#333;">
+  <div style="display:flex;flex-direction:column;gap:5px;">
+    <div style="border:1px solid #4E8A3E;border-radius:6px;padding:5px 8px;"><b style="color:#4E8A3E;">Etapp 1 — beslutad</b><div style="font-size:10px;color:#888;">Datamodell + Event + På gång + iOS + målmappar/original (= handoff §1–§7)</div></div>
+    <div style="border:1px solid #C9871F;border-radius:6px;padding:5px 8px;"><b style="color:#8a6a1f;">Etapp 2 — gallring &amp; träning</b><div style="font-size:10px;color:#888;">Ett flöde (<a class="dv-oid" href="#3a">3a</a>) + tyst träning (<a class="dv-oid" href="#3b">3b</a>) + profiler (<a class="dv-oid" href="#4d">4d</a>)</div></div>
+    <div style="border:1px solid #C9871F;border-radius:6px;padding:5px 8px;"><b style="color:#8a6a1f;">Etapp 3 — publicering</b><div style="font-size:10px;color:#888;">Momentmallar (<a class="dv-oid" href="#3c">3c</a>/<a class="dv-oid" href="#4c">4c</a>) + publiceringskö (<a class="dv-oid" href="#3d">3d</a>)</div></div>
+    <div style="border:1px solid #C9871F;border-radius:6px;padding:5px 8px;"><b style="color:#8a6a1f;">Etapp 4 — Innehåll &amp; jobbnav</b><div style="font-size:10px;color:#888;">Granskningskö (<a class="dv-oid" href="#3e">3e</a>/<a class="dv-oid" href="#4e">4e</a>) + Aktivt jobb (<a class="dv-oid" href="#4a">4a</a>) + iOS Hem per jobbtyp (<a class="dv-oid" href="#4b">4b</a>)</div></div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;margin-top:9px;">Varje etapp får egen handoff när dess skisser är beslutade — löpande merge, ingen storrelease.</div>
+</div></div>
+</div>
+
+<p class="dv-next">Prova: "godkänn etappkartan <a class="dv-oid" href="#5c">5c</a>" · "detaljera etapp 2 som hi-fi" · "justera navkartan <a class="dv-oid" href="#5a">5a</a>"</p>
+</section>
+
+<section class="dv-turn" id="t4">
+<div class="dv-thd"><a class="dv-tid" href="#t4">4</a><span class="dv-tname">Bortom sporten — jobbet som nav (Landskap · Människor · Film · Blogg, konsert/bröllop/fjällsjö)</span></div>
+
+<div class="dv-opts">
+
+<div class="dv-opt" id="4a"><div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a>Jobbet är navet — matchen är ett specialfall</div>
+<div class="dv-card" style="width:380px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:8px 10px;background:#fdf6ea;margin-bottom:8px;">
+    <b>Aktivt jobb</b> <span style="color:#888;">(ersätter "Aktiv match" i toppraden)</span>
+    <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;">
+      <span style="border:1px solid #2F7CB0;color:#2F7CB0;border-radius:99px;padding:2px 8px;font-size:9.5px;">⚽ Match</span>
+      <span style="border:1px solid #2F7CB0;color:#2F7CB0;border-radius:99px;padding:2px 8px;font-size:9.5px;">🏟 Event</span>
+      <span style="border:1px solid #C9657F;color:#C9657F;border-radius:99px;padding:2px 8px;font-size:9.5px;">💍 Bröllop</span>
+      <span style="border:1px solid #C9657F;color:#C9657F;border-radius:99px;padding:2px 8px;font-size:9.5px;">🎓 Student</span>
+      <span style="border:1px solid #C9871F;color:#C9871F;border-radius:99px;padding:2px 8px;font-size:9.5px;">🏔 Landskapsresa</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:8px;">
+    <div style="flex:1;border:1px dashed #999;border-radius:5px;padding:5px;text-align:center;color:#888;">Snabbplock</div>
+    <div style="flex:1;border:1px dashed #999;border-radius:5px;padding:5px;text-align:center;color:#888;">Gallra</div>
+    <div style="flex:1;border:1px dashed #999;border-radius:5px;padding:5px;text-align:center;color:#888;">Leverera</div>
+    <div style="flex:1;border:1px dashed #999;border-radius:5px;padding:5px;text-align:center;color:#888;">Publicera</div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;">Alla flöden hänger på <b>jobbet</b>. Toppnivån är statisk (Sport · Landskap · Människor · Film — styr hemsidans toppmeny); underkategorier (Porträtt, Bröllop, Student, Företag, Mode…) är ett redigerbart register. Match-/eventdata är ett lager ovanpå sportjobb — inte grunden för allt.<br><span style="color:#4E8A3E;">+</span> ett konsert- eller bröllopsjobb får samma genvägar och auto-ifyllnad som en match idag</div>
+</div></div>
+
+<div class="dv-opt" id="4b"><div class="dv-olabel"><a class="dv-oid" href="#4b">4b</a>iOS Hem per jobbtyp — samma skärm, annat innehåll</div>
+<div class="dv-card" style="width:400px;font-size:11px;color:#333;">
+  <div style="display:flex;gap:8px;">
+    <div style="flex:1;border:1.5px solid #333;border-radius:11px;padding:7px;background:repeating-linear-gradient(45deg,#f5f2ea,#f5f2ea 5px,#ece6d8 5px,#ece6d8 10px);">
+      <div style="font-size:8px;font-weight:700;color:#C9657F;">🎓 STUDENT · FREDAG</div>
+      <div style="font-size:10px;margin:3px 0;"><b>Utspring · Leksand</b></div>
+      <div style="background:#fff;border-radius:5px;padding:4px 6px;font-size:8.5px;color:#666;">Utspring 13:10 · samling 12:30<br>Åk senast <b>11:45</b></div>
+    </div>
+    <div style="flex:1;border:1.5px solid #333;border-radius:11px;padding:7px;background:repeating-linear-gradient(45deg,#f5f2ea,#f5f2ea 5px,#ece6d8 5px,#ece6d8 10px);">
+      <div style="font-size:8px;font-weight:700;color:#C9871F;">🏔 LANDSKAP · LÖRDAG</div>
+      <div style="font-size:10px;margin:3px 0;"><b>Fjällsjön, Grövelsjön</b></div>
+      <div style="background:#fff;border-radius:5px;padding:4px 6px;font-size:8.5px;color:#666;">Gyllene tim. 04:41 · blå tim. 03:55<br>☀ klart · vind 2 m/s</div>
+    </div>
+    <div style="flex:1;border:1.5px solid #333;border-radius:11px;padding:7px;background:repeating-linear-gradient(45deg,#f5f2ea,#f5f2ea 5px,#ece6d8 5px,#ece6d8 10px);">
+      <div style="font-size:8px;font-weight:700;color:#C9657F;">💍 BRÖLLOP · 14 AUG</div>
+      <div style="font-size:10px;margin:3px 0;"><b>Elin &amp; Jonas</b></div>
+      <div style="background:#fff;border-radius:5px;padding:4px 6px;font-size:8.5px;color:#666;">Vigsel 14:00 · porträtt 15:30<br>middag 18:00 · schema ur jobbet</div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;margin-top:8px;">Hemskärmens byggklossar (nedräkning, väder här+där, restid, schema, ★-bakgrund per kategori) är redan generella — bara innehållet byter. "Nästa deltillfälle" = nästa schemapunkt i jobbet.</div>
+</div></div>
+
+<div class="dv-opt" id="4c"><div class="dv-olabel"><a class="dv-oid" href="#4c">4c</a>SoMe-moment per jobbtyp — mallar, inte hårdkodning</div>
+<div class="dv-card" style="width:330px;font-size:11px;color:#333;">
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <div style="border:1px solid #2F7CB0;border-radius:6px;padding:5px 8px;"><b style="color:#2F7CB0;">Match:</b> Startelva · Avspark · Halvtid · Målgörare · Resultat · Nästa match</div>
+    <div style="border:1px solid #8A6FB0;border-radius:6px;padding:5px 8px;"><b style="color:#8A6FB0;">Film:</b> Ny film · Stillbilder · Bakom kameran</div>
+    <div style="border:1px solid #C9871F;border-radius:6px;padding:5px 8px;"><b style="color:#C9871F;">Landskap:</b> Ny serie · Platsen · Bakom kulisserna · Blogg-puff</div>
+    <div style="border:1px solid #C9657F;border-radius:6px;padding:5px 8px;"><b style="color:#C9657F;">Bröllop:</b> Tjuvkik (med parets ok) · Leverans klar</div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;margin-top:8px;">Momentkön (<a class="dv-oid" href="#3c">3c</a>) läser jobbets kategori och visar rätt momentuppsättning. Tema följer med: Hav = sport, Sol = landskap, Rosé = porträtt.<br><span style="color:#4E8A3E;">✓ Beslutat:</span> Människor-jobb får per jobb-flagga `some` (samtycket bor i avtalet). Landskap: Ny serie · Platsen · Bakom kulisserna · Blogg-puff. Länk till hemsidan valfri. Kanaler: IG + FB som sport.</div>
+</div></div>
+
+<div class="dv-opt" id="4d"><div class="dv-olabel"><a class="dv-oid" href="#4d">4d</a>Gallringsprofiler per jobbtyp</div>
+<div class="dv-card" style="width:330px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:8px;margin-bottom:8px;">
+    <div style="font-size:9px;color:#888;margin-bottom:5px;">GALLRA — profilen följer jobbets kategori</div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="border:1px dashed #2F7CB0;border-radius:5px;padding:4px 7px;"><b style="color:#2F7CB0;">Sport:</b> burst-gräns · tröjnummer-OCR · hemmafärg</div>
+      <div style="border:1px dashed #C9657F;border-radius:5px;padding:4px 7px;"><b style="color:#C9657F;">Bröllop:</b> blundningar · dubbletter · ansikten skarpa</div>
+      <div style="border:1px dashed #C9871F;border-radius:5px;padding:4px 7px;"><b style="color:#C9871F;">Landskap:</b> skärpa · horisont · bracketing-serier ihop</div>
+      <div style="border:1px dashed #C9657F;border-radius:5px;padding:4px 7px;"><b style="color:#C9657F;">Porträtt/Student:</b> ögon skarpa · blinkningar · hudton</div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;">Din smak-modellen är gemensam; profilen styr bara vilka signaler som väger. Rätt profil förvald ur jobbet — aldrig ett formulär att fylla i.</div>
+</div></div>
+
+<div class="dv-opt" id="4e"><div class="dv-olabel"><a class="dv-oid" href="#4e">4e</a>Innehåll: alla typer förstaklass i granskningskön</div>
+<div class="dv-card" style="width:360px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:8px;">
+    <div style="display:flex;gap:5px;font-size:9.5px;margin-bottom:7px;">
+      <span style="border:1.5px solid #C9871F;background:#fdf6ea;border-radius:99px;padding:2px 8px;font-weight:700;">Allt</span>
+      <span style="border:1px solid #999;border-radius:99px;padding:2px 8px;color:#888;">Sport</span>
+      <span style="border:1px solid #999;border-radius:99px;padding:2px 8px;color:#888;">Landskap</span>
+      <span style="border:1px solid #999;border-radius:99px;padding:2px 8px;color:#888;">Människor</span>
+      <span style="border:1px solid #999;border-radius:99px;padding:2px 8px;color:#888;">Blogg</span>
+      <span style="border:1px solid #999;border-radius:99px;padding:2px 8px;color:#888;">Film</span>
+    </div>
+    <div style="font-size:9px;color:#aaa;margin:-3px 0 7px;">Människor filtreras vidare: Porträtt · Bröllop · Student · Företag · Mode · Övrigt (redigerbart register)</div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;"><span>EuroVolley 2026 · eventsida</span><span style="color:#4E8A3E;">auto-uppdateras</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;"><span>Grövelsjön · landskapsserie</span><span style="color:#8a6a1f;">utkast ur leverans ›</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;"><span>Blogg: "Tre nätter vid sjön"</span><span style="color:#888;">skrivs för hand</span></div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;margin-top:8px;">Collections landskap/porträtt/blogg (redan planerade i datamodellen) aktiveras. Auto-utkast där data finns (sport, leveranser); blogg/film förblir manuella med editorn från idag.</div>
+</div></div>
+</div>
+
+<p class="dv-next">Prova: "gör <a class="dv-oid" href="#4b">4b</a> som riktiga iOS-skärmar" · "visa Gallra med profil <a class="dv-oid" href="#4d">4d</a> i DPT-stil" · "svara på bröllopsfrågan i <a class="dv-oid" href="#4c">4c</a>"</p>
+</section>
+
+<section class="dv-turn" id="t3">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">UX-lyft — förenklingsförslag för Gallring/Träna, SoMe och Innehåll (CMS)</span></div>
+
+<p class="dv-grp">F · Gallring &amp; träning</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="3a"><div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>Ett flöde i stället för tre verktyg</div>
+<div class="dv-card" style="width:360px;font-size:11px;color:#333;">
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:6px 9px;text-align:center;"><b>1. Mål</b><br><span style="color:#888;">40 bilder ▾</span></div>
+    <span style="color:#999;">→</span>
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:6px 9px;text-align:center;background:#fdf6ea;"><b>2. Kör</b><br><span style="color:#888;">AI poängsätter</span></div>
+    <span style="color:#999;">→</span>
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:6px 9px;text-align:center;"><b>3. Granska</b><br><span style="color:#888;">osäkra först</span></div>
+  </div>
+  <div style="border:1px dashed #999;border-radius:5px;padding:5px 8px;color:#888;margin-bottom:8px;">Snabbläge och rapportläge = växlar under steg 2, inte egna verktygskort</div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;"><span style="color:#4E8A3E;">+</span> ett beslut i taget: mål → kör → granska<br><span style="color:#4E8A3E;">+</span> granskningen (osäkra/par/histogram) blir slutsteget i flödet i stället för en separat yta<br><span style="color:#B0483A;">–</span> mindre synligt att rapportläget inte rör disken</div>
+</div></div>
+
+<div class="dv-opt" id="3b"><div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a>Träna försvinner som sektion — modellen lär sig av granskningen</div>
+<div class="dv-card" style="width:330px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:9px;margin-bottom:8px;">
+    <div style="font-size:9px;color:#888;margin-bottom:5px;">GRANSKA (i gallringsflödet)</div>
+    <div style="display:flex;gap:6px;margin-bottom:6px;">
+      <div style="flex:1;border:1px dashed #999;border-radius:5px;padding:8px;text-align:center;color:#888;">bild<br><b style="color:#4E8A3E;">Behåll</b></div>
+      <div style="flex:1;border:1px dashed #999;border-radius:5px;padding:8px;text-align:center;color:#888;">bild<br><b style="color:#B0483A;">Släng</b></div>
+    </div>
+    <div style="font-size:10px;color:#8a6a1f;">✓ Varje val blir träningsdata för Din smak — tyst, automatiskt</div>
+  </div>
+  <div style="border:1px dashed #999;border-radius:6px;padding:6px 9px;color:#888;">Inställningar → Modell: aktiv modell, senast tränad, "träna om nu" — en rad, inte en sektion</div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;margin-top:8px;"><span style="color:#4E8A3E;">+</span> träningen blir en biprodukt av jobbet du redan gör<br><span style="color:#B0483A;">–</span> Five-Star-facit-flödet behöver en ny hemvist (import i Inställningar)</div>
+</div></div>
+</div>
+
+<p class="dv-grp">G · SoMe-flödet</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="3c"><div class="dv-olabel"><a class="dv-oid" href="#3c">3c</a>Momentkö — välj moment, få paket per kanal</div>
+<div class="dv-card" style="width:360px;font-size:11px;color:#333;">
+  <div style="display:flex;gap:5px;margin-bottom:8px;">
+    <span style="border:1.5px solid #C9871F;background:#fdf6ea;border-radius:99px;padding:2px 9px;font-weight:700;">Resultat</span>
+    <span style="border:1px solid #999;border-radius:99px;padding:2px 9px;color:#888;">Avspark ✓</span>
+    <span style="border:1px solid #999;border-radius:99px;padding:2px 9px;color:#888;">Halvtid ✓</span>
+    <span style="border:1px solid #999;border-radius:99px;padding:2px 9px;color:#888;">Startelva</span>
+  </div>
+  <div style="border:1.5px solid #333;border-radius:7px;padding:8px;margin-bottom:8px;">
+    <div style="font-size:9px;color:#888;margin-bottom:5px;">PAKET: RESULTAT — förslaget klart, du justerar</div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;"><span>IG story 9:16 · overlay + 3 bilder</span><span style="color:#4E8A3E;">klar</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;"><span>IG inlägg 4:5 · omslag + 5</span><span style="color:#8a6a1f;">välj omslag</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;color:#888;"><span>FB 1:1 · samma set</span><span>auto</span></div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;"><span style="color:#4E8A3E;">+</span> tänker som du: "nu är det resultat" — inte "nu bygger jag en story"<br><span style="color:#4E8A3E;">+</span> kanalkraven (format per kanal) blir automatik, inte val<br><span style="color:#B0483A;">–</span> mindre frihet att bygga udda enskilda inlägg</div>
+</div></div>
+
+<div class="dv-opt" id="3d"><div class="dv-olabel"><a class="dv-oid" href="#3d">3d</a>Publiceringskö med schemaläggning</div>
+<div class="dv-card" style="width:320px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:8px;">
+    <div style="font-size:9px;color:#888;margin-bottom:5px;">KÖ — allt material på väg ut</div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;"><span>Resultat-story · IG</span><span style="color:#4E8A3E;">publicerad 21:04</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;"><span>Inlägg 4:5 · IG</span><span style="color:#8a6a1f;">schemalagd 08:00</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;"><span>FB-inlägg</span><span style="color:#888;">utkast</span></div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;margin-top:8px;"><span style="color:#4E8A3E;">+</span> löser "delvis publicerad"-luckan — ett ställe visar vad som gått ut var<br><span style="color:#4E8A3E;">+</span> morgon-efter-inlägg görs på kvällen, går ut själva<br><span style="color:#B0483A;">–</span> schemaläggning kräver API-koppling per kanal (Code-fråga)</div>
+</div></div>
+</div>
+
+<p class="dv-grp">H · Innehåll (CMS → hemsidan)</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="3e"><div class="dv-olabel"><a class="dv-oid" href="#3e">3e</a>Innehåll skriver sig självt — du granskar</div>
+<div class="dv-card" style="width:380px;font-size:11px;color:#333;">
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+    <div style="flex:1;border:1px dashed #999;border-radius:6px;padding:6px 8px;color:#888;">Resultat-story skapas<br><span style="font-size:9.5px;">(Publicera)</span></div>
+    <span style="color:#999;">→</span>
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:6px 8px;background:#fdf6ea;"><b>Utkast auto</b><br><span style="font-size:9.5px;color:#888;">matchartikel .md: resultat, målskyttar, bildsvep</span></div>
+    <span style="color:#999;">→</span>
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:6px 8px;"><b>Granska &amp; publicera</b><br><span style="font-size:9.5px;color:#888;">justera text, välj höjdpunkter</span></div>
+  </div>
+  <div style="border:1.5px solid #333;border-radius:7px;padding:8px;">
+    <div style="font-size:9px;color:#888;margin-bottom:5px;">INNEHÅLL = GRANSKNINGSKÖ, inte editor-först</div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;"><span>MFF – KDFF · matchartikel</span><span style="color:#8a6a1f;">utkast · granska ›</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;"><span>EuroVolley 2026 · eventsida</span><span style="color:#4E8A3E;">publicerad · auto-uppdateras</span></div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;margin-top:8px;"><span style="color:#4E8A3E;">+</span> eventsidor uppdaterar sig själva när matcher kopplas/avslutas — eventmodellen gör jobbet<br><span style="color:#4E8A3E;">+</span> editorn finns kvar men är steg 2, inte startpunkten<br><span style="color:#B0483A;">–</span> kräver bra auto-text (mallar per sport)</div>
+</div></div>
+</div>
+
+<p class="dv-next">Prova: "kör <a class="dv-oid" href="#3a">3a</a>+<a class="dv-oid" href="#3b">3b</a> som hi-fi" · "kombinera <a class="dv-oid" href="#3c">3c</a> och <a class="dv-oid" href="#3d">3d</a>" · "visa granskningskön <a class="dv-oid" href="#3e">3e</a> i DPT-stil"</p>
+</section>
+
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Fördjupning av <a class="dv-oid" href="#1a">1a</a> + <a class="dv-oid" href="#1e">1e</a> — event som levande sektion (mästerskap, cuper, turneringar)</span></div>
+
+<div class="dv-opts">
+
+<div class="dv-opt" id="2a"><div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Event-listan — sektionen lever året runt</div>
+<div class="dv-card" style="width:360px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:9px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;"><b style="font-size:13px;">Event</b><span style="color:#8a6a1f;font-size:10px;">+ Nytt event</span></div>
+    <div style="display:flex;gap:5px;font-size:9.5px;margin-bottom:8px;"><span style="border:1.5px solid #C9871F;background:#fdf6ea;border-radius:99px;padding:2px 8px;font-weight:700;">Kommande</span><span style="border:1px solid #999;border-radius:99px;padding:2px 8px;">Pågående</span><span style="border:1px solid #999;border-radius:99px;padding:2px 8px;">Avslutade</span><span style="border:1px solid #999;border-radius:99px;padding:2px 8px;">Sport ▾</span></div>
+    <div style="display:flex;flex-direction:column;gap:5px;">
+      <div style="border:1px dashed #999;border-radius:5px;padding:5px 8px;display:flex;gap:7px;align-items:baseline;"><span style="font-size:8.5px;border:1px solid #999;border-radius:3px;padding:1px 4px;color:#666;">CUP</span><b>Svenska Cupen kvartsfinal</b><span style="color:#888;">fotboll · 2/8 · 1 match</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:5px 8px;display:flex;gap:7px;align-items:baseline;"><span style="font-size:8.5px;border:1px solid #C9871F;background:#fdf6ea;border-radius:3px;padding:1px 4px;color:#8a6a1f;">MÄSTERSKAP</span><b>EuroVolley 2026</b><span style="color:#888;">21–27 aug · 3 grenar · 5 matcher</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:5px 8px;display:flex;gap:7px;align-items:baseline;"><span style="font-size:8.5px;border:1px solid #999;border-radius:3px;padding:1px 4px;color:#666;">TURNERING</span><b>Nordea Open</b><span style="color:#888;">tennis · 12–19 jul · 8 matcher</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:5px 8px;display:flex;gap:7px;align-items:baseline;"><span style="font-size:8.5px;border:1px solid #999;border-radius:3px;padding:1px 4px;color:#666;">VÄRLDSCUP</span><b>Skid-VC Falun</b><span style="color:#888;">skidor · 13–15 feb · 3 grenar</span></div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;">Typ är en etikett på eventet (mästerskap · cup · turnering · världscup…), inte olika entiteter — samma byggklossar under.</div>
+</div></div>
+
+<div class="dv-opt" id="2b"><div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Eventets arbetsyta — EuroVolley 2026</div>
+<div class="dv-card" style="width:400px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:9px;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;"><b style="font-size:13px;">EuroVolley 2026</b><span style="font-size:9px;border:1px solid #C9871F;background:#fdf6ea;border-radius:3px;padding:1px 4px;color:#8a6a1f;">MÄSTERSKAP</span></div>
+    <div style="color:#888;margin-bottom:7px;">volleyboll · 21–27 aug · Scandinavium, Göteborg · <span style="color:#8a6a1f;">På gång: Auto ▾</span></div>
+    <div style="display:flex;gap:8px;">
+      <div style="flex:1.2;display:flex;flex-direction:column;gap:4px;">
+        <div style="font-size:9px;color:#888;">MATCHER <span style="color:#bbb;">— kopplas här eller från matchen</span></div>
+        <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;">21/8 SWE–GER <span style="color:#888;">3–1</span></div>
+        <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;">23/8 SWE–POL <span style="color:#888;">17:00</span></div>
+        <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;color:#8a6a1f;">+ koppla match…</div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+        <div style="font-size:9px;color:#888;">GRENAR</div>
+        <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;">Herr <span style="color:#888;">· 14 individer</span></div>
+        <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;">Dam <span style="color:#888;">· 14 individer</span></div>
+        <div style="font-size:9px;color:#888;margin-top:3px;">INDIVIDER <span style="color:#bbb;">— ur registret</span></div>
+        <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;color:#888;">I. Ivarsson <span style="font-size:9px;">Dam</span></div>
+        <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;color:#8a6a1f;">+ lägg till ur register…</div>
+      </div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;">En cup-kväll med en enda match använder samma yta — grenar/individer är bara tomma och skymmer inget.</div>
+</div></div>
+
+<div class="dv-opt" id="2c"><div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>Testfall: Skid-VC Falun genom samma modell</div>
+<div class="dv-card" style="width:330px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:9px;">
+    <div style="margin-bottom:6px;"><b>Skid-VC Falun</b> <span style="color:#888;">· skidor · 13–15 feb</span></div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;">Gren: 10 km klassisk <span style="color:#888;">fre</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;">Gren: Sprint <span style="color:#888;">lör</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;">Gren: 50 km skate <span style="color:#888;">sön</span></div>
+      <div style="border:1px solid #333;border-radius:5px;padding:4px 7px;margin-top:3px;">Individ: E. Andersson → <span style="color:#8a6a1f;">10 km K · 50 km F</span></div>
+      <div style="border:1px solid #333;border-radius:5px;padding:4px 7px;">Individ: J. Nilsson → <span style="color:#8a6a1f;">Sprint</span></div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;">Individ ⟂ gren n:n precis som friidrotten. Inga matcher alls — och det är okej: event kräver varken matcher eller grenar.</div>
+</div></div>
+
+<div class="dv-opt" id="2d"><div class="dv-olabel"><a class="dv-oid" href="#2d">2d</a>Kopplingen från matchhållet + På gång-raden</div>
+<div class="dv-card" style="width:330px;font-size:11px;color:#333;display:flex;flex-direction:column;gap:8px;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:8px;">
+    <div style="font-size:9px;color:#888;margin-bottom:4px;">MATCHVYN — två valfria fält</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;"><span style="width:44px;color:#888;">Liga</span><span style="flex:1;border:1px solid #999;border-radius:5px;padding:2px 7px;">Damallsvenskan ▾</span></div>
+    <div style="display:flex;gap:6px;align-items:center;"><span style="width:44px;color:#888;">Event</span><span style="flex:1;border:1px solid #999;border-radius:5px;padding:2px 7px;color:#bbb;">— inget ▾ &nbsp;<span style="color:#8a6a1f;">+ nytt</span></span></div>
+  </div>
+  <div style="border:1.5px solid #333;border-radius:7px;padding:8px;">
+    <div style="font-size:9px;color:#888;margin-bottom:4px;">PÅ GÅNG (DPT2) — eventrad med läge, per <a class="dv-oid" href="#1h">1h</a></div>
+    <div style="border:1px dashed #999;border-radius:5px;padding:4px 7px;display:flex;justify-content:space-between;align-items:center;"><span><b>EuroVolley 2026</b> <span style="color:#888;">visar nu: SWE–POL</span></span><span style="display:inline-flex;flex:none;white-space:nowrap;border:1px solid #999;border-radius:99px;overflow:hidden;font-size:8.5px;"><span style="padding:1px 6px;background:#C9871F;color:#fff;">Auto</span><span style="padding:1px 6px;">Heldag</span><span style="padding:1px 6px;">Matcher</span></span></div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;">Samma koppling, två dörrar: eventytan (<a class="dv-oid" href="#2b">2b</a>) för program-jobbet, matchvyn för snabbkoppling i farten.</div>
+</div></div>
+</div>
+
+<p class="dv-next">Prova: "gör <a class="dv-oid" href="#2b">2b</a> i DPT:s riktiga stil" · "visa individregistret" · "iOS-flödet för <a class="dv-oid" href="#1j">1j</a>+<a class="dv-oid" href="#1k">1k</a> som storyboard" · "uppdatera datamodellen som schema"</p>
+</section>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Storyboard — eventmodellen genom hela kedjan (lo-fi)</span></div>
+
+<p class="dv-grp">A · Datamodell — liga vs event</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Två register: Liga + Event, matchen pekar fritt</div>
+<div class="dv-card" style="width:340px;display:flex;flex-direction:column;gap:10px;font-size:12px;color:#333;">
+  <div style="display:flex;gap:10px;">
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:7px 9px;"><b>Liga</b><div style="font-size:10.5px;color:#777;">långlivad · säsonger · på sikt historik (tabell, tidigare möten)</div></div>
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:7px 9px;background:#fdf6ea;"><b>Event</b><div style="font-size:10.5px;color:#777;">tidsbegränsat · 1–n dagar · ort/arena</div></div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:flex-start;">
+    <div style="flex:1;"></div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
+      <div style="border:1.5px dashed #999;border-radius:6px;padding:6px 9px;"><b>Gren</b> <span style="font-size:10.5px;color:#777;">10 km klassisk · sprint · 100 m häck…</span></div>
+      <div style="border:1.5px dashed #999;border-radius:6px;padding:6px 9px;"><b>Individ ⟂ Gren</b> <span style="font-size:10.5px;color:#777;">koppling n:n</span></div>
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:7px 9px;"><b>Match</b><div style="font-size:10.5px;color:#8a6a1f;">liga? · event? — båda valfria, båda möjliga</div></div>
+    <div style="flex:1;border:1.5px solid #333;border-radius:6px;padding:7px 9px;"><b>Individ</b><div style="font-size:10.5px;color:#777;">register som Lag — Duplantis finns kvar mellan event</div></div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;"><span style="color:#4E8A3E;">+</span> rent: inga typ-villkor, historiken bor i Liga<br><span style="color:#4E8A3E;">+</span> event kan referera liga (SM-slutspel i en liga)<br><span style="color:#B0483A;">–</span> migration: dagens Tävling delas i två</div>
+</div></div>
+
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Behåll Tävling — typ styr beteendet</div>
+<div class="dv-card" style="width:300px;display:flex;flex-direction:column;gap:10px;font-size:12px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:6px;padding:7px 9px;"><b>Tävling</b> <span style="font-family:ui-monospace,monospace;font-size:10.5px;background:#eee;padding:1px 5px;border-radius:4px;">typ: liga | event</span><div style="font-size:10.5px;color:#777;">grenar + individer bara när typ = event · historik bara när typ = liga</div></div>
+  <div style="text-align:center;color:#999;">↑</div>
+  <div style="border:1.5px solid #333;border-radius:6px;padding:7px 9px;"><b>Match</b><div style="font-size:10.5px;color:#777;">tavling: 0..2 refs (en liga + ett event)</div></div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;"><span style="color:#4E8A3E;">+</span> minsta migrationen — dagens data funkar<br><span style="color:#B0483A;">–</span> if-satser i all logik (UI, På gång, hemsida)<br><span style="color:#B0483A;">–</span> historik och grenar trängs i samma entitet</div>
+</div></div>
+
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Event samlar, Liga är en etikett</div>
+<div class="dv-card" style="width:300px;display:flex;flex-direction:column;gap:10px;font-size:12px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:6px;padding:7px 9px;background:#fdf6ea;"><b>Event</b><div style="font-size:10.5px;color:#777;">äger sitt program: matcher, grenar, individer under perioden</div>
+    <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px;">
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 8px;font-size:11px;">Gren → individer</div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 8px;font-size:11px;">Match · Match · Match</div>
+    </div></div>
+  <div style="border:1.5px solid #333;border-radius:6px;padding:7px 9px;"><b>Match (fri)</b><div style="font-size:10.5px;color:#777;">liga som enkel referens/etikett — ingen egen struktur ännu</div></div>
+  <div style="font-size:11px;line-height:1.5;border-top:1px dashed #ccc;padding-top:8px;"><span style="color:#4E8A3E;">+</span> På gång blir trivialt — eventet vet sitt program<br><span style="color:#B0483A;">–</span> "äga" krockar med fotboll: matcher ägs av klubbarna och hanteras enskilt<br><span style="color:#B0483A;">–</span> ligahistoriken får byggas om senare ändå</div>
+</div></div>
+</div>
+
+<p class="dv-grp">B · Var i DPT2 hanteras event?</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1d"><div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>"Lag &amp; tävlingar" blir Register med flikar</div>
+<div class="dv-card" style="width:330px;font-size:11px;color:#333;">
+  <div style="display:flex;gap:0;border:1.5px solid #333;border-radius:7px;overflow:hidden;">
+    <div style="width:86px;background:#f4f0e6;border-right:1.5px solid #333;padding:8px 7px;display:flex;flex-direction:column;gap:5px;font-size:10px;">
+      <div style="color:#999;">Fotojobb</div><div style="color:#999;">Matcher</div><div style="background:#C9871F;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;">Register</div><div style="color:#bbb;border-top:1px dashed #ccc;padding-top:5px;">Snabbplock…</div>
+    </div>
+    <div style="flex:1;padding:9px;">
+      <div style="display:flex;gap:5px;margin-bottom:8px;font-size:10px;">
+        <span style="border:1px solid #999;border-radius:99px;padding:2px 8px;">Lag</span><span style="border:1px solid #999;border-radius:99px;padding:2px 8px;">Ligor</span><span style="border:1.5px solid #C9871F;background:#fdf6ea;border-radius:99px;padding:2px 8px;font-weight:700;">Event</span><span style="border:1px solid #999;border-radius:99px;padding:2px 8px;">Individer</span>
+      </div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:6px 8px;margin-bottom:5px;"><b>EuroVolley 2026</b> · volleyboll<br><span style="color:#888;">21–27 aug · Göteborg · 3 grenar · 5 matcher ⟵ auto</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:6px 8px;margin-bottom:5px;"><b>Skid-VC Falun</b> · skidor<br><span style="color:#888;">grenar: 10 km K · sprint · 50 km F</span></div>
+      <div style="color:#8a6a1f;font-size:10px;">+ Nytt event</div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;"><span style="color:#4E8A3E;">+</span> allt referensdata på ett ställe, en mental modell<br><span style="color:#B0483A;">–</span> eventets "arbetsyta" (program, dagar) trängs i ett register</div>
+</div></div>
+
+<div class="dv-opt" id="1e"><div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Event som egen sektion under Planera</div>
+<div class="dv-card" style="width:330px;font-size:11px;color:#333;">
+  <div style="display:flex;border:1.5px solid #333;border-radius:7px;overflow:hidden;">
+    <div style="width:86px;background:#f4f0e6;border-right:1.5px solid #333;padding:8px 7px;display:flex;flex-direction:column;gap:5px;font-size:10px;">
+      <div style="color:#999;">Fotojobb</div><div style="color:#999;">Matcher</div><div style="background:#C9871F;color:#fff;border-radius:4px;padding:2px 5px;font-weight:700;">Event</div><div style="color:#999;">Lag &amp; ligor</div>
+    </div>
+    <div style="flex:1;padding:9px;">
+      <div style="font-weight:700;margin-bottom:2px;">EuroVolley 2026 <span style="font-weight:400;color:#888;">· 21–27 aug</span></div>
+      <div style="display:flex;gap:5px;font-size:9.5px;margin-bottom:7px;color:#8a6a1f;">Översikt · Grenar · Individer · Matcher · På gång</div>
+      <div style="display:flex;gap:5px;margin-bottom:6px;">
+        <div style="flex:1;border:1px dashed #999;border-radius:5px;padding:5px;text-align:center;">21/8<br><span style="color:#888;">SWE–GER</span></div>
+        <div style="flex:1;border:1px dashed #999;border-radius:5px;padding:5px;text-align:center;">23/8<br><span style="color:#888;">SWE–POL</span></div>
+        <div style="flex:1;border:1px dashed #999;border-radius:5px;padding:5px;text-align:center;">25/8<br><span style="color:#888;">kvart</span></div>
+      </div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:5px 8px;color:#888;">Grenar: herr · dam &nbsp;→ individer per gren</div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;"><span style="color:#4E8A3E;">+</span> eventet blir en arbetsyta — navet under ett mästerskap<br><span style="color:#4E8A3E;">+</span> matchar hur du jobbar en heldag (jfr Friidrotts-SM)<br><span style="color:#B0483A;">–</span> en nav-post till; tomt mellan mästerskap</div>
+</div></div>
+
+<div class="dv-opt" id="1f"><div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Kopplingen bor i matchvyn — event skapas inline</div>
+<div class="dv-card" style="width:300px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:10px;">
+    <div style="font-weight:700;margin-bottom:7px;">Match: Sverige – Polen <span style="color:#888;font-weight:400;">23 aug 17:00</span></div>
+    <div style="display:flex;flex-direction:column;gap:5px;">
+      <div style="display:flex;gap:6px;align-items:center;"><span style="width:52px;color:#888;">Liga</span><span style="flex:1;border:1px solid #999;border-radius:5px;padding:3px 8px;color:#bbb;">— ingen ▾</span></div>
+      <div style="display:flex;gap:6px;align-items:center;"><span style="width:52px;color:#888;">Event</span><span style="flex:1;border:1.5px solid #C9871F;background:#fdf6ea;border-radius:5px;padding:3px 8px;">EuroVolley 2026 ▾</span></div>
+      <div style="font-size:10px;color:#8a6a1f;padding-left:58px;">+ skapa nytt event härifrån…</div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;"><span style="color:#4E8A3E;">+</span> noll ny navigation — kopplingen görs där man står<br><span style="color:#4E8A3E;">+</span> funkar för fotboll (liga-fältet finns redan)<br><span style="color:#B0483A;">–</span> grenar/individer/program behöver ändå ett hem någonstans</div>
+</div></div>
+</div>
+
+<p class="dv-grp">C · På gång — automatik och override</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1g"><div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>Ren automatik + pinna/dölj per rad</div>
+<div class="dv-card" style="width:270px;font-size:11px;color:#333;">
+  <div style="display:flex;flex-direction:column;gap:5px;">
+    <div style="border:1px dashed #999;border-radius:5px;padding:5px 8px;display:flex;justify-content:space-between;"><span><b>EuroVolley 2026</b> <span style="color:#888;">heldag</span></span><span>📌 👁</span></div>
+    <div style="border:1px dashed #999;border-radius:5px;padding:5px 8px;display:flex;justify-content:space-between;color:#888;"><span>MFF – KDFF · 27/6</span><span>📌 👁</span></div>
+    <div style="border:1px dashed #999;border-radius:5px;padding:5px 8px;display:flex;justify-content:space-between;color:#888;"><span>Nordea Open · heldag</span><span>📌 👁</span></div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;"><span style="color:#4E8A3E;">+</span> minsta möjliga UI<br><span style="color:#B0483A;">–</span> klarar inte volleyboll-exemplet: heldag ↔ matcher mitt i mästerskapet</div>
+</div></div>
+
+<div class="dv-opt" id="1h"><div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>Läge per event: Auto · Heldag · Matcher</div>
+<div class="dv-card" style="width:360px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;padding:9px;margin-bottom:9px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><b>EuroVolley 2026</b>
+      <span style="display:inline-flex;border:1px solid #999;border-radius:99px;overflow:hidden;font-size:9.5px;"><span style="padding:2px 8px;background:#C9871F;color:#fff;font-weight:700;">Auto</span><span style="padding:2px 8px;">Heldag</span><span style="padding:2px 8px;">Matcher</span></span></div>
+    <div style="display:flex;align-items:center;gap:3px;font-size:9px;color:#888;">
+      <span style="flex:3;border-top:3px solid #999;padding-top:3px;">på avstånd → heldagskort</span>
+      <span style="flex:4;border-top:3px solid #C9871F;padding-top:3px;color:#8a6a1f;">under veckan → Sveriges matcher</span>
+      <span style="flex:2;border-top:3px solid #999;padding-top:3px;">efter → resultat</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <div style="flex:1;border:1px dashed #999;border-radius:6px;padding:6px 8px;"><div style="font-size:9px;color:#888;">PÅ AVSTÅND</div><b>EuroVolley 2026</b><br><span style="color:#888;">21–27 aug · Göteborg</span></div>
+    <div style="flex:1;border:1px dashed #999;border-radius:6px;padding:6px 8px;"><div style="font-size:9px;color:#C9871F;font-weight:700;">DEL AV EUROVOLLEY 2026</div><b>Sverige – Polen</b><br><span style="color:#888;">i morgon 17:00</span></div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;"><span style="color:#4E8A3E;">+</span> exakt beteendet ur epiken; matchen aldrig lösryckt (badge alltid med)<br><span style="color:#4E8A3E;">+</span> auto är default — override är ett val, inte ett jobb</div>
+</div></div>
+
+<div class="dv-opt" id="1i"><div class="dv-olabel"><a class="dv-oid" href="#1i">1i</a>Manuell kö — auto föreslår, du ordnar</div>
+<div class="dv-card" style="width:270px;font-size:11px;color:#333;">
+  <div style="display:flex;flex-direction:column;gap:5px;">
+    <div style="border:1px solid #333;border-radius:5px;padding:5px 8px;">⠿ 1. Sverige – Polen <span style="color:#888;">match</span></div>
+    <div style="border:1px solid #333;border-radius:5px;padding:5px 8px;">⠿ 2. EuroVolley 2026 <span style="color:#888;">heldag</span></div>
+    <div style="border:1px dashed #999;border-radius:5px;padding:5px 8px;color:#888;">förslag: Nordea Open <span style="color:#8a6a1f;">+ lägg till</span></div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;"><span style="color:#4E8A3E;">+</span> full kontroll över ordning och urval<br><span style="color:#B0483A;">–</span> blir ett manuellt jobb varje vecka — motsatsen till "så automatiskt som möjligt"</div>
+</div></div>
+</div>
+
+<p class="dv-grp">D · iOS v2 — bakgrund och restid</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1j"><div class="dv-olabel"><a class="dv-oid" href="#1j">1j</a>Dynamisk bakgrund — kuraterad pott från DPT2</div>
+<div class="dv-card" style="width:380px;font-size:11px;color:#333;">
+  <div style="display:flex;gap:10px;align-items:stretch;">
+    <div style="flex:1.3;border:1.5px solid #333;border-radius:7px;padding:8px;">
+      <div style="font-size:9px;color:#888;margin-bottom:4px;">DPT2 · LEVERERA/PUBLICERA</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;">
+        <div style="width:44px;height:34px;background:repeating-linear-gradient(45deg,#eee,#eee 4px,#e0dcd2 4px,#e0dcd2 8px);border-radius:4px;position:relative;"><span style="position:absolute;top:1px;right:2px;font-size:9px;">★</span></div>
+        <div style="width:44px;height:34px;background:repeating-linear-gradient(45deg,#eee,#eee 4px,#e0dcd2 4px,#e0dcd2 8px);border-radius:4px;"></div>
+        <div style="width:44px;height:34px;background:repeating-linear-gradient(45deg,#eee,#eee 4px,#e0dcd2 4px,#e0dcd2 8px);border-radius:4px;position:relative;"><span style="position:absolute;top:1px;right:2px;font-size:9px;">★</span></div>
+      </div>
+      <div style="font-size:9.5px;color:#8a6a1f;margin-top:5px;">★ = "iOS-bakgrund" — flaggas per bild, taggas med sport</div>
+    </div>
+    <div style="text-align:center;align-self:center;color:#999;">→</div>
+    <div style="width:86px;border:1.5px solid #333;border-radius:12px;padding:7px 6px;background:repeating-linear-gradient(45deg,#f5f2ea,#f5f2ea 5px,#e8e2d4 5px,#e8e2d4 10px);">
+      <div style="font-size:8.5px;color:#666;background:#fff;border-radius:4px;padding:2px 4px;margin-bottom:26px;">bakgrund = ★-bild för dagens sport</div>
+      <div style="font-size:8.5px;background:#fff;border-radius:4px;padding:2px 4px;">Nästa: SWE–POL 17:00</div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;">Fallordning: ★-pott för sporten → egen uppladdad → standard. Kurateringen bor i flöden du redan står i.</div>
+</div></div>
+
+<div class="dv-opt" id="1k"><div class="dv-olabel"><a class="dv-oid" href="#1k">1k</a>Restid mot nästa deltillfälle, med override</div>
+<div class="dv-card" style="width:250px;font-size:11px;color:#333;">
+  <div style="width:170px;margin:0 auto;border:1.5px solid #333;border-radius:12px;padding:9px 8px;">
+    <div style="font-size:9px;color:#C9871F;font-weight:700;">EUROVOLLEY 2026 · PÅGÅR</div>
+    <div style="border:1px dashed #999;border-radius:6px;padding:5px 7px;margin:6px 0;"><b>Nästa: SWE – POL 17:00</b><br><span style="color:#888;">Åk senast <b style="color:#333;">15:12</b> · 1 h 48 m</span></div>
+    <div style="font-size:9.5px;color:#8a6a1f;">Sikta på annan tid… ▾</div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;">Efter 08:00 räknas restiden mot nästa kopplade match/gren i stället för att försvinna. Override = välj annat deltillfälle eller eget klockslag.</div>
+</div></div>
+</div>
+
+<p class="dv-grp">E · Hemsidan — mästerskapet hålls ihop</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1l"><div class="dv-olabel"><a class="dv-oid" href="#1l">1l</a>Eventsida: hero + program + matcher under samma tak</div>
+<div class="dv-card" style="width:340px;font-size:11px;color:#333;">
+  <div style="border:1.5px solid #333;border-radius:7px;overflow:hidden;">
+    <div style="height:64px;background:repeating-linear-gradient(45deg,#f5f2ea,#f5f2ea 5px,#e8e2d4 5px,#e8e2d4 10px);display:flex;align-items:flex-end;padding:7px 10px;"><b>EuroVolley 2026</b>&nbsp;<span style="color:#888;">· 21–27 aug · Göteborg</span></div>
+    <div style="padding:9px 10px;display:flex;flex-direction:column;gap:5px;">
+      <div style="font-size:9px;color:#888;">PROGRAM / GRENAR</div>
+      <div style="display:flex;gap:5px;"><span style="border:1px dashed #999;border-radius:99px;padding:2px 8px;">Herr</span><span style="border:1px dashed #999;border-radius:99px;padding:2px 8px;">Dam</span></div>
+      <div style="font-size:9px;color:#888;margin-top:3px;">MATCHER — grupperas automatiskt hit</div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 8px;">21/8 SWE–GER · <span style="color:#888;">3–1 · galleri →</span></div>
+      <div style="border:1px dashed #999;border-radius:5px;padding:4px 8px;">23/8 SWE–POL · <span style="color:#888;">17:00</span></div>
+    </div>
+  </div>
+  <div style="font-size:11px;line-height:1.5;margin-top:9px;">Matchsidorna finns kvar som idag men länkar "Del av EuroVolley 2026" tillbaka hit. Samma data styr På gång-blocket.</div>
+</div></div>
+</div>
+
+<p class="dv-next">Prova: "kör <a class="dv-oid" href="#1a">1a</a> + <a class="dv-oid" href="#1e">1e</a> + <a class="dv-oid" href="#1h">1h</a> och fördjupa" · "visa <a class="dv-oid" href="#1d">1d</a>-registret med individ-fliken utvecklad" · "skidvärldscupen genom <a class="dv-oid" href="#1e">1e</a>"</p>
+</section>
+</x-dc>
+</body>
+</html>

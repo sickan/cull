@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ddd4c2; }
+  a { color: #C9871F; } a:hover { color: #B5781A; }
+  .dpt .scd { font-family: 'Saira Condensed', sans-serif; }
+  .dpt { --accent:#C9871F; --accent-hover:#B5781A; --accent-soft:rgba(201,135,31,.14); --accent-softborder:rgba(201,135,31,.42); --ink:#100c05;
+    --win:#F4EEE2; --title:#EFE7D6; --bottom:#EBE2D0; --rail:#ECE3D2; --seg:#E2D7C1;
+    --card:#FBF8F1; --card-border:rgba(35,32,26,.14); --field:#FCF9F2; --field-border:rgba(35,32,26,.18);
+    --t-head:#23201a; --t-body:rgba(35,32,26,.78); --t-label:rgba(35,32,26,.62); --t-mut:rgba(35,32,26,.5); --t-help:rgba(35,32,26,.4); --t-caps:rgba(35,32,26,.5);
+    --div:rgba(35,32,26,.13); --div2:rgba(35,32,26,.1); --div3:rgba(35,32,26,.07);
+    --shadow:0 1px 2px rgba(60,50,30,.05),0 12px 30px rgba(60,50,30,.10); --ok:#4E8A3E; }
+  .dpt[data-theme="dark"] { --accent:#F0B45A; --accent-hover:#F4C277; --accent-soft:rgba(240,180,90,.15); --accent-softborder:rgba(240,180,90,.42); --ink:#100c05;
+    --win:#0a0d11; --title:#11141a; --bottom:#06080b; --rail:#0d1015; --seg:#1b2028;
+    --card:#12151b; --card-border:rgba(255,255,255,.09); --field:#0e1217; --field-border:rgba(255,255,255,.14);
+    --t-head:#f3f5f7; --t-body:rgba(243,245,247,.84); --t-label:rgba(243,245,247,.66); --t-mut:rgba(243,245,247,.62); --t-help:rgba(243,245,247,.52); --t-caps:rgba(243,245,247,.55);
+    --div:rgba(255,255,255,.09); --div2:rgba(255,255,255,.07); --div3:rgba(255,255,255,.05);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 16px 40px rgba(0,0,0,.55); --ok:#6FB35A; }
+  .dpt ::-webkit-scrollbar { width:9px; height:9px; }
+  .dpt ::-webkit-scrollbar-thumb { background:rgba(140,130,110,.4); border-radius:6px; border:2px solid transparent; background-clip:content-box; }
+  .dpt input::placeholder { color:var(--t-help); }
+</style>
+</helmet>
+<div class="dpt" data-theme="{{ theme }}" style="padding:28px;display:flex;justify-content:center;font-family:'Saira',sans-serif;">
+  <template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#C9871F"/><g fill="none" stroke="#FBF8F1" stroke-width="4.5" stroke-linejoin="round"><rect x="28" y="32" width="44" height="38" rx="5"/><path d="M28 44h44M40 26v10M60 26v10"/></g></svg></template>
+  <div style="width:1240px;height:900px;flex:none;background:var(--win);border-radius:13px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;border:1px solid var(--card-border);">
+
+    <sc-if value="{{ showFrame }}" hint-placeholder-val="{{ true }}">
+    <div style="height:38px;flex:none;display:flex;align-items:center;padding:0 14px;background:var(--title);border-bottom:1px solid var(--div3);position:relative;">
+      <div style="display:flex;gap:8px;z-index:1;">
+        <span style="width:12px;height:12px;border-radius:50%;background:#FF5F57;"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#FEBC2E;"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#28C840;"></span>
+      </div>
+      <div style="position:absolute;left:0;right:0;text-align:center;font-size:13px;font-weight:600;color:var(--t-body);">Dalecarlia Photo Tools</div>
+    </div>
+    </sc-if>
+
+    <div style="height:58px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--title);border-bottom:1px solid var(--div2);">
+      <img src="uploads/logo-sol.png" alt="Dalecarlia" style="height:36px;width:auto;object-fit:contain;flex:none;">
+      <div style="display:flex;flex-direction:column;line-height:1;">
+        <span class="scd" style="font-size:19px;font-weight:700;color:var(--t-head);letter-spacing:.03em;">DALECARLIA PHOTO</span>
+        <span style="font-size:9px;font-weight:600;letter-spacing:.3em;color:var(--accent);margin-top:4px;">PHOTO TOOLS · v5.0 · gren: eventmodell</span>
+      </div>
+      <div style="flex:1;"></div>
+      <span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--t-head);font-weight:600;"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none;"></span>Sverige – Polen · 23 aug</span>
+    </div>
+
+    <div style="flex:1;display:flex;min-height:0;">
+      <nav style="width:178px;flex:none;background:var(--rail);border-right:1px solid var(--div2);padding:14px 12px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;" data-screen-label="Sidopanel">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:2px 10px 6px;">Planera</div>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/><path d="M12 12.5v2.4l1.7 1.1"/></svg><span>Fotojobb</span></button>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg><span>Matcher</span></button>
+        <button onClick="{{ goLista }}" style="{{ nsOn }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><path d="M12 3.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 9.2l5.4-.8z"/></svg><span>Event</span></button>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><path d="M12 3l7 2.5v5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9v-5z"/></svg><span>Lag &amp; ligor</span></button>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:14px 10px 6px;">Efter match</div>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/></svg><span>Snabbplock</span></button>
+        <button style="{{ nsOff }}"><span style="{{ ncNum }}">1</span><span>Gallra</span></button>
+        <button style="{{ nsOff }}"><span style="{{ ncNum }}">2</span><span>Leverera</span></button>
+        <button style="{{ nsOff }}"><span style="{{ ncNum }}">3</span><span>Matchpublicering</span></button>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:14px 10px 6px;">Webb</div>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18"/></svg><span>Innehåll</span></button>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17"/><path d="M7.5 13.5h5M7.5 16.5h8"/></svg><span>På gång</span></button>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:14px 10px 6px;">System</div>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/><path d="M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3"/></svg><span>Träna</span></button>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5"/></svg><span>Inställningar</span></button>
+      </nav>
+
+      <main style="flex:1;min-width:0;overflow-y:auto;">
+
+        <sc-if value="{{ isLista }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:22px 24px 40px;" data-screen-label="Event — lista">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+            <h1 class="scd" style="margin:0;font-size:25px;font-weight:700;color:var(--t-head);letter-spacing:-.005em;">Event</h1>
+            <span style="font-size:13px;color:var(--t-mut);">Mästerskap, cuper, turneringar — tidsbegränsade samlingar av matcher och grenar</span>
+            <div style="flex:1;"></div>
+            <button style="background:var(--accent);color:var(--ink);border:none;border-radius:7px;padding:7px 13px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;">+ Nytt event</button>
+          </div>
+          <div style="display:flex;gap:6px;margin:16px 0 14px;">
+            <sc-for list="{{ filterChips }}" as="f" hint-placeholder-count="4">
+              <button onClick="{{ f.set }}" style="{{ f.style }}">{{ f.label }}</button>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px;">
+            <sc-for list="{{ evList }}" as="ev" hint-placeholder-count="4">
+              <div onClick="{{ ev.open }}" style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:13px 16px;display:flex;align-items:center;gap:13px;cursor:pointer;">
+                <span style="{{ ev.typStyle }}">{{ ev.typ }}</span>
+                <div style="min-width:0;flex:1;">
+                  <div style="display:flex;align-items:baseline;gap:9px;"><span style="font-size:14.5px;font-weight:600;color:var(--t-head);">{{ ev.namn }}</span><span style="font-size:11.5px;color:var(--t-mut);">{{ ev.sport }}</span></div>
+                  <div style="font-size:11.5px;color:var(--t-mut);margin-top:2px;">{{ ev.metaRad }}</div>
+                </div>
+                <span style="{{ ev.statusStyle }}">{{ ev.statusLabel }}</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--t-help)" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isDetalj }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:22px 24px 40px;" data-screen-label="Event — detalj">
+          <button onClick="{{ goLista }}" style="background:none;border:none;padding:0;font-family:inherit;font-size:12px;color:var(--accent);cursor:pointer;font-weight:600;">‹ Alla event</button>
+          <div style="display:flex;align-items:center;gap:11px;margin-top:9px;flex-wrap:wrap;">
+            <h1 class="scd" style="margin:0;font-size:25px;font-weight:700;color:var(--t-head);">{{ d.namn }}</h1>
+            <span style="{{ d.typStyle }}">{{ d.typ }}</span>
+            <span style="{{ d.statusStyle }}">{{ d.statusLabel }}</span>
+          </div>
+          <p style="margin:5px 0 16px;font-size:12.5px;color:var(--t-mut);">{{ d.metaRad }}</p>
+
+          <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:12px 16px;display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap;">
+            <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);flex:none;">På gång</span>
+            <div style="display:inline-flex;background:var(--seg);border-radius:8px;padding:3px;flex:none;">
+              <sc-for list="{{ d.lagen }}" as="lg" hint-placeholder-count="3">
+                <button onClick="{{ lg.set }}" style="{{ lg.style }}">{{ lg.label }}</button>
+              </sc-for>
+            </div>
+            <span style="font-size:12px;color:var(--t-body);min-width:0;">{{ d.lageText }}</span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:start;">
+            <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:14px 16px;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;">
+                <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);">Matcher</span>
+                <span style="font-size:11px;color:var(--t-help);">kopplas här eller från matchen</span>
+              </div>
+              <sc-if value="{{ d.harMatcher }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:7px;">
+                <sc-for list="{{ d.matcher }}" as="m" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:10px;background:var(--field);border:1px solid var(--field-border);border-radius:9px;padding:8px 11px;">
+                    <div style="display:flex;align-items:center;flex:none;"><dc-import name="Lagbricka" namn="{{ m.hem }}" farg="{{ m.hemCol }}" storlek="22" hint-size="22px,22px"></dc-import><div style="margin-left:-7px;display:flex;"><dc-import name="Lagbricka" namn="{{ m.borta }}" farg="{{ m.bortaCol }}" storlek="22" hint-size="22px,22px"></dc-import></div></div>
+                    <span style="font-size:13px;font-weight:600;color:var(--t-head);min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ m.fixture }}</span>
+                    <span style="font-size:11.5px;color:var(--t-mut);flex:none;">{{ m.nar }}</span>
+                    <span style="{{ m.resStyle }}">{{ m.res }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              </sc-if>
+              <sc-if value="{{ d.ingaMatcher }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px dashed var(--field-border);border-radius:9px;padding:12px 14px;font-size:12px;color:var(--t-mut);">Inga matcher — grenarna är programmet. Event kräver varken matcher eller grenar.</div>
+              </sc-if>
+              <sc-if value="{{ d.kandOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:8px;border:1px solid var(--accent-softborder);background:var(--accent-soft);border-radius:9px;padding:9px 11px;">
+                <div style="font-size:10.5px;font-weight:700;color:var(--accent);letter-spacing:.06em;margin-bottom:6px;">OKOPPLADE MATCHER I {{ d.sportCaps }}</div>
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <sc-for list="{{ d.kandidater }}" as="k" hint-placeholder-count="2">
+                    <button onClick="{{ k.koppla }}" style="display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--card-border);border-radius:7px;padding:6px 10px;font-family:inherit;font-size:12px;color:var(--t-body);cursor:pointer;text-align:left;">
+                      <span style="flex:1;font-weight:600;">{{ k.fixture }}</span><span style="color:var(--t-mut);">{{ k.nar }}</span><span style="color:var(--accent);font-weight:600;">Koppla ›</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+              </sc-if>
+              <button onClick="{{ d.togKand }}" style="margin-top:9px;background:none;border:1px dashed var(--field-border);border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12px;color:var(--accent);font-weight:600;cursor:pointer;width:100%;text-align:left;">{{ d.kandKnapp }}</button>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:14px 16px;">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;">
+                  <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);">Grenar</span>
+                  <button style="background:none;border:none;padding:0;font-family:inherit;font-size:11.5px;color:var(--accent);font-weight:600;cursor:pointer;">+ Ny gren</button>
+                </div>
+                <sc-if value="{{ d.harGrenar }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <sc-for list="{{ d.grenar }}" as="g" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:9px;background:var(--field);border:1px solid var(--field-border);border-radius:8px;padding:7px 11px;">
+                      <span style="font-size:12.5px;font-weight:600;color:var(--t-head);flex:1;">{{ g.namn }}</span>
+                      <span style="font-size:11px;color:var(--t-mut);">{{ g.sub }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                </sc-if>
+                <sc-if value="{{ d.ingaGrenar }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:12px;color:var(--t-help);">Inga grenar — behövs inte för {{ d.typLc }}.</div>
+                </sc-if>
+              </div>
+
+              <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:14px 16px;">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;">
+                  <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);">Deltagare</span>
+                  <button style="background:none;border:none;padding:0;font-family:inherit;font-size:11.5px;color:var(--accent);font-weight:600;cursor:pointer;">+ Ur individregistret</button>
+                </div>
+                <sc-if value="{{ d.harDeltagare }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <sc-for list="{{ d.deltagare }}" as="p" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span style="{{ p.initStyle }}">{{ p.init }}</span>
+                      <span style="font-size:12.5px;color:var(--t-body);flex:1;">{{ p.namn }}</span>
+                      <span style="font-size:10.5px;color:var(--t-mut);">{{ p.grenTxt }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                </sc-if>
+                <sc-if value="{{ d.ingaDeltagare }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:12px;color:var(--t-help);">Inga individer kopplade.</div>
+                </sc-if>
+                <div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--div3);font-size:11px;color:var(--t-help);">Individens historik härleds — allt den ställt upp i visas på individkortet.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Utseende&quot;},&quot;showFrame&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Utseende&quot;}}">
+class Component extends DCLogic {
+  state = {
+    view: 'lista', evId: null, filter: 'alla', kandOpen: false,
+    lagen: {}, // eventId -> auto|heldag|matcher
+    extraKopplade: {}, // eventId -> [kandidat-index]
+  };
+  EVENTS = [
+    { id:'nordea', typ:'Turnering', sport:'Tennis', namn:'Nordea Open', period:'12–19 jul 2026', ort:'Båstad', arena:'Båstad Tennisstadion', status:'pågående',
+      grenar:[], deltagare:[{namn:'E. Ymer', grenar:['Singel']},{namn:'M. Ymer', grenar:['Singel','Dubbel']}],
+      matcher:[
+        { hem:'E. Ymer', borta:'C. Ruud', hemCol:'#2F7CB0', bortaCol:'#B0483A', nar:'i dag 13:00', res:null },
+        { hem:'M. Ymer', borta:'H. Rune', hemCol:'#2F7CB0', bortaCol:'#6E8757', nar:'i morgon 11:00', res:null },
+        { hem:'E. Ymer', borta:'A. Zverev', hemCol:'#2F7CB0', bortaCol:'#555', nar:'15/7', res:'2–1' } ],
+      kandidater:[{ fixture:'M. Ymer – F. Cerundolo', nar:'19/7 14:00' }] },
+    { id:'cupen', typ:'Cup', sport:'Fotboll', namn:'Svenska Cupen — kvartsfinal', period:'2 aug 2026', ort:'Malmö', arena:'Eleda Stadion', status:'kommande',
+      grenar:[], deltagare:[],
+      matcher:[{ hem:'Malmö FF', borta:'AIK', hemCol:'#8FB7DE', bortaCol:'#16181C', nar:'2/8 15:00', res:null }],
+      kandidater:[{ fixture:'Malmö FF – Hammarby', nar:'9/8 15:00 (ev. semifinal)' }] },
+    { id:'eurovolley', typ:'Mästerskap', sport:'Volleyboll', namn:'EuroVolley 2026', period:'21–27 aug 2026', ort:'Göteborg', arena:'Scandinavium', status:'kommande',
+      grenar:[{ namn:'Damer', sub:'14 individer · 3 matcher' },{ namn:'Herrar', sub:'14 individer · 2 matcher' }],
+      deltagare:[{namn:'I. Ivarsson', grenar:['Damer']},{namn:'V. Östberg', grenar:['Damer']},{namn:'A. Ekdahl', grenar:['Herrar']}],
+      matcher:[
+        { hem:'Sverige', borta:'Tyskland', hemCol:'#C9A227', bortaCol:'#16181C', nar:'21/8 18:00', res:null },
+        { hem:'Sverige', borta:'Polen', hemCol:'#C9A227', bortaCol:'#B0483A', nar:'23/8 17:00', res:null },
+        { hem:'Sverige', borta:'Italien', hemCol:'#C9A227', bortaCol:'#3E7C87', nar:'25/8 19:30', res:null } ],
+      kandidater:[{ fixture:'Sverige – Tjeckien', nar:'27/8 (ev. final)' },{ fixture:'Sverige – Frankrike (träning)', nar:'18/8 12:00' }] },
+    { id:'skidvc', typ:'Världscup', sport:'Skidor', namn:'Skid-VC Falun', period:'13–15 feb 2027', ort:'Falun', arena:'Lugnet', status:'kommande',
+      grenar:[{ namn:'10 km klassisk', sub:'fre · 2 individer' },{ namn:'Sprint', sub:'lör · 2 individer' },{ namn:'50 km skate', sub:'sön · 1 individ' }],
+      deltagare:[{namn:'E. Andersson', grenar:['10 km K','50 km F']},{namn:'J. Nilsson', grenar:['Sprint']},{namn:'F. Karlsson', grenar:['Sprint']}],
+      matcher:[], kandidater:[] },
+    { id:'fsm', typ:'Mästerskap', sport:'Friidrott', namn:'Friidrotts-SM 2026', period:'14–16 jun 2026', ort:'Uddevalla', arena:'Rimnersvallen', status:'avslutad',
+      grenar:[{ namn:'100 m häck', sub:'3 individer' },{ namn:'Stavhopp', sub:'2 individer' },{ namn:'Kula', sub:'1 individ' }],
+      deltagare:[{namn:'S. Sjöström', grenar:['100 m häck']},{namn:'A. Bengtsson', grenar:['Stavhopp']}],
+      matcher:[], kandidater:[] },
+  ];
+  TYPCOL = { 'Mästerskap':'var(--accent)', 'Cup':'#3E7C87', 'Turnering':'#6E8757', 'Världscup':'#2F7CB0' };
+  lage(id) { return this.state.lagen[id] || 'auto'; }
+  renderVals() {
+    const theme = this.props.theme ?? 'light';
+    const showFrame = this.props.showFrame ?? true;
+    const navBase = { display:'flex', alignItems:'center', gap:'9px', width:'100%', padding:'8px 10px', border:'none', borderRadius:'8px', fontFamily:'inherit', fontSize:'13px', fontWeight:600, cursor:'pointer', textAlign:'left' };
+    const nsOff = { ...navBase, background:'transparent', color:'var(--t-mut)' };
+    const nsOn = { ...navBase, background:'var(--accent-soft)', color:'var(--accent)' };
+    const ncNum = { width:'17px', height:'17px', borderRadius:'50%', border:'1.5px solid currentColor', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:'10px', flex:'none' };
+    const typBadge = (typ) => ({ fontSize:'9.5px', fontWeight:700, letterSpacing:'.08em', textTransform:'uppercase', color:this.TYPCOL[typ]||'var(--t-mut)', border:'1px solid currentColor', borderRadius:'5px', padding:'2px 7px', flex:'none', opacity:.95 });
+    const statusBadge = (st) => ({
+      fontSize:'10.5px', fontWeight:600, borderRadius:'999px', padding:'2px 10px', flex:'none',
+      background: st==='pågående' ? 'var(--accent-soft)' : 'var(--seg)',
+      color: st==='pågående' ? 'var(--accent)' : 'var(--t-mut)' });
+    const meta = (ev) => {
+      const bitar = [ev.period, ev.ort + ' · ' + ev.arena];
+      if (ev.grenar.length) bitar.push(ev.grenar.length + ' grenar');
+      const extra = (this.state.extraKopplade[ev.id]||[]).length;
+      if (ev.matcher.length + extra) bitar.push((ev.matcher.length + extra) + ' matcher');
+      if (ev.deltagare.length) bitar.push(ev.deltagare.length + ' individer');
+      return bitar.join(' · ');
+    };
+    const filterChips = [['alla','Alla'],['pågående','Pågående'],['kommande','Kommande'],['avslutad','Avslutade']].map(([k,label]) => ({
+      label, set: () => this.setState({ filter:k }),
+      style: this.state.filter===k
+        ? { background:'var(--card)', border:'1px solid var(--card-border)', borderRadius:'999px', padding:'4px 13px', fontSize:'12px', fontWeight:600, color:'var(--t-head)', fontFamily:'inherit', cursor:'pointer', boxShadow:'0 1px 2px rgba(60,50,30,.08)' }
+        : { background:'transparent', border:'1px solid transparent', borderRadius:'999px', padding:'4px 13px', fontSize:'12px', fontWeight:500, color:'var(--t-mut)', fontFamily:'inherit', cursor:'pointer' } }));
+    const evList = this.EVENTS.filter(e => this.state.filter==='alla' || e.status===this.state.filter).map(ev => ({
+      namn: ev.namn, sport: ev.sport, typ: ev.typ, typStyle: typBadge(ev.typ),
+      metaRad: meta(ev), statusLabel: ev.status, statusStyle: statusBadge(ev.status),
+      open: () => this.setState({ view:'detalj', evId:ev.id, kandOpen:false }) }));
+    const E = this.EVENTS.find(e => e.id===this.state.evId) || this.EVENTS[0];
+    const lage = this.lage(E.id);
+    const lageTexter = {
+      auto: E.status==='pågående' ? 'Auto · pågår — dagens matcher visas enskilt, alltid märkta "Del av ' + E.namn + '"'
+          : (E.status==='kommande' ? 'Auto · på avstånd — visas som heldagskort tills eventet börjar' : 'Auto · avslutat — resultat visas'),
+      heldag: 'Override · visas alltid som ett heldagskort, även under perioden',
+      matcher: 'Override · bara enskilda matcher visas — märkta "Del av ' + E.namn + '"' };
+    const extra = (this.state.extraKopplade[E.id]||[]);
+    const matcherAlla = E.matcher.concat(extra.map(i => {
+      const k = E.kandidater[i]; const [hem, borta] = k.fixture.split(' – ');
+      return { hem, borta, hemCol:'#C9A227', bortaCol:'#555', nar:k.nar, res:null };
+    }));
+    const kandKvar = E.kandidater.map((k,i)=>({ ...k, i })).filter(k => extra.indexOf(k.i)<0);
+    const d = {
+      namn: E.namn, typ: E.typ, typLc: E.typ.toLowerCase(), typStyle: typBadge(E.typ),
+      statusLabel: E.status, statusStyle: statusBadge(E.status), metaRad: meta(E),
+      sportCaps: E.sport.toUpperCase(),
+      lagen: [['auto','Auto'],['heldag','Heldag'],['matcher','Matcher']].map(([k,label]) => ({
+        label, set: () => this.setState(s => ({ lagen: { ...s.lagen, [E.id]: k } })),
+        style: lage===k
+          ? { padding:'5px 14px', borderRadius:'6px', border:'none', fontSize:'12px', fontWeight:600, fontFamily:'inherit', cursor:'pointer', background:'var(--card)', color:'var(--t-head)', boxShadow:'0 1px 2px rgba(0,0,0,.08)' }
+          : { padding:'5px 14px', borderRadius:'6px', border:'none', fontSize:'12px', fontWeight:500, fontFamily:'inherit', cursor:'pointer', background:'transparent', color:'var(--t-mut)' } })),
+      lageText: lageTexter[lage],
+      harMatcher: matcherAlla.length>0, ingaMatcher: matcherAlla.length===0,
+      matcher: matcherAlla.map(m => ({ ...m, fixture: m.hem + ' – ' + m.borta,
+        nar: m.nar, res: m.res || (m.nar.indexOf(':')>=0 ? '' : ''),
+        resStyle: m.res ? { fontSize:'12.5px', fontWeight:700, color:'var(--t-head)', flex:'none', fontFamily:"'Saira Condensed'" } : { display:'none' } })),
+      harGrenar: E.grenar.length>0, ingaGrenar: E.grenar.length===0,
+      grenar: E.grenar,
+      harDeltagare: E.deltagare.length>0, ingaDeltagare: E.deltagare.length===0,
+      deltagare: E.deltagare.map(p => ({ namn: p.namn, grenTxt: p.grenar.join(' · '),
+        init: p.namn.split(' ').map(w=>w[0]).join('').slice(0,2),
+        initStyle: { width:'24px', height:'24px', borderRadius:'50%', background:'var(--seg)', color:'var(--t-body)', fontSize:'10px', fontWeight:700, display:'inline-flex', alignItems:'center', justifyContent:'center', flex:'none' } })),
+      kandOpen: this.state.kandOpen && kandKvar.length>0,
+      kandKnapp: this.state.kandOpen ? 'Stäng' : '+ Koppla match…',
+      togKand: () => this.setState(s => ({ kandOpen: !s.kandOpen })),
+      kandidater: kandKvar.map(k => ({ fixture:k.fixture, nar:k.nar,
+        koppla: () => this.setState(s => ({ extraKopplade: { ...s.extraKopplade, [E.id]: (s.extraKopplade[E.id]||[]).concat([k.i]) } })) })) };
+    return { theme, showFrame, nsOff, nsOn, ncNum, filterChips, evList, d,
+      isLista: this.state.view==='lista', isDetalj: this.state.view==='detalj',
+      goLista: () => this.setState({ view:'lista' }) };
+  }
+}
+</script>
+</body>
+</html>

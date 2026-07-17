@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@500;600;700&family=Montserrat:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;background:#07090c;}
+  ::selection{background:rgba(143,208,232,.32);}
+  a{color:#8FD0E8;text-decoration:none;} a:hover{color:#B8E2F2;}
+  .scd{font-family:'Saira Condensed',sans-serif;}
+  .tile{overflow:hidden;position:relative;}
+  .tile img{transition:transform 1s cubic-bezier(.2,.7,.2,1);display:block;}
+  .tile:hover img{transform:scale(1.05);}
+  .mrad{transition:background .2s;}
+  .mrad:hover{background:rgba(255,255,255,.05) !important;}
+</style>
+</helmet>
+<div style="position:relative;width:1440px;min-height:900px;margin:0 auto;font-family:Saira,sans-serif;background:#0a0d11;color:#f3f5f7;overflow:hidden;">
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#0a0d11"/><circle cx="50" cy="44" r="18" fill="none" stroke="#8FD0E8" stroke-width="4.5"/><path d="M28 76h44" stroke="#8FD0E8" stroke-width="4.5" stroke-linecap="round"/></svg></template>
+
+  <header style="position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;height:84px;padding:0 48px 0 64px;background:rgba(10,13,17,.82);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.08);">
+    <div style="display:flex;align-items:center;gap:13px;cursor:pointer;">
+      <img src="webb_assets/logo-hav.png" alt="Dalecarlia" style="height:44px;width:auto;object-fit:contain;">
+      <div style="font:300 24px Montserrat,sans-serif;color:#f3f5f7;">Dalecarlia <span style="font-size:14px;color:rgba(243,245,247,.55);">photo</span></div>
+    </div>
+    <nav style="display:flex;align-items:center;gap:36px;">
+      <span style="font-size:13.5px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#8FD0E8;opacity:1;padding-bottom:4px;border-bottom:2px solid #8FD0E8;cursor:pointer;">Sport</span>
+      <span style="font-size:13.5px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#f3f5f7;opacity:.6;padding-bottom:4px;border-bottom:2px solid transparent;cursor:pointer;">Landskap</span>
+      <span style="font-size:13.5px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#f3f5f7;opacity:.6;padding-bottom:4px;border-bottom:2px solid transparent;cursor:pointer;">Människor</span>
+      <span style="font-size:13.5px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#f3f5f7;opacity:.6;padding-bottom:4px;border-bottom:2px solid transparent;cursor:pointer;">Om</span>
+    </nav>
+  </header>
+
+  <section style="position:relative;height:520px;overflow:hidden;" data-screen-label="Event-hero">
+    <img src="webb_assets/S2.jpg" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 30%;">
+    <div style="position:absolute;left:0;right:0;bottom:0;height:80%;background:linear-gradient(to top,rgba(8,10,13,.97),rgba(8,10,13,.5) 45%,rgba(8,10,13,0));"></div>
+    <div style="position:absolute;left:64px;right:64px;bottom:48px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8FD0E8;border:1px solid rgba(143,208,232,.5);border-radius:5px;padding:3px 10px;">Mästerskap</span>
+        <span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.75);"><span style="width:7px;height:7px;border-radius:50%;background:#6FB35A;"></span>Pågår · dag 3 av 7</span>
+      </div>
+      <h1 class="scd" style="font-weight:700;font-size:86px;line-height:.95;letter-spacing:-.01em;color:#fff;margin:16px 0 0;">EuroVolley 2026</h1>
+      <p style="font-size:17px;line-height:1.6;color:rgba(255,255,255,.78);margin:14px 0 0;">Volleyboll · 21–27 augusti · Scandinavium, Göteborg</p>
+    </div>
+  </section>
+
+  <main style="padding:56px 64px 90px;max-width:1160px;">
+
+    <div style="display:flex;gap:10px;margin-bottom:44px;">
+      <span style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#0a0d11;background:#8FD0E8;border-radius:999px;padding:6px 16px;cursor:pointer;">Allt</span>
+      <span style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(243,245,247,.65);border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:6px 16px;cursor:pointer;">Damer</span>
+      <span style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(243,245,247,.65);border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:6px 16px;cursor:pointer;">Herrar</span>
+    </div>
+
+    <sc-for list="{{ dagar }}" as="dag" hint-placeholder-count="3">
+    <section style="margin-bottom:42px;">
+      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:16px;">
+        <h2 class="scd" style="font-weight:700;font-size:30px;margin:0;color:#f3f5f7;">{{ dag.rubrik }}</h2>
+        <span style="font-size:13px;color:rgba(243,245,247,.45);">{{ dag.sub }}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <sc-for list="{{ dag.matcher }}" as="m" hint-placeholder-count="2">
+        <div class="mrad" style="display:flex;align-items:center;gap:18px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:15px 20px;cursor:pointer;">
+          <span style="display:inline-flex;align-items:center;gap:8px;flex:none;width:74px;"><span style="width:4px;height:22px;border-radius:2px;background:{{ m.grenFarg }};flex:none;"></span><span style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:rgba(243,245,247,.6);">{{ m.gren }}</span></span>
+          <span class="scd" style="font-weight:600;font-size:20px;color:#f3f5f7;min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ m.fixture }}</span>
+          <sc-if value="{{ m.spelad }}" hint-placeholder-val="{{ true }}">
+            <span class="scd" style="font-weight:700;font-size:22px;color:#fff;flex:none;">{{ m.res }}</span>
+            <span style="font-size:12px;color:#8FD0E8;flex:none;">Se bilderna →</span>
+          </sc-if>
+          <sc-if value="{{ m.kommande }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:13px;color:rgba(243,245,247,.6);flex:none;">{{ m.tid }}</span>
+            <span style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#E0A341;border:1px solid rgba(224,163,65,.4);border-radius:5px;padding:2px 8px;flex:none;">Kommande</span>
+          </sc-if>
+        </div>
+        </sc-for>
+      </div>
+    </section>
+    </sc-for>
+
+    <section style="margin-top:56px;border-top:1px solid rgba(255,255,255,.08);padding-top:40px;" data-screen-label="Del av-exempel">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:rgba(243,245,247,.45);margin-bottom:16px;">Så ser matchsidan ut — aldrig lösryckt</div>
+      <div style="display:flex;gap:24px;align-items:flex-start;">
+        <div class="tile" style="width:400px;border-radius:12px;border:1px solid rgba(255,255,255,.09);background:#0d1015;flex:none;">
+          <div style="aspect-ratio:16/9;background:linear-gradient(135deg,#14202c,#0b1118);position:relative;">
+            <img src="webb_assets/S2.jpg" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 60%;opacity:.85;">
+          </div>
+          <div style="padding:16px 18px 18px;">
+            <a href="#" style="display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8FD0E8;"><span style="width:6px;height:6px;border-radius:50%;background:#8FD0E8;"></span>Del av EuroVolley 2026</a>
+            <div class="scd" style="font-weight:700;font-size:26px;color:#fff;margin-top:6px;">Sverige – Tyskland 3–1</div>
+            <div style="font-size:12.5px;color:rgba(243,245,247,.55);margin-top:3px;">Gruppspel damer · 21 aug · Scandinavium</div>
+          </div>
+        </div>
+        <p style="font-size:14.5px;line-height:1.7;color:rgba(243,245,247,.6);max-width:480px;margin:4px 0 0;">Varje match som ingår i ett event bär alltid sin eventtillhörighet — badgen länkar tillbaka hit. Samma data styr <b style="color:#f3f5f7;font-weight:600;">På gång</b>: på avstånd visas hela eventet som ett kort, under veckan visas Sveriges matcher enskilt men aldrig utan sitt sammanhang.</p>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  DAGAR = [
+    { rubrik:'Fredag 21 augusti', sub:'Gruppspel', matcher:[
+      { gren:'DAMER', grenFarg:'#8E5A86', fixture:'Sverige – Tyskland', spelad:true, res:'3–1' },
+      { gren:'HERRAR', grenFarg:'#3E7C87', fixture:'Sverige – Nederländerna', spelad:true, res:'1–3' } ] },
+    { rubrik:'Söndag 23 augusti', sub:'Gruppspel · i dag', matcher:[
+      { gren:'DAMER', grenFarg:'#8E5A86', fixture:'Sverige – Polen', spelad:false, tid:'17:00' },
+      { gren:'DAMER', grenFarg:'#8E5A86', fixture:'Sverige – Italien', spelad:false, tid:'19:30' } ] },
+    { rubrik:'Tisdag 25 augusti', sub:'Kvartsfinal', matcher:[
+      { gren:'HERRAR', grenFarg:'#3E7C87', fixture:'Sverige – Italien', spelad:false, tid:'19:30' } ] },
+  ];
+  renderVals() {
+    return { dagar: this.DAGAR.map(d => ({ ...d, matcher: d.matcher.map(m => ({ ...m, kommande: !m.spelad })) })) };
+  }
+}
+</script>
+</body>
+</html>

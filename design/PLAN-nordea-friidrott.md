@@ -1,26 +1,65 @@
 # Plan — Tennis · iOS telefon · Friidrott · iPad
 
-*Uppdaterad 2026-07-16 (v3): Stigs backlog från användning 15–16 jul insynkad
-(claude_code_backlog.md: BUG-01…08, FEAT-01…13, SPIKE-01…07, iOS + webb).
-Arbetsmodell oförändrad: **alla UX/UI/mall-frågor bryts ut som Design-jobb** —
-prototyper i Claude Design, landat resultat kommer tillbaka hit som handoff.
-Levande dokument.*
+*Uppdaterad 2026-07-17 kväll (v4): backlogg-överlämning v2 (punkt 1–20, `V2-xx`)
++ D10 eventmodell-handoffen (DPT v5 / iOS v2, sektion C i BACKLOG.md) insynkade
+och prioriterade som helhet. Arbetsmodell oförändrad: **alla UX/UI/mall-frågor
+bryts ut som Design-jobb**. Levande dokument.*
 
-## ⭐ AKTUELL PRIO — beslutad gemensamt 16 jul (ersätter listan nedan)
+## ⭐ AKTUELL PRIO v4 — förslag 17/7 kväll (helheten: gammalt + v2 + V5)
 
 *Fullständig backlog: `BACKLOG.md`. Agilt/iterativt — små testade skivor,
-leverera värde löpande.*
+leverera värde löpande. Deadlines styr: fotbollshelg 18–19/7, Friidrotts-SM
+24–26/7 (Uppsala).*
 
-1. **Buggar** — BUG-09 (koppla-listan gren·sport) · #26-rest (id-uppslag) ·
-   BUG-02 (döda kort) · BUG-03 (färgklick-reaktivitet) · HDA-a/b
-2. **iOS-trupp** — matchdaguttag → startelva på telefonen (fotbollshelgen)
-3. **iOS väder + restid** — läs-features: väder-aggregat + "när måste jag åka"
-4. **Därefter (enligt Code-förslaget):** Publiceringskedjan v2 (FEAT-13 →
-   dubbletterna → FEAT-09/12, skiva för skiva) · **B-001 deltagare (hård
-   deadline före 24/7 — startas senast måndag)** · B-002/D2-impl · resten per
-   BACKLOG.md
-- **Design parallellt:** D2 UTE · **D4/D7/D8-handoffs UTE 16 jul** · D3/D5/D6
-  på begäran
+### P0 — NU (matchen är imorgon)
+
+1. **V2-19 kalendervy-buggen** — MFF–Bröndby (lör 18/7!) saknas i iOS-kalendern
+   + väder: laga datumfältet/parsningen, samma fält i lista+kalender, synlig
+   flagga för poster utan giltigt datum.
+2. **V2-16 IG Stories-delningen** — interim "Spara till Bilder"-knapp FÖRST
+   (minuter, räddar helgen), därefter riktiga fixen
+   (`instagram-stories://`-schemat + UIPasteboard-data). Ta **V2-05**
+   (förhandsgransknings-scrollen) i samma veva — samma flöde.
+
+### P1 — före Friidrotts-SM 24/7
+
+3. **V2-20 friidrotts-verifiering av hela SoMe-flödet** — testkör end-to-end
+   (moment: Grenstart/Kval/Final/Resultat/Rekord · resultat-etiketter i stället
+   för ställning · inga två-lags-antaganden, inkl. matchfakta-pålägget).
+   P15-tennisfixen är grunden; det som brister fixas direkt.
+4. **W-friidrott** — kolla att Mästerskap/Friidrott-sajtkoden faktiskt är
+   deployad (snabbkoll, hör ihop med 3).
+
+### P2 — eventmodell-epiken startar (egen branch, löpande merge)
+
+5. **V5-A quick wins** (målmappar per flöde + original utan overlay) — kan gå
+   direkt, även parallellt med P1; rör inte datamodellen.
+6. **V5-B datamodellen** (Liga/Event/Individ/kategori + migration) — grunden;
+   därefter **V5-C → V5-E + V5-UX** skiva för skiva enligt handoffens
+   leveransordning. Startas EFTER SM-verifieringen (V2-20) så friidrotten inte
+   riskeras — men före SM om P0/P1 landar snabbt.
+7. **Kvarvarande ur v3-prion, vävs in mellan skivorna:** FEAT-12-rest
+   (fel-expansion) · D7 Featured (oblockerad) · D8 skiva 2 (deadline/krock
+   genom bron) · iOS-trupp skiva 2/3 · B-012 kamerabrygga FTP · FEAT-14
+   ackrediteringssvar skiva 1–2.
+
+### P3 — nya spår, i förslags-ordning (efter SM)
+
+8. **Lathunds-spåret:** V2-17 matchlathund (epic) → V2-18 nyckelspelare →
+   V2-02 väderväxling + V2-12 packmallar + V2-06 noteringar (underlagen).
+9. **Kund-spåret (V2-KUND):** V2-03 godkännande/eventpublicering (kräver
+   V5-UX §10 some-flaggan + publik endpoint) → V2-14 kundregister → V2-07
+   SpeedLedger → V2-13 publiceringsstatistik (ovanpå V5 §10-kön) → V2-10
+   leveranskrav.
+10. **Webb/copy-paketet:** V2-04 mobil På gång-notis (litet, kan tas när som) ·
+    V2-09 tjänstesektion (mappar mot V5-kategorierna — efter V5-B) · V2-08
+    presskort (copy).
+11. **Småttigt när det passar:** V2-01 versionsvisning · V2-11 filmlogg ·
+    övriga per BACKLOG.md (spikes, D3/D5/D6-implementationer, B-003 röst).
+
+- **Design parallellt:** inga öppna design-jobb just nu — D1–D10 ALLA
+  levererade. Nya design-frågor bryts ut vid behov (kandidater: V2-03-formuläret,
+  V2-17-lathundens läsvy).
 
 ## Prioritering (Stigs ordning — historisk v3)
 

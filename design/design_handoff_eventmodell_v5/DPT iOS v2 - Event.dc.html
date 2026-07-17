@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700;800&family=Saira+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;background:#0b0e12;background-image:radial-gradient(circle at 30% 0%,#12171d,#0b0e12 60%);font-family:'Saira',system-ui,sans-serif;}
+  a{color:#F0B45A;} a:hover{color:#F4C277;}
+  @keyframes kenburns{0%{transform:scale(1) translateY(0);}100%{transform:scale(1.09) translateY(-12px);}}
+  image-slot#ios-egen-bakgrund{width:100%;height:86px;display:block;}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:flex-start;justify-content:center;gap:26px;padding:26px 20px;flex-wrap:wrap;">
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#0a0d11"/><rect x="32" y="18" width="36" height="64" rx="8" fill="none" stroke="#F0B45A" stroke-width="4.5"/><circle cx="50" cy="72" r="3" fill="#F0B45A"/></svg></template>
+
+<!-- ============ A · HEM under pågående event ============ -->
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="430px,884px">
+<div data-screen-label="Hem — pågående event" style="position:relative;height:100%;display:flex;flex-direction:column;background:#0a0d11;color:#f3f5f7;font-family:'Saira',-apple-system,system-ui,sans-serif;overflow:hidden;">
+  <div style="{{ bgStyle }}"></div>
+  <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(10,13,17,.78) 0%,rgba(10,13,17,.3) 32%,rgba(10,13,17,.42) 58%,rgba(10,13,17,.95) 84%);"></div>
+  <div style="position:relative;flex:1;display:flex;flex-direction:column;padding:56px 18px 0;min-height:0;">
+    <div style="display:flex;align-items:center;gap:9px;">
+      <img src="assets/logo-hast-orange.png" alt="" style="width:32px;height:30px;object-fit:contain;filter:drop-shadow(0 1px 6px rgba(0,0,0,.5));">
+      <div style="text-shadow:0 1px 8px rgba(0,0,0,.5);">
+        <div style="font-size:6.5px;font-weight:600;letter-spacing:.3em;color:rgba(243,245,247,.6);">DALECARLIA&nbsp;PHOTO</div>
+        <div style="font-weight:700;font-size:16px;line-height:1.1;">DPT</div>
+        <div style="font-size:7px;font-weight:500;letter-spacing:.08em;color:rgba(243,245,247,.45);margin-top:1px;">v2.0 · build 1</div>
+      </div>
+      <span style="flex:1;"></span>
+      <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(18,21,27,.45);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:5px 11px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);">
+        <span style="width:6px;height:6px;border-radius:50%;background:#5FB35A;flex:none;"></span>
+        <span style="font-size:10px;color:rgba(243,245,247,.7);">synkad 14:02</span>
+      </span>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;min-height:0;">
+      <div style="text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(240,180,90,.16);border:1px solid rgba(240,180,90,.4);border-radius:999px;padding:4px 13px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
+          <span style="width:6px;height:6px;border-radius:50%;background:#F0B45A;"></span>
+          <span style="font-size:10.5px;font-weight:700;letter-spacing:.2em;color:#F0B45A;">EUROVOLLEY 2026 · DAG 3 AV 7</span>
+        </div>
+        <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:27px;line-height:1.1;margin-top:10px;text-shadow:0 2px 14px rgba(0,0,0,.6);">Scandinavium, Göteborg</div>
+        <div style="font-size:11.5px;color:rgba(243,245,247,.7);margin-top:3px;text-shadow:0 1px 8px rgba(0,0,0,.5);">Mästerskap · volleyboll · 21–27 aug</div>
+      </div>
+    </div>
+
+    <div style="background:rgba(18,21,27,.62);border:1px solid rgba(255,255,255,.13);border-radius:20px;padding:12px 16px 13px;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:9.5px;font-weight:700;letter-spacing:.18em;color:rgba(243,245,247,.55);">HÄR I DAG</span>
+        <span style="flex:1;"></span>
+        <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#F0B45A;white-space:nowrap;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F0B45A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 14.5a4.5 4.5 0 0 1 9 0"></path><path d="M3.5 14.5h2M18.5 14.5h2M12 5.5v2.4M6.2 8.7l1.4 1.4M17.8 8.7l-1.4 1.4M4.5 18h15"></path></svg>gyllene tim. 20:47</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <div style="flex:1;text-align:center;"><div style="font-size:13px;">☀ <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:14px;">18°</span></div><div style="font-size:10px;color:rgba(243,245,247,.55);">08</div></div>
+        <div style="width:1px;background:rgba(255,255,255,.09);"></div>
+        <div style="flex:1;text-align:center;"><div style="font-size:13px;">☀ <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:14px;">22°</span></div><div style="font-size:10px;color:rgba(243,245,247,.55);">11</div></div>
+        <div style="width:1px;background:rgba(255,255,255,.09);"></div>
+        <div style="flex:1;text-align:center;"><div style="font-size:13px;">⛅ <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:14px;">24°</span></div><div style="font-size:10px;color:rgba(243,245,247,.55);">14</div></div>
+        <div style="width:1px;background:rgba(255,255,255,.09);"></div>
+        <div style="flex:1;text-align:center;"><div style="font-size:13px;">☁ <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:14px;">21°</span></div><div style="font-size:10px;color:rgba(243,245,247,.55);">17</div></div>
+        <div style="width:1px;background:rgba(255,255,255,.09);"></div>
+        <div style="flex:1;text-align:center;"><div style="font-size:13px;">☁ <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:14px;">17°</span></div><div style="font-size:10px;color:rgba(243,245,247,.55);">20</div></div>
+      </div>
+      <div style="height:1px;background:rgba(255,255,255,.09);margin:10px 0;"></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:9.5px;font-weight:700;letter-spacing:.18em;color:rgba(243,245,247,.55);">NÄSTA DELTILLFÄLLE</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:9px;font-weight:600;color:rgba(243,245,247,.4);border:1px solid rgba(255,255,255,.16);border-radius:5px;padding:1px 5px;">{{ malKalla }}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+        <div style="min-width:0;flex:1;">
+          <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:19px;line-height:1.15;">{{ malNamn }}</div>
+          <div style="font-size:10.5px;color:rgba(243,245,247,.55);margin-top:1px;">Del av EuroVolley 2026 · kl {{ malTid }} · ☁ 21° vid arenan</div>
+        </div>
+        <div style="text-align:right;flex:none;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.5);">ÅK SENAST</div>
+          <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:26px;line-height:1;color:#F0B45A;font-variant-numeric:tabular-nums;">{{ akSenast }}</div>
+          <div style="font-size:10px;color:rgba(243,245,247,.55);font-variant-numeric:tabular-nums;">{{ restid }} restid</div>
+        </div>
+      </div>
+      <div onClick="{{ togSheet }}" style="margin-top:11px;border:1px solid rgba(255,255,255,.16);border-radius:11px;padding:9px;text-align:center;font-size:12px;font-weight:600;color:rgba(243,245,247,.8);cursor:pointer;">Sikta på annan tid ▾</div>
+    </div>
+    <div style="height:78px;flex:none;"></div>
+  </div>
+
+  <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ togSheet }}" style="position:absolute;inset:0;background:rgba(0,0,0,.5);z-index:5;"></div>
+  <div data-screen-label="Sheet — sikta på annan tid" style="position:absolute;left:0;right:0;bottom:0;z-index:6;background:#12151b;border-radius:22px 22px 0 0;border-top:1px solid rgba(255,255,255,.12);padding:14px 18px 34px;">
+    <div style="width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:0 auto 13px;"></div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:.2em;color:rgba(243,245,247,.55);margin-bottom:10px;">SIKTA PÅ ANNAN TID</div>
+    <div style="display:flex;flex-direction:column;gap:7px;">
+      <sc-for list="{{ mal }}" as="t" hint-placeholder-count="3">
+        <div onClick="{{ t.pick }}" style="{{ t.style }}">
+          <div style="min-width:0;flex:1;">
+            <div style="font-size:13px;font-weight:600;">{{ t.namn }}</div>
+            <div style="font-size:10px;color:rgba(243,245,247,.5);">{{ t.sub }}</div>
+          </div>
+          <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:17px;flex:none;font-variant-numeric:tabular-nums;">{{ t.tid }}</span>
+        </div>
+      </sc-for>
+      <div style="display:flex;align-items:center;gap:10px;border:1px dashed rgba(255,255,255,.18);border-radius:12px;padding:11px 13px;">
+        <span style="font-size:13px;font-weight:600;color:rgba(243,245,247,.7);flex:1;">Eget klockslag</span>
+        <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:17px;color:rgba(243,245,247,.45);">--:--</span>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-import>
+
+<!-- ============ B · Inställningar: dynamisk bakgrund ============ -->
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="430px,884px">
+<div data-screen-label="Inställningar — bakgrund" style="position:relative;height:100%;display:flex;flex-direction:column;background:#0a0d11;color:#f3f5f7;font-family:'Saira',-apple-system,system-ui,sans-serif;overflow:hidden;padding:56px 16px 0;">
+  <div style="display:flex;align-items:center;gap:9px;">
+    <img src="assets/logo-hast-orange.png" alt="" style="width:32px;height:30px;object-fit:contain;">
+    <div>
+      <div style="font-size:6.5px;font-weight:600;letter-spacing:.3em;color:rgba(243,245,247,.5);">DALECARLIA&nbsp;PHOTO</div>
+      <div style="font-weight:700;font-size:16px;line-height:1.1;">DPT</div>
+      <div style="font-size:7px;font-weight:500;letter-spacing:.08em;color:rgba(243,245,247,.4);margin-top:1px;">v2.0 · build 1</div>
+    </div>
+  </div>
+  <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:24px;margin:18px 0 3px;">Startsidans bakgrund</div>
+  <div style="font-size:11.5px;color:rgba(243,245,247,.55);margin-bottom:14px;">Väljs automatiskt efter dagens sport — ur bilder du flaggat i DPT.</div>
+
+  <div style="display:flex;flex-direction:column;gap:8px;">
+    <sc-for list="{{ bgVal }}" as="v" hint-placeholder-count="3">
+      <div onClick="{{ v.pick }}" style="{{ v.style }}">
+        <span style="{{ v.radio }}"></span>
+        <div style="min-width:0;flex:1;">
+          <div style="font-size:13.5px;font-weight:600;">{{ v.namn }}</div>
+          <div style="font-size:10.5px;color:rgba(243,245,247,.55);margin-top:1px;">{{ v.sub }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:16px;">
+    <div style="font-size:9.5px;font-weight:700;letter-spacing:.18em;color:rgba(243,245,247,.5);margin-bottom:8px;">★-POTTEN · VOLLEYBOLL <span style="font-weight:500;letter-spacing:.04em;color:rgba(243,245,247,.35);">— flaggas i DPT vid Leverera/Publicera</span></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;">
+      <div style="aspect-ratio:3/4;border-radius:10px;background-image:url('skisser_assets/hero-foto.jpg');background-size:cover;background-position:30% 20%;position:relative;outline:2px solid #F0B45A;outline-offset:1px;"><span style="position:absolute;top:5px;right:6px;font-size:11px;color:#F0B45A;text-shadow:0 1px 4px rgba(0,0,0,.8);">★</span><span style="position:absolute;bottom:5px;left:6px;font-size:8px;font-weight:700;letter-spacing:.1em;color:#fff;background:rgba(0,0,0,.45);border-radius:4px;padding:1px 5px;">VISAS NU</span></div>
+      <div style="aspect-ratio:3/4;border-radius:10px;background-image:url('skisser_assets/hero-foto.jpg');background-size:cover;background-position:70% 45%;filter:saturate(1.15) brightness(.95);position:relative;"><span style="position:absolute;top:5px;right:6px;font-size:11px;color:#F0B45A;text-shadow:0 1px 4px rgba(0,0,0,.8);">★</span></div>
+      <div style="aspect-ratio:3/4;border-radius:10px;background-image:url('skisser_assets/hero-foto.jpg');background-size:cover;background-position:50% 70%;filter:hue-rotate(-10deg);position:relative;"><span style="position:absolute;top:5px;right:6px;font-size:11px;color:#F0B45A;text-shadow:0 1px 4px rgba(0,0,0,.8);">★</span></div>
+    </div>
+    <div style="font-size:10.5px;color:rgba(243,245,247,.45);margin-top:8px;">Ingen ★-bild för kategorin? Då används din egen bild, annars standard.</div>
+  </div>
+
+  <div style="margin-top:14px;">
+    <div style="font-size:9.5px;font-weight:700;letter-spacing:.18em;color:rgba(243,245,247,.5);margin-bottom:8px;">EGEN BILD</div>
+    <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="ios-egen-bakgrund" shape="rounded" placeholder="Släpp en egen bakgrundsbild här" hint-size="100%,86px"></x-import>
+  </div>
+</div>
+</x-import>
+
+<!-- ============ C · HEM för landskapsjobb (4b) ============ -->
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="430px,884px">
+<div data-screen-label="Hem — landskapsjobb" style="position:relative;height:100%;display:flex;flex-direction:column;background:#0a0d11;color:#f3f5f7;font-family:'Saira',-apple-system,system-ui,sans-serif;overflow:hidden;">
+  <div style="position:absolute;inset:0;background-image:url('skisser_assets/hero-foto.jpg');background-size:cover;background-position:20% 65%;filter:hue-rotate(-18deg) saturate(.8) brightness(.9);animation:kenburns 26s ease-in-out infinite alternate;"></div>
+  <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(10,13,17,.78) 0%,rgba(10,13,17,.3) 32%,rgba(10,13,17,.42) 58%,rgba(10,13,17,.95) 84%);"></div>
+  <div style="position:relative;flex:1;display:flex;flex-direction:column;padding:56px 18px 0;min-height:0;">
+    <div style="display:flex;align-items:center;gap:9px;">
+      <img src="assets/logo-hast-orange.png" alt="" style="width:32px;height:30px;object-fit:contain;filter:drop-shadow(0 1px 6px rgba(0,0,0,.5));">
+      <div style="text-shadow:0 1px 8px rgba(0,0,0,.5);">
+        <div style="font-size:6.5px;font-weight:600;letter-spacing:.3em;color:rgba(243,245,247,.6);">DALECARLIA&nbsp;PHOTO</div>
+        <div style="font-weight:700;font-size:16px;line-height:1.1;">DPT</div>
+        <div style="font-size:7px;font-weight:500;letter-spacing:.08em;color:rgba(243,245,247,.45);margin-top:1px;">v2.0 · build 1</div>
+      </div>
+      <span style="flex:1;"></span>
+      <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(18,21,27,.45);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:5px 11px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);">
+        <span style="width:6px;height:6px;border-radius:50%;background:#5FB35A;flex:none;"></span>
+        <span style="font-size:10px;color:rgba(243,245,247,.7);">synkad 21:40</span>
+      </span>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;min-height:0;">
+      <div style="text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(201,135,31,.2);border:1px solid rgba(224,163,65,.45);border-radius:999px;padding:4px 13px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
+          <span style="width:6px;height:6px;border-radius:50%;background:#E0A341;"></span>
+          <span style="font-size:10.5px;font-weight:700;letter-spacing:.2em;color:#E0A341;">LANDSKAP · LÖRDAG</span>
+        </div>
+        <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:27px;line-height:1.1;margin-top:10px;text-shadow:0 2px 14px rgba(0,0,0,.6);">Fjällsjön, Grövelsjön</div>
+        <div style="font-size:11.5px;color:rgba(243,245,247,.7);margin-top:3px;text-shadow:0 1px 8px rgba(0,0,0,.5);">Samma hemskärm — innehållet följer jobbtypen</div>
+      </div>
+    </div>
+    <div style="background:rgba(18,21,27,.62);border:1px solid rgba(255,255,255,.13);border-radius:20px;padding:12px 16px 13px;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:9.5px;font-weight:700;letter-spacing:.18em;color:rgba(243,245,247,.55);">VID SJÖN I MORGON</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:12px;color:rgba(243,245,247,.8);white-space:nowrap;">☀ klart · vind 2 m/s</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <div style="flex:1;text-align:center;"><div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:16px;color:#7FA8D0;">03:55</div><div style="font-size:10px;color:rgba(243,245,247,.55);">Blå timmen</div></div>
+        <div style="width:1px;background:rgba(255,255,255,.09);"></div>
+        <div style="flex:1;text-align:center;"><div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:16px;color:#F0B45A;">04:41</div><div style="font-size:10px;color:rgba(243,245,247,.55);">Gyllene tim.</div></div>
+        <div style="width:1px;background:rgba(255,255,255,.09);"></div>
+        <div style="flex:1;text-align:center;"><div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:16px;color:#F0B45A;">05:12</div><div style="font-size:10px;color:rgba(243,245,247,.55);">Soluppgång</div></div>
+      </div>
+      <div style="height:1px;background:rgba(255,255,255,.09);margin:10px 0;"></div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="min-width:0;flex:1;">
+          <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:19px;line-height:1.15;">Blå timmen vid sjön</div>
+          <div style="font-size:10.5px;color:rgba(243,245,247,.55);margin-top:1px;">Nästa schemapunkt i jobbet · 1 h 22 m bilväg + 25 min vandring</div>
+        </div>
+        <div style="text-align:right;flex:none;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.5);">ÅK SENAST</div>
+          <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:26px;line-height:1;color:#F0B45A;font-variant-numeric:tabular-nums;">02:08</div>
+        </div>
+      </div>
+    </div>
+    <div style="height:78px;flex:none;"></div>
+  </div>
+</div>
+</x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { sheetOpen: false, malIx: 0, bgKind: 'auto' };
+  MAL = [
+    { namn:'Sverige – Polen', sub:'Del av EuroVolley 2026 · gruppspel', tid:'17:00', ak:'15:12', restid:'1 h 48 m' },
+    { namn:'Sverige – Italien (dam)', sub:'Del av EuroVolley 2026 · gruppspel', tid:'19:30', ak:'17:42', restid:'1 h 48 m' },
+    { namn:'Medaljceremoni', sub:'Del av EuroVolley 2026 · arena C', tid:'21:15', ak:'19:27', restid:'1 h 48 m' },
+  ];
+  renderVals() {
+    const m = this.MAL[this.state.malIx];
+    const bgKind = this.state.bgKind;
+    const bgStyle = bgKind==='standard'
+      ? { position:'absolute', inset:0, background:'linear-gradient(160deg,#1a2130,#0a0d11 70%)' }
+      : { position:'absolute', inset:0, backgroundImage:"url('skisser_assets/hero-foto.jpg')", backgroundSize:'cover', backgroundPosition:'55% 28%', animation:'kenburns 26s ease-in-out infinite alternate' };
+    const valBase = (on) => ({ display:'flex', alignItems:'center', gap:'11px', borderRadius:'13px', padding:'11px 13px', cursor:'pointer',
+      background: on ? 'rgba(240,180,90,.12)' : 'rgba(18,21,27,.6)', border: on ? '1px solid rgba(240,180,90,.45)' : '1px solid rgba(255,255,255,.1)' });
+    const radio = (on) => ({ width:'16px', height:'16px', borderRadius:'50%', flex:'none',
+      border: on ? '5px solid #F0B45A' : '2px solid rgba(255,255,255,.3)' });
+    return {
+      bgStyle,
+      malKalla: this.state.malIx===0 ? 'AUTO' : 'VALD',
+      malNamn: m.namn, malTid: m.tid, akSenast: m.ak, restid: m.restid,
+      sheetOpen: this.state.sheetOpen,
+      togSheet: () => this.setState(s => ({ sheetOpen: !s.sheetOpen })),
+      mal: this.MAL.map((t, i) => ({ namn:t.namn, sub:t.sub, tid:t.tid,
+        pick: () => this.setState({ malIx:i, sheetOpen:false }),
+        style: { display:'flex', alignItems:'center', gap:'10px', borderRadius:'12px', padding:'11px 13px', cursor:'pointer',
+          background: this.state.malIx===i ? 'rgba(240,180,90,.14)' : 'rgba(255,255,255,.05)',
+          border: this.state.malIx===i ? '1px solid rgba(240,180,90,.5)' : '1px solid rgba(255,255,255,.1)' } })),
+      bgVal: [
+        { k:'auto', namn:'Automatisk (rekommenderas)', sub:'★-bild för dagens sport, ur potten nedan' },
+        { k:'egen', namn:'Egen bild', sub:'en bild du laddat upp här i appen' },
+        { k:'standard', namn:'Standard', sub:'neutral bakgrund utan foto' },
+      ].map(v => ({ namn:v.namn, sub:v.sub,
+        pick: () => this.setState({ bgKind:v.k }),
+        style: valBase(bgKind===v.k), radio: radio(bgKind===v.k) })),
+    };
+  }
+}
+</script>
+</body>
+</html>
