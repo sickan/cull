@@ -769,6 +769,23 @@ class TestApi(unittest.TestCase):
                           "https://r2.example/event/maya-i-lund/2.jpg"])
         self.assertNotIn(b1, kwargs["body"])                    # ingen lokal läcka
 
+    def test_innehall_md_match_gren_berikas(self):
+        # D4: matchartikelns frontmatter bär gren (hemmalagets, explicit fält —
+        # aldrig härledd ur serienamnet). Server-berikas i alla _innehall_md-
+        # vägar via _berika_gren, utan att UI:t trådar den.
+        self.api.spara_lag({"namn": "Malmö FF", "sport": "fotboll", "gren": "dam"})
+        self.api.spara_match({"lag_hemma": "Malmö FF", "lag_borta": "Häcken",
+                              "liga": "Damallsvenskan", "datum": "2026-07-17"})
+        mid = self.api.lista_matcher()[0]["id"]
+        r = self.api.forhandsgranska_innehall({
+            "typ": "match", "match_id": mid, "titel": "Malmö FF – Häcken",
+            "hem": "Malmö FF", "borta": "Häcken", "serie": "Damallsvenskan"})
+        self.assertIn("gren: Dam", r["md"])
+        # Utan match-koppling (eller utan gren på laget): fältet utelämnas.
+        utan = self.api.forhandsgranska_innehall({
+            "typ": "match", "titel": "A – B", "hem": "A", "borta": "B", "serie": "X"})
+        self.assertNotIn("gren:", utan["md"])
+
     def test_publicera_natet_ompublicering_ateranvander_id(self):
         # BUG-10-roten: ompublicering MED id (editorn trådar innehallId) ska
         # återanvända raden — även vid titelbyte (ny slug) — inte skapa en ny

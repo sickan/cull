@@ -2005,6 +2005,23 @@ class Api:
     def lista_innehall(self, typ=None):
         return store.lista_innehall(self.conn, typ)
 
+    def _berika_innehall(self, data):
+        """Samlad server-berikning inför _innehall_md — körs i alla vägar
+        (förhandsgranska/spara/exportera/publicera) så UI:t inte måste tråda
+        härledda fält."""
+        return self._berika_gren(self._berika_underartiklar(data))
+
+    def _berika_gren(self, data):
+        """D4: matchartikelns frontmatter bär `gren` (Dam/Herr/Mixed) —
+        explicit fält från hemmalagets gren, ALDRIG härlett ur serienamnet
+        (designbeslut). Sajtens matchrader färgar vänsterkanten med den."""
+        if not data or data.get("typ", "match") != "match" or data.get("gren"):
+            return data
+        mid = data.get("match_id")
+        m = store.hamta_match(self.conn, mid) if mid else None
+        gren = (m or {}).get("hem_gren") or ""
+        return {**data, "gren": gren.capitalize()} if gren else data
+
     def _berika_underartiklar(self, data):
         """Sportevent bundet till en tävling (`tavling_id`): fyll på
         underartiklarna med tävlingens matcher automatiskt, så att en match som
@@ -2033,11 +2050,11 @@ class Api:
 
     def forhandsgranska_innehall(self, data):
         """Genererar .md (utan att skriva) för förhandsvisning."""
-        _fm, _b, slug, md = _innehall_md(self._berika_underartiklar(data or {}))
+        _fm, _b, slug, md = _innehall_md(self._berika_innehall(data or {}))
         return {"slug": slug, "md": md}
 
     def spara_innehall(self, data):
-        data = self._berika_underartiklar(data or {})
+        data = self._berika_innehall(data or {})
         fm, body, _slug, _md = _innehall_md(data)
         iid = store.spara_innehall(
             self.conn, typ=data.get("typ", "match"),
@@ -2052,7 +2069,7 @@ class Api:
         till test-output/content/<samma undermapp som skarpt>/<slug>.md,
         bildkopieringen till sajtens public/ hoppas (ingen riktig sajt-repo
         pekas ut). Kräver ingen export_dir."""
-        data = self._berika_underartiklar(data or {})
+        data = self._berika_innehall(data or {})
         fm, body, slug, md = _innehall_md(data)
         if test:
             ut_mapp = testlage.innehall_mapp(_INNEHALL_MAPP.get(data.get("typ", "match"), "matcher"))
@@ -2126,7 +2143,7 @@ class Api:
         Testläge: varken R2-uppladdningen eller content-sync-anropet görs —
         samma lokala .md-skrivning som exportera_innehall(test=True), utan
         härledda bild-URL:er (rör aldrig sajten eller dess innehåll-DB-rad)."""
-        data = self._berika_underartiklar(data or {})
+        data = self._berika_innehall(data or {})
         typ = data.get("typ", "match")
         # Matchpublicering webb-kanal: server-crop:a hero-bilden (fokus+zoom+
         # format) i stället för att luta på sajtens object-position. Sker för
@@ -2705,6 +2722,10 @@ def _innehall_md(data, bild_urls=None):
             "resultat": data.get("resultat") or None,
             prof["md_key"]: data.get("mellan") or None,
             "sport": data.get("sport") or None,
+            # D4: gren (Dam/Herr/Mixed) — explicit fält (server-berikat ur
+            # hemmalagets gren i _berika_gren, aldrig härlett ur serienamnet).
+            # Sajtens matchrader färgar 3px-vänsterkanten med den.
+            "gren": data.get("gren") or None,
             "status": data.get("status") or None,
             "hero": bild_urls.get("hero") or data.get("hero") or None,
             "heroPosition": data.get("heroPosition") or None,
