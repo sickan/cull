@@ -2237,11 +2237,25 @@ class Api:
         ms.sort(key=lambda m: ((m.get("datum") or "9999"), (m.get("tid") or "")))
         return ms
 
+    def _pagang_tavlingar(self, idag=None):
+        """Heldagsaktiviteter för På gång: tävlingar med från/till-datum som
+        inte passerat (pågående ligger kvar hela perioden). Turneringar och
+        mästerskap som Nordea Open eller Friidrotts-SM får datum i tävlings-
+        editorn — ligor utan datum berörs inte."""
+        idag = idag or datetime.now().strftime("%Y-%m-%d")
+        ts = [t for t in store.lista_tavlingar(self.conn)
+              if (t.get("fran") or "").strip() and (t.get("till") or "").strip()
+              and t["till"] >= idag]
+        ts.sort(key=lambda t: (t["fran"], t.get("namn") or ""))
+        return ts
+
     def pagang_matcher(self):
-        """Panelens 'På gång'-vy: kommande matcher + av/på-flaggan. Ingen
-        kuraterad lista längre — allt kommer ur Matcher."""
+        """Panelens 'På gång'-vy: kommande matcher + tävlingsperioder +
+        av/på-flaggan. Ingen kuraterad lista längre — matcherna kommer ur
+        Matcher, heldagsaktiviteterna ur tävlingarnas från/till-datum."""
         return {"ok": True, "visa": store.hamta_installning(self.conn, "pagang_visa") != "0",
-                "matcher": self._pagang_kommande()}
+                "matcher": self._pagang_kommande(),
+                "tavlingar": self._pagang_tavlingar()}
 
     def satt_pagang_visa(self, pa):
         """Slår på/av 'Visa på sajten' för På gång-widgeten."""
@@ -2257,21 +2271,21 @@ class Api:
         (allt avpubliceras). Testläge skriver bara lokala .md-filer."""
         visa = store.hamta_installning(self.conn, "pagang_visa") != "0"
         kommande = self._pagang_kommande() if visa else []
+        tavlingar = self._pagang_tavlingar() if visa else []
+        poster = ([("match-" + m["id"], _pagang_match_md(m)) for m in kommande] +
+                  [("tavling-" + t["id"], _pagang_tavling_md(t)) for t in tavlingar])
         if test:
             mal = testlage.innehall_mapp("pagang")
             skrivna = []
-            for m in kommande:
-                _fm, _b, slug, md = _pagang_match_md(m)
+            for _pid, (_fm, _b, slug, md) in poster:
                 skrivna.append(str(AX.skriv_md(md, mal, slug)))
             return {"ok": True, "antal": len(skrivna), "path": str(mal),
                     "visa": visa, "test": True}
         antal, fel = 0, None
         lokala_ids = set()
-        for m in kommande:
-            mid = "match-" + m["id"]
-            lokala_ids.add(mid)
-            fm, body, slug, _md = _pagang_match_md(m)
-            r = self.innehall_synk.publicera("pagang", mid, slug=slug,
+        for pid, (fm, body, slug, _md) in poster:
+            lokala_ids.add(pid)
+            r = self.innehall_synk.publicera("pagang", pid, slug=slug,
                                              frontmatter=fm, body=body)
             if r.get("ok"):
                 antal += 1
@@ -2750,6 +2764,30 @@ def _pagang_match_md(m):
         "plats": m.get("arena") or None,
         "publicerad": True,
         "heldag": False,
+    }
+    return fm, "", slug, AX.render_md(fm, "")
+
+
+def _pagang_tavling_md(t):
+    """En tävlingsperiod (från/till) → (frontmatter, body, slug, .md) för
+    webbens 'På gång'. Heldagsaktivitet: `slut` ger datumintervallet på
+    sajten ("24–26 juli"), sporten blir etiketten och orten platsen."""
+    t = t or {}
+    titel = t.get("namn") or ""
+    fran = t.get("fran") or ""
+    namnslug = AX.slugga(titel) if titel else "tavling"
+    slug = f"{fran}-{namnslug}" if fran else namnslug
+    fm = {
+        "typ": "aktivitet",
+        "kategori": "Tävling",
+        "etikett": (t.get("sport") or "").capitalize() or None,
+        "titel": titel or None,
+        "datum": fran or None,
+        "slut": t.get("till") or None,
+        "tid": None,
+        "plats": t.get("ort") or t.get("arena") or None,
+        "publicerad": True,
+        "heldag": True,
     }
     return fm, "", slug, AX.render_md(fm, "")
 

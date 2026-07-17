@@ -18,14 +18,31 @@
   onMount(laddaPagang)
   async function laddaPagang() {
     const r = await pagangMatcher()
-    if (r?.ok) { pagang = r.matcher || []; pagangVisa = r.visa }
+    if (r?.ok) {
+      // Matcher + tävlingsperioder (heldagsaktiviteter) i en kronologisk lista.
+      const matcher = (r.matcher || []).map((m) => ({ ...m, art: 'match', sortNyckel: `${m.datum || '9999'}T${m.tid || ''}` }))
+      const tavlingar = (r.tavlingar || []).map((t) => ({ ...t, art: 'tavling', sortNyckel: `${t.fran || '9999'}T` }))
+      pagang = [...matcher, ...tavlingar].sort((a, b) => a.sortNyckel.localeCompare(b.sortNyckel))
+      pagangVisa = r.visa
+    }
   }
+  // "24–26" + "JUL" inom samma månad, annars "30–2" + "JUL–AUG".
+  function intervall(fran, till) {
+    const [f, t] = [fran || '', till || '']
+    const dag = (d) => String(Number(d.split('-')[2]) || '–')
+    const mon = (d) => MK[(Number(d.split('-')[1]) || 1) - 1]?.toUpperCase()
+    if (!t || t === f) return { dag: dag(f), mon: mon(f) }
+    return f.slice(0, 7) === t.slice(0, 7)
+      ? { dag: `${dag(f)}–${dag(t)}`, mon: mon(f) }
+      : { dag: `${dag(f)}–${dag(t)}`, mon: `${mon(f)}–${mon(t)}` }
+  }
+  const versal = (s) => (s || '').charAt(0).toUpperCase() + (s || '').slice(1)
   async function togglePagangVisa() { pagangVisa = !pagangVisa; await sattPagangVisa(pagangVisa) }
   async function uppdateraSajten() {
     pagangKor = true; pagangFlash = ''
     const r = await publiceraPagangMatcher($testMode)
     pagangKor = false
-    pagangFlash = r?.ok ? ($testMode ? '✓ Testfiler skrivna' : `✓ Uppdaterad · ${r.antal} matcher`) : (r?.fel || 'Kunde inte uppdatera')
+    pagangFlash = r?.ok ? ($testMode ? '✓ Testfiler skrivna' : `✓ Uppdaterad · ${r.antal} poster`) : (r?.fel || 'Kunde inte uppdatera')
     setTimeout(() => (pagangFlash = ''), 2600)
   }
 </script>
@@ -47,19 +64,31 @@
       <button class="statusbtn" on:click={uppdateraSajten} disabled={pagangKor}>{pagangKor ? 'Uppdaterar…' : 'Uppdatera sajten'}</button>
     </div>
     <div class="pglista">
-      {#each pagang as m (m.id)}
-        <div class="pgkort">
-          <div class="pgdatum"><span class="pgdag scd">{(m.datum || '').split('-')[2] || '–'}</span>
-            <span class="pgmon">{MK[(Number((m.datum || '').split('-')[1]) || 1) - 1]?.toUpperCase()}</span></div>
-          <span class="grendot" style="background:{grenFarg(m.hem_gren)}"></span>
-          <div class="pgi"><div class="pgf">{m.lag_hemma}{m.lag_borta ? ` – ${m.lag_borta}` : ''}</div><div class="pgl">{m.liga || ''}</div></div>
-        </div>
+      {#each pagang as m (m.art + m.id)}
+        {#if m.art === 'tavling'}
+          {@const iv = intervall(m.fran, m.till)}
+          <div class="pgkort">
+            <div class="pgdatum"><span class="pgdag scd">{iv.dag}</span>
+              <span class="pgmon">{iv.mon}</span></div>
+            <span class="grendot" style="background:{grenFarg(m.gren)}"></span>
+            <div class="pgi"><div class="pgf">{m.namn}</div>
+              <div class="pgl">Heldag · {versal(m.sport)}{m.ort ? ` · ${m.ort}` : ''}</div></div>
+          </div>
+        {:else}
+          <div class="pgkort">
+            <div class="pgdatum"><span class="pgdag scd">{(m.datum || '').split('-')[2] || '–'}</span>
+              <span class="pgmon">{MK[(Number((m.datum || '').split('-')[1]) || 1) - 1]?.toUpperCase()}</span></div>
+            <span class="grendot" style="background:{grenFarg(m.hem_gren)}"></span>
+            <div class="pgi"><div class="pgf">{m.lag_hemma}{m.lag_borta ? ` – ${m.lag_borta}` : ''}</div><div class="pgl">{m.liga || ''}</div></div>
+          </div>
+        {/if}
       {/each}
-      {#if !pagang.length}<div class="tom">Inga kommande matcher i Matcher — lägg till dem där så dyker de upp här.</div>{/if}
+      {#if !pagang.length}<div class="tom">Inget kommande — matcher läggs till i Matcher, tävlingsperioder får från/till-datum i Lag &amp; tävlingar.</div>{/if}
     </div>
     <div class="pgfot">
-      Kurerad På gång-lista → sport-startsidan på webben. Ordningen följer matchdatum (från Matcher) —
-      lägg till/ta bort matcher där. Publiceras som "På gång"-modul på sajten.
+      Kurerad På gång-lista → sport-startsidan på webben. Matcherna följer Matcher; tävlingar med
+      från/till-datum (Nordea Open, Friidrotts-SM …) visas som heldagsaktiviteter hela perioden.
+      Publiceras som "På gång"-modul på sajten.
     </div>
   </div>
 </div>

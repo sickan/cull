@@ -2110,3 +2110,70 @@ class TestSnabbplockStage(unittest.TestCase):
         self.assertTrue(r["ok"])
         self.assertEqual(r["saknade"], ["/finns/inte.NEF"])
         self.assertEqual(r["stegade"], [])
+
+
+class TestPagangTavlingar(unittest.TestCase):
+    """På gång: heldagsaktiviteter ur tävlingarnas från/till-datum (Nordea
+    Open, Friidrotts-SM, EuroVolley …) vid sidan av de kommande matcherna."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+
+    def _tavling(self, namn="Friidrotts-SM", fran="2126-07-24",
+                 till="2126-07-26", **kw):
+        r = self.api.spara_tavling({"namn": namn,
+                                    "sport": kw.pop("sport", "friidrott"),
+                                    "typ": kw.pop("typ", "masterskap"),
+                                    "fran": fran, "till": till, **kw})
+        self.assertTrue(r["ok"])
+        return r["id"]
+
+    def test_kraver_bada_datumen_och_haller_kvar_pagaende(self):
+        kommande = self._tavling()
+        self._tavling(namn="Utan datum", fran=None, till=None)
+        self._tavling(namn="Bara från", fran="2126-07-01", till=None)
+        self._tavling(namn="Passerad", fran="2126-06-01", till="2126-06-05")
+        pagaende = self._tavling(namn="Pågår nu",
+                                 fran="2126-07-10", till="2126-08-01")
+        ts = self.api._pagang_tavlingar(idag="2126-07-17")
+        # Pågående ligger kvar hela perioden; sorterat på från-datum.
+        self.assertEqual([t["id"] for t in ts], [pagaende, kommande])
+
+    def test_pagang_matcher_returnerar_tavlingarna(self):
+        self._tavling()
+        r = self.api.pagang_matcher()
+        self.assertTrue(r["ok"])
+        self.assertEqual([t["namn"] for t in r["tavlingar"]],
+                         ["Friidrotts-SM"])
+
+    def test_tavling_md_blir_heldagsaktivitet(self):
+        from dpt2.app import _pagang_tavling_md
+        fm, body, slug, md = _pagang_tavling_md({
+            "namn": "Friidrotts-SM 2026", "sport": "friidrott",
+            "fran": "2026-07-24", "till": "2026-07-26", "ort": "Uppsala"})
+        self.assertEqual(slug, "2026-07-24-friidrotts-sm-2026")
+        self.assertEqual(fm["kategori"], "Tävling")
+        self.assertEqual(fm["datum"], "2026-07-24")
+        self.assertEqual(fm["slut"], "2026-07-26")
+        self.assertTrue(fm["heldag"])
+        self.assertIsNone(fm["tid"])
+        self.assertEqual(fm["etikett"], "Friidrott")
+        self.assertEqual(fm["plats"], "Uppsala")
+        self.assertIn("slut: 2026-07-26", md)
+
+    def test_publicera_pagang_tar_med_tavlingar_och_stadar(self):
+        from unittest import mock
+        tid = self._tavling()
+        fejk = mock.MagicMock()
+        fejk.publicera.return_value = {"ok": True}
+        fejk.lista.return_value = [{"id": "tavling-gammal"}]
+        fejk.radera.return_value = {"ok": True}
+        self.api.innehall_synk = fejk
+        r = self.api.publicera_pagang_matcher()
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["antal"], 1)
+        publicerade = [c.args[1] for c in fejk.publicera.call_args_list]
+        self.assertIn("tavling-" + tid, publicerade)
+        # Reconciliation städar rader som inte längre motsvarar något lokalt.
+        fejk.radera.assert_called_once_with("pagang", "tavling-gammal")
+        self.assertEqual(r["borttagna"], 1)

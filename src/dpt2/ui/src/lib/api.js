@@ -1144,7 +1144,10 @@ export async function pagangMatcher() {
     { id: 'p1', datum: '2026-07-31', tid: '19:00', lag_hemma: 'Malmö FF', lag_borta: 'Piteå IF DFF', liga: 'OBOS Damallsvenskan', hem_gren: 'dam' },
     { id: 'p2', datum: '2026-08-12', tid: '', lag_hemma: 'Malmö FF', lag_borta: 'Hammarby IF', liga: 'OBOS Damallsvenskan', hem_gren: 'dam' },
     { id: 'p3', datum: '2026-08-21', tid: '18:30', lag_hemma: 'Sverige', lag_borta: 'Italien', liga: 'EM Volleyboll', hem_gren: 'dam' },
-    { id: 'p4', datum: '2026-09-02', tid: '', lag_hemma: 'Sverige', lag_borta: 'Danmark', liga: 'Landskamp herr', hem_gren: 'herr' }] })
+    { id: 'p4', datum: '2026-09-02', tid: '', lag_hemma: 'Sverige', lag_borta: 'Danmark', liga: 'Landskamp herr', hem_gren: 'herr' }],
+  tavlingar: [
+    { id: 't1', namn: 'Friidrotts-SM 2026', sport: 'friidrott', gren: 'mixed', fran: '2026-07-24', till: '2026-07-26', ort: 'Uppsala' },
+    { id: 't2', namn: 'Månadsbryt-cupen', sport: 'volleyboll', gren: 'dam', fran: '2026-07-30', till: '2026-08-02', ort: 'Åhus' }] })
 }
 export async function sattPagangVisa(pa) {
   const api = brygga()
