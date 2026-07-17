@@ -47,6 +47,37 @@ röst→action är LÅG prio.
 | SP-pers | Snabbplock: persist urval per jobb | Ej kritiskt |
 | IPTC | Leverera fas 3: IPTC-bildtexter | Sparad sedan tidigare |
 | C-försl | Beslut om C-förslagen (design/C-FORSLAG.md) | Stig-beslut |
+| FEAT-14 | **EPIC: Ackrediteringssvar → DPT2** (svarsmail blir förslag Beviljad/Nekad + notering i appen) | Handoff §8 senare-fas; skivor nedan |
+
+### EPIC FEAT-14 · Ackrediteringssvar in i DPT2
+
+*Bakgrund 17/7: första skarpa utskicket (MFF–Bröndby) besvarades av MFF;
+status+notering registrerades manuellt i db. Det steget ska bli en funktion.
+Vald väg (resonerad 17/7): Gmail-etikett som "peka ut"-gest + trådspårning —
+INTE Apps Script-add-on (för mycket ceremoni för enanvändarbruk).*
+
+1. **Skiva 1 — trådspårning vid utskick:** workern returnerar Gmails
+   `threadId`/`messageId` från send; schema v-next: `ackreditering.thread_id`.
+   Därmed kan svar-i-tråd hittas utan gest.
+2. **Skiva 2 — läsväg i workern:** scope `gmail.readonly` (kräver om-auth,
+   Stig-steg) + endpoint som samlar (a) nya meddelanden i kända trådar,
+   (b) mail med etiketten **DPT2-ackr** (fristående svar = Stigs gest, funkar
+   i mobil-Gmail). Logg över behandlade message-ids så inget föreslås två ggr.
+3. **Skiva 3 — förslags-UI i DPT2:** badge i Fotojobb ("N ackrediteringssvar
+   att granska") + förslagskort: kopplat jobb, föreslagen status, föreslagen
+   notering — ALLTID godkänn-steg (samma princip som Generera-prompten),
+   godkänn → `satt_ackreditering`.
+4. **Skiva 4 — tolkningen:** Claude (befintlig nyckelväg, som Bildsvepet) får
+   mailet + kandidatjobb (kommande Sport-jobb m status Begärd) → föreslår
+   status/jobb/destillerad notering (ingång, uthämtningstid, legitimation…);
+   regelbaserad fallback ("välkommen/bekräfta" vs "tyvärr") om API strular.
+5. **Senare:** workerns poll → APNs-push till iOS-appen ("Svar från MFF —
+   förslag: Beviljad") via befintlig push-infra.
+
+*Öppet: etikettnamn (förslag `DPT2-ackr` så etiketter kan användas till fler
+flöden). Alternativ väg om Google-scope ska hållas minimalt: Cloudflare Email
+Routing (`ackr@dalecarliaphoto.se`) + Email Worker — noll nya Google-scopes
+men ingen trådautomatik; dokumenterad som plan B.*
 
 ## D · iOS
 
