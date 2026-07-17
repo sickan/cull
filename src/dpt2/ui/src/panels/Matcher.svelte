@@ -420,7 +420,9 @@
   let hamtar = false
   async function lasUttag(sida) {
     if (arMatch()) return
-    const f = await valjFil('Välj startelva (matchblad/CSV/foto)')
+    // Etiketten följer sportprofilen — "startelva" är fotboll; volleyboll
+    // har startsexa, handboll startsju osv.
+    const f = await valjFil(`Välj ${lineupLc()} (matchblad/CSV/foto)`)
     if (!f.ok) return
     hamtar = true
     const res = await lasUttagFil(utkast.id, f.path, sida)
@@ -430,8 +432,9 @@
   const truppStorlek = (namn, id = null) => lagPost(namn, id)?.trupp_n || 0
   const truppNot = (namn, id = null) => {
     const n = truppStorlek(namn, id)
-    return n ? `ur trupp · ${n} spelare` : 'ingen trupp i Lag & tävlingar'
+    return n ? `ur trupp · ${n} spelare` : 'ingen trupp i Lag & ligor'
   }
+  const lineupLc = () => (uttagProfil.lineup || 'startuppställning').toLowerCase()
   const startelvaEtikett = (namn, nStart, id = null) => {
     if (!nStart) return 'ej uppladdad'
     const n = truppStorlek(namn, id)
@@ -725,7 +728,7 @@
                             </div>
                             <div class="grupplbl">{uttagProfil.lineup} <span class="grupplbl-sub">· delmängd av truppen</span></div>
                             <button class="lbtn" class:i={nStart > 0} on:click={() => lasUttag(kol.sida)} disabled={hamtar || arMatch()}>
-                              <span>{nStart ? 'Byt fil…' : 'Ladda upp startelva…'}</span>
+                              <span>{nStart ? 'Byt fil…' : `Ladda upp ${lineupLc()}…`}</span>
                               <span class="lbtn-n">{startelvaEtikett(kol.namn, nStart, kol.id)}</span>
                             </button>
                           </div>
