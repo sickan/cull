@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 30
+SCHEMA_VERSION = 31
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -738,6 +738,99 @@ def _migrera(conn, fran_version):
                                                              "pagang_dold"):
                 conn.execute(f"ALTER TABLE {tabell} ADD COLUMN pagang_dold "
                              "INTEGER NOT NULL DEFAULT 0")
+
+    if fran_version < 31:
+        # v31 (V5-B, eventmodell-epiken): Liga + Event ersätter Tävling — nya
+        # registren liga/event/individ/event_deltagare/kategori + matchens
+        # valfria liga_id/event_id. `tavling` LÄMNAS ORÖRD som skrivyta under
+        # övergången; store speglar varje sparning in i liga/event (samma id)
+        # och backfillen här speglar det som redan finns. Additivt + idempotent.
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS liga (
+          id        TEXT PRIMARY KEY,
+          sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
+          gren      TEXT CHECK (gren IN ('dam','herr','mixed')),
+          namn      TEXT NOT NULL,
+          hemsida   TEXT,
+          fran      TEXT,
+          till      TEXT,
+          ort       TEXT,
+          arena     TEXT,
+          logga     TEXT,
+          kalender  INTEGER NOT NULL DEFAULT 0,
+          press_email TEXT,
+          ackr_dagar  INTEGER,
+          pagang_dold INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS event (
+          id        TEXT PRIMARY KEY,
+          typ       TEXT NOT NULL DEFAULT 'ovrigt'
+                      CHECK (typ IN ('masterskap','cup','turnering','varldscup','ovrigt')),
+          sport     TEXT NOT NULL CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
+          gren      TEXT CHECK (gren IN ('dam','herr','mixed')),
+          namn      TEXT NOT NULL,
+          hemsida   TEXT,
+          fran      TEXT,
+          till      TEXT,
+          ort       TEXT,
+          arena     TEXT,
+          logga     TEXT,
+          liga_id   TEXT REFERENCES liga(id) ON DELETE SET NULL,
+          kalender  INTEGER NOT NULL DEFAULT 0,
+          pagang_lage TEXT NOT NULL DEFAULT 'auto'
+                        CHECK (pagang_lage IN ('auto','heldag','matcher')),
+          press_email TEXT,
+          ackr_dagar  INTEGER,
+          pagang_dold INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS individ (
+          id        TEXT PRIMARY KEY,
+          namn      TEXT NOT NULL,
+          sport     TEXT CHECK (sport IN ('fotboll','handboll','innebandy','volleyboll','beachvolley','tennis','friidrott')),
+          klubb     TEXT,
+          instagram TEXT,
+          bild      TEXT
+        );
+        CREATE TABLE IF NOT EXISTS event_deltagare (
+          event_id   TEXT NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+          individ_id TEXT NOT NULL REFERENCES individ(id) ON DELETE CASCADE,
+          grenar     TEXT,
+          PRIMARY KEY (event_id, individ_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_event_deltagare_individ
+          ON event_deltagare(individ_id);
+        CREATE TABLE IF NOT EXISTS kategori (
+          id     TEXT PRIMARY KEY,
+          topp   TEXT NOT NULL CHECK (topp IN ('sport','landskap','manniskor','film')),
+          namn   TEXT NOT NULL,
+          gallringsprofil TEXT CHECK (gallringsprofil IN ('sport','brollop','landskap','portratt')),
+          some_moment TEXT,
+          ordning INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT OR IGNORE INTO kategori(id, topp, namn, gallringsprofil, some_moment, ordning) VALUES
+          ('portratt', 'manniskor', 'Porträtt', 'portratt', '["tjuvkik","leverans-klar"]', 0),
+          ('brollop',  'manniskor', 'Bröllop',  'brollop',  '["tjuvkik","leverans-klar"]', 1),
+          ('student',  'manniskor', 'Student',  'portratt', '["tjuvkik","leverans-klar"]', 2),
+          ('foretag',  'manniskor', 'Företag',  NULL,       '["tjuvkik","leverans-klar"]', 3),
+          ('mode',     'manniskor', 'Mode',     NULL,       '["tjuvkik","leverans-klar"]', 4),
+          ('ovrigt-manniskor', 'manniskor', 'Övrigt', NULL, '["tjuvkik","leverans-klar"]', 5);
+        """)
+        if _har_tabell(conn, "matchen"):
+            for kol, ref in (("liga_id", "liga"), ("event_id", "event")):
+                if not _har_kolumn(conn, "matchen", kol):
+                    conn.execute(f"ALTER TABLE matchen ADD COLUMN {kol} TEXT "
+                                 f"REFERENCES {ref}(id) ON DELETE SET NULL")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_match_liga ON matchen(liga_id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_match_event ON matchen(event_id)")
+        # Backfill: spegla befintliga tävlingar in i liga/event (samma id) och
+        # sätt matchernas nya referenser. Lokal import — store importerar inte
+        # db. Mycket gamla databaser (före tavling-tabellen) har inget att fylla.
+        if _har_tabell(conn, "tavling"):
+            from dpt2.data import store as _store
+            for r in conn.execute("SELECT id FROM tavling").fetchall():
+                _store.spegla_tavling_v5(conn, r[0])
 
 
 def _har_kolumn(conn, tabell, kolumn):
