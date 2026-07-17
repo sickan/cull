@@ -64,6 +64,7 @@ röst→action är LÅG prio.
 | V2-12 | Utrustningspackning: packmallar per eventtyp → packlista vid planering | v2 §12 · matas av V2-06-noteringar |
 | V2-13 | Publiceringsstatistik: vad publicerats var, per match/event och kanal (underlag åt klubbar/sponsorer) | v2 §13 · bygger naturligt på V5 §10 publiceringskö |
 | V2-17 | **EPIC: Matchlathund** — Claude-genererad matchplan (betydelse/tabelläge, spelare att följa, praktiskt, foto-inställningar ur väder, arenan/solen). Läsbar i iOS på matchdagen, PDF-export offline, skicka till mejl | v2 §17 · underlag: matchdata + väder (V2-02) + packmallar (V2-12) + egna arenanoteringar (V2-06) |
+| FEAT-15 | **Hämta uppladdade original i DPT2** — Mac-sidan av kort→telefon→moln-bryggan (Stig-beslut 18/7): DPT2 listar originalen på molnets privata /api/original-yta per grupp/match och hämtar hem dem ("bilderna väntar när du kommer hem"), så appens Ladda upp-knapp blir en riktig brygga i stället för ren backup | Knyter an till moln-som-sanning-arkitekturen; iOS-sidan klar (`59a4ea1`) |
 
 ### EPIC V2-KUND · Eventpublicering, kundgodkännande & kundregister (v2 §3 + §14 + §7)
 
