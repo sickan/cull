@@ -8,7 +8,7 @@
   // simulerad statuslista. Riktig RAW-preview + urval persistat per jobb +
   // stegvis kopiera/import görs i en backend-uppföljning (markerat nedan).
   import { onMount, onDestroy, createEventDispatcher } from 'svelte'
-  import { aktivMatch, listaMinnesKort, listaKortBilder, thumbForBild, snabbplockExport, snabbplockStage } from '../lib/api.js'
+  import { aktivMatch, listaMinnesKort, listaKortBilder, thumbForBild, snabbplockExport, snabbplockStage, hamtaMalmappar, valjMapp } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
   const N_THUMBS = 10 // tumnaglar som visas per kort (de senaste; resten rullar in)
@@ -33,9 +33,19 @@
   let letat = false // har vi kört minst en kort-detektering?
   let headerMatch = null
 
+  // V5-A (§12): målmapp förifylld ur Inställningar; override gäller körningen.
+  let malmappDefault = ''
+  let utMappOverride = ''
+
   onMount(async () => {
     headerMatch = await aktivMatch()
+    malmappDefault = (await hamtaMalmappar().catch(() => ({})))?.snabbplock || ''
   })
+
+  async function andraUtMapp() {
+    const r = await valjMapp('Målmapp för denna körning')
+    if (r.ok && r.path) utMappOverride = r.path
+  }
   onDestroy(() => {
     timer && clearInterval(timer)
     stopPoll()
@@ -256,7 +266,7 @@
       lrFel = 'Inga plockade filer att exportera.'
       return
     }
-    const r = await snabbplockExport(paths)
+    const r = await snabbplockExport(paths, null, true, utMappOverride || null)
     if (r && r.ok) {
       lrStep = 3
       lrPath = r.path || ''
@@ -396,6 +406,13 @@
           </div>
         </div>
       {/each}
+      <!-- V5-A (§12): målmapp förifylld ur Inställningar; ändring gäller körningen -->
+      <div class="malmapp-rad">
+        <span class="mm-lbl">Målmapp</span>
+        <span class="mm-varde mono">{utMappOverride || malmappDefault || '~/Pictures/DPT2 Snabbplock'}<span class="mm-stamp">/&lt;tidsstämpel&gt;</span></span>
+        <button class="mm-andra" on:click={andraUtMapp}>Ändra för denna körning…</button>
+        {#if utMappOverride}<button class="mm-andra" on:click={() => (utMappOverride = '')}>Återställ</button>{/if}
+      </div>
       <div class="fot-rad">
         <button class="btn-mork" on:click={backToInsert}>‹ Fler kort</button>
         <span class="vaxt"></span>
@@ -563,6 +580,13 @@
   .dsc { position: absolute; left: 7px; bottom: 6px; font-family: 'Saira Condensed', sans-serif; font-size: 10px; color: rgba(255, 255, 255, 0.55); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
   .hjalp { font-size: 11px; color: rgba(243, 245, 247, 0.4); margin-top: 10px; }
   .tomkort { border: 1.5px dashed rgba(255, 255, 255, 0.14); border-radius: 14px; padding: 40px 30px; text-align: center; font-size: 13px; line-height: 1.6; color: rgba(243, 245, 247, 0.55); }
+
+  .malmapp-rad { display: flex; align-items: baseline; gap: 10px; margin-top: 18px; flex-wrap: wrap; font-size: 12.5px; }
+  .malmapp-rad .mm-lbl { color: var(--t-mut, #9aa); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10.5px; }
+  .malmapp-rad .mm-varde { color: var(--t-head, #e8eef2); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .malmapp-rad .mm-stamp { color: var(--t-help, #6b7680); }
+  .malmapp-rad .mm-andra { background: none; border: 0; color: var(--acc, #d9a441); font-weight: 600; cursor: pointer; padding: 2px 4px; font-size: 12px; }
+  .malmapp-rad .mm-andra:hover { text-decoration: underline; }
 
   .fot-rad { display: flex; align-items: center; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); flex-wrap: wrap; }
   .fot-hjalp { font-size: 11.5px; color: rgba(243, 245, 247, 0.45); line-height: 1.45; }

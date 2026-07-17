@@ -736,11 +736,11 @@ export async function listaKortBilder(kortPath, antal = 0) {
 
 // Snabbplockets skarpa 'Öppna i Lightroom' — kopierar de plockade filerna
 // (fulla sökvägar) till en arbetsmapp, skriver Blue-etikett och öppnar LR.
-export async function snabbplockExport(paths, utMapp = null, oppnaLr = true) {
+export async function snabbplockExport(paths, utMapp = null, oppnaLr = true, utRot = null) {
   const api = brygga()
-  if (api) return api.snabbplock_export(paths, utMapp, oppnaLr)
+  if (api) return api.snabbplock_export(paths, utMapp, oppnaLr, utRot)
   return wait({ ok: true, antal: (paths || []).length,
-    path: (utMapp || '~/Pictures/DPT2 Snabbplock/nu') })
+    path: `${utMapp || utRot || '~/Pictures/DPT2 Snabbplock'}/nu` })
 }
 
 // Säkrar ett korts plockade filer till arbetsdisken MEDAN kortet sitter i
@@ -989,6 +989,19 @@ export async function valjMapp(titel = 'Välj mapp') {
   const api = brygga()
   if (api) return api.valj_mapp(titel)
   return wait(_promptPath(titel))
+}
+
+// Målmappar per flöde (V5-A): default i Inställningar, override i flödet.
+export async function hamtaMalmappar() {
+  const api = brygga()
+  if (api) return api.hamta_malmappar()
+  return wait({ snabbplock: '', gallring: '/Volumes/SSD/Gallring', media: '' })
+}
+
+export async function sattMalmapp(typ, sokvag) {
+  const api = brygga()
+  if (api) return api.satt_malmapp(typ, sokvag)
+  return wait({ ok: true, malmappar: { snabbplock: '', gallring: '', media: '', [typ]: sokvag } })
 }
 
 export async function valjFil(titel = 'Välj fil', filter = null) {

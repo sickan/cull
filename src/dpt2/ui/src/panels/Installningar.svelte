@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { kalenderStatus, listaFotojobb,
+  import { kalenderStatus, listaFotojobb, hamtaMalmappar, sattMalmapp, valjMapp,
     privatStatus, privatKalendrar, privatSattValda, privatSattEtikett, privatLoggaIn, privatLoggaUt, privatSparaKlient } from '../lib/api.js'
 
   let status = { har_nyckel: false, ansluten: false, bas_url: '' }
@@ -16,8 +16,31 @@
   let pArbetar = ''            // '' | 'sparar' | 'loggar-in' | 'hamtar'
   let pFlash = ''
 
+  // ── Målmappar per flöde (V5-A) ─────────────────────────────────────────────
+  const MAPPAR = [
+    { typ: 'snabbplock', namn: 'Snabbplock', hint: 'fungerar samtidigt som backup' },
+    { typ: 'gallring', namn: 'Gallring', hint: 't.ex. en SSD' },
+    { typ: 'media', namn: 'Generera media', hint: 'Dropbox — delbar överallt' },
+  ]
+  let malmappar = { snabbplock: '', gallring: '', media: '' }
+  let mFlash = ''
+  let mFel = false
+
+  async function valjMalmapp(typ) {
+    const r = await valjMapp('Välj målmapp')
+    if (!r.ok || !r.path) return
+    await sparaMalmapp(typ, r.path)
+  }
+  async function sparaMalmapp(typ, sokvag) {
+    const r = await sattMalmapp(typ, sokvag)
+    if (r?.ok) { malmappar = { ...malmappar, ...(r.malmappar || { [typ]: sokvag }) }; mBlink('Sparad') }
+    else mBlink(r?.fel || 'Kunde inte spara målmappen', true)
+  }
+  function mBlink(msg, fel = false) { mFlash = msg; mFel = fel; setTimeout(() => (mFlash = ''), 2600) }
+
   onMount(async () => {
     status = await kalenderStatus()
+    malmappar = { ...malmappar, ...(await hamtaMalmappar().catch(() => ({}))) }
     pstatus = await privatStatus().catch(() => pstatus)
     if (pstatus.inloggad) await hamtaKalendrar()
     laddar = false
@@ -140,6 +163,31 @@
         <button class="sek" on:click={oppnaAdmin}>Förnya push-kanal</button>
         {#if flash}<span class="ok">✓ {flash}</span>{/if}
       </div>
+    </div>
+
+    <!-- Målmappar per flöde (V5-A, handoff §5/§12): default här, override i
+         respektive flödes körpanel (gäller bara den körningen). -->
+    <div class="kort">
+      <div class="krad">
+        <span class="titel scd">Målmappar</span>
+        {#if mFlash}<span class="ok" class:felmed={mFel}>{mFel ? '⚠' : '✓'} {mFlash}</span>{/if}
+      </div>
+      <p class="not top">Standardmapp per flöde. Respektive panel visar mappen förifylld och kan ändra den för en enskild körning — utan att röra defaulten här.</p>
+      <div class="fakta">
+        {#each MAPPAR as m, i (m.typ)}
+          <div class="frad mrad" class:slut={i === MAPPAR.length - 1}>
+            <span class="fk">{m.namn}<br /><span class="mhint">{m.hint}</span></span>
+            <input class="mono minp" value={malmappar[m.typ] || ''} placeholder="ej satt — inbyggd standard"
+              on:change={(e) => sparaMalmapp(m.typ, e.target.value.trim())} />
+            <button class="sek mval" on:click={() => valjMalmapp(m.typ)}>Välj…</button>
+            {#if malmappar[m.typ]}
+              <button class="penna mrensa" title="Rensa" aria-label="Rensa {m.namn}-mappen"
+                on:click={() => sparaMalmapp(m.typ, '')}>✕</button>
+            {/if}
+          </div>
+        {/each}
+      </div>
+      <p class="not">Vid generering med overlay sparas originalbilden alltid bredvid exporten (<code>namn.jpg</code> + <code>namn-original.jpg</code>) — varje export har en ren tvilling.</p>
     </div>
 
     <!-- Privata kalendrar: skrivskyddad tillgänglighet, läses DIREKT (aldrig via
@@ -272,6 +320,15 @@
     font-family: inherit; outline: none; }
   .primartag { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
     color: var(--t-mut); background: var(--div3); padding: 2px 7px; border-radius: 999px; flex: none; }
+
+  /* Målmappar */
+  .mrad { gap: 8px; }
+  .mhint { font-size: 10.5px; font-weight: 400; color: var(--t-help); text-transform: none; letter-spacing: 0; }
+  .minp { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--div); border-radius: 8px;
+    background: var(--panel); color: var(--t-head); font-size: 12.5px; font-family: var(--mono, ui-monospace, monospace); }
+  .minp:focus { border-color: var(--acc); outline: none; }
+  .mval { flex: none; padding: 7px 12px; }
+  .mrensa { opacity: 1; }
 
   .flode { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .box { background: var(--panel); border: 1px solid var(--div); border-radius: 8px; padding: 8px 13px; font-weight: 600; font-size: 13px; color: var(--t-head); }

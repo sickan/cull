@@ -1,6 +1,6 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte'
-  import { listaUrval, levereraUrval, levereraEgenMapp, startaNummer, valjMapp, aktivtUrval } from '../lib/api.js'
+  import { listaUrval, levereraUrval, levereraEgenMapp, startaNummer, valjMapp, aktivtUrval, hamtaMalmappar } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
 
   const dispatch = createEventDispatcher()
@@ -21,10 +21,16 @@
   let cfg = { exportRot: '', fotograf: 'Stig Johansson – Dalecarlia Photo AB',
     iptc: true, oppnaI: 'Lightroom', husstil: '(ingen)', expKnuff: '0.5' }
 
+  // V5-A (§12): förifylld ur Inställningar → Målmappar; ändring här gäller
+  // bara körningen (defaulten rörs aldrig från panelen).
+  let malmappDefault = ''
+
   onMount(async () => {
     ;[urval, mal] = await Promise.all([listaUrval(), aktivtUrval()])
     if (!mal) mal = urval.find((u) => u.status === 'gallrad') || urval[0] || null
     bildkalla = mal ? 'gallra' : 'egen'
+    malmappDefault = (await hamtaMalmappar().catch(() => ({})))?.gallring || ''
+    if (!cfg.exportRot && malmappDefault) cfg.exportRot = malmappDefault
     laddar = false
   })
 
@@ -91,6 +97,9 @@
           <input class="mono" bind:value={cfg.exportRot} placeholder="/Volumes/…" />
           <button class="valj" on:click={valjRot}>Välj…</button>
         </div>
+        {#if malmappDefault}
+          <p class="mnot">Förifylld från Inställningar → Målmappar (Gallring). Ändra för denna körning — defaulten rörs inte.</p>
+        {/if}
         <div class="frad"><span class="fl">Fotograf</span><input bind:value={cfg.fotograf} /></div>
         <button class="chk" on:click={() => (cfg.iptc = !cfg.iptc)}>
           <span class="box" class:pa={cfg.iptc}>{cfg.iptc ? '✓' : ''}</span> IPTC-bildtexter

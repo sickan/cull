@@ -2166,6 +2166,63 @@ class TestSnabbplockExport(unittest.TestCase):
         self.assertEqual(r["antal"], 1)
         self.assertEqual(r["saknade"], 1)
 
+    def test_konfigurerad_malmapp_far_tidsstampel(self):
+        # V5-A: default-roten ur Inställningar → <rot>/<tidsstämpel>/filer.
+        import os
+        d, paths = self._filer(["DSC_0001.NEF"])
+        rot = os.path.join(d, "backup")
+        os.makedirs(rot)
+        self.api.satt_malmapp("snabbplock", rot)
+        r = self.api.snabbplock_export(paths)          # ingen ut_mapp/ut_rot
+        self.assertTrue(r["ok"], r.get("fel"))
+        self.assertEqual(os.path.dirname(r["path"]), rot)   # <rot>/<stämpel>
+        self.assertTrue(os.path.exists(os.path.join(r["path"], "DSC_0001.NEF")))
+
+    def test_ut_rot_override_slar_konfigurerad(self):
+        # V5-A: per-körning-roten vinner över defaulten, tidsstämpel läggs på.
+        import os
+        d, paths = self._filer(["DSC_0001.NEF"])
+        default_rot = os.path.join(d, "default"); os.makedirs(default_rot)
+        override = os.path.join(d, "override"); os.makedirs(override)
+        self.api.satt_malmapp("snabbplock", default_rot)
+        r = self.api.snabbplock_export(paths, ut_rot=override)
+        self.assertTrue(r["ok"], r.get("fel"))
+        self.assertEqual(os.path.dirname(r["path"]), override)   # <override>/<stämpel>
+
+
+class TestMalmappar(unittest.TestCase):
+    """Målmappar per flöde (V5-A): default i Inställningar, validering, override."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+
+    def test_default_tomma(self):
+        self.assertEqual(self.api.hamta_malmappar(),
+                         {"snabbplock": "", "gallring": "", "media": ""})
+
+    def test_satt_och_hamta(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        r = self.api.satt_malmapp("gallring", d)
+        self.assertTrue(r["ok"])
+        self.assertEqual(self.api.hamta_malmappar()["gallring"], d)
+        self.assertEqual(r["malmappar"]["gallring"], d)
+
+    def test_okant_flode(self):
+        self.assertFalse(self.api.satt_malmapp("hokuspokus", "/tmp")["ok"])
+
+    def test_icke_befintlig_mapp_nekas(self):
+        self.assertFalse(self.api.satt_malmapp("media", "/finns/verkligen/inte")["ok"])
+
+    def test_tom_strang_rensar(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        self.api.satt_malmapp("media", d)
+        self.assertTrue(self.api.satt_malmapp("media", "")["ok"])
+        self.assertEqual(self.api.hamta_malmappar()["media"], "")
+
 
 class TestSnabbplockStage(unittest.TestCase):
     """snabbplock_stage — säkrar korts bilder MEDAN kortet sitter i, så plocket

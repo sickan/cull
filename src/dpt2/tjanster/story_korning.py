@@ -122,7 +122,12 @@ def _rendera(conn, config, *, ut_path=None, ut_mapp=None, env=None):
 def kor_story(conn, config, *, env=None, logg=print):
     """Renderar en story ur config {foto, moment, tema, format, match_id?} till
     Dropbox-mappen (`config['ut_mapp']`, annars `~/.config/dpt2/stories`).
-    Returnerar {ok, path, moment} eller {ok:False, fel}."""
+    Returnerar {ok, path, moment} eller {ok:False, fel}.
+
+    V5-A (handoff §6): varje overlay-export får en ren tvilling bredvid sig —
+    `namn.jpg` + `namn-original.jpg` (samma beskärning, utan overlay) — så
+    originalet alltid är redigerbart. Ingen opt-in. Gäller den skarpa exporten,
+    aldrig förhandsvisningarna (de skriver till fasta tempfiler)."""
     config = config or {}
     ut_mapp = os.path.expanduser(config.get("ut_mapp") or "~/.config/dpt2/stories")
     logg(f"Renderar story '{config.get('moment')}' ({config.get('tema', 'Hav')}, "
@@ -131,6 +136,17 @@ def kor_story(conn, config, *, env=None, logg=print):
     if r["ok"]:
         logg(f"✓ Story renderad: {r['path']}")
         r["moment"] = config["moment"]
+        try:
+            ut = Path(r["path"])
+            tvilling = story_overlay.beskar_foto(
+                os.path.expanduser(config.get("foto") or ""),
+                config.get("format", "9x16"),
+                config.get("fokus"), config.get("zoom", 1.0),
+                ut_path=ut.with_name(f"{ut.stem}-original.jpg"),
+                env=env or _env())
+            r["original"] = str(tvilling)
+        except Exception as e:                 # tvillingen får aldrig fälla storyn
+            logg(f"⚠ Kunde inte spara original-tvillingen: {e}")
     return r
 
 

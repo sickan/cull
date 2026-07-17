@@ -1214,7 +1214,10 @@ class Api:
         # Kopiering (om export-rot angiven och behållna bilder finns)
         ut_dir = None
         kopierade = []
-        export_rot = (config.get("exportRot") or "").strip() or None
+        # V5-A: panelens fält är en override för KÖRNINGEN; tomt fält faller
+        # tillbaka på den konfigurerade gallrings-målmappen (t.ex. SSD:n).
+        export_rot = ((config.get("exportRot") or "").strip()
+                      or self._malmapp("gallring"))
         if export_rot and behall_stems:
             ut_dir, kopierade = self._kopiera_urval(
                 urval_id, behall_stems,
@@ -1462,6 +1465,8 @@ class Api:
         if not config.get("foto"):
             return {"ok": False, "fel": "Ange ett källfoto."}
         config.setdefault("match_id", store.hamta_installning(self.conn, "aktiv_match_id"))
+        if self._malmapp("media"):
+            config.setdefault("ut_mapp", self._malmapp("media"))
         r = self._kor_jobb("story", {"config": config})
         res = r.get("resultat")
         return {"ok": r["ok"], "path": res.get("path") if res else None,
@@ -1598,14 +1603,18 @@ class Api:
             self.oppna_i_lightroom(str(mal))
         return {"ok": True, "antal": kopierade, "path": str(mal)}
 
-    def snabbplock_export(self, paths, ut_mapp=None, oppna_lr=True):
+    def snabbplock_export(self, paths, ut_mapp=None, oppna_lr=True, ut_rot=None):
         """Snabbplockets 'Öppna i Lightroom': kopierar de EXPLICIT plockade
         bildfilerna (fulla sökvägar i `paths`) till en arbetsmapp, rensar ev.
         uchg-flagga, skriver Blue-etikett-XMP och öppnar mappen i Lightroom.
         Till skillnad från snabbplock_kortrot (ALLA kameralåsta på ETT kort)
         jobbar den mot användarens urval och kan spänna över flera kort.
-        Default-mål: ~/Pictures/DPT2 Snabbplock/<tidsstämpel> (versionshanteras
-        om den råkar finnas). Returnerar {ok, antal, path} eller {ok:False, fel}."""
+        Default-rot: konfigurerad Snabbplock-målmapp (V5-A) annars
+        ~/Pictures/DPT2 Snabbplock — en <tidsstämpel>-undermapp läggs alltid på
+        (versionshanteras om den råkar finnas). `ut_rot` = per-körning-override
+        av roten (Svelte-panelen, gäller bara körningen); `ut_mapp` = exakt
+        katalog utan tidsstämpel (intern väg, t.ex. tester).
+        Returnerar {ok, antal, path} eller {ok:False, fel}."""
         import shutil
         from datetime import datetime
         if not paths:
@@ -1622,8 +1631,12 @@ class Api:
         if ut_mapp:
             ut_dir = Path(ut_mapp).expanduser()
         else:
+            # V5-A: per-körning-override → konfigurerad målmapp (fungerar
+            # samtidigt som backup) → inbyggd default. Tidsstämpel läggs alltid på.
+            rot = Path((ut_rot or "").strip() or self._malmapp("snabbplock")
+                       or "~/Pictures/DPT2 Snabbplock").expanduser()
             stamp = datetime.now().strftime("%Y-%m-%d %H%M")
-            ut_dir = Path.home() / "Pictures" / "DPT2 Snabbplock" / stamp
+            ut_dir = rot / stamp
             i, bas = 2, ut_dir
             while ut_dir.exists():
                 ut_dir = bas.parent / f"{bas.name} {i}"
@@ -1720,6 +1733,8 @@ class Api:
         config.setdefault("match_id",
                           store.hamta_installning(self.conn, "aktiv_match_id"))
         config["format"] = "9x16"
+        if self._malmapp("media"):
+            config.setdefault("ut_mapp", self._malmapp("media"))
         test = bool(config.pop("test", False))
         if test:
             config["ut_mapp"] = str(testlage.live_mapp())
@@ -1781,7 +1796,24 @@ class Api:
                 namn += f"-{m['lag_borta']}"
         slug = store.slug_id(namn) if namn else "ig"
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M")
-        return Path.home() / "Pictures" / "DPT2 IG-export" / f"{stamp}-{slug}"
+        # V5-A: Generera media-målmappen (Dropbox — delbar överallt) vinner
+        # över den inbyggda ~/Pictures-defaulten.
+        rot = Path(self._malmapp("media")
+                   or (Path.home() / "Pictures" / "DPT2 IG-export")).expanduser()
+        return rot / f"{stamp}-{slug}"
+
+    def _spara_original_tvilling(self, foto, fmt, fokus, zoom, ut_mapp, kanal):
+        """V5-A (§6): overlay-omslagets rena tvilling — samma beskärning utan
+        overlay, `<namn>-original.jpg` bredvid exporten. Best effort: tvillingen
+        får aldrig stoppa kanalrenderingen."""
+        from dpt2.motorer import story_overlay
+        try:
+            story_overlay.beskar_foto(
+                foto, fmt, fokus, zoom,
+                ut_path=ut_mapp / f"{kanal}_1_overlay-original.jpg")
+        except Exception as e:
+            self._logg.append({"typ": "fel",
+                               "text": f"original-tvilling {kanal}: {e}"})
 
     def _rendera_kanalbilder(self, kanal, bilder, fmt, ut_mapp, storyfalt):
         """Renderar en kanals bildset server-side i FMT — varje bild med SIN EGEN
@@ -1811,6 +1843,8 @@ class Api:
                         format=fmt, fokus=fokus, zoom=zoom,
                         ut_path=Path(ut_mapp) / f"{kanal}_1_overlay.jpg")
                     renderade.append(str(p))
+                    self._spara_original_tvilling(path, fmt, fokus, zoom,
+                                                  Path(ut_mapp), kanal)
                 elif i == 0:                                 # omslag → overlay
                     cfg = {**storyfalt, "foto": path, "format": fmt,
                            "fokus": fokus, "zoom": zoom}
@@ -1819,6 +1853,8 @@ class Api:
                         ut_path=Path(ut_mapp) / f"{kanal}_1_overlay.jpg")
                     if r.get("ok"):
                         renderade.append(r["path"])
+                        self._spara_original_tvilling(path, fmt, fokus, zoom,
+                                                      Path(ut_mapp), kanal)
                 else:                                        # extra → beskuren
                     p = story_overlay.beskar_foto(
                         path, fmt, fokus, zoom,
@@ -2477,6 +2513,38 @@ class Api:
     # ── Native filväljare (pywebview-dialoger) ───────────────────────────────
     def valj_mapp(self, titel="Välj mapp"):
         return self._dialog(folder=True, titel=titel)
+
+    # ── Målmappar per flöde (V5-A, handoff §5/§12) ───────────────────────────
+    # Default i Inställningar + override i respektive flödes körpanel
+    # (overriden gäller den körningen, aldrig som ny default).
+    MALMAPP_NYCKLAR = {"snabbplock": "mapp_snabbplock",
+                       "gallring": "mapp_gallring",
+                       "media": "mapp_media"}
+
+    def hamta_malmappar(self):
+        """{snabbplock, gallring, media} — tom sträng = ingen default satt
+        (flödet använder sin inbyggda fallback)."""
+        return {typ: store.hamta_installning(self.conn, nyckel, "") or ""
+                for typ, nyckel in self.MALMAPP_NYCKLAR.items()}
+
+    def satt_malmapp(self, typ, sokvag):
+        """Sätter (eller rensar, tom sträng) default-målmappen för ett flöde.
+        Icke-tom sökväg måste peka på en befintlig mapp — väljs normalt via
+        valj_mapp-dialogen, men handskrivna sökvägar valideras också."""
+        nyckel = self.MALMAPP_NYCKLAR.get(typ)
+        if not nyckel:
+            return {"ok": False, "fel": f"Okänt målmapps-flöde: {typ}"}
+        s = (sokvag or "").strip()
+        if s and not Path(s).expanduser().is_dir():
+            return {"ok": False, "fel": f"Mappen finns inte: {s}"}
+        store.satt_installning(self.conn, nyckel, s)
+        return {"ok": True, "malmappar": self.hamta_malmappar()}
+
+    def _malmapp(self, typ):
+        """Konfigurerad default-målmapp för ett flöde, eller None."""
+        s = store.hamta_installning(self.conn,
+                                    self.MALMAPP_NYCKLAR[typ], "") or ""
+        return s.strip() or None
 
     def valj_fil(self, titel="Välj fil", filter=None):
         return self._dialog(folder=False, titel=titel, filter=filter)

@@ -174,6 +174,28 @@ class TestMatchfalt(unittest.TestCase):
                 gren="mixed", tema="Hav", ut_path=f"{d}/ut.jpg")
             self.assertTrue(Path(ut).exists())
 
+    def test_kor_story_sparar_original_tvilling(self):
+        # V5-A (§6): varje skarp overlay-export får en ren <namn>-original.jpg
+        # bredvid sig, samma format, utan overlay.
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        mid = store.spara_match(self.c, {"lag_hemma": "Malmö FF", "lag_borta": "KDFF"})
+        with tempfile.TemporaryDirectory() as d:
+            foto = f"{d}/f.jpg"
+            Image.new("RGB", (1600, 900), (40, 80, 110)).save(foto, "JPEG")
+            r = S.kor_story(self.c, {"moment": "slutresultat", "foto": foto,
+                                     "match_id": mid, "format": "9x16",
+                                     "ut_mapp": d})
+            self.assertTrue(r["ok"], r.get("fel"))
+            orig = Path(r["path"]).with_name(Path(r["path"]).stem + "-original.jpg")
+            self.assertTrue(orig.exists(), "original-tvillingen skrevs inte")
+            self.assertEqual(r.get("original"), str(orig))
+            # Tvillingen har målformatets mått och saknar overlay (skiljer sig
+            # från exporten).
+            self.assertEqual(Image.open(orig).size, (1080, 1920))
+            self.assertNotEqual(Path(r["path"]).read_bytes(), orig.read_bytes())
+
 
 class TestForhandsgranska(unittest.TestCase):
     """VIKTIGT: forhandsgranska() skriver till en FAST sökväg
