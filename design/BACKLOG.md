@@ -137,7 +137,7 @@ visar riktiga server-renderade Horisont-bilden.*
 | V2-16 | IG Stories-delningen felade ("går inte att skicka filen") | ✅ **LÖST 17/7** (ios `9f24628`): `instagram-stories://`-schemat + bilddata på pasteboarden ersätter fil-URL-ShareLink; + "Spara till Bilder"-knapp (interim & permanent fallback); generiska arket kvar som "Dela på annat sätt". **Kräver appinstallation** — oskarpkört mot riktiga Instagram |
 | V2-05 | Förhandsgranskningen utanför synfältet | ✅ **LÖST 17/7** (ios `9f24628`): autoscroll till preview-sektionen när renderingen landar |
 | V2-20 | **Verifiera SoMe-flödet för friidrott FÖRE Friidrotts-SM 24–26/7 (Uppsala):** moment (Grenstart · Försök/Kval · Final · Resultat · Rekord SM/PB · Nästa gren/pass) · overlay = resultat per gren (tider "10,42", höjder "2,01 m", placeringar) INTE ställningssiffror · vyer + matchfakta-pålägget får inte anta två lag (mästerskap = heldagsevent m många grenar/aktiva) | v2 §20 · P15-fixen (tennis) är grunden; deadline-styrd |
-| V2-06 | Noteringar på event/matcher: snabbt i iOS under eventet, utförligt i DPT2 efteråt; sökbara vid planering av liknande event | v2 §6 · iOS+DPT2, synk att bekräfta · matar V2-12 packning + V2-17 lathundens arenadel |
+| V2-06 | Noteringar på event/matcher: snabbt i iOS under eventet, utförligt i DPT2 efteråt; sökbara vid planering av liknande event | v2 §6 · iOS+DPT2 · **BESLUT (Stig 17/7): TVÅVÄGS synk iOS ↔ DPT2** · matar V2-12 packning + V2-17 lathundens arenadel |
 | V2-11 | Filmlogg: rulle i vilken kamera, exponeringsanteckningar, status (i kamera/hos lab/skannad), kopplad till frysinventariet | v2 §11 · iOS+DPT2 |
 | V2-18 | Nyckelspelare → publiceringsflödet: lathundens "spelare att följa" blir objekt m storyline per match → snabbval vid bildval/SoMe + overlay-text kombinerar händelse + kontext ("mål i sin första match för MFF!") | v2 §18 · bygger på V2-17; samma JSON som Damallsvenskan-research |
 | iOS-trupp-2/3 | Trupp skiva 2: Vision-OCR förifyller ur uppställningsfotot · skiva 3: DPT2-reconciliation av mobilsatt roster | Skiva 1 KLAR + installerad |
@@ -218,9 +218,10 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 - [ ] Ta D2-handoffen till Claude Design
 - [ ] MP-död-beslutet: väck eller radera raderaMaterial/sparaUtkast (autospar)
 - [ ] C-förslagen (design/C-FORSLAG.md): besluta
-- [ ] **V2-19:** minns du hur MFF–Bröndby lades in — manuellt eller via import/synk? (hjälper rotorsaken)
-- [ ] **V2-06:** bekräfta att noteringar ska synkas iOS ↔ DPT2 (antagandet i v2-listan)
+- [x] ~~**V2-19:** hur lades MFF–Bröndby in?~~ — svar: via DPT2 (formulärvägen = rotorsaken, LÖST)
+- [x] ~~**V2-06:** bekräfta noterings-synk~~ — beslut 17/7: TVÅVÄGS iOS ↔ DPT2
 - [ ] **V2-08:** finslipa presskortsformuleringen (copy) när sidfoten byggs
+- [ ] Skarptesta IG Stories-delningen (V2-16) mot riktiga Instagram — appen ominstallerad, oskarpkört
 
 ## ✅ Levererat nyligen (rörligt — flyttas hit när klart)
 
