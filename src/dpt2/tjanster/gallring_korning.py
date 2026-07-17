@@ -47,9 +47,25 @@ def _las_tider(paths, env):
         return {}
 
 
+# BUG-CULL-01: Gallra-panelens select skickade VISNINGSNAMN ("Din smak",
+# "Arkiv (facit)", "Hybrid") som cull_jobb.modell medan biblioteket nycklas på
+# typ (din_smak/arkiv/hybrid) → uppslaget missade ALLTID → varje cull föll
+# tyst till den handsatta fotbollsformeln fast tränade modeller fanns.
+# Normalisera här (täcker även redan sparade jobb med gamla etiketter).
+_MODELL_TYP = {"din smak": "din_smak", "din_smak": "din_smak",
+               "arkiv (facit)": "arkiv", "arkiv": "arkiv",
+               "hybrid": "hybrid"}
+
+
+def _modell_typ(varde):
+    """UI-etikett eller typnyckel → kanonisk typnyckel (None om okänd/tom)."""
+    return _MODELL_TYP.get((varde or "").strip().lower())
+
+
 def _modell_paket(conn, typ):
     """Laddar modell-paketet för en typ (din_smak/arkiv/hybrid) ur biblioteket,
-    eller None om den saknas/ej tränad."""
+    eller None om den saknas/ej tränad. Tar även UI-etiketter ("Din smak")."""
+    typ = _modell_typ(typ)
     if not typ:
         return None
     for m in store.lista_modeller(conn):
@@ -86,11 +102,17 @@ def kor_gallring(conn, urval_id, modeller, *, env=None, logg=print, progress=Non
         r["tid"] = tider.get(stem)
         resultat.append(r)
 
+    onskad = _modell_typ((jobb or {}).get("modell"))
     paket = _modell_paket(conn, (jobb or {}).get("modell"))
     if paket is not None:
         inlarning.poangsatt_med_modell(resultat, paket,
                                        sport=urval.get("sport"))
-        logg(f"  Poängsatt med modell ({(jobb or {}).get('modell')}).")
+        logg(f"  Poängsatt med modell ({onskad}).")
+    elif onskad:
+        # En modell VAR vald men gick inte att ladda (otränad typ, saknad/
+        # trasig pkl, saknat sklearn) — säg det högt i stället för att tyst
+        # låta den handsatta formeln se ut som ett normalfall (BUG-CULL-01).
+        logg(f"  ⚠ Modellen '{onskad}' kunde inte laddas — handsatt poängformel.")
     else:
         logg("  Ingen tränad modell — handsatt poängformel.")
     valda, info = gallra(resultat, cfg, modellpoang_satt=paket is not None)

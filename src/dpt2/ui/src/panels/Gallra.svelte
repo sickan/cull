@@ -14,7 +14,7 @@
 
   let kalla = ''              // F1: källmappen delas av alla lägen
   let ai = { keep: 40, unit: 'bilder', burst: 2.0, ocr: true, nums: '',
-    overwrite: false, kit: 'Hemmaställ', kick: 'auto', model: 'Din smak', pose: 60, sharp: 70 }
+    overwrite: false, kit: 'Hemmaställ', kick: 'auto', model: 'din_smak', pose: 60, sharp: 70 }
   let snabb = { keep: 40, burst: 2.0 }
 
   let kor = { ai: false, snabb: false, rapport: false }
@@ -156,7 +156,9 @@
         <button class="avanc" on:click={() => (adv = !adv)}><span class="achev" class:upp={adv}>›</span> Avancerat: modeller &amp; viktning</button>
         {#if adv}
           <div class="avbox">
-            <div class="frad"><span class="fl3">Modell</span><select bind:value={ai.model} class="vaxa"><option>Din smak</option><option>Arkiv (facit)</option><option>Hybrid</option></select></div>
+            <!-- BUG-CULL-01: value = typnyckeln biblioteket nycklas på (backend
+                 normaliserar även gamla etikettvärden) -->
+            <div class="frad"><span class="fl3">Modell</span><select bind:value={ai.model} class="vaxa"><option value="din_smak">Din smak</option><option value="arkiv">Arkiv (facit)</option><option value="hybrid">Hybrid</option></select></div>
             <div></div>
             <div class="frad"><span class="fl3">Pose</span><input type="range" min="0" max="100" bind:value={ai.pose} /><span class="mono v">{ai.pose}</span></div>
             <div class="frad"><span class="fl3">Skärpa</span><input type="range" min="0" max="100" bind:value={ai.sharp} /><span class="mono v">{ai.sharp}</span></div>
