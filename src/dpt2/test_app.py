@@ -2163,21 +2163,51 @@ class TestEventSektion(unittest.TestCase):
                          ["pagang_lage"], "heldag")
         self.assertFalse(self.api.satt_event_pagang_lage(self.sm, "x")["ok"])
 
-    def test_individ_deltagare(self):
+    def test_individ_deltagare_och_grenbron(self):
+        # Skiva 1.5 (Stigs fynd): Deltagare-kortet måste se B-001:s befintliga
+        # gren-deltagare (lag-rader via disciplin_deltagare), sök måste hitta
+        # dem, och gren-chipsen skriver SAMMA koppling som editorn/app-paketet.
+        gid = self.api.spara_disciplin({"tavling_id": self.sm,
+                                        "namn": "Stav"})["id"]
+        lid = store.upsert_lag(self.api.conn, "E. Andersson", kind="individ",
+                               sport="friidrott", klubb="Malmö AI")
+        store.koppla_disciplin_deltagare(self.api.conn, gid, lid)
+        # Befintlig B-001-deltagare syns i unionen med sin gren
+        d = self.api.hamta_event_detalj(self.sm)
+        self.assertEqual(d["deltagare"][0]["namn"], "E. Andersson")
+        self.assertEqual(d["deltagare"][0]["grenar"], [gid])
+        self.assertEqual(self.api.lista_eventer()[0]["antal_deltagare"], 1)
+        # Sök-kandidaterna hittar lag-individen
+        self.assertIn(lid, [k["id"] for k in
+                            self.api.lista_individ_kandidater(self.sm)])
+        # Ny individ ur registret: koppla → utan gren → toggla gren-chip →
+        # hamnar i disciplin_deltagare (B-001-vyn ser henne)
         r = self.api.spara_individ({"namn": "Armand Duplantis",
                                     "sport": "friidrott", "klubb": "Upsala IF"})
-        self.assertTrue(r["ok"])
-        self.assertTrue(self.api.koppla_event_deltagare(
-            self.sm, r["id"], ["stav"])["ok"])
-        d = self.api.hamta_event_detalj(self.sm)
-        self.assertEqual(d["deltagare"][0]["namn"], "Armand Duplantis")
-        self.assertEqual(d["deltagare"][0]["grenar"], ["stav"])
-        self.assertEqual(self.api.lista_eventer()[0]["antal_deltagare"], 1)
-        self.api.koppla_bort_event_deltagare(self.sm, r["id"])
-        self.assertEqual(self.api.hamta_event_detalj(self.sm)["deltagare"], [])
-        self.assertEqual(len(self.api.lista_individer()), 1)
-        self.api.radera_individ(r["id"])
-        self.assertEqual(self.api.lista_individer(), [])
+        self.assertTrue(self.api.koppla_event_individ(self.sm, r["id"])["ok"])
+        namn = {p["namn"]: p for p in
+                self.api.hamta_event_detalj(self.sm)["deltagare"]}
+        self.assertEqual(namn["Armand Duplantis"]["grenar"], [])
+        self.assertTrue(self.api.koppla_event_individ_gren(
+            self.sm, r["id"], gid, True)["ok"])
+        namn = {p["namn"]: p for p in
+                self.api.hamta_event_detalj(self.sm)["deltagare"]}
+        self.assertEqual(namn["Armand Duplantis"]["grenar"], [gid])
+        b001 = store.lista_discipliner(self.api.conn, self.sm)[0]["deltagare"]
+        self.assertIn("Armand Duplantis", [p["namn"] for p in b001])
+        # Toggla av → gren-kopplingen släpper men individen ligger kvar
+        self.api.koppla_event_individ_gren(self.sm, r["id"], gid, False)
+        namn = {p["namn"]: p for p in
+                self.api.hamta_event_detalj(self.sm)["deltagare"]}
+        self.assertEqual(namn["Armand Duplantis"]["grenar"], [])
+        # Ta bort helt → ur listan (även gren-kopplingar hade städats)
+        self.api.koppla_bort_event_individ(self.sm, r["id"])
+        self.assertNotIn("Armand Duplantis",
+                         [p["namn"] for p in
+                          self.api.hamta_event_detalj(self.sm)["deltagare"]])
+        # Kandidat ur lag-registret får individ-registerrad vid koppling
+        self.assertTrue(self.api.koppla_event_individ(self.sm, lid)["ok"])
+        self.assertIsNotNone(store.hamta_individ(self.api.conn, lid))
 
 
 class TestSnabbplockExport(unittest.TestCase):

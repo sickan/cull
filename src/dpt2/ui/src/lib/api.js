@@ -344,6 +344,37 @@ export async function kopplaBortEventDeltagare(eventId, individId) {
   return wait({ ok: true })
 }
 
+// ── Deltagare ⟂ gren (V5-C skiva 1.5) ───────────────────────────────────────
+export async function listaIndividKandidater(eventId) {
+  const api = brygga()
+  if (api) return api.lista_individ_kandidater(eventId)
+  return wait(structuredClone(MOCK_INDIVIDER))
+}
+
+export async function kopplaEventIndivid(eventId, individId) {
+  const api = brygga()
+  if (api) return api.koppla_event_individ(eventId, individId)
+  const i = MOCK_INDIVIDER.find((x) => x.id === individId)
+  MOCK_EVENT_DELTAGARE[eventId] = [...(MOCK_EVENT_DELTAGARE[eventId] || [])
+    .filter((x) => x.id !== individId), { ...i, grenar: [] }]
+  return wait({ ok: true })
+}
+
+export async function kopplaEventIndividGren(eventId, individId, disciplinId, pa = true) {
+  const api = brygga()
+  if (api) return api.koppla_event_individ_gren(eventId, individId, disciplinId, pa)
+  const d = (MOCK_EVENT_DELTAGARE[eventId] || []).find((x) => x.id === individId)
+  if (d) d.grenar = pa ? [...new Set([...(d.grenar || []), disciplinId])]
+    : (d.grenar || []).filter((g) => g !== disciplinId)
+  return wait({ ok: true })
+}
+
+export async function kopplaBortEventIndivid(eventId, individId) {
+  const api = brygga()
+  if (api) return api.koppla_bort_event_individ(eventId, individId)
+  return kopplaBortEventDeltagare(eventId, individId)
+}
+
 // ── Discipliner (B-001): tävlingens grenar + deltagare per gren ─────────────
 let MOCK_DISCIPLINER = [
   { id: 'disc_langd', tavling_id: 'friidrotts-sm', namn: 'Längd', typ: 'hoppkast', ordning: 0,

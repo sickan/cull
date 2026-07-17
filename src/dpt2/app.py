@@ -660,9 +660,8 @@ class Api:
             e["antal_grenar"] = self.conn.execute(
                 "SELECT COUNT(*) FROM disciplin WHERE tavling_id=?", (eid,)
             ).fetchone()[0]
-            e["antal_deltagare"] = self.conn.execute(
-                "SELECT COUNT(*) FROM event_deltagare WHERE event_id=?", (eid,)
-            ).fetchone()[0]
+            e["antal_deltagare"] = len(
+                store.lista_event_individer(self.conn, eid))
             ut.append(e)
         return ut
 
@@ -685,7 +684,10 @@ class Api:
                 (g["id"],)).fetchone()[0]
         return {"event": e, "matcher": matcher, "okopplade": okopplade,
                 "grenar": grenar,
-                "deltagare": store.lista_event_deltagare(self.conn, event_id),
+                # Skiva 1.5: unionen av gren-kopplade deltagare (B-001:s
+                # disciplin_deltagare — samma sanning som appen/editorn) och
+                # individregistrets event-kopplingar.
+                "deltagare": store.lista_event_individer(self.conn, event_id),
                 # Grenar skapas via disciplin-tabellen som (ännu) kräver att
                 # eventet finns som tävling — sant för alla speglade event.
                 "kan_grenar": bool(store.hamta_tavling(self.conn, event_id))}
@@ -735,6 +737,56 @@ class Api:
 
     def koppla_bort_event_deltagare(self, event_id, individ_id):
         store.koppla_bort_event_deltagare(self.conn, event_id, individ_id)
+        return {"ok": True}
+
+    # ── Deltagare ⟂ gren (V5-C skiva 1.5) ────────────────────────────────────
+    # Deltagare-kortet jobbar mot SAMMA gren-koppling som Grenar & deltagare-
+    # editorn och app-paketet (disciplin_deltagare) — individregistret är
+    # ingången, lag-raden (kind=individ) är bäraren under övergången.
+
+    def lista_individ_kandidater(self, event_id):
+        """Sökbara individer för väljaren — utövar-lag ∪ individregistret,
+        filtrerat på eventets sport."""
+        e = store.hamta_event(self.conn, event_id)
+        return store.individ_kandidater(self.conn, (e or {}).get("sport"))
+
+    def koppla_event_individ(self, event_id, individ_id):
+        """Lägger till en individ på eventet (utan gren än — gren-chipsen
+        skriver disciplin-kopplingen). Kandidat ur lag-registret får en
+        individ-registerrad på köpet (samma id)."""
+        if not store.hamta_individ(self.conn, individ_id):
+            if not store.sakerstall_individ_fran_lag(self.conn, individ_id):
+                return {"ok": False, "fel": "Okänd individ."}
+        store.satt_event_deltagare(self.conn, event_id, individ_id, [])
+        return {"ok": True}
+
+    def koppla_event_individ_gren(self, event_id, individ_id, disciplin_id,
+                                  pa=True):
+        """Togglar en individs deltagande i en gren. Skriver
+        disciplin_deltagare (kräver lag-rad — skapas ur individregistret om
+        den saknas) så B-001-editorn och appens tävlings-paket ser samma sak."""
+        lag_id = individ_id
+        if not self.conn.execute("SELECT 1 FROM lag WHERE id=?",
+                                 (lag_id,)).fetchone():
+            i = store.hamta_individ(self.conn, individ_id)
+            if not i:
+                return {"ok": False, "fel": "Okänd individ."}
+            lag_id = store.upsert_lag(self.conn, i["namn"], kind="individ",
+                                      sport=i.get("sport"),
+                                      klubb=i.get("klubb"),
+                                      instagram=i.get("instagram"))
+        store.koppla_disciplin_deltagare(self.conn, disciplin_id, lag_id, pa)
+        return {"ok": True, "lag_id": lag_id}
+
+    def koppla_bort_event_individ(self, event_id, individ_id):
+        """Tar bort individen från eventet helt: registerkopplingen + ALLA
+        gren-kopplingar i eventets discipliner."""
+        store.koppla_bort_event_deltagare(self.conn, event_id, individ_id)
+        self.conn.execute(
+            "DELETE FROM disciplin_deltagare WHERE lag_id=? AND disciplin_id "
+            "IN (SELECT id FROM disciplin WHERE tavling_id=?)",
+            (individ_id, event_id))
+        self.conn.commit()
         return {"ok": True}
 
     def lagg_tavling_i_kalender(self, tavling_id):

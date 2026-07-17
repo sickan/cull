@@ -1089,6 +1089,66 @@ def lista_event_deltagare(conn, event_id):
     return ut
 
 
+def lista_event_individer(conn, event_id):
+    """Deltagare-kortets lista (V5-C skiva 1.5): UNIONEN av gren-kopplade
+    deltagare (disciplin_deltagare — dagens sanning, delas med appen och
+    Grenar & deltagare-editorn) och individregistrets event-kopplingar
+    (event_deltagare; utan gren tills chips togglas). grenar = disciplin-id:n."""
+    ut = {}
+    for r in conn.execute(
+            "SELECT l.id, l.namn, l.klubb, l.gren AS lag_gren, dd.disciplin_id "
+            "FROM disciplin d "
+            "JOIN disciplin_deltagare dd ON dd.disciplin_id=d.id "
+            "JOIN lag l ON l.id=dd.lag_id "
+            "WHERE d.tavling_id=? ORDER BY l.namn", (event_id,)):
+        p = ut.setdefault(r["id"], {"id": r["id"], "namn": r["namn"],
+                                    "klubb": r["klubb"] or "",
+                                    "gren": r["lag_gren"] or "", "grenar": []})
+        p["grenar"].append(r["disciplin_id"])
+    for r in conn.execute(
+            "SELECT i.id, i.namn, i.klubb FROM event_deltagare ed "
+            "JOIN individ i ON i.id=ed.individ_id WHERE ed.event_id=?",
+            (event_id,)):
+        ut.setdefault(r["id"], {"id": r["id"], "namn": r["namn"],
+                                "klubb": r["klubb"] or "", "gren": "",
+                                "grenar": []})
+    return sorted(ut.values(), key=lambda p: p["namn"])
+
+
+def individ_kandidater(conn, sport=None):
+    """Sökbara individer för deltagar-väljaren: individ-LAG (utövar-poster —
+    här bor de befintliga deltagarna från B-001-editorn) ∪ individregistret.
+    Dedup på id; sport-filter släpper igenom poster utan satt sport."""
+    ut = {}
+    q = ("SELECT id, namn, klubb, sport FROM lag "
+         "WHERE kind='individ' AND arkiverad=0")
+    args = ()
+    if sport:
+        q += " AND (sport=? OR sport IS NULL)"
+        args = (sport,)
+    for r in conn.execute(q, args):
+        ut[r["id"]] = {"id": r["id"], "namn": r["namn"], "klubb": r["klubb"] or ""}
+    for r in conn.execute("SELECT id, namn, klubb, sport FROM individ"):
+        if sport and r["sport"] and r["sport"] != sport:
+            continue
+        ut.setdefault(r["id"], {"id": r["id"], "namn": r["namn"],
+                                "klubb": r["klubb"] or ""})
+    return sorted(ut.values(), key=lambda p: p["namn"])
+
+
+def sakerstall_individ_fran_lag(conn, lag_id):
+    """Ser till att en individ-registerrad finns för en utövar-lagrad (samma
+    id) — event_deltagare kräver individ-FK. No-op om den redan finns."""
+    r = conn.execute("SELECT * FROM lag WHERE id=?", (lag_id,)).fetchone()
+    if r is None:
+        return None
+    conn.execute(
+        "INSERT OR IGNORE INTO individ(id,namn,sport,klubb,instagram) "
+        "VALUES(?,?,?,?,?)",
+        (r["id"], r["namn"], r["sport"], r["klubb"], r["instagram"]))
+    return lag_id
+
+
 def individ_historik(conn, individ_id):
     """Individens eventhistorik — HÄRLEDD ur event_deltagare (skrivs aldrig
     på individen, kan aldrig komma i osynk). Nyast först."""

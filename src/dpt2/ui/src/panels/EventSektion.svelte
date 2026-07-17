@@ -5,8 +5,9 @@
   // sektionen äger KOPPLINGARNA. Mockup: DPT v5 — Event.dc.html.
   import { onMount, createEventDispatcher } from 'svelte'
   import { listaEventer, hamtaEventDetalj, sattEventPagangLage,
-    kopplaMatchEvent, listaIndivider, sparaIndivid, kopplaEventDeltagare,
-    kopplaBortEventDeltagare, sparaDisciplin, raderaDisciplin } from '../lib/api.js'
+    kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
+    kopplaEventIndividGren, kopplaBortEventIndivid,
+    sparaDisciplin, raderaDisciplin } from '../lib/api.js'
 
   const dispatch = createEventDispatcher()
 
@@ -105,20 +106,23 @@
     detalj = await hamtaEventDetalj(vald)
   }
 
-  // ── Deltagare (individregistret) ─────────────────────────────────────────
+  // ── Deltagare (skiva 1.5): individ ⟂ gren ────────────────────────────────
+  // Väljaren söker utövar-lagen (B-001:s befintliga deltagare) ∪ individ-
+  // registret; gren-chipsen på varje rad skriver SAMMA koppling som Grenar &
+  // deltagare-editorn (disciplin_deltagare) — appens paket ser allt.
   let valjareOppen = false
   let individer = []
   let sok = ''
   let nyIndividNamn = ''
   async function oppnaValjare() {
     valjareOppen = !valjareOppen
-    if (valjareOppen) individer = await listaIndivider().catch(() => [])
+    if (valjareOppen) individer = await listaIndividKandidater(vald).catch(() => [])
   }
   $: kopplade = new Set((detalj?.deltagare || []).map((d) => d.id))
   $: traffar = individer.filter((i) =>
     !kopplade.has(i.id) && (!sok || i.namn.toLowerCase().includes(sok.toLowerCase())))
   async function valjIndivid(i) {
-    await kopplaEventDeltagare(vald, i.id, [])
+    await kopplaEventIndivid(vald, i.id)
     detalj = await hamtaEventDetalj(vald)
   }
   async function skapaIndivid() {
@@ -126,16 +130,22 @@
     if (!namn) return
     const r = await sparaIndivid({ namn, sport: detalj?.event?.sport })
     if (r?.ok) {
-      await kopplaEventDeltagare(vald, r.id, [])
+      await kopplaEventIndivid(vald, r.id)
       nyIndividNamn = ''
-      individer = await listaIndivider()
+      individer = await listaIndividKandidater(vald)
       detalj = await hamtaEventDetalj(vald)
     }
   }
-  async function taBortDeltagare(id) {
-    await kopplaBortEventDeltagare(vald, id)
+  async function togglaGren(individId, grenId, pa) {
+    await kopplaEventIndividGren(vald, individId, grenId, pa)
     detalj = await hamtaEventDetalj(vald)
   }
+  async function taBortDeltagare(id) {
+    await kopplaBortEventIndivid(vald, id)
+    detalj = await hamtaEventDetalj(vald)
+  }
+  const grenNamn = (grenId) =>
+    (detalj?.grenar || []).find((g) => g.id === grenId)?.namn || grenId
 
   const initialer = (namn) => (namn || '').split(/\s+/).map((d) => d[0]).slice(0, 2).join('').toUpperCase()
   const matchNar = (m) => [m.datum, m.tid].filter(Boolean).join(' · ')
@@ -278,17 +288,32 @@
           {/if}
           {#if detalj.deltagare.length}
             {#each detalj.deltagare as d (d.id)}
-              <div class="mrad">
-                <span class="bricka">{initialer(d.namn)}</span>
-                <span class="fixture">{d.namn}</span>
-                <span class="nar">{[d.klubb, (d.grenar || []).join(', ')].filter(Boolean).join(' · ')}</span>
-                <button class="bort" title="Koppla bort" on:click={() => taBortDeltagare(d.id)}>✕</button>
+              <div class="drad">
+                <div class="dradtopp">
+                  <span class="bricka">{initialer(d.namn)}</span>
+                  <span class="fixture">{d.namn}</span>
+                  <span class="nar">{d.klubb || ''}</span>
+                  <button class="bort" title="Ta bort från eventet (alla grenar)" on:click={() => taBortDeltagare(d.id)}>✕</button>
+                </div>
+                {#if detalj.grenar.length}
+                  <!-- Gren-chips: klick togglar deltagandet i grenen -->
+                  <div class="grenchips">
+                    {#each detalj.grenar as g (g.id)}
+                      {@const pa = (d.grenar || []).includes(g.id)}
+                      <button class="grenchip" class:pa
+                        title={pa ? `Ta bort ur ${g.namn}` : `Lägg till i ${g.namn}`}
+                        on:click={() => togglaGren(d.id, g.id, !pa)}>{g.namn}</button>
+                    {/each}
+                  </div>
+                {:else}
+                  <span class="dradhint">Lägg till grenar ovan för att koppla deltagandet per gren.</span>
+                {/if}
               </div>
             {/each}
           {:else}
             <p class="tomkort">Inga individer kopplade.</p>
           {/if}
-          <p class="fotnot">Individens historik härleds ur eventen — den lagras aldrig på individen.</p>
+          <p class="fotnot">Gren-chipsen delar koppling med Grenar &amp; deltagare-editorn — appens tävlingspaket ser samma sak. Historiken härleds ur eventen, aldrig lagrad på individen.</p>
         </div>
       </div>
     </div>
@@ -386,4 +411,17 @@
   .bricka { flex: none; width: 26px; height: 26px; border-radius: 50%; display: inline-flex;
     align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700;
     background: color-mix(in srgb, var(--acc) 18%, transparent); color: var(--acc); }
+
+  /* Deltagarrad m gren-chips (skiva 1.5) */
+  .drad { border: 1px solid var(--div3, var(--div)); border-radius: 9px; padding: 8px 10px;
+    margin-bottom: 6px; background: var(--panel); }
+  .dradtopp { display: flex; align-items: center; gap: 10px; }
+  .drad .bort { opacity: 0; }
+  .drad:hover .bort { opacity: 1; }
+  .grenchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px 36px; }
+  .grenchip { border: 1px solid var(--div); background: var(--kort); border-radius: 999px;
+    padding: 3px 11px; font-size: 11.5px; font-weight: 600; color: var(--t-mut); cursor: pointer; }
+  .grenchip.pa { border-color: var(--acc); color: var(--acc);
+    background: color-mix(in srgb, var(--acc) 14%, transparent); }
+  .dradhint { display: block; margin: 6px 0 2px 36px; font-size: 11px; color: var(--t-help); }
 </style>
