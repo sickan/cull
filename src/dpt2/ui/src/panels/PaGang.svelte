@@ -5,7 +5,7 @@
   // Funktionellt oförändrad mot den tidigare inbäddade editorn i Innehåll — bara
   // flyttad hit och med egen rubrik (ingen bibliotek-länk).
   import { onMount } from 'svelte'
-  import { pagangMatcher, sattPagangVisa, publiceraPagangMatcher } from '../lib/api.js'
+  import { pagangMatcher, sattPagangVisa, sattPagangDold, publiceraPagangMatcher } from '../lib/api.js'
   import { grenFarg } from '../lib/gren.js'
   import { testMode } from '../lib/testlage.js'
 
@@ -37,6 +37,14 @@
       : { dag: `${dag(f)}–${dag(t)}`, mon: `${mon(f)}–${mon(t)}` }
   }
   const versal = (s) => (s || '').charAt(0).toUpperCase() + (s || '').slice(1)
+  // Per-post-kryssrutan: avbockad = döljs på sajten (turneringens delmatcher
+  // när heldagsaktiviteten täcker dem — och omvänt). Uppdaterar lokalt direkt
+  // så rutan känns momentan; backend persisterar.
+  async function toggleDold(p) {
+    const dold = !p.pagang_dold
+    const r = await sattPagangDold(p.art, p.id, dold)
+    if (r?.ok) pagang = pagang.map((x) => (x.art === p.art && x.id === p.id ? { ...x, pagang_dold: dold ? 1 : 0 } : x))
+  }
   async function togglePagangVisa() { pagangVisa = !pagangVisa; await sattPagangVisa(pagangVisa) }
   async function uppdateraSajten() {
     pagangKor = true; pagangFlash = ''
@@ -65,30 +73,32 @@
     </div>
     <div class="pglista">
       {#each pagang as m (m.art + m.id)}
-        {#if m.art === 'tavling'}
-          {@const iv = intervall(m.fran, m.till)}
-          <div class="pgkort">
+        <div class="pgkort" class:dold={m.pagang_dold}>
+          {#if m.art === 'tavling'}
+            {@const iv = intervall(m.fran, m.till)}
             <div class="pgdatum"><span class="pgdag scd">{iv.dag}</span>
               <span class="pgmon">{iv.mon}</span></div>
             <span class="grendot" style="background:{grenFarg(m.gren)}"></span>
             <div class="pgi"><div class="pgf">{m.namn}</div>
               <div class="pgl">Heldag · {versal(m.sport)}{m.ort ? ` · ${m.ort}` : ''}</div></div>
-          </div>
-        {:else}
-          <div class="pgkort">
+          {:else}
             <div class="pgdatum"><span class="pgdag scd">{(m.datum || '').split('-')[2] || '–'}</span>
               <span class="pgmon">{MK[(Number((m.datum || '').split('-')[1]) || 1) - 1]?.toUpperCase()}</span></div>
             <span class="grendot" style="background:{grenFarg(m.hem_gren)}"></span>
             <div class="pgi"><div class="pgf">{m.lag_hemma}{m.lag_borta ? ` – ${m.lag_borta}` : ''}</div><div class="pgl">{m.liga || ''}</div></div>
-          </div>
-        {/if}
+          {/if}
+          <button class="visaruta" title={m.pagang_dold ? 'Visas inte på sajten — tryck för att visa' : 'Visas på sajten — tryck för att dölja'}
+            on:click={() => toggleDold(m)}>
+            <span class="chk" class:pa={!m.pagang_dold}>{m.pagang_dold ? '' : '✓'}</span>Visa</button>
+        </div>
       {/each}
       {#if !pagang.length}<div class="tom">Inget kommande — matcher läggs till i Matcher, tävlingsperioder får från/till-datum i Lag &amp; tävlingar.</div>{/if}
     </div>
     <div class="pgfot">
       Kurerad På gång-lista → sport-startsidan på webben. Matcherna följer Matcher; tävlingar med
       från/till-datum (Nordea Open, Friidrotts-SM …) visas som heldagsaktiviteter hela perioden.
-      Publiceras som "På gång"-modul på sajten.
+      Kryssrutan styr per post — bocka av t.ex. turneringens delmatcher när heldagsaktiviteten
+      räcker. Publiceras som "På gång"-modul på sajten.
     </div>
   </div>
 </div>
@@ -113,6 +123,9 @@
   .statusbtn:disabled { opacity: 0.5; cursor: default; }
   .pglista { display: flex; flex-direction: column; gap: 8px; }
   .pgkort { display: flex; align-items: center; gap: 13px; padding: 9px 11px; border: 1px solid var(--div); border-radius: 10px; background: var(--panel); }
+  .pgkort.dold .pgdatum, .pgkort.dold .grendot, .pgkort.dold .pgi { opacity: 0.38; }
+  .visaruta { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; flex: none;
+    background: none; border: none; padding: 4px 2px; font-size: 11px; font-weight: 600; color: var(--t-mut); cursor: pointer; }
   .pgdatum { display: flex; flex-direction: column; align-items: center; min-width: 40px; }
   .pgdag { font-size: 17px; font-weight: 700; color: var(--t-head); font-family: var(--font-c); line-height: 1; }
   .pgmon { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; color: var(--t-mut); }

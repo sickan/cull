@@ -2177,3 +2177,41 @@ class TestPagangTavlingar(unittest.TestCase):
         # Reconciliation städar rader som inte längre motsvarar något lokalt.
         fejk.radera.assert_called_once_with("pagang", "tavling-gammal")
         self.assertEqual(r["borttagna"], 1)
+
+    def test_pagang_dold_utesluts_ur_publiceringen(self):
+        from unittest import mock
+        tid = self._tavling()
+        dold_tid = self._tavling(namn="Dold turnering",
+                                 fran="2126-08-01", till="2126-08-03")
+        mid = self.api.spara_match({
+            "lag_hemma": "Nuno Borges", "lag_borta": "Luciano Darderi",
+            "sport": "tennis", "datum": "2126-07-25", "tid": "13:00"})["id"]
+        r = self.api.satt_pagang_dold("tavling", dold_tid, True)
+        self.assertTrue(r["ok"])
+        self.assertTrue(self.api.satt_pagang_dold("match", mid, True)["ok"])
+        # Panelen ser ALLA poster (med flaggan), publiceringen bara synliga.
+        pm = self.api.pagang_matcher()
+        self.assertEqual({t["id"]: t["pagang_dold"] for t in pm["tavlingar"]},
+                         {tid: 0, dold_tid: 1})
+        self.assertEqual([m["pagang_dold"] for m in pm["matcher"]], [1])
+        fejk = mock.MagicMock()
+        fejk.publicera.return_value = {"ok": True}
+        fejk.lista.return_value = [{"id": "match-" + mid}]   # låg kvar på workern
+        fejk.radera.return_value = {"ok": True}
+        self.api.innehall_synk = fejk
+        res = self.api.publicera_pagang_matcher()
+        self.assertTrue(res["ok"])
+        publicerade = [c.args[1] for c in fejk.publicera.call_args_list]
+        self.assertEqual(publicerade, ["tavling-" + tid])
+        # Reconciliation plockar bort den nu dolda matchen från workern.
+        fejk.radera.assert_called_once_with("pagang", "match-" + mid)
+        # Bocka i igen → med i nästa publicering.
+        self.api.satt_pagang_dold("match", mid, False)
+        fejk.publicera.reset_mock()
+        self.api.publicera_pagang_matcher()
+        self.assertIn("match-" + mid,
+                      [c.args[1] for c in fejk.publicera.call_args_list])
+
+    def test_satt_pagang_dold_validerar_art(self):
+        r = self.api.satt_pagang_dold("blogg", "x", True)
+        self.assertFalse(r["ok"])

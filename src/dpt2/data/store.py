@@ -1159,7 +1159,8 @@ def lista_matcher(conn):
     """Matchlista (utan spelare) för kalender/översikt, nyast först."""
     rader = conn.execute(
         "SELECT m.id,m.datum,m.tid,m.arena,m.status,m.resultat,m.sport,m.event,"
-        "m.tavling_id, h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga, "
+        "m.tavling_id,m.pagang_dold, "
+        "h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga, "
         "h.gren AS hem_gren, "
         "h.stall_hemma AS hemfarg, b.stall_hemma AS bortafarg, "
         "h.logga AS hemlogga, b.logga AS bortalogga, "
@@ -1176,6 +1177,16 @@ def lista_matcher(conn):
 
 def radera_match(conn, match_id):
     conn.execute("DELETE FROM matchen WHERE id=?", (match_id,))
+    conn.commit()
+
+
+def satt_pagang_dold(conn, art, post_id, dold):
+    """Per-post synlighet i webbens På gång (v30). art: 'match'/'tavling'."""
+    tabell = {"match": "matchen", "tavling": "tavling"}.get(art)
+    if not tabell:
+        raise ValueError(f"okänd art: {art}")
+    conn.execute(f"UPDATE {tabell} SET pagang_dold=? WHERE id=?",
+                 (1 if dold else 0, post_id))
     conn.commit()
 
 

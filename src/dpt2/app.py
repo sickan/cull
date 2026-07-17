@@ -2262,6 +2262,17 @@ class Api:
         store.satt_installning(self.conn, "pagang_visa", "1" if pa else "0")
         return {"ok": True, "visa": bool(pa)}
 
+    def satt_pagang_dold(self, art, post_id, dold):
+        """Per-post-kryssrutan i På gång-listan: dölj en enskild match eller
+        tävlingsperiod på webben (t.ex. turneringens delmatcher när heldags-
+        aktiviteten täcker dem). Default synlig; panelen visar dolda rader
+        avbockade, publiceringen hoppar över dem (reconciliation städar)."""
+        try:
+            store.satt_pagang_dold(self.conn, art, post_id, bool(dold))
+        except ValueError as e:
+            return {"ok": False, "fel": str(e)}
+        return {"ok": True, "dold": bool(dold)}
+
     def publicera_pagang_matcher(self, test=False):
         """Publicerar kommande matcher som webbens 'På gång'-widget (content-sync
         typ 'pagang'). Match-synk ÄGER hela pagang-samlingen: rader på workern
@@ -2272,6 +2283,10 @@ class Api:
         visa = store.hamta_installning(self.conn, "pagang_visa") != "0"
         kommande = self._pagang_kommande() if visa else []
         tavlingar = self._pagang_tavlingar() if visa else []
+        # Per-post-kryssrutan: dolda poster publiceras inte — och plockas
+        # bort från workern av reconciliationen nedan (de lämnar lokala_ids).
+        kommande = [m for m in kommande if not m.get("pagang_dold")]
+        tavlingar = [t for t in tavlingar if not t.get("pagang_dold")]
         poster = ([("match-" + m["id"], _pagang_match_md(m)) for m in kommande] +
                   [("tavling-" + t["id"], _pagang_tavling_md(t)) for t in tavlingar])
         if test:

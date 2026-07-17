@@ -1154,6 +1154,11 @@ export async function sattPagangVisa(pa) {
   if (api) return api.satt_pagang_visa(pa)
   return wait({ ok: true, visa: !!pa })
 }
+export async function sattPagangDold(art, id, dold) {
+  const api = brygga()
+  if (api) return api.satt_pagang_dold(art, id, dold)
+  return wait({ ok: true, dold: !!dold })   // mock: panelen uppdaterar lokalt
+}
 export async function publiceraPagangMatcher(test = false) {
   const api = brygga()
   if (api) return api.publicera_pagang_matcher(test)

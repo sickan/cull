@@ -28,7 +28,8 @@ CREATE TABLE tavling (
   logga     TEXT,                       -- filsökväg
   kalender  INTEGER NOT NULL DEFAULT 0, -- fotojobb-utkast skapat (se fotojobb_utkast)
   press_email TEXT,                     -- arrangörens press/ackrediteringsadress
-  ackr_dagar  INTEGER                   -- "begär senast" = matchdatum − dagar (tom = default)
+  ackr_dagar  INTEGER,                  -- "begär senast" = matchdatum − dagar (tom = default)
+  pagang_dold INTEGER NOT NULL DEFAULT 0 -- v30: dölj i webbens På gång (heldagsaktiviteten)
 );
 
 -- Lokalt fotojobb-utkast (tävling → "Lägg i Google Calendar"). Väntar på att
@@ -134,6 +135,7 @@ CREATE TABLE matchen (
   sida_url     TEXT,                     -- publicerad hemsideslänk
   omslag       TEXT,                     -- omslagsbild (filsökväg)
   event        INTEGER NOT NULL DEFAULT 0, -- p.5: heldagsevent = match utan motståndare
+  pagang_dold  INTEGER NOT NULL DEFAULT 0, -- v30: dölj i webbens På gång (t.ex. turneringens delmatcher)
   skapad       TEXT NOT NULL
 );
 CREATE INDEX idx_match_datum   ON matchen(datum);

@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 30
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -728,6 +728,16 @@ def _migrera(conn, fran_version):
               PRIMARY KEY (disciplin_id, lag_id)
             );
             """)
+
+    if fran_version < 30:
+        # v30 (På gång-kryssrutor): per-post synlighet i webbens På gång —
+        # enskilda matcher under en turnering ska kunna döljas när heldags-
+        # aktiviteten täcker dem (och omvänt). Default synlig. Additivt.
+        for tabell in ("matchen", "tavling"):
+            if _har_tabell(conn, tabell) and not _har_kolumn(conn, tabell,
+                                                             "pagang_dold"):
+                conn.execute(f"ALTER TABLE {tabell} ADD COLUMN pagang_dold "
+                             "INTEGER NOT NULL DEFAULT 0")
 
 
 def _har_kolumn(conn, tabell, kolumn):
