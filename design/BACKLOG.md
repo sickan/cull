@@ -32,7 +32,7 @@ röst→action är LÅG prio.
 |----|-----|-----------|
 | FEAT-13 | Purge/spegling av bygg-repot före publicering | ✅ **KLAR 17/7** (`1c0abe7`): reconciling publish per typ (skyddsvakt mot tom lokal DB) + radera_innehall propagerar till live |
 | FEAT-09 | Auto-status efter publicering (polla → realtid, bort med manuella "Kolla status") | ✅ **KLAR 17/7** (`3972fe8`): auto-poll var 10:e sek efter publicering — bygger-puls → Live/Fel per D9 §3, Kolla status-knappen borta |
-| FEAT-12 | Statusfärger 🔵utkast 🟡publicerad 🟢live 🔴fel + fasa ut utkastknappen | Färger specade av Stig → code direkt |
+| FEAT-12 | Statusfärger + fasa ut utkastknappen (D9) | ✅ **SKIVA 1 KLAR 17/7** (`0e04977`): StatusChip + radstatus + filterchips + hörnbåge i statusfärg + Spara utkast borta. Kvar: fel-radens per-kanal-expansion (Matchpubliceringen) + Sport-vyns kort |
 | FEAT-08 | Avpublicera match/tävling från DPT2 | Raderaflöde finns för vissa typer — utöka |
 | FEAT-07 | Varningsmodal vid radering av länkade objekt | |
 | FEAT-01 | Drag-n-drop för bilder (Innehåll, särskilt galleri) | |
