@@ -2200,6 +2200,7 @@ class Api:
             match_namn=data.get("match_namn"),
             moment=data.get("moment"), tema=data.get("tema"),
             dropbox=data.get("dropbox"), foto=data.get("foto"),
+            referat=data.get("referat"),
             channels=data.get("channels"), caption=data.get("caption"),
             banor=data.get("banor"), ch_results=data.get("ch_results"),
             historik_note=data.get("historik_note"), id=data.get("id"))

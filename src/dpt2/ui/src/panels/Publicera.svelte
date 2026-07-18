@@ -97,8 +97,9 @@
     // Utan material: nollställ texten till mallen — förra matchens caption
     // ska inte läcka in i en färsk match. (Kanal-/bildval lämnas som de är —
     // fotografens arbetsinställningar, inte innehåll.)
-    if (!mt) { caption = CAPTION_DEFAULT; return }
+    if (!mt) { caption = CAPTION_DEFAULT; referat = ''; return }
     if (mt.caption) caption = mt.caption
+    referat = mt.referat || ''
     const banor = mt.banor || {}
     const kanaler = mt.channels || []
     if (kanaler.length) {
@@ -325,6 +326,9 @@
   // Text + tokens
   const CAPTION_DEFAULT = 'Stabil hemmaseger på {arena}! {resultat}. Mål: {målskyttar}. {@lag} {#liga} #dalecarliaphoto'
   let caption = CAPTION_DEFAULT
+  // F18FM-2: referatet är ett EGET källfält — webben byggs från det, aldrig
+  // genom att strippa sociala texten (som läckte rubrikblock/länkrad/@?-taggar).
+  let referat = ''
   let capEl
   const TOKENS = ['{resultat}', '{målskyttar}', '{arena}', '{@lag}', '{galleri}', '{hemsida}']
   function insertToken(tok) {
@@ -387,7 +391,11 @@
     genTimer = setInterval(() => (genSek += 1), 1000)
     try {
       const r = await genereraBildsvep(info, match.sport || '', '', fakta)
-      if (r?.ok && r.bildsvep) caption = r.bildsvep
+      if (r?.ok && r.bildsvep) {
+        caption = r.bildsvep
+        // Källfältet följer med från Generera — webbtexten byggs härifrån.
+        if (r.referat) referat = r.referat
+      }
       else genFel = r?.fel || 'Kunde inte generera texten.'
     } catch (e) {
       genFel = 'Kunde inte generera texten.'
@@ -412,7 +420,9 @@
   }
   // B2: realtidsförhandsvisning kopplad till texten (social med @/#, webb utan).
   $: capSocial = losText(caption)
-  $: capWebb = losText(caption, { web: true })
+  // Webben = referat-källfältet (F18FM-2); strippad social text bara som
+  // fallback för material sparade före v34.
+  $: capWebb = referat.trim() ? losText(referat, { web: true }) : losText(caption, { web: true })
 
   // ── Steg 2: Skicka till (kanaler + beskärning) ──────────────────────────────
   // Format-koder = backendens (story_overlay.FORMAT_H). Etikett = kod med ':'.
@@ -471,7 +481,7 @@
     // gav en json-sträng inuti en json-sträng).
     const r = await sparaMaterial({ id: materialId || undefined,
       kind: 'some', status: 'utkast', ...malFalt,
-      match_namn: fixtur, caption, channels: aktiva.map((k) => k.key), foto: coverPath,
+      match_namn: fixtur, caption, referat, channels: aktiva.map((k) => k.key), foto: coverPath,
       // Bildval + kanalconfig följer med även i UTKAST (tidigare bara vid
       // publicering) — annars går bildvalet inte att återställa vid återbesök.
       banor: Object.fromEntries(aktiva.map((k) => [k.key, kanalConfig(k.key)])) })
@@ -582,7 +592,7 @@
     // Testläge persisterar aldrig material (samma kontrakt som lib/testlage.js).
     if (!test) {
       const r = await sparaUtfall({ id: materialId || undefined, ...malFalt,
-        match_namn: fixtur, caption, foto: coverPath }, chRes, cfgs)
+        match_namn: fixtur, caption, referat, foto: coverPath }, chRes, cfgs)
       if (r?.ok) materialId = r.id
     }
   }
@@ -646,7 +656,7 @@
     }
     // Historiken namnger vilka kanaler DETTA försök gällde — inte de som är kvar.
     await sparaUtfall({ id: mt.id, match_id: mt.match_id, match_namn: mt.match_namn,
-      caption: mt.caption, foto: mt.foto }, nya, cfgs,
+      caption: mt.caption, referat: mt.referat, foto: mt.foto }, nya, cfgs,
       `omförsök — ${fel.map((k) => KANALNAMN[k] || k).join(', ')}`)
     retryId = null
     if (!felKanaler(nya).length) {
@@ -960,7 +970,9 @@
         <div class="inspelhint">Skickas med som styrning när texten genereras — utöver matchfakta.</div>
       </div>
       {#if genFel}<div class="genfel">{genFel}</div>{/if}
-      <div class="hint">Sociala kanaler får @ och #. <b>Webben får samma text utan @/#</b> (rena namn, inga hashtags)
+      <div class="f"><label>Referat <span class="lmut">— webbens källtext (utan rubrik/länkar/taggar)</span></label>
+        <textarea rows="4" bind:value={referat} placeholder="Fylls av ✨ Generera — eller skriv själv. Tomt = webben faller tillbaka på strippad social text."></textarea></div>
+      <div class="hint">Sociala kanaler får @ och #. <b>Webben byggs från referatet</b> (F18FM-2)
         — webbartikeln byggs i <b>Innehåll</b>, som hämtar referatet härifrån.</div>
       <div class="prevgrid">
         <div class="prevkol">

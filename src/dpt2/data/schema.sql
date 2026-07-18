@@ -350,7 +350,8 @@ CREATE TABLE publicera_material (
   foto       TEXT,                       -- live: vald bildfil (steg 2)
   channels   TEXT,                       -- some: json-lista ['story','ig','fb']
   caption    TEXT,                       -- some: bildtext
-  banor      TEXT,                       -- some: json {story:{mapp,bilder},ig:{...},fb:{...}}
+  banor      TEXT,
+  referat    TEXT,   -- källfältet för webben (F18FM-2) — sociala texten är caption                       -- some: json {story:{mapp,bilder},ig:{...},fb:{...}}
   ch_results TEXT,                       -- some: json {story:'ok'|'fail',ig:...,fb:...} — driver delvis-läget & retry
   uppdaterad TEXT NOT NULL
 );

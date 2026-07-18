@@ -9,7 +9,9 @@ export const hashtag = (s) => (s || '').replace(/[^\p{L}\p{N}]/gu, '')
 // Strippar sociala tokens för webben: varje #tagg/@handle bort, hängande
 // blanksteg och dubbelspace kollapsas. ("# och @ strippas för webben".)
 export const strippaSocialt = (s) => (s || '')
-  .replace(/[#@][\p{L}\p{N}_]+/gu, '')
+  // \??: Generera markerar OSÄKRA handles med '?' (@?malmo_ff) — de läckte
+  // förbi strippningen och syntes på webben (F18FM-2).
+  .replace(/[#@]\??[\p{L}\p{N}_]+/gu, '')
   .replace(/ *\n/g, '\n')
   .replace(/[ \t]{2,}/g, ' ')
   .trim()

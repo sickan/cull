@@ -489,7 +489,9 @@
   function handle(namn) { return (lagAlla.find((x) => x.namn === namn)?.instagram || '').replace(/^@/, '') }
   function pullFromSome() {
     if (!artMaterial) return
-    cmsMatch.svep = losText(artMaterial.caption,
+    // F18FM-2: referat-källfältet vinner — strippningen är bara fallback
+    // för material sparade före v34.
+    cmsMatch.svep = losText(artMaterial.referat || artMaterial.caption,
       tokenVals({ match: artMatch, res: cmsMatch, handle: handle(artMatch?.lag_hemma),
         galleriUrl: cmsMatch.pixieset, hemsidaUrl: '', web: true }), { web: true })
     cmsMatch = cmsMatch

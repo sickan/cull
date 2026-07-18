@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 33
+SCHEMA_VERSION = 34
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -885,6 +885,14 @@ def _migrera(conn, fran_version):
         if (_har_tabell(conn, "ackreditering")
                 and not _har_kolumn(conn, "ackreditering", "thread_id")):
             conn.execute("ALTER TABLE ackreditering ADD COLUMN thread_id TEXT")
+
+    if fran_version < 34:
+        # v34 (F18FM-2): referatet sparas som EGET källfält på materialet —
+        # webbkanalen byggs från det i stället för att strippa sociala texten
+        # (som läckte rubrikblock/länkrad/@?-taggar till webben).
+        if (_har_tabell(conn, "publicera_material")
+                and not _har_kolumn(conn, "publicera_material", "referat")):
+            conn.execute("ALTER TABLE publicera_material ADD COLUMN referat TEXT")
 
 
 def _har_kolumn(conn, tabell, kolumn):
