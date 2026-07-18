@@ -154,12 +154,15 @@ class TestXmpWriter(unittest.TestCase):
             {"SourceFile": "/x/c.nef", "RollAngle": 11.8, "PitchAngle": 0.0},
             {"SourceFile": "/x/d.nef"},                       # ingen gyrotagg
             {"SourceFile": "/x/e.nef", "RollAngle": 1.8, "PitchAngle": 5.3},
+            # rak, rimlig vinkel — men kropp med obrukbar givare
+            {"SourceFile": "/x/f.nef", "RollAngle": -6.1, "PitchAngle": 1.3,
+             "Model": "NIKON D5"},
         ])
         with mock.patch.object(subprocess, "run",
                                return_value=mock.Mock(stdout=svar)):
             ut = xmp_writer.las_roll_vinklar(
                 [Path("/x/a.nef"), Path("/x/b.nef"), Path("/x/c.nef"),
-                 Path("/x/d.nef"), Path("/x/e.nef")])
+                 Path("/x/d.nef"), Path("/x/e.nef"), Path("/x/f.nef")])
         # CropAngle = +RollAngle rakt av (LR-katalog-verifierat 18/7) —
         # ingen negering får smyga in här.
         self.assertEqual(ut[Path("/x/a.nef")], 1.1)
@@ -170,6 +173,9 @@ class TestXmpWriter(unittest.TestCase):
         # anroparen lämnar bilden orörd i stället för att gissa.
         self.assertIn(Path("/x/e.nef"), ut)
         self.assertIsNone(ut[Path("/x/e.nef")])
+        # D5:ans givare är obrukbar även på raka bilder — aldrig ett tal här.
+        self.assertIn(Path("/x/f.nef"), ut)
+        self.assertIsNone(ut[Path("/x/f.nef")])
 
     def test_las_roll_vinklar_tom_och_trasig(self):
         import subprocess

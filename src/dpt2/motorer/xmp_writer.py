@@ -121,15 +121,26 @@ def berakna_uppratning(img_bgr):
 # där den behövs.
 MAX_PITCH = 2.0
 
+# Kroppar vars nivågivare mätts obrukbar — gyrot används inte alls där.
+#
+# D5:an brusar ±2.6° mot Z8:ans ±1.0° (±3.2° i serietagning: spegelslaget i
+# 12 b/s stör givaren, den spegellösa Z8:an har inget sådant). Nickgränsen
+# räcker inte — Stigs stickprov 18/7 visar flera grader fel på RAKA bilder
+# (D51_3968: gyro -6.1° vid pitch 1.3°, facit ~0; D51_4033: -3.1°, facit
+# ~-0.4). Över hela facitmängden gör D5-gyrot bilderna sämre än att inte
+# röra dem (medianfel 1.44° mot 1.33°), så det finns inget att rädda.
+OPALITLIGA_KROPPAR = frozenset({"NIKON D5"})
 
-def las_roll_vinklar(raw_paths, env=None, max_grader=8.0, max_pitch=MAX_PITCH):
+
+def las_roll_vinklar(raw_paths, env=None, max_grader=8.0, max_pitch=MAX_PITCH,
+                     opalitliga=OPALITLIGA_KROPPAR):
     """Kamerans gyro-RollAngle (grader) för flera raw-filer i ETT exiftool-
     anrop.
 
     Returnerar {Path: grader | None}:
       grader  pålitlig vinkel — använd den
-      None    kameran HAR gyro men värdet är inte att lita på (nickad över
-              max_pitch) — räta inte alls hellre än att räta fel
+      None    gyrot går inte att lita på här (kameran nickad över max_pitch,
+              eller en kropp i `opalitliga`) — räta inte alls hellre än fel
     Filer helt utan taggen (D3S/Df…) saknas i dicten — där får anroparen
     falla tillbaka på bildinnehållet.
 
@@ -143,7 +154,7 @@ def las_roll_vinklar(raw_paths, env=None, max_grader=8.0, max_pitch=MAX_PITCH):
     import subprocess
     if not raw_paths:
         return {}
-    cmd = (["exiftool", "-j", "-RollAngle", "-PitchAngle"]
+    cmd = (["exiftool", "-j", "-RollAngle", "-PitchAngle", "-Model"]
            + [str(p) for p in raw_paths])
     ut = {}
     try:
@@ -157,6 +168,9 @@ def las_roll_vinklar(raw_paths, env=None, max_grader=8.0, max_pitch=MAX_PITCH):
             p = Path(post["SourceFile"])
             if abs(grader) > max_grader:
                 continue          # medveten lutning — rör inte
+            if (post.get("Model") or "").strip() in opalitliga:
+                ut[p] = None
+                continue
             try:
                 pitch = float(post.get("PitchAngle"))
             except (TypeError, ValueError):
