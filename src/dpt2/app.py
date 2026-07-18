@@ -2512,12 +2512,13 @@ class Api:
         Matcher, heldagsaktiviteterna ur tävlingarnas från/till-datum.
         V5-C §3: posterna annoteras med automatikens beslut (auto_dold +
         del_av) så panelen kan VISA varför något inte publiceras."""
+        eventer = store.lista_eventer(self.conn)
+        idag = datetime.now().strftime("%Y-%m-%d")
         matcher, tavlingar = _pagang_auto(
-            self._pagang_kommande(), self._pagang_tavlingar(),
-            store.lista_eventer(self.conn),
-            datetime.now().strftime("%Y-%m-%d"))
+            self._pagang_kommande(), self._pagang_tavlingar(), eventer, idag)
         return {"ok": True, "visa": store.hamta_installning(self.conn, "pagang_visa") != "0",
-                "matcher": matcher, "tavlingar": tavlingar}
+                "matcher": matcher, "tavlingar": tavlingar,
+                "resultat": _pagang_resultat(eventer, idag)}
 
     def satt_pagang_visa(self, pa):
         """Slår på/av 'Visa på sajten' för På gång-widgeten."""
@@ -2545,18 +2546,23 @@ class Api:
         visa = store.hamta_installning(self.conn, "pagang_visa") != "0"
         kommande = self._pagang_kommande() if visa else []
         tavlingar = self._pagang_tavlingar() if visa else []
+        eventer = store.lista_eventer(self.conn)
+        idag = datetime.now().strftime("%Y-%m-%d")
         # V5-C §3: automatiken (pagang_lage per event) avgör vad som täcks av
         # heldagskortet resp. matcherna; annoterar även del_av (invarianten).
-        _pagang_auto(kommande, tavlingar, store.lista_eventer(self.conn),
-                     datetime.now().strftime("%Y-%m-%d"))
+        _pagang_auto(kommande, tavlingar, eventer, idag)
+        # Efter-fasen: nyligen avslutade event blir resultatkort.
+        resultat = _pagang_resultat(eventer, idag) if visa else []
         # Per-post-kryssrutan (manuell) + automatiken: dolda poster publiceras
         # inte — och plockas bort från workern av reconciliationen nedan.
         kommande = [m for m in kommande
                     if not m.get("pagang_dold") and not m.get("auto_dold")]
         tavlingar = [t for t in tavlingar
                      if not t.get("pagang_dold") and not t.get("auto_dold")]
+        resultat = [e for e in resultat if not e.get("pagang_dold")]
         poster = ([("match-" + m["id"], _pagang_match_md(m)) for m in kommande] +
-                  [("tavling-" + t["id"], _pagang_tavling_md(t)) for t in tavlingar])
+                  [("tavling-" + t["id"], _pagang_tavling_md(t)) for t in tavlingar] +
+                  [("resultat-" + e["id"], _pagang_resultat_md(e)) for e in resultat])
         if test:
             mal = testlage.innehall_mapp("pagang")
             skrivna = []
@@ -3085,8 +3091,7 @@ def _pagang_auto(kommande, tavlingar, eventer, idag):
 
     Ligor/övriga tävlingsposter och matcher utan event berörs inte. Manuella
     per-post-kryssrutan (pagang_dold) ligger kvar ovanpå och vinner alltid.
-    'Efter → resultat' täcks av att posterna faller ur listorna som idag —
-    resultatet bor i matcharkivet (resultatkort på På gång = senare skiva)."""
+    Efter-fasen hanteras av `_pagang_resultat` (egna resultatkort)."""
     ev = {e["id"]: e for e in eventer or []}
     for m in kommande:
         e = ev.get(m.get("event_id") or "")
@@ -3107,6 +3112,65 @@ def _pagang_auto(kommande, tavlingar, eventer, idag):
         under = bool(fran) and fran <= idag <= till
         t["auto_dold"] = lage == "matcher" or (lage == "auto" and under)
     return kommande, tavlingar
+
+
+PAGANG_RESULTAT_DAGAR = 7
+
+
+def _pagang_resultat(eventer, idag):
+    """Efter-fasen i På gång-automatiken (V5-C §3: 'Efter → resultat'): event
+    vars period passerat visas som ETT resultatkort i högst
+    PAGANG_RESULTAT_DAGAR dagar — dörren till eventsidans program/galleri där
+    resultaten bor. Därefter faller kortet ur (matcharkivet tar över).
+    Event utan period berörs inte. Manuella kryssrutan (pagang_dold, speglad
+    från tävlingsraden) vinner som vanligt — filtreras hos anroparen så
+    panelen kan VISA det dolda kortet avbockat."""
+    try:
+        d0 = datetime.strptime(idag, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return []
+    ut = []
+    for e in eventer or []:
+        fran = (e.get("fran") or "").strip()
+        till = (e.get("till") or fran or "").strip()
+        if not till or till >= idag:          # ingen period / inte passerad
+            continue
+        try:
+            dagar = (d0 - datetime.strptime(till, "%Y-%m-%d")).days
+        except ValueError:
+            continue
+        if dagar > PAGANG_RESULTAT_DAGAR:
+            continue
+        ut.append(dict(e))
+    ut.sort(key=lambda e: (e.get("till") or "", e.get("namn") or ""),
+            reverse=True)                     # senast avslutat överst
+    return ut
+
+
+def _pagang_resultat_md(e):
+    """Ett avslutat event → resultatkortets .md (kategori 'Resultat').
+    Kortet ÄR eventet, så del_av lämnas tom (sajtens eyebrow blir 'Resultat');
+    del_av_slug bär länken till eventsidan — samma slug-join som V5-E
+    (förutsätter att sporteventets titel är eventets namn)."""
+    e = e or {}
+    namn = e.get("namn") or ""
+    namnslug = AX.slugga(namn) if namn else "event"
+    fm = {
+        "typ": "aktivitet",
+        "kategori": "Resultat",
+        "etikett": (e.get("sport") or "").capitalize() or None,
+        "titel": namn or None,
+        "datum": (e.get("fran") or "").strip() or None,
+        "slut": (e.get("till") or "").strip() or None,
+        "tid": None,
+        "plats": e.get("ort") or e.get("arena") or None,
+        "publicerad": True,
+        "heldag": True,
+        "del_av": None,
+        "del_av_slug": AX.slugga(namn) if namn else None,
+        "gren": (e.get("gren") or "").capitalize() or None,
+    }
+    return fm, "", f"resultat-{namnslug}", AX.render_md(fm, "")
 
 
 def _pagang_match_md(m):

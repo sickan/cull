@@ -1286,7 +1286,9 @@ export async function pagangMatcher() {
     { id: 'p4', datum: '2026-09-02', tid: '', lag_hemma: 'Sverige', lag_borta: 'Danmark', liga: 'Landskamp herr', hem_gren: 'herr' }],
   tavlingar: [
     { id: 't1', namn: 'Friidrotts-SM 2026', sport: 'friidrott', gren: 'mixed', fran: '2026-07-24', till: '2026-07-26', ort: 'Uppsala' },
-    { id: 't2', namn: 'Månadsbryt-cupen', sport: 'volleyboll', gren: 'dam', fran: '2026-07-30', till: '2026-08-02', ort: 'Åhus' }] })
+    { id: 't2', namn: 'Månadsbryt-cupen', sport: 'volleyboll', gren: 'dam', fran: '2026-07-30', till: '2026-08-02', ort: 'Åhus' }],
+  resultat: [
+    { id: 'e1', namn: 'Nordea Open 2026', sport: 'tennis', gren: 'herr', fran: '2026-07-13', till: '2026-07-17', ort: 'Båstad' }] })
 }
 export async function sattPagangVisa(pa) {
   const api = brygga()

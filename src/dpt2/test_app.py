@@ -2601,3 +2601,68 @@ class TestPagangTavlingar(unittest.TestCase):
     def test_satt_pagang_dold_validerar_art(self):
         r = self.api.satt_pagang_dold("blogg", "x", True)
         self.assertFalse(r["ok"])
+
+
+class TestPagangResultat(unittest.TestCase):
+    """V5-C §3 efter-fasen: nyss avslutade event blir resultatkort på På gång
+    i högst PAGANG_RESULTAT_DAGAR dagar — dörren till eventsidans resultat."""
+
+    EV = {"id": "no", "namn": "Nordea Open 2026", "sport": "tennis",
+          "gren": "herr", "fran": "2026-07-13", "till": "2026-07-17",
+          "ort": "Båstad", "pagang_dold": 0}
+
+    def test_fonstret(self):
+        from dpt2.app import _pagang_resultat
+        # Dagen efter → med. Inom fönstret → med. Efter fönstret → ute.
+        self.assertEqual(len(_pagang_resultat([self.EV], "2026-07-18")), 1)
+        self.assertEqual(len(_pagang_resultat([self.EV], "2026-07-24")), 1)
+        self.assertEqual(len(_pagang_resultat([self.EV], "2026-07-25")), 0)
+        # Pågående/eventuell framtid → inte efter-fasen.
+        self.assertEqual(len(_pagang_resultat([self.EV], "2026-07-17")), 0)
+        self.assertEqual(len(_pagang_resultat([self.EV], "2026-07-01")), 0)
+        # Utan period → berörs aldrig.
+        self.assertEqual(len(_pagang_resultat(
+            [{"id": "x", "namn": "Ligacupen"}], "2026-07-18")), 0)
+
+    def test_md_formatet(self):
+        from dpt2.app import _pagang_resultat_md
+        fm, body, slug, md = _pagang_resultat_md(self.EV)
+        self.assertEqual(fm["kategori"], "Resultat")
+        self.assertEqual(fm["titel"], "Nordea Open 2026")
+        self.assertEqual(fm["datum"], "2026-07-13")
+        self.assertEqual(fm["slut"], "2026-07-17")
+        self.assertEqual(fm["del_av_slug"], "nordea-open-2026")
+        self.assertIsNone(fm["del_av"])            # kortet ÄR eventet
+        self.assertTrue(fm["heldag"])
+        self.assertEqual(slug, "resultat-nordea-open-2026")
+
+    def test_dold_flagga_speglas_till_event(self):
+        # satt_pagang_dold('tavling') måste nå event-spegeln — annars läser
+        # efter-fasen en stale flagga.
+        api = Api(db_path=":memory:")
+        r = api.spara_tavling({"namn": "Nordea Open 2026", "sport": "tennis",
+                               "gren": "herr", "typ": "turnering",
+                               "fran": "2026-07-13", "till": "2026-07-17"})
+        self.assertTrue(r["ok"])
+        tid = r["id"]
+        api.satt_pagang_dold("tavling", tid, True)
+        ev = store.hamta_event(api.conn, tid)
+        self.assertEqual(ev["pagang_dold"], 1)
+        api.satt_pagang_dold("tavling", tid, False)
+        self.assertEqual(store.hamta_event(api.conn, tid)["pagang_dold"], 0)
+
+    def test_pagang_matcher_returnerar_resultat(self):
+        from datetime import datetime, timedelta
+        api = Api(db_path=":memory:")
+        igar = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        forra_veckan = (datetime.now() - timedelta(days=4)).strftime("%Y-%m-%d")
+        api.spara_tavling({"namn": "Nyss Avslutade Cupen", "sport": "tennis",
+                           "gren": "herr", "typ": "turnering",
+                           "fran": forra_veckan, "till": igar})
+        r = api.pagang_matcher()
+        self.assertTrue(r["ok"])
+        namn = [e["namn"] for e in r.get("resultat") or []]
+        self.assertIn("Nyss Avslutade Cupen", namn)
+        # ...och tävlingsposten (heldag) är inte längre "kommande".
+        self.assertNotIn("Nyss Avslutade Cupen",
+                         [t["namn"] for t in r["tavlingar"]])

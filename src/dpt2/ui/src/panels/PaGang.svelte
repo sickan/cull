@@ -20,9 +20,12 @@
     const r = await pagangMatcher()
     if (r?.ok) {
       // Matcher + tävlingsperioder (heldagsaktiviteter) i en kronologisk lista.
+      // Efter-fasens resultatkort (nyss avslutade event) ligger överst —
+      // deras datum har passerat, så kronologin sätter dem naturligt först.
       const matcher = (r.matcher || []).map((m) => ({ ...m, art: 'match', sortNyckel: `${m.datum || '9999'}T${m.tid || ''}` }))
       const tavlingar = (r.tavlingar || []).map((t) => ({ ...t, art: 'tavling', sortNyckel: `${t.fran || '9999'}T` }))
-      pagang = [...matcher, ...tavlingar].sort((a, b) => a.sortNyckel.localeCompare(b.sortNyckel))
+      const resultat = (r.resultat || []).map((e) => ({ ...e, art: 'resultat', sortNyckel: `${e.fran || '0000'}T` }))
+      pagang = [...resultat, ...matcher, ...tavlingar].sort((a, b) => a.sortNyckel.localeCompare(b.sortNyckel))
       pagangVisa = r.visa
     }
   }
@@ -42,7 +45,10 @@
   // så rutan känns momentan; backend persisterar.
   async function toggleDold(p) {
     const dold = !p.pagang_dold
-    const r = await sattPagangDold(p.art, p.id, dold)
+    // Resultatkortet är eventets efter-fas — samma id och samma dold-flagga
+    // som tävlingsraden (backend speglar tavling → liga/event).
+    const backendArt = p.art === 'resultat' ? 'tavling' : p.art
+    const r = await sattPagangDold(backendArt, p.id, dold)
     if (r?.ok) pagang = pagang.map((x) => (x.art === p.art && x.id === p.id ? { ...x, pagang_dold: dold ? 1 : 0 } : x))
   }
   async function togglePagangVisa() { pagangVisa = !pagangVisa; await sattPagangVisa(pagangVisa) }
@@ -74,13 +80,13 @@
     <div class="pglista">
       {#each pagang as m (m.art + m.id)}
         <div class="pgkort" class:dold={m.pagang_dold || m.auto_dold}>
-          {#if m.art === 'tavling'}
+          {#if m.art === 'tavling' || m.art === 'resultat'}
             {@const iv = intervall(m.fran, m.till)}
             <div class="pgdatum"><span class="pgdag scd">{iv.dag}</span>
               <span class="pgmon">{iv.mon}</span></div>
             <span class="grendot" style="background:{grenFarg(m.gren)}"></span>
             <div class="pgi"><div class="pgf">{m.namn}</div>
-              <div class="pgl">Heldag · {versal(m.sport)}{m.ort ? ` · ${m.ort}` : ''}</div></div>
+              <div class="pgl">{m.art === 'resultat' ? 'Resultat · avslutat' : 'Heldag'} · {versal(m.sport)}{m.ort ? ` · ${m.ort}` : ''}</div></div>
           {:else}
             <div class="pgdatum"><span class="pgdag scd">{(m.datum || '').split('-')[2] || '–'}</span>
               <span class="pgmon">{MK[(Number((m.datum || '').split('-')[1]) || 1) - 1]?.toUpperCase()}</span></div>
