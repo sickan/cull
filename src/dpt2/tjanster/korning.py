@@ -15,6 +15,7 @@ Event-typer:
 """
 
 import json
+import os
 import subprocess
 import sys
 
@@ -57,8 +58,15 @@ def kor_subprocess(args, lyssnare=None, *, python=None):
     """
     cmd = [python or sys.executable, "-m", "dpt2.worker", *args]
     events = []
+    # Tysta MediaPipes Google-telemetri (clearcut) — "Failed to send to
+    # clearcut: FAILED_PRECONDITION" var 60:e sekund är ofarligt brus som
+    # dränkte gallringsloggen (Stigs körning 18/7: ~40 rader på 2250 bilder).
+    # GLOG_minloglevel=3 släpper bara FATAL igenom från absl/glog-lagret;
+    # workerns egna JSON-events går på stdout och berörs inte.
+    env = {**os.environ, "GLOG_minloglevel": "3", "ABSL_MIN_LOG_LEVEL": "3"}
     with subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, text=True, bufsize=1) as proc:
+                          stderr=subprocess.STDOUT, text=True, bufsize=1,
+                          env=env) as proc:
         for rad in proc.stdout:
             ev = parsa_event(rad)
             if ev is None:
