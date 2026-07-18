@@ -215,6 +215,7 @@ MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utred
 | IB-1 | Trupp-OCR: inläsning körs mot valt lag + auto-komplettering (spelare i inläst elva som saknas i truppen läggs till, markerade för verifiering) | Bygger på trupp skiva 2 (18/7) |
 | IB-2 | Bilder → På telefonen: Töm-knapp m bekräftelse | Litet |
 | IB-4 | Robustare DPT2↔iOS-synk: silent push (`content-available:1`, payload `{match_id, changed}`) som signal + `updated_since`-delta vid start/förgrund; ev. WS/SSE i live-läge senare | Backend + iOS; APNs-infran finns (design-lyftet etapp 3) |
+| IB-5 | **Fokuspunkt i iOS-appens story-flöde** (Stig 18/7): kunna sätta fokus/beskärning på fotot före rendering — desktopens Matchpublicering har redan väljaren (BildvaljareFokuspunkt) och workerns story-spec tar redan emot `fokus{x,y}` + `zoom` → bara app-UI:t saknas (tap/dra på förhandsbilden → skicka med i render-anropet) | iOS · liten-medel; hela kedjan bakom finns |
 
 ## G · Spikes DPT2
 
