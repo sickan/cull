@@ -64,7 +64,7 @@ röst→action är LÅG prio.
 | V2-12 | Utrustningspackning: packmallar per eventtyp → packlista vid planering | v2 §12 · matas av V2-06-noteringar |
 | V2-13 | Publiceringsstatistik: vad publicerats var, per match/event och kanal (underlag åt klubbar/sponsorer) | v2 §13 · bygger naturligt på V5 §10 publiceringskö |
 | V2-17 | **EPIC: Matchlathund** — Claude-genererad matchplan (betydelse/tabelläge, spelare att följa, praktiskt, foto-inställningar ur väder, arenan/solen). Läsbar i iOS på matchdagen, PDF-export offline, skicka till mejl | v2 §17 · underlag: matchdata + väder (V2-02) + packmallar (V2-12) + egna arenanoteringar (V2-06) |
-| FEAT-15 | **Hämta uppladdade original i DPT2** — Mac-sidan av kort→telefon→moln-bryggan (Stig-beslut 18/7): DPT2 listar originalen på molnets privata /api/original-yta per grupp/match och hämtar hem dem ("bilderna väntar när du kommer hem"), så appens Ladda upp-knapp blir en riktig brygga i stället för ren backup | Knyter an till moln-som-sanning-arkitekturen; iOS-sidan klar (`59a4ea1`) |
+| FEAT-15 | **Hämta uppladdade original i DPT2** — Mac-sidan av kort→telefon→moln-bryggan (Stig-beslut 18/7): DPT2 listar originalen på molnets privata /api/original-yta per grupp/match och hämtar hem dem ("bilderna väntar när du kommer hem"), så appens Ladda upp-knapp blir en riktig brygga i stället för ren backup | ✅ **KLAR 18/7** (dpt `8907798` + worker `4403e0b` DEPLOYAD): workern fick list/hämta/städa-rutter (auth, streamad GET), DPT2-tjänst `original_synk` + "Från telefonen"-kort i Gallra (hämta → auto-källmapp; städa molnet-kryss, tas bort först efter verifierad hemkomst; idempotent omkörning). 13 nya tester (668 gröna), skarpverifierad mot riktiga NEF:er i molnet |
 
 ### EPIC V2-KUND · Eventpublicering, kundgodkännande & kundregister (v2 §3 + §14 + §7)
 
@@ -145,7 +145,7 @@ visar riktiga server-renderade Horisont-bilden.*
 | V2-06 | Noteringar på event/matcher: snabbt i iOS under eventet, utförligt i DPT2 efteråt; sökbara vid planering av liknande event | v2 §6 · iOS+DPT2 · **BESLUT (Stig 17/7): TVÅVÄGS synk iOS ↔ DPT2** · matar V2-12 packning + V2-17 lathundens arenadel |
 | V2-11 | Filmlogg: rulle i vilken kamera, exponeringsanteckningar, status (i kamera/hos lab/skannad), kopplad till frysinventariet | v2 §11 · iOS+DPT2 |
 | V2-18 | Nyckelspelare → publiceringsflödet: lathundens "spelare att följa" blir objekt m storyline per match → snabbval vid bildval/SoMe + overlay-text kombinerar händelse + kontext ("mål i sin första match för MFF!") | v2 §18 · bygger på V2-17; samma JSON som Damallsvenskan-research |
-| iOS-trupp-2/3 | Trupp skiva 2: Vision-OCR förifyller ur uppställningsfotot · skiva 3: DPT2-reconciliation av mobilsatt roster | Skiva 1 KLAR + installerad |
+| iOS-trupp-2/3 | Trupp skiva 2: Vision-OCR förifyller ur uppställningsfotot · skiva 3: DPT2-reconciliation av mobilsatt roster | **Skiva 2 ✅ KLAR 18/7** (ios `c65f70a`, INSTALLERAD): "Läs uppställningen ur bilden"-knapp → Vision-OCR (sv/en, utan språkkorrektion) → ren matchningslogik (efternamn+nr, Levenshtein-tolerans, efternamnskrock→osäkra, nakna nummer bär aldrig bevisvikt) → obligatoriskt granskningsark → fyller startelvan. 10 tester (31 gröna). Skiva 3 kvar |
 | iOS-notis | Skarp notis-landning ("påminn när matchdata landat" — Stigs knapptryck end-to-end) | Kvar från design-lyftet etapp 3 |
 | iOS-story | Story-text-override | Kvar från lyftet |
 | iOS-lev | Leverans-progress-datakälla | Kvar från lyftet |
