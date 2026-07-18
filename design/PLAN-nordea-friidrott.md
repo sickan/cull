@@ -105,6 +105,23 @@ skiljelinje för dolda jobb, FEAT-10/11 galleri-sökvägs-UI. → Code direkt.
 
 ### Prio 2 — iOS telefon
 
+- [ ] **BUG-iOS-03 Raderat i DPT2 ligger kvar i appen** (Stig 18/7: tog bort
+      Nordea Open imorgon i DPT2, fanns kvar i iOS). *Diagnos klar — molnet var
+      redan rätt* (`/api/jobb` hade bara 14/7+17/7 kvar, `/api/live` inget
+      Nordea; DPT2:s wholesale-PUT propagerade korrekt). Två app-hål:
+      **(a)** `FotojobbView` hämtar bara en gång per app-start
+      (`.task { if jobb.isEmpty … }`, `FotojobbView.swift:63`) och saknar
+      `.dptSynka`-lyssnare helt — till skillnad från Hem/Matcher. Enda vägen
+      till färskt data = pull-to-refresh eller döda appen.
+      **(b)** `SynkDelta.harAndringar()` (`PushService.swift:47`) frågar bara
+      `/api/live?updated_since=` och returnerar `antal > 0` → en **raderad**
+      post ger ingen uppdaterad rad = ingen synksignal (gäller även matcher),
+      och `/api/jobb` pollas överhuvudtaget inte.
+      *Fix:* `.dptSynka` + `.refreshable` även på kalender-läget i FotojobbView;
+      låt förgrundssynken jämföra en billig **signatur** (antal + senaste
+      ändringsstämpel) för både `/api/live` och `/api/jobb` istället för
+      `antal > 0` — då fångas raderingar. Alternativ (enklare/robustare):
+      ladda alltid om vid `.active` när datan är äldre än ~60 s. Litet–medel.
 - [ ] **B-012 Kamerabrygga FTP** (ersätter SPIKE-iOS-01 — designen KLAR:
       `ios-nef-brygga/design/PLAN-kamera-ftp.md`, `d207bba`): FTP-mottagare i
       appen (Network.framework, port 2121) → Z8 skickar markerade bilder över
