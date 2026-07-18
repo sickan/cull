@@ -788,7 +788,7 @@
     }
     if (d && nyare && (d.status === 'failure' || d.status === 'canceled')) {
       statusLage = 'fel'
-      statusOrsak = d.status === 'canceled' ? 'Bygget avbröts' : 'Bygget misslyckades'
+      statusOrsak = d.status === 'canceled' ? 'Bygget avbröts' : byggfelText(d)
       return
     }
     if (Date.now() - publiceradVid > 5 * 60_000) {
@@ -798,6 +798,21 @@
     statusLage = 'bygger'
     statusTimer = setTimeout(pollaStatus, 10_000)
   }
+  // Ett bygge kan falla på två helt olika sätt och "Bygget misslyckades" dolde
+  // skillnaden (Stigs natt 18/7): Cloudflare kunde inte ens ta emot jobbet
+  // (fas initialize, "unable to submit build job") — övergående, Försök igen
+  // räcker — mot ett riktigt fel i innehållet/koden, där en ny knapptryckning
+  // bara ger samma fel. Säg vilket det är.
+  function byggfelText(d) {
+    const infra = d.fas === 'initialize' || d.fas === 'queued' ||
+      /unable to submit build job/i.test(d.detalj || '')
+    if (infra) return 'Cloudflare kunde inte starta bygget — försök igen'
+    const var_ = d.fas === 'clone_repo' ? 'Kunde inte hämta koden'
+      : d.fas === 'deploy' ? 'Publiceringen av bygget misslyckades'
+      : 'Bygget misslyckades'
+    return var_ + (d.detalj ? ': ' + d.detalj : '')
+  }
+
   onDestroy(stoppaStatusPoll)
 
   const DEPLOY_ETI = { success: 'Live', building: 'Bygger…', queued: 'Köad', failure: 'Fel', canceled: 'Avbruten' }
@@ -1328,7 +1343,7 @@
         {:else if statusLage === 'live'}
           <span class="deploystatus st-live"><span class="stprick"></span>Live sedan {statusTid}</span>
         {:else if statusLage === 'fel'}
-          <span class="deploystatus st-fel"><span class="stprick"></span>{statusOrsak}</span>
+          <span class="deploystatus st-fel" title={statusOrsak}><span class="stprick"></span>{statusOrsak}</span>
           <button class="statusbtn" on:click={publicera} disabled={synkar}>Försök igen</button>
         {:else if publiceradId && deployText}
           <span class="deploystatus">{deployText}</span>
@@ -1602,7 +1617,8 @@
     background: currentColor; margin-right: 6px; vertical-align: 1px; }
   .st-bygger { color: #B07A2A; }
   .st-live { color: #5C8F4A; }
-  .st-fel { color: #C0492F; }
+  .st-fel { color: #C0492F; max-width: 46ch; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }   /* hela orsaken i title — loggraden kan vara lång */
   .stprick.puls { animation: d9puls 1.6s ease-in-out infinite; }
   @keyframes d9puls { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
   @media (prefers-reduced-motion: reduce) { .stprick.puls { animation: none; } }

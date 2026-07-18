@@ -1254,6 +1254,17 @@ export async function thumbForBild(path) {
 export async function statusInnehall(typ, id) {
   const api = brygga()
   if (api) return api.status_innehall(typ, id)
+  // Mockläget kan spela upp ett misslyckat bygge (?deployfel=infra|build) så
+  // felremsans två varianter går att se utan att provocera fram ett riktigt
+  // CF-fel.
+  const fel = new URLSearchParams(location.search).get('deployfel')
+  if (fel) {
+    return wait({ id, publicerad: true, deploy: {
+      status: 'failure', skapad: new Date().toISOString(), url: null,
+      fas: fel === 'infra' ? 'initialize' : 'build',
+      detalj: fel === 'infra' ? 'Failed: unable to submit build job'
+        : "error: Expected \"---\" but found \"-\" i content/sport/malmo-ff-brondby-if.md" } })
+  }
   return wait({ id, publicerad: true, deploy: { status: 'success', skapad: new Date().toISOString(), url: null } })
 }
 
