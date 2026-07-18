@@ -26,7 +26,8 @@ PROFILER = {
         "namn": "Handboll",
         "res_label": "Slutresultat", "res_ph": "28–24",
         "mid_label": "Halvtid", "mid_ph": "14–11", "mid_moment": "Halvtid", "mid_token": "halvtid",
-        "start_moment": "Avspark",
+        # Handboll kastar av — "Avspark" är fotbollens ord (Stigs fältnot 18/7).
+        "start_moment": "Avkast",
         "has_scorers": True, "scorers_label": "Målskyttar",
         "lineup": "Startsju", "lineup_n": "(7)",
         "squad": True, "individ": False,

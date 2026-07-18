@@ -55,6 +55,7 @@ röst→action är LÅG prio.
 | B-004 | Enhetligt skapa/ändra-mönster (fotojobb/matcher/lag/liga) | Absorberar B-005 ("Ny" utan ändring), #26, FEAT-07-mönstret |
 | T-auto | Turnerings-autospar (tennis fas 3-rest) | Tennis-minnet |
 | SP-pers | Snabbplock: persist urval per jobb | Ej kritiskt |
+| SPORT-ORD | **Startmomentets ord per sport** (Stig 18/7): heter inte alltid "Avspark" — fotboll Avspark · handboll **Avkast** (✅ rättad 18/7, låg fel som Avspark) · innebandy Nedsläpp · tennis/volleyboll/beachvolley Matchstart · friidrott Start. Bors i `sportprofil.start_moment` och följer med matchpaketet → overlay + appens momentknappar. **Vid NY sport: sätt rätt startord i profilen direkt** (t.ex. ishockey Nedsläpp, löpning/lopp Starttid) | Princip, inte öppen bugg — profilen är enda källan |
 | IPTC | Leverera fas 3: IPTC-bildtexter | Sparad sedan tidigare |
 | C-försl | Beslut om C-förslagen (design/C-FORSLAG.md) | Stig-beslut |
 | FEAT-14 | **EPIC: Ackrediteringssvar → DPT2** (svarsmail blir förslag Beviljad/Nekad + notering i appen) | Handoff §8 senare-fas; skivor nedan |
