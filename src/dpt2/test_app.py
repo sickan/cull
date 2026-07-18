@@ -1424,6 +1424,30 @@ class TestGallringConfig(unittest.TestCase):
         self.assertIsNone(g.topp)
         self.assertFalse(g.ai)          # rapport → ai=False
 
+    def test_panelens_nycklar_behall_enhet(self):
+        # CULL-04: §9-panelen skickar 'behall'/'enhet' — de måste nå fram
+        # (föll annars tyst till 10 %-defaulten oavsett Stigs val).
+        g = _gallring_av_config({"enhet": "bilder", "behall": 300,
+                                 "verktyg": "ai", "burst": 2.0})
+        self.assertEqual(g.topp, 300)
+        g = _gallring_av_config({"enhet": "procent", "behall": 25})
+        self.assertAlmostEqual(g.andel, 0.25)
+
+    def test_bevaka_ur_panelens_kommastrang(self):
+        # Panelen skickar nummer som '11,23' — set() på strängen vore en
+        # teckenmängd; parsas till {'11','23'}.
+        g = _gallring_av_config({"nummer": "11, 23"})
+        self.assertEqual(g.bevaka, {"11", "23"})
+        self.assertEqual(_gallring_av_config({"bevaka": ["7"]}).bevaka, {"7"})
+        self.assertEqual(_gallring_av_config({"nummer": ""}).bevaka, set())
+
+    def test_profil_och_sport_foljer_med(self):
+        # CULL-02: profil/sport → Gallring (signalval i handsatta formeln)
+        g = _gallring_av_config({"profil": "sport", "sport": "friidrott"})
+        self.assertEqual(g.profil, "sport")
+        self.assertEqual(g.sport, "friidrott")
+        self.assertEqual(_gallring_av_config({}).profil, "sport")
+
 
 class FejkInnehallSynkLogga:
     """Bara det logga_url_for_lag rör."""

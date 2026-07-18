@@ -1224,6 +1224,12 @@ class Api:
     # ── Gallra (skapar urval + cull_jobb; motorn körs i ML-miljö) ────────────
     def starta_cull(self, config):
         from dpt2.motorer.gallring import Gallring
+        # CULL-02: matchens sport styr signalvalet i handsatta formeln
+        # (fotbollssignaler bara för lagsporter) — slå upp den här, workern
+        # läser den sedan ur cull_jobb.vikter.
+        if config.get("match_id") and not config.get("sport"):
+            m = store.hamta_match(self.conn, config["match_id"]) or {}
+            config["sport"] = m.get("sport") or ""
         cfg = _gallring_av_config(config)
         uid = store.spara_urval(
             self.conn, kalla=config.get("kalla", ""), bilder=0,
@@ -3613,17 +3619,32 @@ def _platser_md(platser):
 
 def _gallring_av_config(config):
     """Mappar UI-config → motorer.gallring.Gallring. behall_enhet 'bilder' →
-    topp (exakt antal); 'procent' → andel (fraktion)."""
+    topp (exakt antal); 'procent' → andel (fraktion).
+
+    CULL-04: §9-Gallra-panelen skickar nycklarna 'behall'/'enhet' — de gamla
+    namnen 'behall_varde'/'behall_enhet' lästes här → panelens behåll-val
+    nådde aldrig fram och varje körning föll tyst till 10 %-defaulten
+    (Stigs 2250→225). Ta emot båda uppsättningarna."""
     from dpt2.motorer.gallring import Gallring
-    enhet = config.get("behall_enhet", "bilder")
-    varde = config.get("behall_varde")
+    enhet = config.get("behall_enhet") or config.get("enhet") or "bilder"
+    varde = config.get("behall_varde") or config.get("behall")
     topp = int(varde) if (enhet == "bilder" and varde) else None
     andel = (float(varde) / 100.0) if (enhet == "procent" and varde) else 0.10
     return Gallring(
         ai=config.get("verktyg", "ai") == "ai",
         topp=topp, andel=andel,
         burst_sek=float(config.get("burst", 2.0)),
-        bevaka=set(config.get("bevaka") or []))
+        bevaka=_bevaka_av(config.get("bevaka") or config.get("nummer")),
+        profil=config.get("profil") or "sport",
+        sport=config.get("sport") or "")
+
+
+def _bevaka_av(varde):
+    """Bevakade tröjnummer ur UI-config: panelen skickar kommasträng ('11,23'),
+    äldre vägar en lista. set('11,23') vore en TECKENmängd — parsa."""
+    if isinstance(varde, str):
+        return {n.strip() for n in varde.split(",") if n.strip()}
+    return set(varde or [])
 
 
 def index_url():

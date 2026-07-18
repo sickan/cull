@@ -26,6 +26,22 @@ class TestCfgAvJobb(unittest.TestCase):
         cfg = G._cfg_av_jobb(None)
         self.assertAlmostEqual(cfg.andel, 0.10)
         self.assertEqual(cfg.burst_sek, 2.0)
+        # CULL-02: gamla jobb utan vikter → sport-profil, okänd sport (arvet)
+        self.assertEqual(cfg.profil, "sport")
+        self.assertEqual(cfg.sport, "")
+
+    def test_vikter_json_ger_profil_och_sport(self):
+        # CULL-02: profil/sport rundresar via cull_jobb.vikter (JSON-sträng
+        # ur sqlite) → signalvalet i handsatta formeln.
+        cfg = G._cfg_av_jobb({"behall_enhet": "bilder", "behall_varde": 10,
+                              "vikter": '{"profil": "sport", "sport": "friidrott"}'})
+        self.assertEqual(cfg.profil, "sport")
+        self.assertEqual(cfg.sport, "friidrott")
+
+    def test_trasig_vikter_json_faller_till_default(self):
+        cfg = G._cfg_av_jobb({"vikter": "inte json"})
+        self.assertEqual(cfg.profil, "sport")
+        self.assertEqual(cfg.sport, "")
 
 
 class TestModellPaket(unittest.TestCase):

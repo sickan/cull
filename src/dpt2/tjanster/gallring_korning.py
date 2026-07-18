@@ -17,21 +17,32 @@ import subprocess
 from pathlib import Path
 
 from dpt2.data import store
-from dpt2.motorer import extraktion, inlarning
+from dpt2.motorer import extraktion, gallring, inlarning
 from dpt2.motorer.gallring import Gallring, gallra
 from dpt2.tjanster.leverera import lista_bilder
 
 
 def _cfg_av_jobb(jobb):
-    """cull_jobb-rad → Gallring. behall_enhet 'bilder'→topp, 'procent'→andel."""
+    """cull_jobb-rad → Gallring. behall_enhet 'bilder'→topp, 'procent'→andel.
+    CULL-02: profil/sport läses ur vikter-JSON:en (signalval i handsatta
+    formeln); gamla jobb utan vikter faller till sport-profilen (arvet)."""
     enhet = (jobb or {}).get("behall_enhet") or "procent"
     varde = (jobb or {}).get("behall_varde")
     topp = int(varde) if (enhet == "bilder" and varde) else None
     andel = (float(varde) / 100.0) if (enhet == "procent" and varde) else 0.10
+    vikter = (jobb or {}).get("vikter")
+    if isinstance(vikter, str):
+        try:
+            vikter = json.loads(vikter)
+        except Exception:
+            vikter = None
+    vikter = vikter if isinstance(vikter, dict) else {}
     return Gallring(
         ai=(jobb or {}).get("verktyg", "ai") != "rapport",
         topp=topp, andel=andel,
-        burst_sek=float((jobb or {}).get("burst_grans") or 2.0))
+        burst_sek=float((jobb or {}).get("burst_grans") or 2.0),
+        profil=vikter.get("profil") or "sport",
+        sport=vikter.get("sport") or "")
 
 
 def _las_tider(paths, env):
@@ -104,17 +115,23 @@ def kor_gallring(conn, urval_id, modeller, *, env=None, logg=print, progress=Non
 
     onskad = _modell_typ((jobb or {}).get("modell"))
     paket = _modell_paket(conn, (jobb or {}).get("modell"))
+    # CULL-02: profilen (och matchens sport) avgör signaluppsättningen —
+    # urval-tabellen saknar sport-kolumn, så cfg (ur cull_jobb.vikter) är facit.
+    _, signaler = gallring.aktiva_signaler(cfg.profil, cfg.sport)
+    formel = (f"profil {cfg.profil}"
+              + (f"/{cfg.sport}" if cfg.sport else "")
+              + (", full matchformel" if len(signaler) > 1
+                 else " — sportneutral formel"))
     if paket is not None:
-        inlarning.poangsatt_med_modell(resultat, paket,
-                                       sport=urval.get("sport"))
+        inlarning.poangsatt_med_modell(resultat, paket, sport=cfg.sport or None)
         logg(f"  Poängsatt med modell ({onskad}).")
     elif onskad:
         # En modell VAR vald men gick inte att ladda (otränad typ, saknad/
         # trasig pkl, saknat sklearn) — säg det högt i stället för att tyst
         # låta den handsatta formeln se ut som ett normalfall (BUG-CULL-01).
-        logg(f"  ⚠ Modellen '{onskad}' kunde inte laddas — handsatt poängformel.")
+        logg(f"  ⚠ Modellen '{onskad}' kunde inte laddas — handsatt formel ({formel}).")
     else:
-        logg("  Ingen tränad modell — handsatt poängformel.")
+        logg(f"  Ingen tränad modell — handsatt formel ({formel}).")
     valda, info = gallra(resultat, cfg, modellpoang_satt=paket is not None)
 
     # Persistera per-bild-urvalet (behåll-flagga + poäng) → Leverera/nummer.

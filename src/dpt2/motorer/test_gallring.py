@@ -172,5 +172,79 @@ class TestGallraEndToEnd(unittest.TestCase):
         self.assertTrue(all("poang" in r for r in valda))
 
 
+class TestProfilSignaler(unittest.TestCase):
+    """CULL-02: profilen/sporten väljer signaluppsättning i handsatta formeln."""
+
+    def test_default_ar_full_matchformel(self):
+        ogon, sig = G.aktiva_signaler()
+        self.assertTrue(ogon)
+        self.assertEqual(sig, G.MATCHSIGNALER)
+
+    def test_lagsport_far_full_matchformel(self):
+        for sport in ("fotboll", "handboll", "innebandy", "volleyboll"):
+            self.assertEqual(G.aktiva_signaler("sport", sport)[1],
+                             G.MATCHSIGNALER)
+
+    def test_individsport_far_sportneutral(self):
+        for sport in ("friidrott", "tennis", "beachvolley"):
+            ogon, sig = G.aktiva_signaler("sport", sport)
+            self.assertTrue(ogon)
+            self.assertEqual(sig, ("armar",))
+
+    def test_manniskoprofiler_bara_ogon(self):
+        for profil in ("brollop", "portratt"):
+            ogon, sig = G.aktiva_signaler(profil)
+            self.assertTrue(ogon)
+            self.assertEqual(sig, ())
+
+    def test_landskap_bara_bas(self):
+        ogon, sig = G.aktiva_signaler("landskap")
+        self.assertFalse(ogon)
+        self.assertEqual(sig, ())
+
+    def test_fotboll_bitidentisk_med_arvet(self):
+        # Frysta formeln: default-args ska ge exakt samma poäng som innan.
+        rader = [_rad("a.NEF", skarpa=80, boll=0.3, hemma=0.2, klunga=0.1),
+                 _rad("b.NEF", skarpa=20, armar=0.5, trojnummer=0.15)]
+        G.normalisera(rader)
+        G.poangsatt_handsatt(rader)
+        for r in rader:
+            vantad = (G.W_SKARPA * r["skarpa_n"] + G.W_EXP * r["exp"]
+                      + G._ogon_bonus(r) + r["armar"] + r["boll"] + r["hemma"]
+                      + r["trojnummer"] + r["klunga"] + r["fas"] + r["estetik"])
+            self.assertAlmostEqual(r["poang"], vantad, places=9)
+
+    def test_friidrott_ignorerar_matchsignaler(self):
+        # Bollsignal m.m. ska INTE lyfta en oskarp bild förbi en skarp.
+        rader = [_rad("skarp.NEF", skarpa=90),
+                 _rad("boll.NEF", skarpa=10, boll=1.0, hemma=1.0,
+                      trojnummer=1.0, klunga=1.0, fas=1.0)]
+        G.normalisera(rader)
+        G.poangsatt_handsatt(rader, profil="sport", sport="friidrott")
+        poang = {r["fil"]: r["poang"] for r in rader}
+        self.assertGreater(poang["skarp.NEF"], poang["boll.NEF"])
+        # armar (ansträngning/jubel) räknas dock fortfarande
+        rader2 = [_rad("jubel.NEF", skarpa=50, armar=0.4),
+                  _rad("still.NEF", skarpa=50)]
+        G.normalisera(rader2)
+        G.poangsatt_handsatt(rader2, profil="sport", sport="friidrott")
+        p2 = {r["fil"]: r["poang"] for r in rader2}
+        self.assertGreater(p2["jubel.NEF"], p2["still.NEF"])
+
+    def test_gallra_gatear_vast_for_individsport(self):
+        # Väststraffet (uppvärmningsväst) ska inte dra ned friidrottsbilder.
+        rader = [_rad(f"{i}.NEF", skarpa=50 + i, vast=2) for i in range(4)]
+        cfg = Gallring(topp=2, profil="sport", sport="friidrott")
+        valda, _ = G.gallra([dict(r) for r in rader], cfg)
+        ref = [dict(r) for r in rader]
+        G.normalisera(ref)
+        G.poangsatt_handsatt(ref, "sport", "friidrott")
+        # poängen i gallra-vägen == ren formel utan väststraff
+        self.assertEqual(len(valda), 2)
+        for r in valda:
+            motsvarande = next(x for x in ref if x["fil"] == r["fil"])
+            self.assertAlmostEqual(r["poang"], motsvarande["poang"], places=9)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

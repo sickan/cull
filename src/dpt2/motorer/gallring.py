@@ -41,6 +41,8 @@ class Gallring:
     bevaka: set = field(default_factory=set)      # bevakade tröjnummer
     skyddade: set = field(default_factory=set)    # kamera-skyddade (id)
     id_nyckel: str = "fil"
+    profil: str = "sport"            # §9-gallringsprofil (sport/brollop/landskap/portratt)
+    sport: str = ""                  # matchens sport ("" = okänd → fotbollsformeln)
 
 
 # ── små rena hjälpare (numpy-fri percentil = numpy 'linear') ─────────────────
@@ -91,22 +93,49 @@ def normalisera(resultat):
 
 
 # ── poängsättning ────────────────────────────────────────────────────────────
-def poangsatt_handsatt(resultat):
+# CULL-02: matchsignalerna gäller bara lagsporter med trupp (tröjnummer,
+# hemmafärg, målklunga finns inte i friidrott/tennis/bröllop). Basen
+# skärpa/exponering/estetik gäller alla profiler; ögon gäller där människor
+# är motivet. Vikterna i sig är oförändrade (frysta) — profilen väljer bara
+# vilka termer som ingår.
+MATCHSIGNALER = ("armar", "boll", "hemma", "trojnummer", "klunga", "fas")
+
+
+def aktiva_signaler(profil="sport", sport=""):
+    """Vilka signaler utöver basen som ingår för en §9-profil.
+    Returnerar (ogon: bool, matchsignaler: tuple)."""
+    p = (profil or "sport").strip().lower()
+    if p == "landskap":
+        return False, ()
+    if p in ("brollop", "portratt", "manniskor"):
+        return True, ()
+    # Sportprofilen: lagsporter (squad) får hela matchformeln; individ-/
+    # parsporter (friidrott, tennis, beachvolley) får ögon + armar (jubel/
+    # ansträngning läses ur samma pose-signal). Okänd sport → fotboll (arvet).
+    if sport:
+        from dpt2.data import sportprofil
+        pr = sportprofil.profil(sport) or {}
+        if not pr.get("squad", True):
+            return True, ("armar",)
+    return True, MATCHSIGNALER
+
+
+def poangsatt_handsatt(resultat, profil="sport", sport=""):
     """Sätter r['poang'] med de handsatta vikterna (när ingen modell finns).
-    Förutsätter normalisera() körd. Speglar core 1611-1626."""
+    Förutsätter normalisera() körd. Speglar core 1611-1626; med default-
+    argumenten (sport-profil, okänd sport) är formeln bit-identisk med arvet."""
+    ogon, signaler = aktiva_signaler(profil, sport)
     for r in resultat:
-        r["poang"] = (
+        p = (
             W_SKARPA * r.get("skarpa_n", 0.0)
             + W_EXP * r.get("exp", 0.0)
-            + _ogon_bonus(r)
-            + r.get("armar", 0.0)
-            + r.get("boll", 0.0)
-            + r.get("hemma", 0.0)
-            + r.get("trojnummer", 0.0)
-            + r.get("klunga", 0.0)
-            + r.get("fas", 0.0)
             + r.get("estetik", 0.0)
         )
+        if ogon:
+            p += _ogon_bonus(r)
+        for s in signaler:
+            p += r.get(s, 0.0)
+        r["poang"] = p
     return resultat
 
 
@@ -235,8 +264,9 @@ def gallra(resultat, cfg, modellpoang_satt=False):
     + fas), så den handsatta formeln hoppas över. Returnerar (valda, info)."""
     normalisera(resultat)
     if not modellpoang_satt:
-        poangsatt_handsatt(resultat)
-    if cfg.ai:
+        poangsatt_handsatt(resultat, cfg.profil, cfg.sport)
+    # Firande/väst är lagsportsbegrepp — bara när matchsignalerna är aktiva.
+    if cfg.ai and MATCHSIGNALER == aktiva_signaler(cfg.profil, cfg.sport)[1]:
         firande_boost(resultat, cfg.firande_boost)
         vast_straff(resultat)
     burst_grupper(resultat, cfg.burst_sek)

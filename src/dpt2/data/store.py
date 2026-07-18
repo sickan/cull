@@ -292,10 +292,15 @@ def cull_jobb_fran_gallring(conn, urval_id, cfg, *, verktyg="ai",
         varde, enhet = float(cfg.topp), "bilder"
     else:
         varde, enhet = cfg.andel * 100.0, "procent"
+    # CULL-02: profil/sport följer med i vikter-JSON:en så workern kan välja
+    # rätt signaluppsättning i den handsatta formeln (ingen schemaändring).
+    vikter = {"profil": getattr(cfg, "profil", "sport"),
+              "sport": getattr(cfg, "sport", "")}
     return spara_cull_jobb(
         conn, urval_id=urval_id, verktyg=verktyg, behall_varde=varde,
         behall_enhet=enhet, burst_grans=cfg.burst_sek,
-        trojnummer_ocr=bool(cfg.bevaka), hemmafarg=hemmafarg, modell=modell)
+        trojnummer_ocr=bool(cfg.bevaka), hemmafarg=hemmafarg, modell=modell,
+        vikter=vikter)
 
 
 def jobb_for_urval(conn, urval_id):

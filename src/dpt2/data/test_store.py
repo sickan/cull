@@ -101,6 +101,15 @@ class TestCullJobb(unittest.TestCase):
         self.assertEqual(j["behall_varde"], 25.0)
         self.assertEqual(j["behall_enhet"], "procent")
 
+    def test_fran_gallring_persisterar_profil_och_sport(self):
+        # CULL-02: profil/sport → cull_jobb.vikter så workern kan välja
+        # signaluppsättning (hela rundresan testas i test_gallring_korning).
+        import json
+        cfg = Gallring(topp=10, profil="sport", sport="friidrott")
+        store.cull_jobb_fran_gallring(self.c, self.uid, cfg)
+        v = json.loads(store.jobb_for_urval(self.c, self.uid)[0]["vikter"])
+        self.assertEqual(v, {"profil": "sport", "sport": "friidrott"})
+
     def test_vikter_json(self):
         jid = store.spara_cull_jobb(self.c, urval_id=self.uid, verktyg="ai",
                                     vikter={"pose": 60, "skarpa": 70})
