@@ -194,7 +194,7 @@ MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utred
 | ID | Vad | Anteckning |
 |----|-----|-----------|
 | F18-12 | **KRITISK: Uppladdning av laglogga fungerar inte** (DPT2 lagvyn, Malmö FF) | ✅ **LÖST 18/7 fm** (`d6a943f`, FÖRE 14:00): rot = INTE handlern — PNG/WebP gick ner i `_thumb_for`:s raw-gren (exiftool-preview saknas i en PNG) → miniatyren None → loggan visades aldrig fast valet+sparningen lyckades. Fix: PIL-läsbara format direkt + transparens bevaras som PNG-data-URI. Bonus: tävlingsvyns filväljar-filter hade ogiltigt pywebview-format (kastade tyst). 2 regressionstester (677 gröna). **Kräver DPT2-omstart** |
-| F18-1 | Bild 4 blinkar svart vid hover i sport-galleriet (Darderi–Borges, webben) | ✅ **LÖST 18/7** (sajt `c3abe57`): hypotesen om oskalat original MOTBEVISAD (alla fyra 1600×1067, 103–151 kB) → fallbacken tillämpad: `backface-visibility:hidden` + `translateZ(0)` på .tile img (egen GPU-layer, ingen re-rastrering). Pages-deploy |
+| F18-1 | Bild 4 blinkar svart vid hover i sport-galleriet (Darderi–Borges, webben) | ⚠️ **KVARSTÅR efter första fixen** (fm-listan p.3): `backface-visibility`+`translateZ(0)` (sajt `c3abe57`) räckte inte — oskalat original REDAN motbevisat (alla fyra 1600×1067, 103–151 kB). Nästa: kolla i Nätverk-fliken om filen HÄMTAS OM vid hover (cache-headers/källbyte i hover-stilen) + prova `will-change: transform` på alla galleribilder. Kopplas till F18-2 (nedskalning/validering) |
 | F18-2 | Automatisk nedskalning av galleribilder vid publicering (DPT2) | Alla källor → webbstorlek; ev. varning för stor fil på väg ut. Rotbot för F18-1; jfr `publicering/bildoptimering.py` |
 | F18-3 | "Importera spelschema"-knappen död (DPT2) | Handler saknas eller tyst krasch? Definiera sen källa (TheSportsDB 4347/5209, CSV, mff.unwi.se) → **absorberar SPIKE-01** |
 | F18-4 | Ta bort utskrivet "Heldag" i På gång-högerspalten (webben) | ✅ **LÖST 18/7** (sajt `c3abe57`): heldag → tom tid-rad (nedre platsraden behålls = linjerar mot klockslags-poster); Resultat-kortets "Avslutat" kvar |
@@ -216,6 +216,15 @@ MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utred
 | IB-2 | Bilder → På telefonen: Töm-knapp m bekräftelse | ✅ **KLAR 18/7** (ios `ec508ea`): Töm-rad m antal+storlek + bekräftelsedialog; kort/moln rörs inte |
 | IB-4 | Robustare DPT2↔iOS-synk: silent push + `updated_since`-delta | ✅ **BYGGD 18/7** (worker `2ce239a` DEPLOYAD + D1-migration 0005 + ios `8dd2291` INSTALLERAD): enhetsregister (`/api/push/enhet`, app registrerar vid start, döda tokens städas), tyst push `{match_id, changed}` i waitUntil vid paket-/roster-upsert → appen omhämtar, `?updated_since=` på /api/live (servern stämplar `nu`) + förgrundsdelta i appen. **Notis-landningen på köpet:** påminnelsen bär match_id → tap öppnar matchens hubb, banner även i förgrund. Delta+register skarpverifierade mot live; **första helkedje-provet sker när appen öppnats (registrering) + nästa DPT2-paketpush**. WS/SSE i live-läge = ev. steg 2 |
 | IB-5 | **Fokuspunkt i iOS-appens story-flöde** (Stig 18/7) | ✅ **KLAR 18/7** (ios `ec508ea`): FokusValjare-sektion — dra på förhandsbilden (procent, samma modell som `_cover_crop`), zoom-slider 1–2.5×, 9:16-ramguide, Återställ; nollas vid fotobyte; overlay AV + fokus → hela bilden skickas så serverns crop får punkten. INSTALLERAD |
+
+## F18FM · Förmiddagens genomgång 18/7 (källa: `~/Downloads/backlogg-2026-07-18-fm.md`)
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| F18FM-1 | **Matchpubliceringens resultatfält ser inmatade ut** (UX): förslagsvärden i nästan full kontrast → man tror datan är sparad, särskilt vid växling webb↔iOS | Lösning per Stig: tomt tillstånd ("–:–", streckad ram, dämpad färg) tills värde SPARATS + statusindikator per fält (tom cirkel → grön bock), ifyllt = solid ram/full kontrast. Omfattning: resultat, halvtid, målgörare; samma mönster i story-/inläggs-/webbförhandsvisningarna. Indikatorerna speglas i iOS |
+| F18FM-2 | **Webbkanalen läcker social text** (bugg): rubrikblock, länkrad och kvarblivna @-taggar ("@?traningsmatch") följer med — webb ska bara ha referatet | Lösning per Stig: bygg kanaltexterna från KÄLLFÄLTEN (rubrik/emoji · matchrad · länkrad · referat · hashtags · @-taggar) i stället för att filtrera den sociala varianten: sociala = alla fält, webb = enbart referatet. Verifiera inga tagg-/länkrester |
+| F18FM-3 | Hover-blinken KVARSTÅR — se uppdaterad F18-1 ovan | Utredning: hämtas filen om vid hover? + `will-change: transform` |
+| SYNK-DPT2 | **Tvåvägs-blixt även mot DPT2** (Stig 18/7): mobilens ändringar når idag desktopen via poll (Publicera-panelens ~10s + vid läsning) — ingen knuff när panelen är stängd | Enklaste skivan: DPT2:s poll byter till `?updated_since=`-endpointen (IB-4, billig fråga) och breddas appglobalt; alt. SSE från workern. Moln→iOS-blixten + iOS→moln-direktskrivningarna finns redan (IB-4) |
 
 ## G · Spikes DPT2
 
