@@ -257,9 +257,20 @@
   }
 
   async function toggla(m) {
-    if (oppen === m.id) { oppen = null; utkast = null; lagForTavling = []; return }
+    if (oppen === m.id) {
+      // F18-6: en OSPARAD post har inget i databasen — spara fältdatat på
+      // listraden vid kollaps så inget tappas och raden kan öppnas igen.
+      if (String(m.id).startsWith('ny-') && utkast) {
+        matcher = matcher.map((x) => (x.id === m.id ? { ...x, ...utkast } : x))
+      }
+      oppen = null; utkast = null; lagForTavling = []
+      return
+    }
     oppen = m.id
-    utkast = await hamtaMatch(m.id)
+    // F18-6: osparad post → återställ ur listraden (hamtaMatch hittar den inte).
+    utkast = String(m.id).startsWith('ny-')
+      ? { spelare: [], ...m }
+      : await hamtaMatch(m.id)
     await laddaLagForTavling(utkast.liga)
     slutFran(utkast)
   }
@@ -677,12 +688,15 @@
                           class:accent={c.tone === 'accent'} on:click={() => goFromMatch(utkast, c.dest)}>{c.label}</button>
                       {/each}
                     </div>
-                    <label class="eventtogg">
+                    <!-- F18-5: kompakt vänsterställd toggle — hjälptexten bor i
+                         tooltip så raden inte konkurrerar med HELDAG-badgen. -->
+                    <label class="eventtogg"
+                      title="Cup, mästerskap, läger… — matchen har inget bortalag; eventnamnet blir rubriken.">
                       <input type="checkbox" checked={!!utkast.event} on:change={(e) => sattEvent(e.target.checked)} />
-                      <span>Heldagsevent <span class="eventmut">— utan motståndare (t.ex. cup, mästerskap)</span></span>
+                      <span>Heldagsevent <span class="eventmut">(utan motståndare)</span></span>
                     </label>
                     <div class="rad2" class:enkel={utkast.event}>
-                      <label>{utkast.event ? 'Lag / arrangör' : (uttagProfil.individ ? 'Spelare 1' : 'Hemmalag')}
+                      <label>{utkast.event ? 'Eventnamn' : (uttagProfil.individ ? 'Spelare 1' : 'Hemmalag')}
                         <Combobox options={lagVal} value={utkast.lag_hemma} placeholder={uttagProfil.individ ? 'Välj spelare…' : 'Välj lag…'}
                           on:pick={(e) => valjHemma(e.detail)} on:create={(e) => skapaHemma(e.detail)} />
                       </label>
