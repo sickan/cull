@@ -193,16 +193,16 @@ MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utred
 | ID | Vad | Anteckning |
 |----|-----|-----------|
 | F18-12 | **KRITISK: Uppladdning av laglogga fungerar inte** (DPT2 lagvyn, Malmö FF) | ✅ **LÖST 18/7 fm** (`d6a943f`, FÖRE 14:00): rot = INTE handlern — PNG/WebP gick ner i `_thumb_for`:s raw-gren (exiftool-preview saknas i en PNG) → miniatyren None → loggan visades aldrig fast valet+sparningen lyckades. Fix: PIL-läsbara format direkt + transparens bevaras som PNG-data-URI. Bonus: tävlingsvyns filväljar-filter hade ogiltigt pywebview-format (kastade tyst). 2 regressionstester (677 gröna). **Kräver DPT2-omstart** |
-| F18-1 | Bild 4 blinkar svart vid hover i sport-galleriet (Darderi–Borges, webben) | Trolig oskalad originalfil → re-rastrering vid transform. Akut: ersätt m nedskalad; fallback `backface-visibility:hidden; translateZ(0)`. Förebyggs permanent av F18-2 |
+| F18-1 | Bild 4 blinkar svart vid hover i sport-galleriet (Darderi–Borges, webben) | ✅ **LÖST 18/7** (sajt `c3abe57`): hypotesen om oskalat original MOTBEVISAD (alla fyra 1600×1067, 103–151 kB) → fallbacken tillämpad: `backface-visibility:hidden` + `translateZ(0)` på .tile img (egen GPU-layer, ingen re-rastrering). Pages-deploy |
 | F18-2 | Automatisk nedskalning av galleribilder vid publicering (DPT2) | Alla källor → webbstorlek; ev. varning för stor fil på väg ut. Rotbot för F18-1; jfr `publicering/bildoptimering.py` |
 | F18-3 | "Importera spelschema"-knappen död (DPT2) | Handler saknas eller tyst krasch? Definiera sen källa (TheSportsDB 4347/5209, CSV, mff.unwi.se) → **absorberar SPIKE-01** |
-| F18-4 | Ta bort utskrivet "Heldag" i På gång-högerspalten (webben) | Datumintervall + plats räcker; linjera platsraden mot poster m klockslag. OBS: rör samma yta som Resultat-kortets "Avslutat" (18/7) |
+| F18-4 | Ta bort utskrivet "Heldag" i På gång-högerspalten (webben) | ✅ **LÖST 18/7** (sajt `c3abe57`): heldag → tom tid-rad (nedre platsraden behålls = linjerar mot klockslags-poster); Resultat-kortets "Avslutat" kvar |
 | F18-5 | Kompaktare heldagsval i matchformuläret (DPT2) | Vänsterställd toggle "Heldagsevent (utan motståndare)", heldag → eventnamnsfält ersätter lagfälten; alt. typval vid skapande. Görs ihop med F18-6 |
 | F18-6 | Osparad post kan inte öppnas efter kollaps (DPT2 matchformuläret) | Expandera nycklar på id som osparad post saknar → temporärt id eller spärra kollaps tills sparad. Verifiera fältdata överlever kollaps/expand |
-| F18-7 | Rubrik-fallback dubblerar heldagsmarkering (DPT2 matchformuläret) | "Ny match"/"Namnlöst event" som fallback-titel; badgen ensam markerar heldag. Hänger ihop m F18-5 |
+| F18-7 | Rubrik-fallback dubblerar heldagsmarkering (DPT2 matchformuläret) | ✅ **LÖST 18/7** (dpt `dbe8b58`): matchnamn-fallback "Ny match"/"Namnlöst event", utskrivna Heldag borta ur metaraden — badgen ensam markör. Kräver omstart |
 | F18-8 | Tidigare projekt tar för mycket plats + dubbletter (DPT2 Snabbplock) | Kompakta listrader (tumnagel, relativ tid, Återuppta), 3 senaste + Visa alla. Dubbletter per match → gruppera eller återuppta befintligt projekt (jfr SP-pers persist urval) |
 | F18-9 | Kalenderväljarna radbryter (DPT2 Fotojobb) | Skilj kalendrar (på/av-lager) från kategorifilter (enval): färgprickar m tooltip, alt. samlad Kalendrar-popover |
-| F18-10 | Hem-knappen gör inget från matchsidan (iOS) | Tryck på aktiv flik ska poppa till roten — alla flikar |
+| F18-10 | Hem-knappen gör inget från matchsidan (iOS) | ✅ **LÖST 18/7** (ios `aea3771`): flikbaren postar popp-signal vid tryck på aktiv flik → Hem/Matcher nollar sin NavigationPath (Jobb/Bilder pushar inget). 31 tester gröna. **Install väntar** — telefonens tunnel nere igen |
 | F18-11 | Tydligare logotyp på startskärmen (iOS) | Vit logotyp (logotype_vit.png) m drop shadow, hästen bär hörnet, DPT sekundär; "v1.0 · build 1" → Inställningar. Viktig inför ★-bakgrunden (V5-D-resten) |
 | F18-13 | **NY: Ladda upp bilder från iOS-appen** in i matchens bildflöde | Avgränsning att bekräfta m Stig: matchbilder, lagloggor eller båda? Knyter an till original-bryggan (FEAT-15) och loggor→R2-blockeraren |
 
