@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { rataUppMapp, valjMapp } from '../lib/api.js'
+  import { rataUppMappBakgrund, uppratStatus, valjMapp } from '../lib/api.js'
 
   let valtMapp = ''
   let laddar = true
@@ -17,19 +17,30 @@
     if (r.ok) valtMapp = r.path
   }
 
+  // Vinkelräkningen (preview-extraktion + Hough per raw) tar minuter för en
+  // matchmapp — bakgrundstråd + poll driver progressbaren.
+  let prog = null
   async function korUppratning() {
     if (!valtMapp) return
-    kor = true
-    status = ''
-    resultat = null
-    const r = await rataUppMapp(valtMapp)
-    kor = false
-    if (r.ok) {
-      status = `✓ XMP-sidecars skrivna för ${r.n_skriv}/${r.n_raw} raw-filer`
-      resultat = r
-    } else {
-      status = r.fel || 'Fel vid upprätning'
-    }
+    kor = true; status = ''; resultat = null; prog = null
+    const start = await rataUppMappBakgrund(valtMapp)
+    if (!start?.ok) { kor = false; status = start?.fel || 'Kunde inte starta.'; return }
+    const poll = setInterval(async () => {
+      const st = await uppratStatus().catch(() => null)
+      if (!st) return
+      prog = { fas: st.fas, klara: st.klara, totalt: st.totalt }
+      if (!st.pagar) {
+        clearInterval(poll)
+        kor = false; prog = null
+        const r = st.resultat || {}
+        if (r.ok) {
+          status = `✓ ${r.meddelande || `${r.n_skriv}/${r.n_raw} sidecars skrivna`}`
+          resultat = r
+        } else {
+          status = r.fel || 'Fel vid upprätning'
+        }
+      }
+    }, 400)
   }
 </script>
 
@@ -44,8 +55,14 @@
       <button class="valj" on:click={valjRawMapp}>Välj…</button>
     </div>
     <button class="btn-primary" on:click={korUppratning} disabled={kor || !valtMapp}>
-      {kor ? 'Skriver…' : 'Kör upprätning'}
+      {kor ? (prog?.totalt ? `${prog.fas} ${prog.klara}/${prog.totalt}…` : 'Räknar…') : 'Kör upprätning'}
     </button>
+    {#if kor && prog?.totalt}
+      <div class="uprog">
+        <div class="ubar"><div class="ufyll" style="width:{Math.round(prog.klara / prog.totalt * 100)}%"></div></div>
+        <span class="utxt">{prog.klara}/{prog.totalt}</span>
+      </div>
+    {/if}
     {#if status}
       <p class={resultat?.ok ? 'status-ok' : 'status-err'}>{status}</p>
     {/if}
@@ -65,4 +82,8 @@
   .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
   .status-ok { color: var(--success); margin-top: 1rem; }
   .status-err { color: var(--error); margin-top: 1rem; }
+  .uprog { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .ubar { flex: 1; height: 6px; border-radius: 4px; background: var(--div3); overflow: hidden; }
+  .ufyll { height: 100%; background: var(--acc); border-radius: 4px; transition: width 0.3s; }
+  .utxt { font-size: 11px; color: var(--t-mut); white-space: nowrap; font-variant-numeric: tabular-nums; }
 </style>

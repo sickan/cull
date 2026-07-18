@@ -86,7 +86,10 @@ def berakna_uppratning(img_bgr):
     if lines is None:
         return 0.0
     vinklar = []
-    for x1, y1, x2, y2 in lines:
+    # HoughLinesP:s form varierar mellan OpenCV-byggen ((N,4) resp (N,1,4)) —
+    # ravel per rad funkar för båda.
+    for rad in lines:
+        x1, y1, x2, y2 = np.ravel(rad)[:4]
         dx, dy = x2 - x1, y2 - y1
         if abs(dx) < 10:
             continue

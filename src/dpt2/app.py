@@ -66,6 +66,7 @@ class Api:
         # Pågående hemhämtning (en åt gången) — UI:t pollar original_status().
         self._original_hamtning = {"pagar": False}
         self._leverans = {"pagar": False}   # bakgrundsleveransens poll-status
+        self._upprat = {"pagar": False}     # upprätningens poll-status
 
     # ── Sportprofiler ────────────────────────────────────────────────────────
     def sportprofiler(self):
@@ -1449,6 +1450,27 @@ class Api:
     # brygganropet gav bara "Levererar…" utan progress. UI:t startar här och
     # pollar leverans_status(); de synkrona metoderna finns kvar (tester m.m.).
 
+    def rata_upp_mapp_bakgrund(self, mapp):
+        if self._upprat.get("pagar"):
+            return {"ok": False, "fel": "En upprätning pågår redan."}
+        status = {"pagar": True, "fas": "Förbereder", "klara": 0, "totalt": 0,
+                  "resultat": None}
+        self._upprat = status
+
+        def _kor():
+            try:
+                status["resultat"] = self.rata_upp_mapp(mapp, _status=status)
+            except Exception as e:
+                status["resultat"] = {"ok": False, "fel": str(e)}
+            finally:
+                status["pagar"] = False
+
+        threading.Thread(target=_kor, daemon=True).start()
+        return {"ok": True}
+
+    def upprat_status(self):
+        return dict(self._upprat)
+
     def leverera_urval_bakgrund(self, urval_id, config=None):
         return self._leverans_bakgrund(
             lambda st: self.leverera_urval(urval_id, config, _status=st))
@@ -1560,13 +1582,18 @@ class Api:
 
         return {"ok": True, "antal": kopierade, "path": str(ut_dir)}
 
-    def rata_upp_mapp(self, mapp):
-        """Upprätning: skriver XMP-sidecars bredvid raw-filerna för att initiera
-        Lightroom-upprätning. Icke-förstörande: befintliga develop + betyg/
-        etikett bevaras. I denna version används bara en placeholder för
-        upprätningsvinkeln; den tunga gyro/Vision-räkningen kan köras senare
-        via arbetaren. Returnerar {ok, n_raw, n_skriv} eller {ok:False, fel}."""
+    def rata_upp_mapp(self, mapp, _status=None):
+        """Upprätning: räknar korrektionsvinkeln per raw (inbäddad preview →
+        Hough-horisontdetektorn i xmp_writer) och skriver XMP-sidecars.
+        Icke-förstörande: befintliga develop + betyg/etikett bevaras.
+        Vinkeln var tidigare en 0.0-placeholder — upprätningen gjorde då
+        ingenting alls (Stigs fynd 18/7). Returnerar {ok, n_raw, n_skriv,
+        n_ratade}."""
+        import tempfile
+        import cv2
         from dpt2.motorer import xmp_writer
+        from dpt import gui
+        _status = _status if _status is not None else {}
 
         if not mapp:
             return {"ok": False, "fel": "Peka ut en mapp."}
@@ -1582,27 +1609,51 @@ class Api:
         if not raw:
             return {"ok": False, "fel": "Inga raw-filer i mappen."}
 
+        env = os.environ.copy()
+        for extra in ("/opt/homebrew/bin", "/usr/local/bin"):
+            if extra not in env.get("PATH", "").split(os.pathsep):
+                env["PATH"] = extra + os.pathsep + env.get("PATH", "")
+
         n_skriv = 0
-        for f in raw:
-            # Läs befintlig XMP (bevarar develop + betyg)
-            sc = f.with_suffix(".xmp")
-            preset = rating = label = None
-            if sc.exists():
+        n_ratade = 0
+        with tempfile.TemporaryDirectory() as td:
+            for i, f in enumerate(raw):
+                _status["fas"] = "Räknar vinklar"
+                _status["klara"] = i + 1
+                _status["totalt"] = len(raw)
+                sc = f.with_suffix(".xmp")
+                preset = rating = label = None
+                if sc.exists():
+                    try:
+                        preset = xmp_writer.las_preset(sc)
+                    except Exception:
+                        pass
+
+                # Inbäddad preview → Hough-horisontdetektorn → vinkel.
+                vinkel = 0.0
                 try:
-                    preset = xmp_writer.las_preset(sc)
+                    jpg = Path(td) / (f.stem + ".jpg")
+                    if gui._extrahera_preview(f, jpg, env):
+                        img = cv2.imread(str(jpg))
+                        if img is not None:
+                            vinkel = xmp_writer.berakna_uppratning(img)
+                        jpg.unlink(missing_ok=True)
+                except Exception:
+                    vinkel = 0.0
+
+                try:
+                    xmp_writer.skriv_xmp(f, vinkel=vinkel, preset=preset,
+                                        rating=rating, label=label)
+                    n_skriv += 1
+                    if abs(vinkel) >= 0.1:
+                        n_ratade += 1
                 except Exception:
                     pass
 
-            # Skriv XMP (icke-förstörande, bara placeholder för upprätning)
-            try:
-                xmp_writer.skriv_xmp(f, vinkel=0.0, preset=preset,
-                                    rating=rating, label=label)
-                n_skriv += 1
-            except Exception:
-                pass
-
         return {"ok": True, "n_raw": len(raw), "n_skriv": n_skriv,
-                "meddelande": f"XMP-sidecars skrivna på {n_skriv} raw-filer. Importera mappen i Lightroom."}
+                "n_ratade": n_ratade,
+                "meddelande": (f"{n_skriv} sidecars skrivna, {n_ratade} med "
+                               "upprätningsvinkel. Importera mappen i Lightroom.")}
 
     def lar_av_match(self, mapp, match_namn="", sport=""):
         """Lär av match: märker ett gallrat urval (mappen med de behållna

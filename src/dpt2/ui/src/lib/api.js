@@ -1136,6 +1136,20 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
   return wait(_promptPath(titel))
 }
 
+// Upprätning i bakgrund + poll (vinkelräkning över hela mappen tar minuter).
+export async function rataUppMappBakgrund(mapp) {
+  const api = brygga()
+  if (api) return api.rata_upp_mapp_bakgrund(mapp)
+  return wait({ ok: true })
+}
+export async function uppratStatus() {
+  const api = brygga()
+  if (api) return api.upprat_status()
+  return wait({ pagar: false, fas: 'Räknar vinklar', klara: 4, totalt: 4,
+    resultat: { ok: true, n_raw: 4, n_skriv: 4, n_ratade: 3,
+      meddelande: '4 sidecars skrivna, 3 med upprätningsvinkel.' } })
+}
+
 // Leveransprogress: starta i bakgrund + polla status.
 export async function levereraUrvalBakgrund(urvalId, cfg) {
   const api = brygga()
