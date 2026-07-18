@@ -14,6 +14,8 @@ design-handoff för eventmodell-epiken/DPT v5 & iOS v2** (sektion C nedan,
 källa `design_handoff_eventmodell_v5/`). Prio-vyn i `PLAN-nordea-friidrott.md`
 uppdaterad till v4.*
 
+**VECKOPRIO (Stig 18/7 kväll): SM-PAKETET** — CULL-02 sportneutral gallring + M18-9 hemresan klart före SM-torsdagen; därefter klockmodulen → B-012 → §10s3/§11.
+
 **Stigs prio-signaler (16 jul):** ① buggar generellt först — särskilt att
 Innehåll inte känns robust (= dubbletterna/publiceringskedjan) · ② iOS
 trupp/startelvor inför FOTBOLLSHELGEN · ③ tennis under veckan · ④ B-003
@@ -235,7 +237,7 @@ Stigs numrering. 2+4+5 är ETT klockmodul-paket.*
 |----|-----|-----------|
 | M18-7 | **AKUT: Avsluta live-match gick inte att hitta** — match låg kvar som live | ✅ **LÖST 18/7 em**: (a) datat sanerat direkt (KDFF-matchen 27/6 hade resultat 6-0 men status 'kommande' — pre-slutsignalfix-kvarleva; satt till avslutad) + (b) ios `4ac414a` (INSTALLERAD): "Matchen är slut"-raden PERMANENT för alla ostängda matcher med passerad avspark (krävde förr 'idag' → äldre häng gick ej att stänga) |
 | M18-1 | Startelva-overlayn ritar inte spelarnamnen | ✅ **KEDJAN LÖST 18/7 em** (dpt `80a13a0` + worker `36226f0`, **dpt-render 1.4.0 byggd/pushad/deployad**): startelva saknades BÅDE i workerns spec-bygge (byggs nu ur paketets roster: hemmalagets start=true, "nr namn"-rader) och i containerns _GENOMSLAPP. Visuellt verifierad lokalt (namnen ritas). **OBS datalagret:** molnpaketets roster hade 0 startande — appens OCR-elva verkar inte ha sparats ELLER klobbats av desktopens paket-push (→ trupp skiva 3-reconciliation). Verifiera nästa matchdag |
-| M18-6 | Snabbplockade bilder går inte att återfinna i Lightroom mobil — flödet BRUTET | Hög prio. Öppen designfråga: eget album/mapp som LR ser, kopierbar filnamnslista, eller tumnaglar m filnamn i plockordning |
+| M18-6 | Snabbplockade bilder går inte att återfinna i Lightroom mobil | **BESLUT (Stig 18/7 kväll): EGET ALBUM** — plocken sparas till ett "DPT Snabbplock"-album i kamerarullen som LR mobil ser direkt. Byggs nu |
 | M18-2 | Klockmodulen: manuell tidssynk mot matchuret | ✅ **KLAR 18/7 kväll** (ios `d7459d1`+`1e676b9`, INSTALLERAD): tap på matchklockan → "Sätt matchtid" (halvleksminut 07:32 eller matchminut 52:10 → tolkas som 2:a halvlek) |
 | M18-4 | Tilläggstid + räkning per halvlek | ✅ **KLAR 18/7 kväll** (samma commit): Matchklocka-modellen (ren, 4 testfall) — 0–45→45+X, 2:a halvlek startar ALLTID 45:00→90→90+X, "Starta 2:a halvlek"-knapp under klockan, målminut loggas 45+2; persistad per match (appomstart-säker) |
 | M18-5 | Automatisk halvleksdetektering | ✅ **KLAR 18/7 kväll** (samma commit): `Matchklocka.auto(avspark:)` — <60 min = första, därefter andra (bas avspark+60); manuell synk vinner alltid |
