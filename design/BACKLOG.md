@@ -213,9 +213,9 @@ MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utred
 |----|-----|-----------|
 | IB-3 | **KRITISK: Loggor synkas inte till iOS** — appen faller tillbaka på initialer fast DPT2 har loggorna | ✅ **LÖST 18/7** (ios `c1791c0`): felsökningen visade att SERVERSIDAN redan levererar (paketet bär `lag_*_logga_url`, R2-speglat, MFF-loggan verifierad 200/PNG live) — APPEN parsade aldrig fälten. Ny delad `LagCirkel` (AsyncImage på ljus platta, monogram-fallback) i matchlista/hubb/live-läget; Match-modellen bär hemmaLogga/bortaLogga. **Löste samtidigt FEAT-iOS-01.** 31 tester gröna. Bröndby-loggan dyker upp när Stig lagt in den (F18-12-fixen + omstart) och paketet omsynkats. **Install väntar på telefonen** |
 | IB-1 | Trupp-OCR: inläsning körs mot valt lag + auto-komplettering (spelare i inläst elva som saknas i truppen läggs till, markerade för verifiering) | Bygger på trupp skiva 2 (18/7) |
-| IB-2 | Bilder → På telefonen: Töm-knapp m bekräftelse | Litet |
+| IB-2 | Bilder → På telefonen: Töm-knapp m bekräftelse | ✅ **KLAR 18/7** (ios `ec508ea`): Töm-rad m antal+storlek + bekräftelsedialog; kort/moln rörs inte |
 | IB-4 | Robustare DPT2↔iOS-synk: silent push (`content-available:1`, payload `{match_id, changed}`) som signal + `updated_since`-delta vid start/förgrund; ev. WS/SSE i live-läge senare | Backend + iOS; APNs-infran finns (design-lyftet etapp 3) |
-| IB-5 | **Fokuspunkt i iOS-appens story-flöde** (Stig 18/7): kunna sätta fokus/beskärning på fotot före rendering — desktopens Matchpublicering har redan väljaren (BildvaljareFokuspunkt) och workerns story-spec tar redan emot `fokus{x,y}` + `zoom` → bara app-UI:t saknas (tap/dra på förhandsbilden → skicka med i render-anropet) | iOS · liten-medel; hela kedjan bakom finns |
+| IB-5 | **Fokuspunkt i iOS-appens story-flöde** (Stig 18/7) | ✅ **KLAR 18/7** (ios `ec508ea`): FokusValjare-sektion — dra på förhandsbilden (procent, samma modell som `_cover_crop`), zoom-slider 1–2.5×, 9:16-ramguide, Återställ; nollas vid fotobyte; overlay AV + fokus → hela bilden skickas så serverns crop får punkten. INSTALLERAD |
 
 ## G · Spikes DPT2
 
