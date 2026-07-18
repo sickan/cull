@@ -74,11 +74,13 @@
   <main>
     <div class="topbar">
       <div class="matchgrupp">
-        <button class="widget match" on:click={() => (aktiv = 'matcher')} title="Aktiv match">
+        <!-- §8: jobbet som nav — chippet heter "Aktivt jobb". Sportjobb visar
+             matchdata som förut; tomläget bjuder in alla jobbtyper. -->
+        <button class="widget match" on:click={() => (aktiv = 'matcher')} title="Aktivt jobb">
           <span class="dot" class:pa={aktivM}></span>
           <span class="wtext">
-            <span class="wlbl">Aktiv match</span>
-            <span class="wval scd">{aktivM ? `${aktivM.lag_hemma} – ${aktivM.lag_borta}` : 'Ingen vald'}</span>
+            <span class="wlbl">Aktivt jobb</span>
+            <span class="wval scd">{aktivM ? `${aktivM.lag_hemma} – ${aktivM.lag_borta}` : 'Inget valt'}</span>
           </span>
         </button>
         {#if aktivM}

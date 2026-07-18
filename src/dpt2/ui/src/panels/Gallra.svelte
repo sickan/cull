@@ -23,6 +23,22 @@
   let res = { ai: '', snabb: '', rapport: '' }
 
   const KIT = ['Hemmaställ', 'Bortaställ', 'Tredjeställ', 'Egen färg']
+
+  // §9 (UX-lyftet): Gallra som ETT flöde — stegindikatorn är ramen (Mål→Kör→
+  // Granska), profilen styr vilka signaler som väger (Din smak är gemensam).
+  // Rätt profil förvals ur jobbets kategori (aktiv match → Sport).
+  const PROFILER = [
+    { id: 'sport', namn: 'Sport', signaler: ['Burst-gräns 2.0 s', 'Tröjnummer-OCR', 'Hemmafärg ur laget', 'Skärpa på bollhöjd'] },
+    { id: 'brollop', namn: 'Bröllop', signaler: ['Blundningar bort', 'Dubbletter ihop', 'Ansikten skarpa', 'Mjukt ljus prioriteras'] },
+    { id: 'landskap', namn: 'Landskap', signaler: ['Skärpa kant till kant', 'Rak horisont', 'Bracketing-serier ihop', 'Inga burst-straff'] },
+    { id: 'portratt', namn: 'Porträtt/Student', signaler: ['Ögon skarpa', 'Blinkningar bort', 'Hudton', 'Pose-varianter ihop'] },
+  ]
+  let profil = 'sport'
+  let profilManuell = false     // manuellt val vinner över jobb-förvalet
+  $: if (!profilManuell) profil = aktiv ? 'sport' : profil
+  $: aktivProfil = PROFILER.find((p) => p.id === profil)
+  // Aktivt steg i ramen: ingen källa → 1 Mål; kör → 2; klar körning → 3 Granska.
+  $: steg = kor[lage] ? 2 : res[lage] ? 3 : kalla ? 2 : 1
   // Rapport kör AI:s poängsättning utan att skriva till disk → delar AI:s inställningar.
   const LAGEN = [
     { id: 'ai', namn: 'AI', sub: 'Poängsätter hela tagningen och behåller dina bästa bilder', knapp: 'Kör AI-gallring' },
@@ -85,12 +101,14 @@
   }
 
   async function kora(vilket) {
+    // §9: profilen följer med körningen (framtida signalviktning — Din
+    // smak-modellen är gemensam, se CULL-02).
     const cfg = vilket === 'snabb'
-      ? { kalla, verktyg: 'snabb', behall: snabb.keep, enhet: 'bilder', burst: snabb.burst }
+      ? { kalla, verktyg: 'snabb', behall: snabb.keep, enhet: 'bilder', burst: snabb.burst, profil }
       : { kalla, verktyg: vilket === 'rapport' ? 'rapport' : 'ai',
           behall: ai.keep, enhet: ai.unit, burst: ai.burst, trojnummer: ai.ocr,
           nummer: ai.nums, hemmafarg: hemFarg, avspark: ai.kick, modell: ai.model,
-          match_id: aktiv?.id || null }
+          match_id: aktiv?.id || null, profil }
     kor[vilket] = true; prog[vilket] = 5; res[vilket] = ''
     // Riktig progress: startaGallring blockar tills workern är klar, men
     // events (5% Laddar modeller… → 95% Extraherar) strömmar löpande in i
@@ -133,6 +151,32 @@
   </header>
   <AktivMatchRad on:navigera />
   <p class="intro">Ett gallringssteg — välj läge, peka ut källmappen och kör. Resultatet kopieras till ett nytt urval.</p>
+
+  <!-- §9: stegindikatorn — ramen för hela flödet -->
+  <div class="steg">
+    <span class="stegpill" class:pa={steg === 1}><span class="stegnr">1</span>Mål</span>
+    <span class="stegpil">→</span>
+    <span class="stegpill" class:pa={steg === 2}><span class="stegnr">2</span>Kör <span class="stegsub">— profil per jobbtyp</span></span>
+    <span class="stegpil">→</span>
+    <span class="stegpill" class:pa={steg === 3}><span class="stegnr">3</span>Granska <span class="stegsub">— dina val tränar modellen tyst</span></span>
+  </div>
+
+  <!-- §9: gallringsprofilen — signalerna som väger, förvald ur jobbet -->
+  <div class="profkort">
+    <div class="profrad">
+      <span class="profcaps">Profil</span>
+      <div class="profseg">
+        {#each PROFILER as p (p.id)}
+          <button class:on={profil === p.id} on:click={() => { profil = p.id; profilManuell = true }}>{p.namn}</button>
+        {/each}
+      </div>
+      <span class="profkalla">{profilManuell ? 'Vald manuellt' : aktiv ? 'Förvald ur jobbet (Sport)' : 'Standard'}</span>
+    </div>
+    <div class="profchips">
+      {#each aktivProfil.signaler as s}<span class="profchip">{s}</span>{/each}
+    </div>
+    <div class="profnot">Din smak-modellen är gemensam — profilen styr bara vilka signaler som väger. Rätt profil förvald ur jobbets kategori.</div>
+  </div>
 
   <div class="kort open">
     <div class="khuvud">
@@ -273,6 +317,32 @@
   h1 { margin: 0; font-size: 25px; font-weight: 700; color: var(--t-head); }
   .sub { font-size: 13px; color: var(--t-mut); }
   .intro { margin: 7px 0 18px; font-size: 12px; color: var(--t-help); }
+
+  /* §9: stegindikator + profilkort */
+  .steg { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; }
+  .stegpill { display: inline-flex; align-items: center; gap: 7px; background: var(--kort);
+    border: 1px solid var(--div); border-radius: 999px; padding: 4px 13px;
+    font-size: 11.5px; font-weight: 600; color: var(--t-head); }
+  .stegpill.pa { border-color: var(--acc-border); box-shadow: inset 0 0 0 1px var(--acc-border); }
+  .stegnr { width: 16px; height: 16px; border-radius: 50%; background: var(--acc); color: var(--kort);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 700; }
+  .stegsub { font-weight: 400; color: var(--t-mut); }
+  .stegpil { color: var(--t-help); font-size: 11px; }
+  .profkort { background: var(--kort); border: 1px solid var(--div); border-radius: 11px;
+    padding: 12px 16px; margin-bottom: 18px; }
+  .profrad { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .profcaps { font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--t-caps); flex: none; }
+  .profseg { display: inline-flex; background: var(--panel); border: 1px solid var(--div);
+    border-radius: 8px; padding: 3px; flex: none; }
+  .profseg button { border: 0; background: transparent; color: var(--t-mut); border-radius: 6px;
+    padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .profseg button.on { background: var(--acc); color: var(--kort); }
+  .profkalla { font-size: 11px; color: var(--t-help); flex: none; }
+  .profchips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
+  .profchip { background: var(--panel); border: 1px solid var(--div); border-radius: 999px;
+    padding: 3px 11px; font-size: 11px; color: var(--t-mut); }
+  .profnot { font-size: 11px; color: var(--t-help); margin-top: 8px; }
 
   .kort { border: 1px solid var(--div); border-radius: var(--r); background: var(--kort); box-shadow: var(--skugga); overflow: hidden; }
   .kort.open { border-color: var(--acc-border); }

@@ -1,5 +1,8 @@
 <script>
   import { onMount } from 'svelte'
+  // §9 (UX-lyftet): panelen bor numera som utfällbar rad i Inställningar —
+  // inbäddad slipper den sin egen rubrik/panelram.
+  export let inbaddad = false
   import { listaModeller, sattAktivModell, startaTraning, startaOmraknaArkiv,
     valjMapp, listaUrval, larAvMatch, traningshistorik } from '../lib/api.js'
 
@@ -150,11 +153,13 @@
 
 <svelte:window on:keydown={(e) => { if (e.key === 'Escape') stangGranska() }} />
 
-<div class="panel">
-  <header>
-    <h1 class="scd">Träna</h1>
-    <span class="sub">Lär modellen din smak — biblioteket lever här, träningen körs i ML-workern</span>
-  </header>
+<div class="panel" class:inbaddad>
+  {#if !inbaddad}
+    <header>
+      <h1 class="scd">Träna</h1>
+      <span class="sub">Lär modellen din smak — biblioteket lever här, träningen körs i ML-workern</span>
+    </header>
+  {/if}
 
   {#if laddar}
     <p class="tom">Laddar modeller…</p>
@@ -542,4 +547,5 @@
   .hnamn { font-size: 13.5px; font-weight: 600; color: var(--t-head); min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hmeta { font-size: 12px; color: var(--t-mut); flex: none; }
+  .panel.inbaddad { padding: 4px 0 8px; max-width: none; }
 </style>

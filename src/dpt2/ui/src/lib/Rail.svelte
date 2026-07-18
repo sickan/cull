@@ -14,19 +14,21 @@
       { id: 'eventsektion', namn: 'Event' },              // V5-C (handoff §2)
       { id: 'lag', namn: 'Lag & ligor' },                 // V5-C: omdöpt
     ] },
-    { rubrik: 'Efter match', poster: [
+    // §8 (UX-lyftet): jobbet som nav — "Efter jobb" + "Publicera" (inte
+    // match-specifikt); §9: Träna har lämnat naven (tyst träning + rad i
+    // Inställningar), gamla panelen nås därifrån.
+    { rubrik: 'Efter jobb', poster: [
       { id: 'gallra', namn: 'Gallra', nr: 1 },
       { id: 'leverera', namn: 'Leverera', nr: 2 },
       { id: 'snabbplock', namn: 'Snabbplock' },
       { id: 'upprattning', namn: 'Upprätning' },
-      { id: 'publicera', namn: 'Matchpublicering', nr: 3 },
+      { id: 'publicera', namn: 'Publicera', nr: 3 },
     ] },
     { rubrik: 'Webb', poster: [
       { id: 'innehall', namn: 'Innehåll' },
       { id: 'pagang', namn: 'På gång' },
     ] },
     { rubrik: 'System', poster: [
-      { id: 'trana', namn: 'Träna' },
       { id: 'logg', namn: 'Logg' },
       { id: 'installningar', namn: 'Inställningar' },
     ] },

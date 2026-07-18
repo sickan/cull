@@ -37,11 +37,11 @@
   $: bortaLoggaUri = !bortaLoggaPath ? '' : (/^(data:|https?:)/.test(bortaLoggaPath) ? bortaLoggaPath : ($loggor[bortaLoggaPath] || ''))
 </script>
 
-<!-- F3: ingen tom-ruta när match saknas — topbarens "Aktiv match"-chip bär kontexten
+<!-- F3: ingen tom-ruta när match saknas — topbarens "Aktivt jobb"-chip bär kontexten
      en gång för alla steg, istället för att varje delsteg upprepar samma tomrad. -->
 {#if !laddar && match}
   <div class="amrad">
-    <span class="amcaps">Aktiv match</span>
+    <span class="amcaps">Aktivt jobb</span>
     <span class="ambrickor">
       <span class="ambricka" style={brickStil(fargForLag(match.lag_hemma))}>{#if hemLoggaUri}<img src={hemLoggaUri} alt="" />{:else}{initialer(match.lag_hemma)}{/if}</span>
       <span class="ambricka away" style={brickStil(fargForLag(match.lag_borta))}>{#if bortaLoggaUri}<img src={bortaLoggaUri} alt="" />{:else}{initialer(match.lag_borta)}{/if}</span>

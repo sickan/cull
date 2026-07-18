@@ -2,6 +2,10 @@
   import { onMount } from 'svelte'
   import { kalenderStatus, listaFotojobb, hamtaMalmappar, sattMalmapp, valjMapp,
     privatStatus, privatKalendrar, privatSattValda, privatSattEtikett, privatLoggaIn, privatLoggaUt, privatSparaKlient } from '../lib/api.js'
+  import Trana from './Trana.svelte'
+
+  // §9: Träna bor här nu (rad, inte nav-post) — fälls ut vid behov.
+  let visaTraning = false
 
   let status = { har_nyckel: false, ansluten: false, bas_url: '' }
   let laddar = true
@@ -188,6 +192,19 @@
         {/each}
       </div>
       <p class="not">Vid generering med overlay sparas originalbilden alltid bredvid exporten (<code>namn.jpg</code> + <code>namn-original.jpg</code>) — varje export har en ren tvilling.</p>
+    </div>
+
+    <!-- §9 (UX-lyftet): Träna har lämnat naven — modellstatus/omträning/
+         Five-Star-import bor här som en RAD som fäller ut gamla panelen. -->
+    <div class="kort">
+      <div class="krad">
+        <span class="titel scd">Modell &amp; träning</span>
+        <button class="sek" on:click={() => (visaTraning = !visaTraning)}>{visaTraning ? 'Dölj' : 'Visa'}</button>
+      </div>
+      <p class="not top">Gallringens Din smak-modell. Träningen sker tyst av dina val i granskningen — här finns status, manuell omträning och Five-Star-import.</p>
+      {#if visaTraning}
+        <div class="traninbaddad"><Trana inbaddad /></div>
+      {/if}
     </div>
 
     <!-- Privata kalendrar: skrivskyddad tillgänglighet, läses DIREKT (aldrig via
