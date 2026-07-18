@@ -17,6 +17,7 @@
     listaMinneskort, exporteraSkyddade,
     hamtaLive,
   } from '../lib/api.js'
+  import { kopieraText } from '../lib/kopiera.js'
   import ResultatRemsa from '../lib/ResultatRemsa.svelte'
   import { losText as losTextDelad, tokenVals } from '../lib/webtext.js'
   import { farskaFalt } from '../lib/live_merge.js'
@@ -63,6 +64,32 @@
   $: momentNasta = momentMall.find((m) => !m.klar)?.nyckel
   function speglaRes(m) { resNu = { resultat: m?.resultat || '', mellan: m?.mellan || '', malskyttar: m?.malskyttar || '' } }
   const tema = 'Hav'               // Skagen-tema för rendern (gren styr kanten, inte temat)
+
+  // Kopiera texterna vi skapar med Claude (Stigs önskemål 19/7). Fyra ytor:
+  // bildtexten, referatet och de två FÄRDIGA förhandsvisningarna — de senare
+  // är det man faktiskt klistrar in (tokens upplösta, @/# på plats för
+  // sociala, strippat för webben).
+  // '' | 'kopierat' | 'markerat' | 'fel' per nyckel — knappen säger alltid
+  // vad som HÄNDE (webviewen kan neka urklippet; då markeras texten i stället).
+  let kopieradNyckel = ''
+  let kopieradUtfall = ''
+  async function kopiera(nyckel, text, ev) {
+    const yta = ev?.currentTarget?.closest('.prevkol, .f, .kort')
+      ?.querySelector('.prevtext, textarea')
+    kopieradUtfall = await kopieraText(text, yta)
+    kopieradNyckel = nyckel
+    const tid = kopieradUtfall === 'kopierat' ? 1600 : 4000
+    setTimeout(() => { if (kopieradNyckel === nyckel) { kopieradNyckel = ''; kopieradUtfall = '' } }, tid)
+  }
+  // OBS: nyckel/utfall skickas som ARGUMENT — Svelte spårar inte variabler
+  // som bara läses inuti en anropad funktion, så `{kopText('soc', kopieradNyckel, kopieradUtfall)}` hade
+  // aldrig ritats om (samma fälla som lag-panelens filter).
+  function kopText(nyckel, aktiv, utfall) {
+    if (aktiv !== nyckel) return 'Kopiera'
+    return utfall === 'kopierat' ? '✓ Kopierat'
+      : utfall === 'markerat' ? 'Markerat — tryck ⌘C'
+      : 'Kunde inte kopiera'
+  }
 
   $: profil = profiler[match?.sport] || profiler.fotboll ||
     { res_label: 'Slutresultat', res_ph: '6–0', mid_label: 'Halvtid', mid_ph: '3–0',
@@ -975,6 +1002,8 @@
             {laddarFraga ? 'Bygger fråga…' : genererar ? 'Genererar…' : 'Generera med Claude'}
           </button>
           {#if caption && !genererar && !laddarFraga}<button class="genigen" on:click={oppnaGranska} disabled={!match} title="Generera igen">↻ Igen</button>{/if}
+          {#if caption}<button class="kopbtn" on:click={(e) => kopiera('cap', caption, e)}
+            title="Kopiera bildtexten (rå, med tokens)">{kopText('cap', kopieradNyckel, kopieradUtfall)}</button>{/if}
         </div>
       </div>
       {#if granska}
@@ -1009,17 +1038,23 @@
         <div class="inspelhint">Skickas med som styrning när texten genereras — utöver matchfakta.</div>
       </div>
       {#if genFel}<div class="genfel">{genFel}</div>{/if}
-      <div class="f"><label>Referat <span class="lmut">— webbens källtext (utan rubrik/länkar/taggar)</span></label>
+      <div class="f"><label>Referat <span class="lmut">— webbens källtext (utan rubrik/länkar/taggar)</span>
+        {#if referat.trim()}<button class="kopbtn liten" on:click={(e) => kopiera('ref', referat, e)}
+          title="Kopiera referatet">{kopText('ref', kopieradNyckel, kopieradUtfall)}</button>{/if}</label>
         <textarea rows="4" bind:value={referat} placeholder="Fylls av ✨ Generera — eller skriv själv. Tomt = webben faller tillbaka på strippad social text."></textarea></div>
       <div class="hint">Sociala kanaler får @ och #. <b>Webben byggs från referatet</b> (F18FM-2)
         — webbartikeln byggs i <b>Innehåll</b>, som hämtar referatet härifrån.</div>
       <div class="prevgrid">
         <div class="prevkol">
-          <div class="prevlbl">Förhandsvisning · sociala</div>
+          <div class="prevlbl">Förhandsvisning · sociala
+            {#if capSocial}<button class="kopbtn liten" on:click={(e) => kopiera('soc', capSocial, e)}
+              title="Kopiera den färdiga sociala texten">{kopText('soc', kopieradNyckel, kopieradUtfall)}</button>{/if}</div>
           <div class="prevtext">{capSocial || '—'}</div>
         </div>
         <div class="prevkol">
-          <div class="prevlbl">Förhandsvisning · webb</div>
+          <div class="prevlbl">Förhandsvisning · webb
+            {#if capWebb}<button class="kopbtn liten" on:click={(e) => kopiera('webb', capWebb, e)}
+              title="Kopiera den färdiga webbtexten">{kopText('webb', kopieradNyckel, kopieradUtfall)}</button>{/if}</div>
           <div class="prevtext">{capWebb || '—'}</div>
         </div>
       </div>
@@ -1454,6 +1489,13 @@
     border: 1px solid var(--div); background: transparent; color: var(--t-mut); }
   .tonchip.on { background: var(--acc); border-color: var(--acc); color: var(--ink); }
   .genfel { font-size: 11.5px; color: var(--rose); font-weight: 600; margin-top: 9px; }
+  /* Kopiera-knappar: samma familj som ↻ Igen, men diskretare — de ska finnas
+     där texten är utan att konkurrera med Generera. */
+  .kopbtn { background: var(--kort); border: 1px solid var(--div); color: var(--t-mut);
+    border-radius: 8px; padding: 7px 11px; font-size: 12px; font-weight: 600; }
+  .kopbtn:hover { border-color: var(--acc); color: var(--acc); }
+  .kopbtn.liten { padding: 2px 8px; font-size: 10.5px; border-radius: 6px;
+    margin-left: 8px; vertical-align: 1px; }
 
   /* Flikar (p.1) */
   .mpflikar { display: flex; gap: 6px; background: var(--panel); border: 1px solid var(--div);
@@ -1519,7 +1561,9 @@
   @keyframes gensnurr { to { transform: rotate(360deg); } }
   .prevgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
   .prevkol { border: 1px solid var(--div3); border-radius: 9px; background: var(--panel); padding: 10px 12px; min-width: 0; }
-  .prevlbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-caps); margin-bottom: 6px; }
+  .prevlbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--t-caps); margin-bottom: 6px; display: flex; align-items: center; }
+  .prevlbl .kopbtn { margin-left: auto; letter-spacing: 0; text-transform: none; }
   .prevtext { font-size: 12px; color: var(--t-body); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
   .hint.c { text-align: center; }
 
