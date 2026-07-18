@@ -2214,7 +2214,29 @@ class Api:
         """Samlad server-berikning inför _innehall_md — körs i alla vägar
         (förhandsgranska/spara/exportera/publicera) så UI:t inte måste tråda
         härledda fält."""
-        return self._berika_gren(self._berika_underartiklar(data))
+        return self._berika_matchkontext(
+            self._berika_gren(self._berika_underartiklar(data)))
+
+    def _berika_matchkontext(self, data):
+        """V5-E rest: matchartikeln bär sitt sammanhang — `del_av`/`del_av_slug`
+        (eventets namn; invarianten 'aldrig lösryckt' även på artikelsidan) +
+        `rond` (fas-etiketten på eventsidans program). Hämtas ur matchraden;
+        explicit satta fält rörs aldrig."""
+        if not data or data.get("typ", "match") != "match":
+            return data
+        mid = data.get("match_id")
+        m = store.hamta_match(self.conn, mid) if mid else None
+        if not m:
+            return data
+        ut = dict(data)
+        if not ut.get("rond") and (m.get("rond") or "").strip():
+            ut["rond"] = m["rond"].strip()
+        if not ut.get("del_av") and m.get("event_id"):
+            e = store.hamta_event(self.conn, m["event_id"])
+            if e and (e.get("namn") or "").strip():
+                ut["del_av"] = e["namn"].strip()
+                ut["del_av_slug"] = AX.slugga(e["namn"])
+        return ut
 
     def _berika_gren(self, data):
         """D4: matchartikelns frontmatter bär `gren` (Dam/Herr/Mixed) —
@@ -3058,6 +3080,12 @@ def _innehall_md(data, bild_urls=None):
             # Startside-kurering ("Välj själv"): sport.astro lyfter posten med
             # topp-flaggan till hero. None = härledd (nyaste avslutade).
             "topp": data.get("topp") or None,
+            # V5-E rest (_berika_matchkontext): eventkoppling + turneringsrond.
+            # Artikelsidan visar "Del av {event} →", eventsidans program
+            # använder rond som fas-etikett per dag.
+            "del_av": data.get("del_av") or None,
+            "del_av_slug": data.get("del_av_slug") or None,
+            "rond": data.get("rond") or None,
         }
     gal_text = typ not in ("landskap", "event", "sportevent", "film")   # bild-only annars
     # URL-segmentet skiljer sig från content-collection-mappen för match:
@@ -3266,6 +3294,9 @@ def _pagang_match_md(m):
         # eventets titel är eventets namn.
         "del_av_slug": AX.slugga(m["del_av"]) if m.get("del_av") else None,
         "gren": (m.get("hem_gren") or "").capitalize() or None,
+        # V5-E rest: turneringsronden ("Åttondel", "Semifinal" …) blir
+        # fas-etikett per dag på eventsidans program.
+        "fas": (m.get("rond") or "").strip() or None,
     }
     return fm, "", slug, AX.render_md(fm, "")
 

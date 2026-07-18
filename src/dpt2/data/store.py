@@ -1459,7 +1459,7 @@ def lista_matcher(conn):
     """Matchlista (utan spelare) för kalender/översikt, nyast först."""
     rader = conn.execute(
         "SELECT m.id,m.datum,m.tid,m.arena,m.status,m.resultat,m.sport,m.event,"
-        "m.tavling_id,m.liga_id,m.event_id,m.pagang_dold, "
+        "m.tavling_id,m.liga_id,m.event_id,m.pagang_dold,m.rond, "
         "h.namn AS lag_hemma, b.namn AS lag_borta, t.namn AS liga, "
         "h.gren AS hem_gren, "
         "h.stall_hemma AS hemfarg, b.stall_hemma AS bortafarg, "
