@@ -765,6 +765,39 @@ def noteringar_for_fotojobb(conn, fotojobb_ider):
     return {r["fotojobb_id"]: r["notering"] for r in rader}
 
 
+# ── Fotojobb → underkategori (Människor: Porträtt/Student/Bröllop …) ─────────
+def satt_fotojobb_underkategori(conn, fotojobb_id, underkategori):
+    """Skriver (eller raderar, om tom) jobbets underkategori. Lokal — samma
+    skäl som noteringen: tjänsten känner bara `category`."""
+    text = (underkategori or "").strip()
+    conn.execute("DELETE FROM fotojobb_underkategori WHERE fotojobb_id=?",
+                 (fotojobb_id,))
+    if text:
+        conn.execute("INSERT INTO fotojobb_underkategori(fotojobb_id,underkategori) "
+                     "VALUES(?,?)", (fotojobb_id, text))
+    conn.commit()
+
+
+def underkategorier_for_fotojobb(conn, fotojobb_ider):
+    """Batch-uppslag: {fotojobb_id: underkategori} för given lista av id:n."""
+    ider = [i for i in fotojobb_ider if i]
+    if not ider:
+        return {}
+    platshallare = ",".join("?" * len(ider))
+    rader = conn.execute(
+        f"SELECT fotojobb_id, underkategori FROM fotojobb_underkategori "
+        f"WHERE fotojobb_id IN ({platshallare})", ider).fetchall()
+    return {r["fotojobb_id"]: r["underkategori"] for r in rader}
+
+
+def kanda_underkategorier(conn):
+    """Alla underkategorier som faktiskt använts — panelens förslagslista
+    växer med Stigs egna ord i stället för att låsas till en fast lista."""
+    return [r[0] for r in conn.execute(
+        "SELECT DISTINCT underkategori FROM fotojobb_underkategori "
+        "ORDER BY underkategori")]
+
+
 # ── Ackreditering per matchjobb (bara Sport; jobben bor hos tjänsten) ─────────
 ACKR_STATUS = ("ejbegard", "begard", "beviljad", "nekad")
 _ACKR_TOM = {"status": "ejbegard", "note": "", "paminnelse_jobb_id": None,

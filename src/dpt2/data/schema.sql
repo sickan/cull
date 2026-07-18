@@ -254,6 +254,14 @@ CREATE TABLE fotojobb_notering (
   notering    TEXT NOT NULL
 );
 
+-- Underkategori inom en kategori — idag bara Människor (Porträtt, Student,
+-- Bröllop m.fl.). LOKAL av samma skäl som noteringen: kalendertjänsten känner
+-- bara till `category`, så en synk får aldrig kunna radera den här nyansen.
+CREATE TABLE fotojobb_underkategori (
+  fotojobb_id   TEXT PRIMARY KEY,
+  underkategori TEXT NOT NULL
+);
+
 -- Fotoackreditering per matchjobb (bara kategori Sport). Skild från jobbet
 -- självt — jobben bor hos Calendar Sync-tjänsten, samma textnyckel-rymd som
 -- fotojobb_match/fotojobb_notering. paminnelse_jobb_id pekar på tjänstens

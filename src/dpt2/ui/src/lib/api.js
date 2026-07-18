@@ -1139,6 +1139,13 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
 // §10: momentmallens status för matchen (✓ ur some_material).
 // §10 skiva 3: momentmallen gäller alla jobbtyper — matchId för sportjobb,
 // (null, jobbId, kategori) för landskaps-/människo-/filmjobb.
+// v37: förslagslistan för Människor-jobbens underkategori.
+export async function listaUnderkategorier() {
+  const api = brygga()
+  if (api) return api.underkategorier()
+  return wait(['Porträtt', 'Student', 'Bröllop'])
+}
+
 export async function momentStatus(matchId, jobbId = null, kategori = null) {
   const api = brygga()
   if (api) return api.moment_status(matchId, jobbId, kategori)

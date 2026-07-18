@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 36
+SCHEMA_VERSION = 37
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -911,6 +911,13 @@ def _migrera(conn, fran_version):
         for tabell in ("some_material", "publicera_material"):
             if _har_tabell(conn, tabell) and not _har_kolumn(conn, tabell, "jobb_id"):
                 conn.execute(f"ALTER TABLE {tabell} ADD COLUMN jobb_id TEXT")
+
+    if fran_version < 37:
+        # v37: Människor-jobb har underkategorier (Porträtt, Student, Bröllop
+        # m.fl. — Stigs fältnot 18/7). Lokal tabell som noteringen: tjänsten
+        # känner bara `category` och får inte kunna radera nyansen vid synk.
+        conn.execute("CREATE TABLE IF NOT EXISTS fotojobb_underkategori ("
+                     "fotojobb_id TEXT PRIMARY KEY, underkategori TEXT NOT NULL)")
 
 
 def _har_kolumn(conn, tabell, kolumn):

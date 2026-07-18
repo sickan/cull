@@ -881,6 +881,15 @@ class Api:
         UI:t anropar per synligt tidsspann (vecka/månad), aldrig allt på en gång."""
         return self.privat.hamta_span(fran, till)
 
+    def underkategorier(self):
+        """Förslagslistan för Människor-jobbens underkategori: Stigs vanliga
+        plus allt han själv skrivit in tidigare (v37)."""
+        # Bara de Stig faktiskt nämnt (18/7) — listan växer med hans egna ord
+        # i stället för att jag gissar fram fler.
+        kanda = store.kanda_underkategorier(self.conn)
+        bas = ["Porträtt", "Student", "Bröllop"]
+        return bas + [k for k in kanda if k not in bas]
+
     def lista_fotojobb(self):
         """Lokala utkast (väntar på manuell synk) + riktiga jobb hos tjänsten.
         Utkast taggas `utkast: True` så UI:t kan visa "Aktivera synk"-läget;
@@ -903,9 +912,12 @@ class Api:
         ider = [j.get("id") for j in alla]
         matchref = store.matchref_for_fotojobb(self.conn, ider)
         noteringar = store.noteringar_for_fotojobb(self.conn, ider)
+        # Människor-jobbens nyans (Porträtt/Student/Bröllop …) — lokal, v37.
+        underkat = store.underkategorier_for_fotojobb(self.conn, ider)
         ackr = store.ackreditering_for_fotojobb(self.conn, ider)
         for j in alla:
             j["match_id"] = matchref.get(j.get("id"))
+            j["underkategori"] = underkat.get(j.get("id")) or None
             # Ackreditering finns bara på matcher (Sport) — övriga kategorier
             # saknar fältet helt (handoff §5).
             if j.get("category") == "Sport":
@@ -951,6 +963,9 @@ class Api:
                 store.lanka_fotojobb_match(self.conn, jobb["id"], jobb.get("match_id"))
             if "notering" in jobb:
                 store.satt_fotojobb_notering(self.conn, jobb["id"], jobb.get("notering"))
+            if "underkategori" in jobb:
+                store.satt_fotojobb_underkategori(self.conn, jobb["id"],
+                                                  jobb.get("underkategori"))
             return {"ok": True}
         jid = jobb.get("id")
         data = {k: jobb.get(k) for k in
@@ -977,6 +992,9 @@ class Api:
             if sparat_id:
                 if "match_id" in jobb:
                     store.lanka_fotojobb_match(self.conn, sparat_id, jobb.get("match_id"))
+                if "underkategori" in jobb:
+                    store.satt_fotojobb_underkategori(self.conn, sparat_id,
+                                                      jobb.get("underkategori"))
                 if "notering" in jobb:
                     # Noteringen bor hos tjänsten nu — städa den lokala
                     # fallback-raden så gamla noter inte spökar efter migrering.
@@ -992,6 +1010,7 @@ class Api:
         (de har inga främmandenycklar mot jobbet — det bor hos tjänsten)."""
         store.lanka_fotojobb_match(self.conn, jobb_id, None)
         store.satt_fotojobb_notering(self.conn, jobb_id, "")
+        store.satt_fotojobb_underkategori(self.conn, jobb_id, "")
         self._stada_ackreditering(jobb_id)
         if store.hamta_fotojobb_utkast(self.conn, jobb_id):
             store.radera_fotojobb_utkast(self.conn, jobb_id)
@@ -1756,10 +1775,12 @@ class Api:
     }
 
     # §10 skiva 3: kategori (Calendar Sync-etikett) → mall-nyckel ovan.
+    # Stigs kategorier (fältnot 18/7): Sport · Landskap · Människor · Film.
+    # Människor har underkategorier (Porträtt, Student, Bröllop m.fl.) — de
+    # delar momentmall, nyansen styr inte publiceringsrytmen. Blogg är en
+    # innehållstyp i Innehåll-panelen, inte ett fotojobb.
     _KATEGORI_MALL = {"landskap": "landskap", "natur": "landskap",
                       "människor": "manniskor", "manniskor": "manniskor",
-                      "porträtt": "manniskor", "portratt": "manniskor",
-                      "bröllop": "manniskor", "brollop": "manniskor",
                       "film": "film"}
 
     def moment_status(self, match_id=None, jobb_id=None, kategori=None):

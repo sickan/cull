@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte'
   import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher, listaLag,
     privatKalendrar, privatHandelser, sattAckreditering, skickaAckrMail,
-    momentStatus } from '../lib/api.js'
+    momentStatus, listaUnderkategorier } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { grenFarg } from '../lib/gren.js'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
@@ -82,8 +82,17 @@
     'Augusti', 'September', 'Oktober', 'November', 'December']
   const MAN_KORT = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
   const VD = ['sön', 'mån', 'tis', 'ons', 'tor', 'fre', 'lör']
-  const KATEGORIER = ['Sport', 'Landskap', 'Event', 'Övrigt']
-  const KAT_FARG = { Sport: '#2F7CB0', Landskap: '#C9871F', Event: '#C9657F', 'Övrigt': '#6E8B5E' }
+  // Stigs kategorier (fältnot 18/7): Sport · Landskap · Människor · Film.
+  // Människor har underkategorier (Porträtt/Student/Bröllop m.fl.) — egen
+  // väljare i kortet, inte fler toppkategorier. Blogg är en innehållstyp i
+  // Innehåll-panelen, inte ett fotojobb.
+  const KATEGORIER = ['Sport', 'Landskap', 'Människor', 'Film']
+  const KAT_FARG = { Sport: '#2F7CB0', Landskap: '#C9871F', 'Människor': '#C9657F',
+    Film: '#8A6FB0',
+    // Äldre jobb kan bära de gamla etiketterna — behåll färgerna så historiken
+    // inte blir grå, men de går inte att VÄLJA längre.
+    Event: '#C9657F', 'Övrigt': '#6E8B5E' }
+  const LEGACY_KAT = ['Event', 'Övrigt']
   const NULLKAT = 'rgba(35,32,26,.45)'
   const FILTER = ['Alla', ...KATEGORIER, 'Okategoriserat']
 
@@ -282,8 +291,9 @@
     if (j.category === 'Sport') { oppnaModalFor(j); return }
     if (jobEditId === j.id) { stangRedigering(); return }     // klick igen stänger
     laddaJobbMoment(j, j.category || '')
+    if (!underkatForslag.length) listaUnderkategorier().then((l) => (underkatForslag = l || []))
     redigerar = { ...j, category: j.category || '', match_id: j.match_id || '',
-      notering: j.notering || '',
+      notering: j.notering || '', underkategori: j.underkategori || '',
       start_at: tillLokal(j.start_at), end_at: tillLokal(j.end_at) }
     jobEditId = j.id
     radTillToppen(rad)
@@ -294,6 +304,10 @@
   // egna moment (Ny serie, Tjuvkik, Ny film …) precis som matchen har sina.
   // ✓ = posten har gått ut (some_material.jobb_id). Sportjobb visar ingen
   // remsa här — deras mall bor i Publicera, med matchen som mål.
+  // v37: Människor-jobbens underkategori (Porträtt/Student/Bröllop …).
+  // Förslagen kommer från backend och växer med Stigs egna ord; fritext
+  // tillåts alltid — listan ska aldrig hindra ett nytt slags uppdrag.
+  let underkatForslag = []
   let jobbMoment = []
   async function laddaJobbMoment(jobb, kategori) {
     jobbMoment = []
@@ -305,6 +319,9 @@
   async function sparaRedigering() {
     const d = { ...redigerar, category: redigerar.category || null }
     d.match_id = d.category === 'Sport' ? (d.match_id || null) : null
+    // Underkategorin hör bara till Människor — byter man kategori ska den inte
+    // ligga kvar som spöke på jobbet.
+    d.underkategori = d.category === 'Människor' ? (d.underkategori || '') : ''
     if (d.all_day) {          // heldag lagras som rent datum (inklusivt slut)
       d.start_at = (d.start_at || '').slice(0, 10)
       d.end_at = (d.end_at || d.start_at || '').slice(0, 10)
@@ -550,6 +567,15 @@
                             {/each}
                           </div>
                         </div>
+                        {#if redigerar.category === 'Människor'}
+                          <label class="full">Underkategori
+                            <input list="underkat-forslag2" bind:value={redigerar.underkategori}
+                              placeholder="t.ex. Porträtt, Student, Bröllop" />
+                          </label>
+                          <datalist id="underkat-forslag2">
+                            {#each underkatForslag as u}<option value={u}></option>{/each}
+                          </datalist>
+                        {/if}
                         {#if jobbMoment.length}
                           <div class="momentrad">
                             <span class="lbl">Moment</span>
@@ -663,6 +689,15 @@
                         {/each}
                       </div>
                     </div>
+                    {#if redigerar.category === 'Människor'}
+                      <label class="full">Underkategori
+                        <input list="underkat-forslag" bind:value={redigerar.underkategori}
+                          placeholder="t.ex. Porträtt, Student, Bröllop" />
+                      </label>
+                      <datalist id="underkat-forslag">
+                        {#each underkatForslag as u}<option value={u}></option>{/each}
+                      </datalist>
+                    {/if}
                     <label class="check" on:click={() => (redigerar.all_day = !redigerar.all_day)}>
                       <span class="box" class:pa={redigerar.all_day}>{redigerar.all_day ? '✓' : ''}</span> Heldag
                     </label>

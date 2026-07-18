@@ -1453,20 +1453,68 @@ class TestMomentStatus(unittest.TestCase):
         # Posten hör till jobbet, inte till någon match
         self.assertEqual(store.lista_some_material(self.api.conn, "jobb-1"), [])
 
+    def test_manniskor_ar_kategorin_underkategorin_styr_inte_mallen(self):
+        # Stigs kategorier: Sport · Landskap · Människor · Film. Porträtt/
+        # Student/Bröllop är UNDERkategorier under Människor — de delar
+        # momentmall (nyansen styr inte publiceringsrytmen).
+        r = self.api.moment_status(None, "jobb-m", "Människor")
+        self.assertEqual([m["nyckel"] for m in r["moment"]], ["tjuvkik"])
+
+    def test_filmjobb_far_filmmallen(self):
+        r = self.api.moment_status(None, "jobb-f", "Film")
+        self.assertEqual([m["nyckel"] for m in r["moment"]],
+                         ["ny_film", "stillbilder", "bakom_kameran"])
+
     def test_manniskojobb_doljer_leverans_klar_utan_some_flagga(self):
         # Kundleveranser är privata: "Leverans klar" bara när jobbet är
         # some-flaggat (some:true i noteringen).
         nycklar = [m["nyckel"]
-                   for m in self.api.moment_status(None, "jobb-x", "Porträtt")["moment"]]
+                   for m in self.api.moment_status(None, "jobb-x", "Människor")["moment"]]
         self.assertEqual(nycklar, ["tjuvkik"])
 
     def test_okand_kategori_ger_tom_mall_inte_gissning(self):
+        # Gamla etiketter (Event/Övrigt) finns kvar på historiska jobb.
         r = self.api.moment_status(None, "jobb-2", "Övrigt")
         self.assertTrue(r["ok"])
         self.assertEqual(r["moment"], [])
 
     def test_okand_match_ger_fel(self):
         self.assertFalse(self.api.moment_status("finns-inte")["ok"])
+
+
+class TestUnderkategori(unittest.TestCase):
+    """v37: Människor-jobbens underkategori (Porträtt/Student/Bröllop …) —
+    lokal, som noteringen: kalendersynken känner bara `category`."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+
+    def test_forslagen_innehaller_stigs_ord_och_vaxer(self):
+        self.assertEqual(self.api.underkategorier(),
+                         ["Porträtt", "Student", "Bröllop"])
+        store.satt_fotojobb_underkategori(self.api.conn, "j1", "Konfirmation")
+        self.assertIn("Konfirmation", self.api.underkategorier())
+
+    def test_satt_och_las_underkategori(self):
+        store.satt_fotojobb_underkategori(self.api.conn, "j1", "Student")
+        self.assertEqual(
+            store.underkategorier_for_fotojobb(self.api.conn, ["j1", "j2"]),
+            {"j1": "Student"})
+
+    def test_tom_text_raderar_raden(self):
+        store.satt_fotojobb_underkategori(self.api.conn, "j1", "Bröllop")
+        store.satt_fotojobb_underkategori(self.api.conn, "j1", "")
+        self.assertEqual(store.underkategorier_for_fotojobb(self.api.conn, ["j1"]), {})
+
+    def test_utkast_sparar_underkategorin(self):
+        tid = store.upsert_tavling(self.api.conn, "Studentvecka", sport="friidrott")
+        jid = store.skapa_fotojobb_utkast(
+            self.api.conn, tavling_id=tid, title="Studentfoto",
+            start_at="2026-06-05T10:00:00", end_at="2026-06-05T12:00:00")
+        self.api.spara_fotojobb({"id": jid, "utkast": True,
+                                 "category": "Människor", "underkategori": "Student"})
+        jobb = next(j for j in self.api.lista_fotojobb() if j["id"] == jid)
+        self.assertEqual(jobb["underkategori"], "Student")
 
 
 class TestGallringConfig(unittest.TestCase):
