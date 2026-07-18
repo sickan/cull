@@ -150,7 +150,7 @@ visar riktiga server-renderade Horisont-bilden.*
 | iOS-notis | Skarp notis-landning ("påminn när matchdata landat" — Stigs knapptryck end-to-end) | Kvar från design-lyftet etapp 3 |
 | iOS-story | Story-text-override | Kvar från lyftet |
 | iOS-lev | Leverans-progress-datakälla | Kvar från lyftet |
-| FEAT-iOS-01 | Logotyp på lag i appen | Blockerare: **loggor → R2** (delas med mobil-live E2 + #27-polish) |
+| FEAT-iOS-01 | Logotyp på lag i appen | ✅ **LÖST 18/7 av IB-3** (ios `c1791c0`) — R2-vägen fanns redan serverside; appen renderar nu URL:erna |
 | FEAT-iOS-02 | SoMe-inlägg från heldagsevent i Kalendern | Blockerad: mobil render-väg (Pillow är Mac-bunden — se ML-E2) |
 | FEAT-iOS-03 | Kalender som visningsläge under Fotojobb | ✅ **SKIVA 1 KLAR 17/7** (ios `99973cd`): Lista\|Kalender-segment, månadsgrid + dag-panel, Kalender-fliken BORT (4 flikar). Skiva 2 kvar: deadline-ringar + krock (kräver /api/jobb-data) |
 | FEAT-iOS-04 | Systemstyrt mörkt tema | Litet (samma princip som DPT2 #25) |
@@ -210,7 +210,7 @@ MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utred
 
 | ID | Vad | Anteckning |
 |----|-----|-----------|
-| IB-3 | **KRITISK: Loggor synkas inte till iOS** — appen faller tillbaka på initialer fast DPT2 har loggorna | = kända **loggor→R2-blockeraren** (FEAT-iOS-01, #27-polish, ML-E2). Verifiera server- vs appsida; löses troligen delvis av IB-4 men verifieras separat |
+| IB-3 | **KRITISK: Loggor synkas inte till iOS** — appen faller tillbaka på initialer fast DPT2 har loggorna | ✅ **LÖST 18/7** (ios `c1791c0`): felsökningen visade att SERVERSIDAN redan levererar (paketet bär `lag_*_logga_url`, R2-speglat, MFF-loggan verifierad 200/PNG live) — APPEN parsade aldrig fälten. Ny delad `LagCirkel` (AsyncImage på ljus platta, monogram-fallback) i matchlista/hubb/live-läget; Match-modellen bär hemmaLogga/bortaLogga. **Löste samtidigt FEAT-iOS-01.** 31 tester gröna. Bröndby-loggan dyker upp när Stig lagt in den (F18-12-fixen + omstart) och paketet omsynkats. **Install väntar på telefonen** |
 | IB-1 | Trupp-OCR: inläsning körs mot valt lag + auto-komplettering (spelare i inläst elva som saknas i truppen läggs till, markerade för verifiering) | Bygger på trupp skiva 2 (18/7) |
 | IB-2 | Bilder → På telefonen: Töm-knapp m bekräftelse | Litet |
 | IB-4 | Robustare DPT2↔iOS-synk: silent push (`content-available:1`, payload `{match_id, changed}`) som signal + `updated_since`-delta vid start/förgrund; ev. WS/SSE i live-läge senare | Backend + iOS; APNs-infran finns (design-lyftet etapp 3) |
