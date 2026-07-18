@@ -27,6 +27,9 @@ _GENOMSLAPP = (
     "liga", "stallning", "mal_rad", "avspark_tid", "arena", "next_when",
     "sport", "tema", "gren", "format", "zoom",
     "overlay", "scorers_layout",
+    # M18-1: startelva-strängen ("nr namn"-rader) — utan den ritade
+    # Startelva-momentet bara rubriken, aldrig spelarna.
+    "startelva",
 )
 
 MAX_BYTES = 25 * 1024 * 1024   # skydd mot orimliga uppladdningar
