@@ -1020,7 +1020,8 @@ class _FakeKalender:
         self.beskrivningar = {}      # jobb-id → description hos "tjänsten"
         self.jobb = []               # svar för lista_jobb
         self.mail = []               # skickade (till, amne, kropp)
-        self.mail_svar = {"ok": True, "status": 200, "fel": None}
+        self.mail_svar = {"ok": True, "status": 200, "fel": None,
+                          "thread_id": "trad-abc123"}
 
     def har_nyckel(self):
         return True
@@ -2001,8 +2002,10 @@ class TestAckreditering(unittest.TestCase):
         self.assertEqual(self.fake.mail, [("press@obos.se",
                                            "Ackreditering – Malmö FF", "Hej")])
         # Begärd → påminnelsen är borttagen.
-        self.assertIsNone(store.hamta_ackreditering(
-            self.api.conn, jid)["paminnelse_jobb_id"])
+        a = store.hamta_ackreditering(self.api.conn, jid)
+        self.assertIsNone(a["paminnelse_jobb_id"])
+        # FEAT-14 skiva 1: Gmails tråd-id sparades för svar-i-tråd-spårning.
+        self.assertEqual(a["thread_id"], "trad-abc123")
 
     def test_skicka_mail_validerar_och_ror_inget_vid_fel(self):
         jid = self._matchjobb()
@@ -2054,7 +2057,7 @@ class TestAckreditering(unittest.TestCase):
         self.assertIn(pam_id, self.fake.raderade)
         self.assertEqual(store.hamta_ackreditering(self.api.conn, jid),
                          {"status": "ejbegard", "note": "",
-                          "paminnelse_jobb_id": None})
+                          "paminnelse_jobb_id": None, "thread_id": None})
 
     def test_nytt_matchdatum_flyttar_paminnelsen(self):
         jid = self._matchjobb(datum="2026-07-19")

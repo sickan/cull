@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 32
+SCHEMA_VERSION = 33
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -878,6 +878,13 @@ def _migrera(conn, fran_version):
             if problem:
                 raise RuntimeError(
                     f"v32-migreringen lämnade brutna referenser: {problem[:5]}")
+
+    if fran_version < 33:
+        # v33 (FEAT-14 skiva 1): Gmails tråd-id sparas på ackrediteringen vid
+        # utskicket → skiva 2:s läsväg hittar svar-i-tråd utan manuell gest.
+        if (_har_tabell(conn, "ackreditering")
+                and not _har_kolumn(conn, "ackreditering", "thread_id")):
+            conn.execute("ALTER TABLE ackreditering ADD COLUMN thread_id TEXT")
 
 
 def _har_kolumn(conn, tabell, kolumn):

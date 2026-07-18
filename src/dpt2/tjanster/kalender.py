@@ -102,7 +102,10 @@ class Kalender:
             "POST", "/api/mail/send",
             body={"to": till, "subject": amne, "body": kropp}, auth=True)
         fel = (data or {}).get("error") if isinstance(data, dict) else None
-        return {"ok": status == 200, "status": status, "fel": fel}
+        # FEAT-14 skiva 1: Gmails tråd-id följer med hem (svar-i-tråd-spårning).
+        thread_id = (data or {}).get("threadId") if isinstance(data, dict) else None
+        return {"ok": status == 200, "status": status, "fel": fel,
+                "thread_id": thread_id}
 
 
 def _packa_upp(data):

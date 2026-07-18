@@ -316,7 +316,7 @@ class TestAckreditering(unittest.TestCase):
     def test_grundlage_utan_rad(self):
         a = store.hamta_ackreditering(self.c, "jobb1")
         self.assertEqual(a, {"status": "ejbegard", "note": "",
-                             "paminnelse_jobb_id": None})
+                             "paminnelse_jobb_id": None, "thread_id": None})
         self.assertEqual(store.ackreditering_for_fotojobb(self.c, ["jobb1"]), {})
 
     def test_satt_status_och_note(self):

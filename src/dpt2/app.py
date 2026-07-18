@@ -1142,7 +1142,10 @@ class Api:
         if not r.get("ok"):
             return {"ok": False, "fel": r.get("fel") or
                     f"Utskicket misslyckades (HTTP {r.get('status')})."}
-        store.satt_ackreditering(self.conn, jobb_id, status="begard")
+        # FEAT-14 skiva 1: tråd-id:t från Gmail sparas på ackrediteringen så
+        # läsvägen (skiva 2) hittar svar-i-tråd utan manuell gest.
+        store.satt_ackreditering(self.conn, jobb_id, status="begard",
+                                 thread_id=r.get("thread_id"))
         self._synka_ackr_paminnelse(jobb_id)      # Begärd → påminnelsen bort
         a = store.hamta_ackreditering(self.conn, jobb_id)
         return {"ok": True, "ackreditering": {"status": a["status"],

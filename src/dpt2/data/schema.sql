@@ -263,7 +263,8 @@ CREATE TABLE ackreditering (
   status             TEXT NOT NULL DEFAULT 'ejbegard'
                        CHECK (status IN ('ejbegard','begard','beviljad','nekad')),
   note               TEXT NOT NULL DEFAULT '',
-  paminnelse_jobb_id TEXT
+  paminnelse_jobb_id TEXT,
+  thread_id          TEXT   -- Gmail-trådens id från utskicket (FEAT-14 s1)
 );
 
 -- Uttagen trupp per match (subset av lagets spelare) + vem som startade.

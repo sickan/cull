@@ -762,13 +762,15 @@ def noteringar_for_fotojobb(conn, fotojobb_ider):
 
 # ── Ackreditering per matchjobb (bara Sport; jobben bor hos tjänsten) ─────────
 ACKR_STATUS = ("ejbegard", "begard", "beviljad", "nekad")
-_ACKR_TOM = {"status": "ejbegard", "note": "", "paminnelse_jobb_id": None}
+_ACKR_TOM = {"status": "ejbegard", "note": "", "paminnelse_jobb_id": None,
+             "thread_id": None}
 
 
 def hamta_ackreditering(conn, fotojobb_id):
     """Jobbets ackreditering; saknad rad = grundläget (Ej begärd, tom not)."""
-    r = conn.execute("SELECT status,note,paminnelse_jobb_id FROM ackreditering "
-                     "WHERE fotojobb_id=?", (fotojobb_id,)).fetchone()
+    r = conn.execute("SELECT status,note,paminnelse_jobb_id,thread_id "
+                     "FROM ackreditering WHERE fotojobb_id=?",
+                     (fotojobb_id,)).fetchone()
     return dict(r) if r else dict(_ACKR_TOM)
 
 
@@ -788,7 +790,7 @@ def ackreditering_for_fotojobb(conn, fotojobb_ider):
 
 
 def satt_ackreditering(conn, fotojobb_id, *, status=None, note=None,
-                       paminnelse_jobb_id=...):
+                       paminnelse_jobb_id=..., thread_id=...):
     """Uppdaterar jobbets ackreditering (bara angivna fält). Blir resultatet
     grundläget raderas raden istället — tabellen bär bara avvikelser, så ett
     jobb kan alltid nollställas till Ej begärd utan att lämna skräp."""
@@ -801,12 +803,17 @@ def satt_ackreditering(conn, fotojobb_id, *, status=None, note=None,
         a["note"] = (note or "").strip()
     if paminnelse_jobb_id is not ...:
         a["paminnelse_jobb_id"] = paminnelse_jobb_id or None
+    if thread_id is not ...:
+        # FEAT-14 skiva 1: Gmails tråd-id från utskicket — skiva 2:s läsväg
+        # hittar svar-i-tråd via den utan manuell gest.
+        a["thread_id"] = thread_id or None
     conn.execute("DELETE FROM ackreditering WHERE fotojobb_id=?", (fotojobb_id,))
     if a != _ACKR_TOM:
         conn.execute(
-            "INSERT INTO ackreditering(fotojobb_id,status,note,paminnelse_jobb_id)"
-            " VALUES(?,?,?,?)",
-            (fotojobb_id, a["status"], a["note"], a["paminnelse_jobb_id"]))
+            "INSERT INTO ackreditering(fotojobb_id,status,note,"
+            "paminnelse_jobb_id,thread_id) VALUES(?,?,?,?,?)",
+            (fotojobb_id, a["status"], a["note"], a["paminnelse_jobb_id"],
+             a["thread_id"]))
     conn.commit()
     return a
 
