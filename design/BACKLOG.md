@@ -184,9 +184,31 @@ visar riktiga server-renderade Horisont-bilden.*
 | ML-E1-skarp | Etapp 1 skarpkörning telefon↔desktop under riktig match | Byggd, ej skarpkörd |
 | ML-E2 | Etapp 2: publicera stories utan Macen (Browser Rendering-inriktning) | Blockerare: **loggor → R2** · låser upp FEAT-iOS-02 |
 
+## F18 · Stigs fynd 18/7 (källa: `~/Downloads/backlog-2026-07-18.md`)
+
+*Numren = punkterna i Stigs lista. Föreslagen ordning (Stigs): 12 KRITISK före
+MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utredningar
+3/2 → UX-omtag 8/9/11 → ny funktion 13.*
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| F18-12 | **KRITISK: Uppladdning av laglogga fungerar inte** (DPT2 lagvyn, Malmö FF) | Före MFF–Bröndby idag 14:00. Felsök: filväljare? nätverksanrop? Trolig okopplad handler (jfr F18-3). Workaround: lägg loggofiler manuellt i lagringsvägen |
+| F18-1 | Bild 4 blinkar svart vid hover i sport-galleriet (Darderi–Borges, webben) | Trolig oskalad originalfil → re-rastrering vid transform. Akut: ersätt m nedskalad; fallback `backface-visibility:hidden; translateZ(0)`. Förebyggs permanent av F18-2 |
+| F18-2 | Automatisk nedskalning av galleribilder vid publicering (DPT2) | Alla källor → webbstorlek; ev. varning för stor fil på väg ut. Rotbot för F18-1; jfr `publicering/bildoptimering.py` |
+| F18-3 | "Importera spelschema"-knappen död (DPT2) | Handler saknas eller tyst krasch? Definiera sen källa (TheSportsDB 4347/5209, CSV, mff.unwi.se) → **absorberar SPIKE-01** |
+| F18-4 | Ta bort utskrivet "Heldag" i På gång-högerspalten (webben) | Datumintervall + plats räcker; linjera platsraden mot poster m klockslag. OBS: rör samma yta som Resultat-kortets "Avslutat" (18/7) |
+| F18-5 | Kompaktare heldagsval i matchformuläret (DPT2) | Vänsterställd toggle "Heldagsevent (utan motståndare)", heldag → eventnamnsfält ersätter lagfälten; alt. typval vid skapande. Görs ihop med F18-6 |
+| F18-6 | Osparad post kan inte öppnas efter kollaps (DPT2 matchformuläret) | Expandera nycklar på id som osparad post saknar → temporärt id eller spärra kollaps tills sparad. Verifiera fältdata överlever kollaps/expand |
+| F18-7 | Rubrik-fallback dubblerar heldagsmarkering (DPT2 matchformuläret) | "Ny match"/"Namnlöst event" som fallback-titel; badgen ensam markerar heldag. Hänger ihop m F18-5 |
+| F18-8 | Tidigare projekt tar för mycket plats + dubbletter (DPT2 Snabbplock) | Kompakta listrader (tumnagel, relativ tid, Återuppta), 3 senaste + Visa alla. Dubbletter per match → gruppera eller återuppta befintligt projekt (jfr SP-pers persist urval) |
+| F18-9 | Kalenderväljarna radbryter (DPT2 Fotojobb) | Skilj kalendrar (på/av-lager) från kategorifilter (enval): färgprickar m tooltip, alt. samlad Kalendrar-popover |
+| F18-10 | Hem-knappen gör inget från matchsidan (iOS) | Tryck på aktiv flik ska poppa till roten — alla flikar |
+| F18-11 | Tydligare logotyp på startskärmen (iOS) | Vit logotyp (logotype_vit.png) m drop shadow, hästen bär hörnet, DPT sekundär; "v1.0 · build 1" → Inställningar. Viktig inför ★-bakgrunden (V5-D-resten) |
+| F18-13 | **NY: Ladda upp bilder från iOS-appen** in i matchens bildflöde | Avgränsning att bekräfta m Stig: matchbilder, lagloggor eller båda? Knyter an till original-bryggan (FEAT-15) och loggor→R2-blockeraren |
+
 ## G · Spikes DPT2
 
-SPIKE-01 importera spelschema (URL/fil) · SPIKE-03 ML/modell-bibliotek ·
+SPIKE-01 importera spelschema → absorberad av F18-3 · SPIKE-03 ML/modell-bibliotek ·
 SPIKE-04 PM-mapp · SPIKE-05 platshållare i ML-bildvyer · SPIKE-06
 push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 (SPIKE-02 visningslogik → **D7**.)
