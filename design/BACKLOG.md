@@ -205,7 +205,7 @@ MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utred
 | F18-9 | Kalenderväljarna radbryter (DPT2 Fotojobb) | Skilj kalendrar (på/av-lager) från kategorifilter (enval): färgprickar m tooltip, alt. samlad Kalendrar-popover |
 | F18-10 | Hem-knappen gör inget från matchsidan (iOS) | ✅ **LÖST 18/7** (ios `aea3771`): flikbaren postar popp-signal vid tryck på aktiv flik → Hem/Matcher nollar sin NavigationPath (Jobb/Bilder pushar inget). 31 tester gröna. **Install väntar** — telefonens tunnel nere igen |
 | F18-11 | Tydligare logotyp på startskärmen (iOS) | Vit logotyp (logotype_vit.png) m drop shadow, hästen bär hörnet, DPT sekundär; "v1.0 · build 1" → Inställningar. Viktig inför ★-bakgrunden (V5-D-resten) |
-| F18-13 | **NY: Ladda upp bilder från iOS-appen** in i matchens bildflöde | Avgränsning att bekräfta m Stig: matchbilder, lagloggor eller båda? Knyter an till original-bryggan (FEAT-15) och loggor→R2-blockeraren |
+| F18-13 | **NY: Ladda upp bilder från iOS-appen** | **AVGRÄNSAD (Stig 18/7): BÅDA** — (a) matchbilder från kamerarullen in i matchens bildflöde och (b) sätta/byta lagloggor från telefonen. Byggs som egen skiva; loggavägen återanvänder /api/bilder/lag + logga_url-mönstret (IB-3), matchbildsvägen angränsar original-bryggan |
 
 ## IB · iOS-backloggen 18/7 (källa: `~/Downloads/dpt2-ios-backlogg.md`)
 
