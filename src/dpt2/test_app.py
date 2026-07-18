@@ -2818,3 +2818,55 @@ class TestThumbForLogga(unittest.TestCase):
             r = api.thumb_for_bild(str(p))
             self.assertTrue(r["ok"])
             self.assertTrue(r["data_uri"].startswith("data:image/jpeg;base64,"))
+
+
+class TestSynkDelta(unittest.TestCase):
+    """SYNK-DPT2: delta-pollen — baslinje först, sedan appliceras mobilens
+    live-fält på lokala matchen (store-direkt, inget eko till molnet)."""
+
+    class FejkLive:
+        def __init__(self):
+            self.ids = []
+            self.live = {}
+            self.pushade = []
+
+        def delta(self, sedan=None):
+            return (self.ids if sedan else [], "2026-07-18T12:00:00.000Z")
+
+        def hamta(self, mid):
+            return self.live.get(mid)
+
+        def har_nyckel(self):
+            return True
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.fejk = self.FejkLive()
+        self.api.live_synk = self.fejk
+        r = self.api.spara_match({"lag_hemma": "Malmö FF", "lag_borta": "Bröndby IF",
+                                  "datum": "2026-07-18", "sport": "fotboll"})
+        self.mid = r["id"]
+
+    def test_forsta_anropet_ar_baslinje(self):
+        self.fejk.ids = [self.mid]
+        r = self.api.synk_delta()
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["andrade"], [])          # baslinje — inget brus
+
+    def test_delta_applicerar_livefalt_lokalt(self):
+        self.api.synk_delta()                        # baslinje
+        self.fejk.ids = [self.mid]
+        self.fejk.live[self.mid] = {"resultat": "2-1", "mellan": "1-0",
+                                    "malskyttar": [{"namn": "Hansson", "minut": 12}]}
+        r = self.api.synk_delta()
+        self.assertEqual(r["andrade"], [self.mid])
+        m = store.hamta_match(self.api.conn, self.mid)
+        self.assertEqual(m["resultat"], "2-1")
+        self.assertEqual(m["mellan"], "1-0")
+        self.assertEqual(m["malskyttar"], "Hansson 12'")
+
+    def test_okand_match_ignoreras(self):
+        self.api.synk_delta()
+        self.fejk.ids = ["finns-inte"]
+        r = self.api.synk_delta()
+        self.assertEqual(r["andrade"], ["finns-inte"])   # signalen förmedlas ändå

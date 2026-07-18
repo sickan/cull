@@ -1156,6 +1156,13 @@ export async function hamtaOriginal(mapp, taBort = false, malmapp = '') {
   return wait({ ok: true, status: { ...MOCK_ORIGINAL_STATUS, pagar: true } })
 }
 
+// SYNK-DPT2: delta-pollen — vilka matcher ändrades i molnet sedan sist?
+export async function synkDelta() {
+  const api = brygga()
+  if (api) return api.synk_delta()
+  return wait({ ok: true, andrade: [] })
+}
+
 export async function originalStatus() {
   const api = brygga()
   if (api) return api.original_status()

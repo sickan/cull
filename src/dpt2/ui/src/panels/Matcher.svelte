@@ -54,6 +54,11 @@
       [listaMatcher(), listaTavlingar(), listaLag(), listaUrval(), sportprofiler(),
        listaMaterial(), listaInnehall('match'), listaEventer()])
     laddar = false
+    // SYNK-DPT2: mobilens ändringar (resultat/trupp via molnet) → ladda om
+    // matchlistan när delta-pollen signalerar. Lyssnaren städas vid unmount.
+    const synka = async () => { matcher = await listaMatcher() }
+    window.addEventListener('dpt-synk', synka)
+    return () => window.removeEventListener('dpt-synk', synka)
   })
 
   // ── §2: matchradens statuschips (Kalender/Gallrat/Live/SoMe/Webb) ─────────

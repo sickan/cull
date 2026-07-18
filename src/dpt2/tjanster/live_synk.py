@@ -143,6 +143,23 @@ class LiveSynk:
             return []
         return data.get("matcher") or []
 
+    def delta(self, sedan=None):
+        """SYNK-DPT2: ?updated_since-frågan — ändrade paket sedan stämpeln.
+        Returnerar (match_ids, nu) där `nu` är SERVERNS stämpel att spara
+        till nästa fråga (klientklockor driftar). ([], None) vid fel."""
+        if not self.har_nyckel():
+            return [], None
+        path = "/api/live"
+        if sedan:
+            from urllib.parse import quote
+            path += f"?updated_since={quote(sedan)}"
+        status, data = self._anrop("GET", path)
+        if status != 200 or not isinstance(data, dict):
+            return [], None
+        ids = [m.get("match_id") for m in (data.get("matcher") or [])
+               if m.get("match_id")]
+        return ids, data.get("nu")
+
     def hamta(self, match_id):
         """Live-state för en match, eller None. Tomt state → None (ej fel)."""
         if not self.har_nyckel():

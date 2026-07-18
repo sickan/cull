@@ -15,7 +15,7 @@
   import Trana from './panels/Trana.svelte'
   import Logg from './panels/Logg.svelte'
   import Installningar from './panels/Installningar.svelte'
-  import { erMock, aktivMatch, aktivtUrval, listaMaterial, stangAktivMatch } from './lib/api.js'
+  import { erMock, aktivMatch, aktivtUrval, listaMaterial, stangAktivMatch, synkDelta } from './lib/api.js'
   import { testMode } from './lib/testlage.js'
 
   const ARMOCK = erMock()
@@ -43,6 +43,16 @@
     }
     ;[aktivM, aktivU] = await Promise.all([aktivMatch(), aktivtUrval()])
     await uppdateraDelvis()
+    // SYNK-DPT2 (tvåvägs-blixten): appglobal delta-poll — mobilens ändringar
+    // (resultat, trupp, original) når skrivbordet utan öppen Publicera-panel.
+    // Billig fråga (bara ändrade paket kommer tillbaka); paneler lyssnar på
+    // window-eventet och laddar om sina berörda vyer.
+    setInterval(async () => {
+      const d = await synkDelta().catch(() => null)
+      if (d?.ok && d.andrade?.length) {
+        window.dispatchEvent(new CustomEvent('dpt-synk', { detail: d.andrade }))
+      }
+    }, 15000)
   })
   async function uppdateraDelvis() {
     const mat = await listaMaterial()

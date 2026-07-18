@@ -62,6 +62,7 @@ class Api:
         self.innehall_synk = InnehallSynk()   # klient mot deployade Content Sync-tjänsten
         self.live_synk = LiveSynk()  # Mobil Live (samma worker, egna /api/live-rutter)
         self.original_synk = OriginalSynk()  # FEAT-15: hemhämtning av telefonens original
+        self._synk_stampel = None   # SYNK-DPT2: senaste delta-stämpeln (session)
         # Pågående hemhämtning (en åt gången) — UI:t pollar original_status().
         self._original_hamtning = {"pagar": False}
 
@@ -2799,6 +2800,43 @@ class Api:
 
         threading.Thread(target=_kor, daemon=True).start()
         return {"ok": True, "status": dict(status)}
+
+    def synk_delta(self):
+        """SYNK-DPT2 (tvåvägs-blixten): billig delta-fråga mot molnet — vilka
+        matcher har ändrats sedan förra frågan? Första anropet sätter bara
+        baslinjen (allt vore 'ändrat' = brus). UI:t pollar och laddar om
+        berörda vyer, så mobilens ändringar syns utan öppen Publicera-panel."""
+        forsta = self._synk_stampel is None
+        ids, nu = self.live_synk.delta(self._synk_stampel)
+        if nu:
+            self._synk_stampel = nu
+        if forsta:
+            return {"ok": nu is not None, "andrade": []}
+        # Applicera mobilens live-fält på lokala matchen (store-direkt, INTE
+        # satt_resultat — den skulle eka tillbaka till molnet och stämpla om
+        # fälten med desktop-tid, vilket kan klobba en färskare mobilskrivning).
+        for mid in ids:
+            try:
+                m = store.hamta_match(self.conn, mid)
+                live = self.live_synk.hamta(mid) if m else None
+                if not live:
+                    continue
+                falt = {}
+                if live.get("resultat") is not None:
+                    falt["resultat"] = live["resultat"]
+                if live.get("mellan") is not None:
+                    falt["mellan"] = live["mellan"]
+                if live.get("malskyttar") is not None:
+                    falt["malskyttar"] = poster_till_malskyttar(live["malskyttar"])
+                if falt and any((m.get(k) or "") != v for k, v in falt.items()):
+                    store.satt_resultat(
+                        self.conn, mid,
+                        falt.get("resultat", m.get("resultat") or ""),
+                        falt.get("mellan", m.get("mellan") or ""),
+                        falt.get("malskyttar", m.get("malskyttar") or ""))
+            except Exception:
+                continue   # en trasig match får inte stoppa deltan
+        return {"ok": nu is not None, "andrade": ids}
 
     def original_status(self):
         """Pågående/senaste hemhämtningens tillstånd (UI-poll)."""
