@@ -1481,12 +1481,19 @@ def radera_match(conn, match_id):
 
 
 def satt_pagang_dold(conn, art, post_id, dold):
-    """Per-post synlighet i webbens På gång (v30). art: 'match'/'tavling'."""
+    """Per-post synlighet i webbens På gång (v30). art: 'match'/'tavling'.
+    'tavling' speglas även in i liga/event-registren (samma id, v31) —
+    annars läser efter-fasens resultatkort (event-raden) en stale flagga
+    tills nästa spara-spegling råkar köras."""
     tabell = {"match": "matchen", "tavling": "tavling"}.get(art)
     if not tabell:
         raise ValueError(f"okänd art: {art}")
     conn.execute(f"UPDATE {tabell} SET pagang_dold=? WHERE id=?",
                  (1 if dold else 0, post_id))
+    if art == "tavling":
+        for spegel in ("liga", "event"):
+            conn.execute(f"UPDATE {spegel} SET pagang_dold=? WHERE id=?",
+                         (1 if dold else 0, post_id))
     conn.commit()
 
 
