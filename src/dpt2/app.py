@@ -1755,10 +1755,25 @@ class Api:
                  ("bakom_kameran", "Bakom kameran")],
     }
 
-    def moment_status(self, match_id):
-        """Matchens momentmall med publiceringsstatus: klar (✓ — en post har
-        gått ut), annars ej. Första o-klara = panelens 'nästa' (accent).
-        Mallen följer sportprofilen (Avspark/Avkast/Matchstart …)."""
+    # §10 skiva 3: kategori (Calendar Sync-etikett) → mall-nyckel ovan.
+    _KATEGORI_MALL = {"landskap": "landskap", "natur": "landskap",
+                      "människor": "manniskor", "manniskor": "manniskor",
+                      "porträtt": "manniskor", "portratt": "manniskor",
+                      "bröllop": "manniskor", "brollop": "manniskor",
+                      "film": "film"}
+
+    def moment_status(self, match_id=None, jobb_id=None, kategori=None):
+        """Momentmallen med publiceringsstatus: klar (✓ — en post har gått ut),
+        annars ej. Första o-klara = panelens 'nästa' (accent).
+
+        Sportjobb (match_id): mallen följer sportprofilen (Avspark/Avkast/
+        Matchstart …). §10 skiva 3 — övriga jobbtyper (jobb_id + kategori):
+        mallen kommer ur MOMENTMALLAR och ✓ ur postens jobb_id. Människors
+        "Leverans klar" är kundriktad och visas bara när jobbet är
+        some-flaggat (handoff 4c) — flaggan bor i jobbets notering som
+        `some:true` tills fotojobben får ett eget fält."""
+        if not match_id and jobb_id:
+            return self._moment_status_jobb(jobb_id, kategori)
         m = store.hamta_match(self.conn, match_id) if match_id else None
         if not m:
             return {"ok": False, "fel": "Okänd match."}
@@ -1773,14 +1788,40 @@ class Api:
             mall = [x for x in mall if x[0] != "malgorare"]
         publicerade = {(r.get("moment") or "").lower()
                        for r in store.lista_some_material(self.conn, match_id)}
-        # Momentnamn normaliseras som i workern (svenska → nyckel).
-        def _n(s):
-            return (s or "").lower().replace("å", "a").replace("ä", "a") \
-                .replace("ö", "o").replace(" ", "_")
+        _n = _moment_nyckel   # normaliseras som i workern (svenska → nyckel)
         pub_n = {_n(p) for p in publicerade}
         moment = [{"nyckel": k, "etikett": e, "klar": k in pub_n or _n(e) in pub_n}
                   for k, e in mall]
-        return {"ok": True, "moment": moment}
+        return {"ok": True, "moment": moment, "mal": "match"}
+
+    def _moment_status_jobb(self, jobb_id, kategori=None):
+        """Momentmall för ett icke-sportjobb (§10 skiva 3). Kategorin kan
+        skickas in (panelen vet den) eller slås upp ur jobblistan."""
+        if not kategori:
+            kategori = next((j.get("kategori") or j.get("category")
+                             for j in self.lista_fotojobb()
+                             if j.get("id") == jobb_id), None)
+        nyckel = self._KATEGORI_MALL.get((kategori or "").strip().lower())
+        if not nyckel:
+            # Sport-jobb utan match, eller okategoriserat — ingen mall att visa
+            # (bättre än att gissa fel moment).
+            return {"ok": True, "moment": [], "mal": "jobb", "kategori": kategori}
+        mall = list(self.MOMENTMALLAR[nyckel])
+        if nyckel == "manniskor" and not self._jobb_ar_some(jobb_id):
+            mall = [x for x in mall if x[0] != "leverans_klar"]
+        publicerade = {(r.get("moment") or "").lower()
+                       for r in store.lista_some_material_for_jobb(self.conn, jobb_id)}
+        pub_n = {_moment_nyckel(p) for p in publicerade}
+        moment = [{"nyckel": k, "etikett": e,
+                   "klar": k in pub_n or _moment_nyckel(e) in pub_n}
+                  for k, e in mall]
+        return {"ok": True, "moment": moment, "mal": "jobb", "kategori": kategori}
+
+    def _jobb_ar_some(self, jobb_id):
+        """Människojobb: kundleveranser är privata — SoMe-momenten gäller bara
+        när jobbet uttryckligen är some-flaggat (`some:true` i noteringen)."""
+        j = next((x for x in self.lista_fotojobb() if x.get("id") == jobb_id), None)
+        return "some:true" in ((j or {}).get("notering") or "").lower()
 
     def skapa_story(self, config):
         """Renderar en Matchdag-story i workern (story_overlay). Matchdata fylls
@@ -3628,6 +3669,13 @@ def _platser_md(platser):
              .rstrip(" —")
              for p in (platser or []) if (p.get("plats") or "").strip()]
     return "## Platser & tips\n\n" + "\n".join(rader) if rader else ""
+
+
+def _moment_nyckel(s):
+    """Momentnamn → kanonisk nyckel (svenska → ascii_snake), som i workern.
+    Delas av match- och jobbmallarna (§10 skiva 2/3)."""
+    return (s or "").lower().replace("å", "a").replace("ä", "a") \
+        .replace("ö", "o").replace(" ", "_")
 
 
 def _gallring_av_config(config):

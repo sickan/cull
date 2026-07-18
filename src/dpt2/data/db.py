@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 35
+SCHEMA_VERSION = 36
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -901,6 +901,16 @@ def _migrera(conn, fran_version):
         if (_har_tabell(conn, "publicera_material")
                 and not _har_kolumn(conn, "publicera_material", "publiceras")):
             conn.execute("ALTER TABLE publicera_material ADD COLUMN publiceras TEXT")
+
+    if fran_version < 36:
+        # v36 (UX-lyftet §10 skiva 3): momentmallen gäller ALLA jobbtyper, inte
+        # bara matcher — landskaps-/människo-/filmjobb har egna moment (Ny
+        # serie, Tjuvkik, Ny film …). Publicerade poster kunde bara knytas till
+        # match/tävling → ✓-status fanns inte för dem. `jobb_id` = fotojobbets
+        # id (Calendar Sync/lokalt utkast).
+        for tabell in ("some_material", "publicera_material"):
+            if _har_tabell(conn, tabell) and not _har_kolumn(conn, tabell, "jobb_id"):
+                conn.execute(f"ALTER TABLE {tabell} ADD COLUMN jobb_id TEXT")
 
 
 def _har_kolumn(conn, tabell, kolumn):

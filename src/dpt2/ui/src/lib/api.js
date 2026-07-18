@@ -1137,10 +1137,25 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
 }
 
 // §10: momentmallens status för matchen (✓ ur some_material).
-export async function momentStatus(matchId) {
+// §10 skiva 3: momentmallen gäller alla jobbtyper — matchId för sportjobb,
+// (null, jobbId, kategori) för landskaps-/människo-/filmjobb.
+export async function momentStatus(matchId, jobbId = null, kategori = null) {
   const api = brygga()
-  if (api) return api.moment_status(matchId)
-  return wait({ ok: true, moment: [
+  if (api) return api.moment_status(matchId, jobbId, kategori)
+  if (jobbId) {
+    const mallar = {
+      landskap: [['ny_serie', 'Ny serie'], ['platsen', 'Platsen'],
+        ['bakom_kulisserna', 'Bakom kulisserna'], ['blogg_puff', 'Blogg-puff']],
+      manniskor: [['tjuvkik', 'Tjuvkik']],
+      film: [['ny_film', 'Ny film'], ['stillbilder', 'Stillbilder'],
+        ['bakom_kameran', 'Bakom kameran']],
+    }
+    const nyckel = { landskap: 'landskap', 'människor': 'manniskor',
+      'porträtt': 'manniskor', 'bröllop': 'manniskor', film: 'film' }[(kategori || '').toLowerCase()]
+    return wait({ ok: true, mal: 'jobb', kategori,
+      moment: (mallar[nyckel] || []).map(([n, e], i) => ({ nyckel: n, etikett: e, klar: i === 0 })) })
+  }
+  return wait({ ok: true, mal: 'match', moment: [
     { nyckel: 'startelva', etikett: 'Startelva', klar: true },
     { nyckel: 'avspark', etikett: 'Avspark', klar: true },
     { nyckel: 'halvtid', etikett: 'Halvtid', klar: false },

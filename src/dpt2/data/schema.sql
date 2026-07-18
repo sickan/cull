@@ -318,6 +318,7 @@ CREATE TABLE some_material (
   id       TEXT PRIMARY KEY,
   match_id TEXT REFERENCES matchen(id) ON DELETE CASCADE,
   tavling_id TEXT REFERENCES tavling(id) ON DELETE CASCADE, -- turnerings-SoMe (ej matchbunden)
+  jobb_id  TEXT,                         -- v36: fotojobb (landskap/människor/film) — ingen FK, jobben bor hos Calendar Sync
   kanal    TEXT CHECK (kanal IN ('instagram','facebook','tiktok')),
   format   TEXT,                         -- t.ex. 'Inlägg 4:5', '9:16'
   moment   TEXT,                         -- Avspark/Halvtid/Resultat/Startelva/Målgörare/Nästa match
@@ -339,8 +340,9 @@ CREATE TABLE publicera_material (
   -- Målet är antingen en match (mal_typ='match', match_id satt) eller en hel
   -- turnering (mal_typ='turnering', tavling_id satt, match_id NULL) — turnerings-
   -- SoMe (t.ex. "Nordea Open dag 3") som inte hänger på en enskild match.
-  mal_typ    TEXT NOT NULL DEFAULT 'match' CHECK (mal_typ IN ('match','turnering')),
+  mal_typ    TEXT NOT NULL DEFAULT 'match' CHECK (mal_typ IN ('match','turnering','jobb')),
   match_id   TEXT REFERENCES matchen(id) ON DELETE SET NULL,
+  jobb_id    TEXT,                       -- v36: fotojobb (landskap/människor/film)
   tavling_id TEXT REFERENCES tavling(id) ON DELETE SET NULL,
   match_namn TEXT,                       -- denormaliserad etikett (match- ELLER tävlingsnamn)
   status     TEXT NOT NULL CHECK (status IN ('utkast','publicerad','delvis')),

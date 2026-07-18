@@ -1,7 +1,8 @@
 <script>
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte'
   import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher, listaLag,
-    privatKalendrar, privatHandelser, sattAckreditering, skickaAckrMail } from '../lib/api.js'
+    privatKalendrar, privatHandelser, sattAckreditering, skickaAckrMail,
+    momentStatus } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { grenFarg } from '../lib/gren.js'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
@@ -280,13 +281,27 @@
     // och ackreditering bor (handoff §2). Övriga behåller inline-kortet.
     if (j.category === 'Sport') { oppnaModalFor(j); return }
     if (jobEditId === j.id) { stangRedigering(); return }     // klick igen stänger
+    laddaJobbMoment(j, j.category || '')
     redigerar = { ...j, category: j.category || '', match_id: j.match_id || '',
       notering: j.notering || '',
       start_at: tillLokal(j.start_at), end_at: tillLokal(j.end_at) }
     jobEditId = j.id
     radTillToppen(rad)
   }
-  function stangRedigering() { jobEditId = null; redigerar = null }
+  function stangRedigering() { jobEditId = null; redigerar = null; jobbMoment = [] }
+
+  // §10 skiva 3: momentmallen per jobbtyp — landskaps-/människo-/filmjobb har
+  // egna moment (Ny serie, Tjuvkik, Ny film …) precis som matchen har sina.
+  // ✓ = posten har gått ut (some_material.jobb_id). Sportjobb visar ingen
+  // remsa här — deras mall bor i Publicera, med matchen som mål.
+  let jobbMoment = []
+  async function laddaJobbMoment(jobb, kategori) {
+    jobbMoment = []
+    if (!jobb || !kategori || kategori === 'Sport') return
+    const r = await momentStatus(null, jobb.id, kategori).catch(() => null)
+    if (jobEditId === jobb.id) jobbMoment = r?.ok ? r.moment : []
+  }
+  $: jobbMomentNasta = jobbMoment.find((m) => !m.klar)?.nyckel
   async function sparaRedigering() {
     const d = { ...redigerar, category: redigerar.category || null }
     d.match_id = d.category === 'Sport' ? (d.match_id || null) : null
@@ -530,10 +545,22 @@
                             {#each KATEGORIER as k}
                               <button class:on={redigerar.category === k}
                                 style={redigerar.category === k ? `background:${katFarg(k)};border-color:transparent;color:#fff` : ''}
-                                on:click={() => (redigerar.category = redigerar.category === k ? '' : k)}>{k}</button>
+                                on:click={() => { redigerar.category = redigerar.category === k ? '' : k
+                                                  laddaJobbMoment(j, redigerar.category) }}>{k}</button>
                             {/each}
                           </div>
                         </div>
+                        {#if jobbMoment.length}
+                          <div class="momentrad">
+                            <span class="lbl">Moment</span>
+                            <div class="momentchips">
+                              {#each jobbMoment as mm (mm.nyckel)}
+                                <span class="momentchip" class:klar={mm.klar}
+                                  class:nasta={mm.nyckel === jobbMomentNasta}>{mm.klar ? '✓ ' : ''}{mm.etikett}</span>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
                         <div class="rkfoot">
                           <button class="prim" on:click={sparaRedigering} disabled={!redigerar.title || !redigerar.start_at}>Spara ändringar</button>
                           <button class="sek" on:click={stangRedigering}>Avbryt</button>
@@ -631,13 +658,25 @@
                         {#each KATEGORIER as k}
                           <button class:on={redigerar.category === k}
                             style={redigerar.category === k ? `background:${katFarg(k)};border-color:transparent;color:#fff` : ''}
-                            on:click={() => (redigerar.category = redigerar.category === k ? '' : k)}>{k}</button>
+                            on:click={() => { redigerar.category = redigerar.category === k ? '' : k
+                                              laddaJobbMoment(j, redigerar.category) }}>{k}</button>
                         {/each}
                       </div>
                     </div>
                     <label class="check" on:click={() => (redigerar.all_day = !redigerar.all_day)}>
                       <span class="box" class:pa={redigerar.all_day}>{redigerar.all_day ? '✓' : ''}</span> Heldag
                     </label>
+                    {#if jobbMoment.length}
+                      <div class="momentrad">
+                        <span class="lbl">Moment</span>
+                        <div class="momentchips">
+                          {#each jobbMoment as mm (mm.nyckel)}
+                            <span class="momentchip" class:klar={mm.klar}
+                              class:nasta={mm.nyckel === jobbMomentNasta}>{mm.klar ? '✓ ' : ''}{mm.etikett}</span>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
                     <div class="rkfoot">
                       <button class="prim" on:click={sparaRedigering} disabled={!redigerar.title || !redigerar.start_at}>Spara ändringar</button>
                       <button class="sek" on:click={stangRedigering}>Avbryt</button>
@@ -818,6 +857,19 @@
   .manad { font-weight: 700; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--t-mut); margin: 18px 2px 12px; }
   .lista { display: flex; flex-direction: column; gap: 10px; }
+  /* §10 skiva 3: momentremsan i jobbkortet — samma språk som Publiceras
+     momentkort (✓ klar · accent nästa · streckad ej påbörjad). */
+  .momentrad { display: flex; align-items: center; gap: 10px; grid-column: 1 / -1; }
+  .momentchips { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* Samma tokens som Publiceras momentkort — hårdkodade vita nyanser blev
+     osynliga i ljust tema. */
+  .momentchip { font-size: 11.5px; font-weight: 600; color: var(--t-mut);
+    border: 1px dashed var(--div); border-radius: 999px; padding: 4px 12px; }
+  .momentchip.klar { border-style: solid; border-color: var(--ok, #6FB35A);
+    color: var(--ok, #6FB35A); }
+  .momentchip.nasta { border-style: solid; border-color: var(--acc);
+    color: var(--acc); background: var(--acc-soft); }
+
   /* Ackreditering §1: kategorins vänsterkant ersatt av hörnbågen uppe-vänster
      (<Hornmarkor>) — fyra oberoende hörnsignaler ryms på samma kort. */
   .rad { position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px; background: var(--kort);

@@ -1410,6 +1410,65 @@ class TestMatchSynkOchRadering(unittest.TestCase):
         self.assertEqual(self.fake.uppdaterade, [])
 
 
+class TestMomentStatus(unittest.TestCase):
+    """§10 skiva 2/3: momentmallen — match (sportprofil) och jobb (kategori)."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+
+    def test_matchmallen_foljer_sportprofilen(self):
+        mid = self.api.spara_match({"lag_hemma": "A", "lag_borta": "B",
+                                    "datum": "2026-08-01", "sport": "handboll"})["id"]
+        r = self.api.moment_status(mid)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["mal"], "match")
+        etiketter = [m["etikett"] for m in r["moment"]]
+        self.assertIn("Avkast", etiketter)          # handboll kastar av
+        self.assertNotIn("Avspark", etiketter)
+        self.assertTrue(all(not m["klar"] for m in r["moment"]))
+
+    def test_publicerad_post_bockar_av_momentet(self):
+        mid = self.api.spara_match({"lag_hemma": "A", "lag_borta": "B",
+                                    "datum": "2026-08-01", "sport": "fotboll"})["id"]
+        store.spara_some_material(self.api.conn, match_id=mid, kanal="instagram",
+                                  format="9:16", moment="Avspark")
+        moment = {m["nyckel"]: m["klar"] for m in self.api.moment_status(mid)["moment"]}
+        self.assertTrue(moment["avspark"])
+        self.assertFalse(moment["halvtid"])
+
+    def test_landskapsjobb_far_egen_mall(self):
+        r = self.api.moment_status(None, "jobb-1", "Landskap")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["mal"], "jobb")
+        self.assertEqual([m["nyckel"] for m in r["moment"]],
+                         ["ny_serie", "platsen", "bakom_kulisserna", "blogg_puff"])
+
+    def test_jobbmomentet_bockas_av_via_jobb_id(self):
+        store.spara_some_material(self.api.conn, jobb_id="jobb-1", kanal="instagram",
+                                  format="4:5", moment="Ny serie")
+        moment = {m["nyckel"]: m["klar"]
+                  for m in self.api.moment_status(None, "jobb-1", "Landskap")["moment"]}
+        self.assertTrue(moment["ny_serie"])
+        self.assertFalse(moment["platsen"])
+        # Posten hör till jobbet, inte till någon match
+        self.assertEqual(store.lista_some_material(self.api.conn, "jobb-1"), [])
+
+    def test_manniskojobb_doljer_leverans_klar_utan_some_flagga(self):
+        # Kundleveranser är privata: "Leverans klar" bara när jobbet är
+        # some-flaggat (some:true i noteringen).
+        nycklar = [m["nyckel"]
+                   for m in self.api.moment_status(None, "jobb-x", "Porträtt")["moment"]]
+        self.assertEqual(nycklar, ["tjuvkik"])
+
+    def test_okand_kategori_ger_tom_mall_inte_gissning(self):
+        r = self.api.moment_status(None, "jobb-2", "Övrigt")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["moment"], [])
+
+    def test_okand_match_ger_fel(self):
+        self.assertFalse(self.api.moment_status("finns-inte")["ok"])
+
+
 class TestGallringConfig(unittest.TestCase):
     def test_bilder_ger_topp(self):
         g = _gallring_av_config({"behall_enhet": "bilder", "behall_varde": 40,
