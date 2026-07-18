@@ -160,7 +160,7 @@ visar riktiga server-renderade Horisont-bilden.*
 | B-003 | Röst → transkribering → action | **LÅG prio (Stig 16 jul)** |
 | B-008 | iPad-spike + D3-implementation | Stigs prio 4-spår |
 | B-009 | Widgets (hem + låsskärm) | |
-| B-010 | Låsskärm som startsida (Live Activity) | **SKIVA 1 ✅ KLAR 18/7** (ios `ea9cb88`, INSTALLERAD): widget-extension NEFBryggaWidgets — kompakt Island (LIVE-puls + lagkoder + ställning, klocka accent/tabular via timerInterval), expanderad + låsskärmskort (från avspark-läget per D6); LIVE-läget startar/uppdaterar, slutsignal → SLUT + 30 min kvar. **Kvar (D6-rest):** före-läget (åk senast + restid + tidsprogress), auto-start på jobbdagen, nästa åtgärd-radens deep-link, icke-match-jobb, B-009-widgets |
+| B-010 | Låsskärm som startsida (Live Activity) | **SKIVA 1 ✅ KLAR 18/7** (ios `ea9cb88`, INSTALLERAD): widget-extension NEFBryggaWidgets — kompakt Island (LIVE-puls + lagkoder + ställning, klocka accent/tabular via timerInterval), expanderad + låsskärmskort (från avspark-läget per D6); LIVE-läget startar/uppdaterar, slutsignal → SLUT + 30 min kvar. **D6-REST ✅ KLAR 18/7** (ios `5d85363`, INSTALLERAD): FÖRE-läget (MATCHDAG-kort: avsparkstid, "Åk senast · N min restid" i accent, arenaväder, tidsprogress Nu→Åk→Avspark; kompakta Island räknar ner till åk senast), auto-start på matchdagen (nu ≥ åk−60min, ur Hem-restidsberäkningen), deep-link `dpt://match/<id>` → matchhubben. **Kvar:** icke-match-jobb (bröllop/porträtt-läget) + B-009-widgets (small/medium/rektangulär) |
 | B-011 | Realtid utan batteridränering (spike) | Läs-features utbrutna till iOS-läs ovan |
 
 ## E · Webb/sajt
