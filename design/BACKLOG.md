@@ -192,7 +192,7 @@ MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utred
 
 | ID | Vad | Anteckning |
 |----|-----|-----------|
-| F18-12 | **KRITISK: Uppladdning av laglogga fungerar inte** (DPT2 lagvyn, Malmö FF) | Före MFF–Bröndby idag 14:00. Felsök: filväljare? nätverksanrop? Trolig okopplad handler (jfr F18-3). Workaround: lägg loggofiler manuellt i lagringsvägen |
+| F18-12 | **KRITISK: Uppladdning av laglogga fungerar inte** (DPT2 lagvyn, Malmö FF) | ✅ **LÖST 18/7 fm** (`d6a943f`, FÖRE 14:00): rot = INTE handlern — PNG/WebP gick ner i `_thumb_for`:s raw-gren (exiftool-preview saknas i en PNG) → miniatyren None → loggan visades aldrig fast valet+sparningen lyckades. Fix: PIL-läsbara format direkt + transparens bevaras som PNG-data-URI. Bonus: tävlingsvyns filväljar-filter hade ogiltigt pywebview-format (kastade tyst). 2 regressionstester (677 gröna). **Kräver DPT2-omstart** |
 | F18-1 | Bild 4 blinkar svart vid hover i sport-galleriet (Darderi–Borges, webben) | Trolig oskalad originalfil → re-rastrering vid transform. Akut: ersätt m nedskalad; fallback `backface-visibility:hidden; translateZ(0)`. Förebyggs permanent av F18-2 |
 | F18-2 | Automatisk nedskalning av galleribilder vid publicering (DPT2) | Alla källor → webbstorlek; ev. varning för stor fil på väg ut. Rotbot för F18-1; jfr `publicering/bildoptimering.py` |
 | F18-3 | "Importera spelschema"-knappen död (DPT2) | Handler saknas eller tyst krasch? Definiera sen källa (TheSportsDB 4347/5209, CSV, mff.unwi.se) → **absorberar SPIKE-01** |
