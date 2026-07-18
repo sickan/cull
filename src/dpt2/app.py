@@ -1713,6 +1713,45 @@ class Api:
         return {"ok": True, "referat": data.get("referat", ""),
                 "bildsvep": data["bildsvep"]}
 
+    # §10 skiva 2: momentmallen som statuskort. Mallen per kategori (handoff
+    # 4c); match-målet härleder ✓ ur some_material (vad som faktiskt gått ut).
+    # Landskap/Människor/Film aktiveras när panelen får jobbmål (nästa skiva) —
+    # mallarna ligger redan här så kopplingen blir ren.
+    MOMENTMALLAR = {
+        "landskap": [("ny_serie", "Ny serie"), ("platsen", "Platsen"),
+                     ("bakom_kulisserna", "Bakom kulisserna"), ("blogg_puff", "Blogg-puff")],
+        "manniskor": [("tjuvkik", "Tjuvkik"), ("leverans_klar", "Leverans klar")],
+        "film": [("ny_film", "Ny film"), ("stillbilder", "Stillbilder"),
+                 ("bakom_kameran", "Bakom kameran")],
+    }
+
+    def moment_status(self, match_id):
+        """Matchens momentmall med publiceringsstatus: klar (✓ — en post har
+        gått ut), annars ej. Första o-klara = panelens 'nästa' (accent).
+        Mallen följer sportprofilen (Avspark/Avkast/Matchstart …)."""
+        m = store.hamta_match(self.conn, match_id) if match_id else None
+        if not m:
+            return {"ok": False, "fel": "Okänd match."}
+        pr = sportprofil.profil(m.get("sport") or "")
+        mall = [("startelva", pr.get("lineup") or "Startelva"),
+                ("avspark", pr.get("start_moment") or "Avspark"),
+                ("halvtid", pr.get("mid_label") or "Halvtid"),
+                ("malgorare", "Målgörare"),
+                ("slutresultat", pr.get("res_label") or "Slutresultat"),
+                ("nasta_match", "Nästa match")]
+        if not pr.get("has_scorers", True):
+            mall = [x for x in mall if x[0] != "malgorare"]
+        publicerade = {(r.get("moment") or "").lower()
+                       for r in store.lista_some_material(self.conn, match_id)}
+        # Momentnamn normaliseras som i workern (svenska → nyckel).
+        def _n(s):
+            return (s or "").lower().replace("å", "a").replace("ä", "a") \
+                .replace("ö", "o").replace(" ", "_")
+        pub_n = {_n(p) for p in publicerade}
+        moment = [{"nyckel": k, "etikett": e, "klar": k in pub_n or _n(e) in pub_n}
+                  for k, e in mall]
+        return {"ok": True, "moment": moment}
+
     def skapa_story(self, config):
         """Renderar en Matchdag-story i workern (story_overlay). Matchdata fylls
         ur den aktiva matchen om ingen match_id anges. Returnerar sökväg till JPG."""

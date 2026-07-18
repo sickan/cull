@@ -7,7 +7,7 @@
   // matas till skarp rendering. Gren-signalen = färgad kant + glow (låst,
   // ingen textetikett). Design: handoff-matchpublicering (8 jul 2026).
   import { onMount, onDestroy, createEventDispatcher } from 'svelte'
-  import {
+  import { momentStatus,
     listaMatcher, hamtaMatch, aktivMatch, sattAktivMatch, sportprofiler, listaLag,
     listaTavlingar, listaDiscipliner,
     valjMapp, listaSomeBilder, thumbForBild,
@@ -51,6 +51,16 @@
   // så previews + publicering använder det inskrivna värdet direkt, inte matchens
   // gamla, utan att röra remsans interna state.
   let resNu = { resultat: '', mellan: '', malskyttar: '' }
+  // §10 skiva 2: momentmallen som statuskort — ✓ = publicerat (some_material),
+  // första o-klara är "nästa" (accent), resten streckade.
+  let momentMall = []
+  $: laddaMoment(match?.id)
+  async function laddaMoment(mid) {
+    if (!mid) { momentMall = []; return }
+    const r = await momentStatus(mid).catch(() => null)
+    momentMall = r?.ok ? r.moment : []
+  }
+  $: momentNasta = momentMall.find((m) => !m.klar)?.nyckel
   function speglaRes(m) { resNu = { resultat: m?.resultat || '', mellan: m?.mellan || '', malskyttar: m?.malskyttar || '' } }
   const tema = 'Hav'               // Skagen-tema för rendern (gren styr kanten, inte temat)
 
@@ -823,6 +833,19 @@
     </div>
     <span class="mhint">{arTurnering ? '— publicering för hela turneringen, utan enskild match' : '— resultatmodellen följer matchens sport'}</span>
   </div>
+
+  <!-- §10 skiva 2: momentkortet — jobbets mall med publiceringsstatus.
+       ✓ = gått ut (some_material) · accent = nästa · streckad = ej påbörjad. -->
+  {#if match && momentMall.length}
+    <div class="momentkort">
+      <span class="momentcaps">Moment</span>
+      {#each momentMall as mm (mm.nyckel)}
+        <span class="momentchip" class:klar={mm.klar} class:nasta={mm.nyckel === momentNasta}>
+          {mm.klar ? '✓ ' : ''}{mm.etikett}
+        </span>
+      {/each}
+    </div>
+  {/if}
 
   <!-- Delad resultatremsa (p.5: gömd för heldagsevent — resultat är irrelevant) -->
   {#if match && !isEvent}
@@ -1600,6 +1623,19 @@
   .ingsel { margin-top: 8px; }
   .ingrad { display: flex; gap: 8px; margin: 8px 0 10px; }
   .ingrad input { flex: 1; min-width: 0; }
+  /* §10 skiva 2: momentkortet */
+  .momentkort { display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+    background: var(--kort); border: 1px solid var(--div); border-radius: 11px;
+    padding: 10px 14px; margin-bottom: 14px; }
+  .momentcaps { font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--t-caps); margin-right: 4px; }
+  .momentchip { font-size: 11.5px; font-weight: 600; color: var(--t-mut);
+    border: 1px dashed var(--div); border-radius: 999px; padding: 4px 12px; }
+  .momentchip.klar { border-style: solid; border-color: var(--ok, #6FB35A);
+    color: var(--ok, #6FB35A); }
+  .momentchip.nasta { border-style: solid; border-color: var(--acc);
+    color: var(--acc); background: var(--acc-soft); }
+
   /* §10: publiceringskön */
   .schemafalt { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px;
     color: var(--t-mut); font-weight: 600; }

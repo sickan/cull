@@ -1136,6 +1136,19 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
   return wait(_promptPath(titel))
 }
 
+// §10: momentmallens status för matchen (✓ ur some_material).
+export async function momentStatus(matchId) {
+  const api = brygga()
+  if (api) return api.moment_status(matchId)
+  return wait({ ok: true, moment: [
+    { nyckel: 'startelva', etikett: 'Startelva', klar: true },
+    { nyckel: 'avspark', etikett: 'Avspark', klar: true },
+    { nyckel: 'halvtid', etikett: 'Halvtid', klar: false },
+    { nyckel: 'malgorare', etikett: 'Målgörare', klar: false },
+    { nyckel: 'slutresultat', etikett: 'Slutresultat', klar: false },
+    { nyckel: 'nasta_match', etikett: 'Nästa match', klar: false }] })
+}
+
 // Upprätning i bakgrund + poll (vinkelräkning över hela mappen tar minuter).
 export async function rataUppMappBakgrund(mapp) {
   const api = brygga()
