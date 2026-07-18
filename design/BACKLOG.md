@@ -14,7 +14,7 @@ design-handoff för eventmodell-epiken/DPT v5 & iOS v2** (sektion C nedan,
 källa `design_handoff_eventmodell_v5/`). Prio-vyn i `PLAN-nordea-friidrott.md`
 uppdaterad till v4.*
 
-**VECKOPRIO (Stig 18/7 kväll): SM-PAKETET ✅ KOMPLETT 18/7** — CULL-02 sportneutral gallring ✅ + M18-9 hemresan ✅ (+ bifynd CULL-04 behåll-valet ✅). Nästa: klockmodulen skarptest → B-012 → §10s3/§11.
+**VECKOPRIO (Stig 18/7 kväll): SM-PAKETET ✅ KOMPLETT 18/7** — CULL-02 sportneutral gallring ✅ + M18-9 hemresan ✅ (+ bifynd CULL-04 behåll-valet ✅). **B-012 skiva 1+2 ✅ samma kväll** (skiva 3 = skarpkörning m Z8, Stigs recept §8). Nästa: klockmodulen skarptest → B-012 skiva 3 → §10s3/§11.
 
 **Stigs prio-signaler (16 jul):** ① buggar generellt först — särskilt att
 Innehåll inte känns robust (= dubbletterna/publiceringskedjan) · ② iOS
@@ -158,7 +158,7 @@ visar riktiga server-renderade Horisont-bilden.*
 | FEAT-iOS-02 | SoMe-inlägg från heldagsevent i Kalendern | Blockerad: mobil render-väg (Pillow är Mac-bunden — se ML-E2) |
 | FEAT-iOS-03 | Kalender som visningsläge under Fotojobb | ✅ **SKIVA 1 KLAR 17/7** (ios `99973cd`): Lista\|Kalender-segment, månadsgrid + dag-panel, Kalender-fliken BORT (4 flikar). Skiva 2 kvar: deadline-ringar + krock (kräver /api/jobb-data) |
 | FEAT-iOS-04 | Systemstyrt mörkt tema | Litet (samma princip som DPT2 #25) |
-| B-012 | Kamerabrygga FTP: Z8 → telefon utan kortdrag (ersätter SPIKE-iOS-01) | **Design KLAR** (`ios-nef-brygga/design/PLAN-kamera-ftp.md`) — 3 skivor: FTP-motor+tester → Kameran-segment i Bilder → skarpkörning m Z8 |
+| B-012 | Kamerabrygga FTP: Z8 → telefon utan kortdrag (ersätter SPIKE-iOS-01) | **SKIVA 1+2 KLARA 18/7 kväll** (ios `df4e472`+`ec32b91`, INSTALLERAD på telefonen): FTP-motor på Network.framework (ren parser/tillståndsmaskin, atomisk STOR→importerade-hyllan, EPSV/PASV) + Kameran-segmentet i Bilder (PÅ/AV, adress stort, puls, remsa, Story av vald + Redigera i Lightroom, keep-awake) + FTP-lösen i Inställningar + **dpt://kamera**-deep-link (genväg/NFC → mottagaren PÅ). 16 nya tester; simulatorverifierad end-to-end m curl (byte-identisk fil, rätt grupp). **KVAR skiva 3:** skarpkörning m Z8 (recept §8 i planen: FTP-profil 172.20.10.1:2121, användare dpt, passivt läge PÅ, JPEG-sändning) + Vintage-preset-valideringen §6b |
 | SPIKE-iOS-02 | Översyn "Matchdata klar" | Liten, ihop med notis-flödet |
 | B-003 | Röst → transkribering → action | **LÅG prio (Stig 16 jul)** |
 | B-008 | iPad-spike + D3-implementation | Stigs prio 4-spår |
