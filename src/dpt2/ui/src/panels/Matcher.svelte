@@ -314,8 +314,13 @@
   const valjHemma = (o) => { utkast.lag_hemma = o.namn; utkast.lag_hemma_id = o.id; arvSportFran(o.id) }
   const valjBorta = (o) => { utkast.lag_borta = o.namn; utkast.lag_borta_id = o.id; arvSportFran(o.id) }
   // p.5: heldagsevent visas utan motståndare (ingen efterhängande "– ").
-  const matchnamn = (m) => (m?.event || !(m?.lag_borta || '').trim())
-    ? (m?.lag_hemma || '') : `${m.lag_hemma} – ${m.lag_borta}`
+  // F18-7: tom ny post får en riktig fallback-titel i stället för att rubriken
+  // blir tom och "Heldag" ser ut som namn.
+  const matchnamn = (m) => {
+    const namn = (m?.event || !(m?.lag_borta || '').trim())
+      ? (m?.lag_hemma || '') : `${m.lag_hemma} – ${m.lag_borta}`
+    return namn || (m?.event ? 'Namnlöst event' : 'Ny match')
+  }
   // p.5: heldagsevent = match utan motståndare. Slå på → rensa bortalaget.
   function sattEvent(v) {
     utkast = { ...utkast, event: v,
@@ -628,7 +633,9 @@
                       {#if m.hem_gren}<span class="grenlbl scd" style="color:{grenFarg(m.hem_gren)}">{grenEtikett(m.hem_gren)}</span>{/if}
                       <!-- Listjusteringar: liga + arena i metaraden (ligan doldes
                            annars helt när listan grupperas på datum). -->
-                      <span>{[SPORT_ETIKETT[m.sport] || '', m.liga, m.arena, harTid(m.tid) ? m.tid : 'Heldag'].filter(Boolean).join(' · ')}</span>
+                      <!-- F18-7: badgen ensam markerar heldag — utskrivna "Heldag" i metaraden
+                           dubblerade den. -->
+                      <span>{[SPORT_ETIKETT[m.sport] || '', m.liga, m.arena, harTid(m.tid) ? m.tid : ''].filter(Boolean).join(' · ')}</span>
                       {#if !harTid(m.tid)}<span class="heldagstagg">Heldag</span>{/if}
                     </div>
                   </div>
