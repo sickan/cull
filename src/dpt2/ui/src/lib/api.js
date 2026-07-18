@@ -1136,6 +1136,32 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
   return wait(_promptPath(titel))
 }
 
+// FEAT-15: telefonens uppladdade original på molnets privata yta — lista,
+// hämta hem (bakgrund, polla status). Mock: en grupp med två NEF:er.
+let MOCK_ORIGINAL_STATUS = { pagar: false }
+
+export async function listaOriginal() {
+  const api = brygga()
+  if (api) return api.lista_original()
+  return wait({ ok: true, mappar: [{ namn: 'osorterat', antal: 2, bytes: 62914560,
+    filer: [{ filnamn: 'Z81_8488.NEF', bytes: 31457280, uppladdad: '2026-07-17T23:01:16Z' },
+            { filnamn: 'Z81_8516.NEF', bytes: 31457280, uppladdad: '2026-07-17T23:01:16Z' }] }] })
+}
+
+export async function hamtaOriginal(mapp, taBort = false, malmapp = '') {
+  const api = brygga()
+  if (api) return api.hamta_original(mapp, taBort, malmapp)
+  MOCK_ORIGINAL_STATUS = { pagar: false, mapp, mal: malmapp || `~/Pictures/DPT2 Original/${mapp}`,
+    klara: 2, hoppade: 0, stadade: taBort ? 2 : 0, totalt: 2, fel: [] }
+  return wait({ ok: true, status: { ...MOCK_ORIGINAL_STATUS, pagar: true } })
+}
+
+export async function originalStatus() {
+  const api = brygga()
+  if (api) return api.original_status()
+  return wait({ ...MOCK_ORIGINAL_STATUS })
+}
+
 // Miniatyr (base64 data-URI) för en vald hero-bild — raw extraheras, jpg
 // öppnas direkt (samma logik som dpt v1:s "Visa urval"-miniatyrer).
 export async function thumbForBild(path) {

@@ -1,6 +1,7 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte'
-  import { startaCull, startaGallring, valjMapp, aktivMatch, listaLag, sattAktivtUrval, hamtaLogg } from '../lib/api.js'
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte'
+  import { startaCull, startaGallring, valjMapp, aktivMatch, listaLag, sattAktivtUrval, hamtaLogg,
+    listaOriginal, hamtaOriginal, originalStatus } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
 
   const dispatch = createEventDispatcher()
@@ -30,11 +31,45 @@
   ]
   $: aktivtLage = LAGEN.find((l) => l.id === lage)
 
+  // FEAT-15: telefonens uppladdade original — kortet visas bara när molnet
+  // faktiskt har något att hämta (tyst annars, ingen tom yta).
+  let molnMappar = []
+  let molnStadar = true
+  let molnHamtar = null        // gruppnamn under pågående hämtning
+  let molnStatus = null        // senaste status-pollen
+  let molnPoll = null
+
   onMount(async () => {
     lagAlla = await listaLag()
     if (!aktiv) aktiv = await aktivMatch()
     if (aktiv?.tid && ai.kick === 'auto') ai.kick = aktiv.tid
+    const o = await listaOriginal().catch(() => null)
+    if (o?.ok) molnMappar = o.mappar || []
   })
+  onDestroy(() => clearInterval(molnPoll))
+
+  const mb = (b) => (b >= 1 << 30 ? `${(b / (1 << 30)).toFixed(1)} GB` : `${Math.round(b / (1 << 20))} MB`)
+
+  async function hamtaHem(mapp) {
+    const r = await hamtaOriginal(mapp.namn, molnStadar)
+    if (!r?.ok) { molnStatus = { fel: [r?.fel || 'Kunde inte starta hämtningen'] }; return }
+    molnHamtar = mapp.namn
+    molnStatus = r.status
+    molnPoll = setInterval(async () => {
+      molnStatus = await originalStatus().catch(() => null)
+      if (molnStatus && !molnStatus.pagar) {
+        clearInterval(molnPoll)
+        molnHamtar = null
+        // Klart: hämtade mappen blir källa för gallringen — hela poängen
+        // med bryggan ("bilderna väntar när du kommer hem").
+        if (molnStatus.klara > 0 && molnStatus.mal) kalla = molnStatus.mal
+        if (molnStatus.stadade > 0) {
+          const o = await listaOriginal().catch(() => null)
+          if (o?.ok) molnMappar = o.mappar || []
+        }
+      }
+    }, 700)
+  }
 
   $: hemlag = aktiv ? lagAlla.find((l) => l.namn === aktiv.lag_hemma) : null
   $: hemFarg = !hemlag ? '#c9bfa8'
@@ -191,6 +226,45 @@
       </div>
     </div>
   </div>
+
+  {#if molnMappar.length}
+    <!-- FEAT-15: Mac-sidan av kort→telefon→moln-bryggan -->
+    <div class="kort moln">
+      <div class="khuvud">
+        <span class="kic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 15a4 4 0 0 1 .6-7.96A5.5 5.5 0 0 1 18.2 8.6 3.5 3.5 0 0 1 17.5 15"/><path d="M12 12v7m0 0-2.5-2.5M12 19l2.5-2.5"/></svg>
+        </span>
+        <span class="ktxt">
+          <span class="ktitel scd">Från telefonen</span>
+          <span class="ksub">Original som appen laddat upp i fält — hämta hem och gallra</span>
+        </span>
+      </div>
+      <div class="kkropp">
+        {#each molnMappar as m (m.namn)}
+          <div class="molnrad">
+            <span class="mnamn">{m.namn}</span>
+            <span class="minfo">{m.antal} {m.antal === 1 ? 'fil' : 'filer'} · {mb(m.bytes)}</span>
+            <button class="prim-btn" on:click={() => hamtaHem(m)} disabled={!!molnHamtar}>
+              {molnHamtar === m.namn ? `Hämtar ${molnStatus?.klara ?? 0} av ${molnStatus?.totalt ?? m.antal}…` : 'Hämta hem'}
+            </button>
+          </div>
+        {/each}
+        <div class="frad">
+          <button class="box" class:pa={molnStadar} on:click={() => (molnStadar = !molnStadar)}>{molnStadar ? '✓' : ''}</button>
+          <span class="fx">Städa molnet efter hämtning</span>
+          <span class="help">— tas bara bort när filen är verifierat hemma</span>
+        </div>
+        {#if molnStatus && !molnStatus.pagar && (molnStatus.klara > 0 || molnStatus.fel?.length)}
+          <div class="molnres">
+            {#if molnStatus.klara > 0}
+              <span class="ok">✓ {molnStatus.klara} {molnStatus.klara === 1 ? 'fil' : 'filer'} hemma i {molnStatus.mal}{molnStatus.stadade ? ` · ${molnStatus.stadade} städade ur molnet` : ''} — satt som källmapp</span>
+            {/if}
+            {#each molnStatus.fel || [] as f}<span class="molnfel">✕ {f}</span>{/each}
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -260,4 +334,13 @@
   .ok { font-size: 12px; color: var(--ok); font-weight: 600; white-space: nowrap; }
   .prim-btn { background: var(--acc); color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 600; flex: none; }
   .prim-btn:disabled { opacity: 0.5; }
+
+  /* FEAT-15: Från telefonen */
+  .kort.moln { margin-top: 16px; }
+  .molnrad { display: flex; align-items: center; gap: 12px; }
+  .mnamn { font-size: 13.5px; font-weight: 600; color: var(--t-head); font-family: var(--mono, ui-monospace, monospace); }
+  .minfo { flex: 1; font-size: 12px; color: var(--t-mut); }
+  .molnres { display: flex; flex-direction: column; gap: 4px; }
+  .molnres .ok { white-space: normal; }
+  .molnfel { font-size: 12px; color: var(--fel, #c0524f); }
 </style>

@@ -26,6 +26,7 @@ from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
 from dpt2.tjanster.kalender import Kalender
 from dpt2.tjanster.privat_kalender import PrivatKalender
 from dpt2.tjanster.innehall_synk import InnehallSynk
+from dpt2.tjanster.original_synk import OriginalSynk
 from dpt2.tjanster.live_synk import (
     GREN_FARG, LiveSynk, iso_nu, malskyttar_till_poster, poster_till_malskyttar)
 from dpt2.publicering import astro_export as AX
@@ -60,6 +61,9 @@ class Api:
         self.privat = PrivatKalender()   # läser privata Google-kalendrar DIREKT (skrivskyddat)
         self.innehall_synk = InnehallSynk()   # klient mot deployade Content Sync-tjänsten
         self.live_synk = LiveSynk()  # Mobil Live (samma worker, egna /api/live-rutter)
+        self.original_synk = OriginalSynk()  # FEAT-15: hemhämtning av telefonens original
+        # Pågående hemhämtning (en åt gången) — UI:t pollar original_status().
+        self._original_hamtning = {"pagar": False}
 
     # ── Sportprofiler ────────────────────────────────────────────────────────
     def sportprofiler(self):
@@ -2708,6 +2712,65 @@ class Api:
         s = store.hamta_installning(self.conn,
                                     self.MALMAPP_NYCKLAR[typ], "") or ""
         return s.strip() or None
+
+    # ── FEAT-15: hämta hem telefonens uppladdade original ────────────────────
+    # iOS-appen laddar upp NEF:er till molnets privata original-yta i fält;
+    # här är hemvägen — "bilderna väntar när du kommer hem". Hämtningen körs i
+    # bakgrundstråd (7 × 30 MB ska inte frysa bryggan); UI:t pollar status.
+
+    ORIGINAL_ROT = "~/Pictures/DPT2 Original"
+
+    def lista_original(self):
+        """Grupperna på molnets original-yta med filer och total storlek."""
+        if not self.original_synk.har_nyckel():
+            return {"ok": False, "fel": "CONTENT_SYNC_API_KEY saknas."}
+        mappar = []
+        for namn in self.original_synk.lista_mappar():
+            filer = self.original_synk.lista_filer(namn)
+            mappar.append({"namn": namn, "antal": len(filer),
+                           "bytes": sum(f.get("bytes") or 0 for f in filer),
+                           "filer": filer})
+        return {"ok": True, "mappar": mappar}
+
+    def hamta_original(self, mapp, ta_bort=False, malmapp=""):
+        """Startar hemhämtning av en grupp. `malmapp` är per-körnings-override
+        (V5-A-mönstret); default ORIGINAL_ROT/<grupp>. `ta_bort` städar molnet
+        fil för fil — men bara efter lyckad (eller verifierat redan hämtad)
+        nedladdning, så ett nätavbrott aldrig kostar bilder."""
+        if self._original_hamtning.get("pagar"):
+            return {"ok": False, "fel": "En hämtning pågår redan."}
+        filer = self.original_synk.lista_filer(mapp)
+        if not filer:
+            return {"ok": False, "fel": f"Inga filer i molngruppen {mapp}."}
+        rot = (malmapp or "").strip() or str(
+            Path(self.ORIGINAL_ROT).expanduser() / mapp)
+        status = {"pagar": True, "mapp": mapp, "mal": rot, "klara": 0,
+                  "hoppade": 0, "stadade": 0, "totalt": len(filer), "fel": []}
+        self._original_hamtning = status
+
+        def _kor():
+            try:
+                for f in filer:
+                    r = self.original_synk.hamta_fil(
+                        mapp, f["filnamn"], rot, bytes_vantat=f.get("bytes"))
+                    if not r.get("ok"):
+                        status["fel"].append(r.get("fel") or f["filnamn"])
+                        continue
+                    status["klara"] += 1
+                    if r.get("hoppad"):
+                        status["hoppade"] += 1
+                    if ta_bort and self.original_synk.radera_fil(
+                            mapp, f["filnamn"]):
+                        status["stadade"] += 1
+            finally:
+                status["pagar"] = False
+
+        threading.Thread(target=_kor, daemon=True).start()
+        return {"ok": True, "status": dict(status)}
+
+    def original_status(self):
+        """Pågående/senaste hemhämtningens tillstånd (UI-poll)."""
+        return dict(self._original_hamtning)
 
     def valj_fil(self, titel="Välj fil", filter=None):
         return self._dialog(folder=False, titel=titel, filter=filter)

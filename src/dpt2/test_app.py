@@ -2601,3 +2601,86 @@ class TestPagangTavlingar(unittest.TestCase):
     def test_satt_pagang_dold_validerar_art(self):
         r = self.api.satt_pagang_dold("blogg", "x", True)
         self.assertFalse(r["ok"])
+
+
+class TestHamtaOriginal(unittest.TestCase):
+    """FEAT-15: hemhämtning av telefonens original (bakgrundstråd + status)."""
+
+    class FejkSynk:
+        def __init__(self, filer, fel_pa=None):
+            self.filer = filer
+            self.fel_pa = fel_pa or set()
+            self.raderade = []
+
+        def har_nyckel(self):
+            return True
+
+        def lista_mappar(self):
+            return ["osorterat"]
+
+        def lista_filer(self, mapp):
+            return self.filer
+
+        def hamta_fil(self, mapp, filnamn, malmapp, *, bytes_vantat=None):
+            if filnamn in self.fel_pa:
+                return {"ok": False, "fel": f"{filnamn}: HTTP 500"}
+            return {"ok": True, "path": f"{malmapp}/{filnamn}", "hoppad": False}
+
+        def radera_fil(self, mapp, filnamn):
+            self.raderade.append(filnamn)
+            return True
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+
+    def _vanta(self):
+        import time
+        for _ in range(100):
+            if not self.api.original_status().get("pagar"):
+                return self.api.original_status()
+            time.sleep(0.01)
+        self.fail("hämtningen blev aldrig klar")
+
+    def test_hamtar_alla_och_stadar(self):
+        filer = [{"filnamn": "A.NEF", "bytes": 1}, {"filnamn": "B.NEF", "bytes": 2}]
+        self.api.original_synk = self.FejkSynk(filer)
+        r = self.api.hamta_original("osorterat", ta_bort=True)
+        self.assertTrue(r["ok"])
+        s = self._vanta()
+        self.assertEqual(s["klara"], 2)
+        self.assertEqual(s["stadade"], 2)
+        self.assertEqual(self.api.original_synk.raderade, ["A.NEF", "B.NEF"])
+
+    def test_fel_pa_en_fil_ater_inte_resten_och_stadar_inte_den(self):
+        filer = [{"filnamn": "A.NEF", "bytes": 1}, {"filnamn": "B.NEF", "bytes": 2}]
+        self.api.original_synk = self.FejkSynk(filer, fel_pa={"A.NEF"})
+        self.api.hamta_original("osorterat", ta_bort=True)
+        s = self._vanta()
+        self.assertEqual(s["klara"], 1)
+        self.assertEqual(len(s["fel"]), 1)
+        self.assertEqual(self.api.original_synk.raderade, ["B.NEF"])  # A kvar i molnet
+
+    def test_tom_grupp_ger_fel_direkt(self):
+        self.api.original_synk = self.FejkSynk([])
+        r = self.api.hamta_original("tom")
+        self.assertFalse(r["ok"])
+
+    def test_dubbelstart_blockeras(self):
+        import threading as th
+        slapp = th.Event()
+
+        class Trog(self.FejkSynk):
+            def hamta_fil(self, *a, **kw):
+                slapp.wait(timeout=2)
+                return super().hamta_fil(*a, **kw)
+
+        self.api.original_synk = Trog([{"filnamn": "A.NEF", "bytes": 1}])
+        self.assertTrue(self.api.hamta_original("osorterat")["ok"])
+        self.assertFalse(self.api.hamta_original("osorterat")["ok"])   # pågår redan
+        slapp.set()
+        self._vanta()
+
+    def test_malmapp_override_galler_korningen(self):
+        self.api.original_synk = self.FejkSynk([{"filnamn": "A.NEF", "bytes": 1}])
+        r = self.api.hamta_original("osorterat", malmapp="/tmp/egen-mapp")
+        self.assertEqual(r["status"]["mal"], "/tmp/egen-mapp")
