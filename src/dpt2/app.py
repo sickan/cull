@@ -1628,6 +1628,7 @@ class Api:
         n_skriv = 0
         n_ratade = 0
         n_gyro = 0
+        n_nickade = 0
         with tempfile.TemporaryDirectory() as td:
             for i, f in enumerate(raw):
                 _status["fas"] = "Räknar vinklar"
@@ -1641,10 +1642,18 @@ class Api:
                     except Exception:
                         pass
 
-                # Gyro-RollAngle först; Hough på inbäddad preview som fallback.
-                vinkel = roll_karta.get(f)
-                if vinkel is not None:
-                    n_gyro += 1
+                # Gyrot först. Tre utfall (se las_roll_vinklar):
+                #   tal   pålitlig vinkel
+                #   None  kameran har gyro men var nickad -> lämna orörd,
+                #         hellre rak-nog än roterad åt fel håll
+                #   saknas helt  gammal kropp utan gyro -> Hough på previewen
+                if f in roll_karta:
+                    vinkel = roll_karta[f]
+                    if vinkel is None:
+                        vinkel = 0.0
+                        n_nickade += 1
+                    else:
+                        n_gyro += 1
                 else:
                     vinkel = 0.0
                     try:
@@ -1666,11 +1675,15 @@ class Api:
                 except Exception:
                     pass
 
+        nick_txt = (f", {n_nickade} lämnade orörda (kameran nickad — "
+                    "gyrot opålitligt där)") if n_nickade else ""
         return {"ok": True, "n_raw": len(raw), "n_skriv": n_skriv,
                 "n_ratade": n_ratade, "n_gyro": n_gyro,
+                "n_nickade": n_nickade,
                 "meddelande": (f"{n_skriv} sidecars skrivna, {n_ratade} med "
                                f"upprätningsvinkel ({n_gyro} från kamerans "
-                               "gyro). Importera mappen i Lightroom.")}
+                               f"gyro){nick_txt}. Importera mappen i "
+                               "Lightroom.")}
 
     def lar_av_match(self, mapp, match_namn="", sport=""):
         """Lär av match: märker ett gallrat urval (mappen med de behållna

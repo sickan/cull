@@ -105,10 +105,36 @@ def berakna_uppratning(img_bgr):
     return float(np.clip(float(np.median(vinklar)), -5.0, 5.0))
 
 
-def las_roll_vinklar(raw_paths, env=None, max_grader=8.0):
+# Nickgräns för när gyrots roll får användas. Mätt mot 1085 av Stigs egna
+# handrätningar ur LR-katalogen (X10 Blue-arkivet, 2026-07-18): med nickad
+# kamera blir gyrot sämre än att inte röra bilden alls — dels tappar
+# nivågivaren precision, dels lutar perspektivet referenslinjerna så att
+# "rakt" i bilden inte längre är detsamma som lodrätt mot tyngdkraften.
+#
+#   kropp   |pitch|<2°  gyro/utan     |pitch|>=2°  gyro/utan
+#   Z8      0.53 / 1.14  (halverar)    0.69 / 1.28
+#   D850    0.72 / 1.05                1.16 / 0.97  <- sämre
+#   D5      1.15 / 1.37                1.79 / 1.27  <- klart sämre
+#
+# D5:ans givare är dessutom brusig rakt igenom (spridning ±2.6° mot Z8:s
+# ±1.0°, ±3.2° i serietagning — spegelslaget stör), så gränsen skyddar mest
+# där den behövs.
+MAX_PITCH = 2.0
+
+
+def las_roll_vinklar(raw_paths, env=None, max_grader=8.0, max_pitch=MAX_PITCH):
     """Kamerans gyro-RollAngle (grader) för flera raw-filer i ETT exiftool-
-    anrop. Returnerar {Path: grader} — filer utan taggen (D3S/Df…) eller med
-    |roll| > max_grader (medveten lutning, räta inte) utelämnas.
+    anrop.
+
+    Returnerar {Path: grader | None}:
+      grader  pålitlig vinkel — använd den
+      None    kameran HAR gyro men värdet är inte att lita på (nickad över
+              max_pitch) — räta inte alls hellre än att räta fel
+    Filer helt utan taggen (D3S/Df…) saknas i dicten — där får anroparen
+    falla tillbaka på bildinnehållet.
+
+    |roll| > max_grader tolkas som medveten lutning (eller porträttvridning)
+    och lämnas ifred.
 
     Teckenkonvention LR-katalog-verifierad 2026-07-18 (MFF–Bröndby, Z8+D5):
     crs:CropAngle = +RollAngle rakt av. (Obs: LR:s Angle-REGLAGE visar
@@ -117,18 +143,25 @@ def las_roll_vinklar(raw_paths, env=None, max_grader=8.0):
     import subprocess
     if not raw_paths:
         return {}
-    cmd = ["exiftool", "-j", "-RollAngle"] + [str(p) for p in raw_paths]
+    cmd = (["exiftool", "-j", "-RollAngle", "-PitchAngle"]
+           + [str(p) for p in raw_paths])
     ut = {}
     try:
         rå = subprocess.run(cmd, capture_output=True, text=True,
-                            env=env, timeout=120).stdout
+                            env=env, timeout=300).stdout
         for post in json.loads(rå):
             try:
                 grader = float(post.get("RollAngle"))
             except (TypeError, ValueError):
-                continue
-            if abs(grader) <= max_grader:
-                ut[Path(post["SourceFile"])] = grader
+                continue          # ingen gyrotagg alls
+            p = Path(post["SourceFile"])
+            if abs(grader) > max_grader:
+                continue          # medveten lutning — rör inte
+            try:
+                pitch = float(post.get("PitchAngle"))
+            except (TypeError, ValueError):
+                pitch = 0.0
+            ut[p] = None if abs(pitch) > max_pitch else grader
     except Exception:
         pass
     return ut

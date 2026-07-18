@@ -149,19 +149,27 @@ class TestXmpWriter(unittest.TestCase):
         from unittest import mock
         from dpt2.motorer import xmp_writer
         svar = json.dumps([
-            {"SourceFile": "/x/a.nef", "RollAngle": 1.1},    # med — behålls
-            {"SourceFile": "/x/b.nef", "RollAngle": -2.0},   # tecknet ORÖRT
-            {"SourceFile": "/x/c.nef", "RollAngle": 11.8},   # >8° = medveten
+            {"SourceFile": "/x/a.nef", "RollAngle": 1.1, "PitchAngle": 0.3},
+            {"SourceFile": "/x/b.nef", "RollAngle": -2.0, "PitchAngle": -1.0},
+            {"SourceFile": "/x/c.nef", "RollAngle": 11.8, "PitchAngle": 0.0},
             {"SourceFile": "/x/d.nef"},                       # ingen gyrotagg
+            {"SourceFile": "/x/e.nef", "RollAngle": 1.8, "PitchAngle": 5.3},
         ])
         with mock.patch.object(subprocess, "run",
                                return_value=mock.Mock(stdout=svar)):
             ut = xmp_writer.las_roll_vinklar(
-                [Path("/x/a.nef"), Path("/x/b.nef"),
-                 Path("/x/c.nef"), Path("/x/d.nef")])
+                [Path("/x/a.nef"), Path("/x/b.nef"), Path("/x/c.nef"),
+                 Path("/x/d.nef"), Path("/x/e.nef")])
         # CropAngle = +RollAngle rakt av (LR-katalog-verifierat 18/7) —
         # ingen negering får smyga in här.
-        self.assertEqual(ut, {Path("/x/a.nef"): 1.1, Path("/x/b.nef"): -2.0})
+        self.assertEqual(ut[Path("/x/a.nef")], 1.1)
+        self.assertEqual(ut[Path("/x/b.nef")], -2.0)
+        self.assertNotIn(Path("/x/c.nef"), ut)   # >8° = medveten lutning
+        self.assertNotIn(Path("/x/d.nef"), ut)   # ingen gyrotagg alls
+        # Nickad kamera: taggen finns men värdet duger inte -> None, så
+        # anroparen lämnar bilden orörd i stället för att gissa.
+        self.assertIn(Path("/x/e.nef"), ut)
+        self.assertIsNone(ut[Path("/x/e.nef")])
 
     def test_las_roll_vinklar_tom_och_trasig(self):
         import subprocess
