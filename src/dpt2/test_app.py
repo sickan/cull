@@ -2666,3 +2666,41 @@ class TestPagangResultat(unittest.TestCase):
         # ...och tävlingsposten (heldag) är inte längre "kommande".
         self.assertNotIn("Nyss Avslutade Cupen",
                          [t["namn"] for t in r["tavlingar"]])
+
+
+class TestMatchkontextBerikning(unittest.TestCase):
+    """V5-E rest: matchartikeln bär del_av/del_av_slug/rond ur matchraden,
+    och pagang-matchens .md bär fas (ronden) för eventsidans dagrubriker."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        r = self.api.spara_tavling({"namn": "Nordea Open 2026", "sport": "tennis",
+                                    "gren": "herr", "typ": "turnering",
+                                    "fran": "2026-07-13", "till": "2026-07-17"})
+        self.event_id = r["id"]
+        m = self.api.spara_match({"lag_hemma": "Borges", "lag_borta": "Darderi",
+                                  "datum": "2026-07-17", "sport": "tennis",
+                                  "event_id": self.event_id, "rond": "Semifinal"})
+        self.match_id = m["id"]
+
+    def test_berika_matchkontext(self):
+        data = self.api._berika_innehall(
+            {"typ": "match", "match_id": self.match_id, "titel": "Borges – Darderi"})
+        self.assertEqual(data["del_av"], "Nordea Open 2026")
+        self.assertEqual(data["del_av_slug"], "nordea-open-2026")
+        self.assertEqual(data["rond"], "Semifinal")
+
+    def test_explicita_falt_rors_inte(self):
+        data = self.api._berika_innehall(
+            {"typ": "match", "match_id": self.match_id, "titel": "x",
+             "rond": "Final", "del_av": "Annat event"})
+        self.assertEqual(data["rond"], "Final")
+        self.assertEqual(data["del_av"], "Annat event")
+
+    def test_pagang_md_bar_fas(self):
+        from dpt2.app import _pagang_match_md
+        fm, _b, _slug, _md = _pagang_match_md(
+            {"id": "m1", "lag_hemma": "Borges", "lag_borta": "Darderi",
+             "datum": "2026-07-17", "rond": "Semifinal", "del_av": "Nordea Open 2026"})
+        self.assertEqual(fm["fas"], "Semifinal")
+        self.assertEqual(fm["del_av_slug"], "nordea-open-2026")
