@@ -226,6 +226,23 @@ MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utred
 | F18FM-3 | Hover-blinken KVARSTÅR — se uppdaterad F18-1 ovan | Utredning: hämtas filen om vid hover? + `will-change: transform` |
 | SYNK-DPT2 | **Tvåvägs-blixt även mot DPT2** | ✅ **KLAR 18/7** (`8f2da6b`): `live_synk.delta` (?updated_since, serverns nu-stämpel) + `synk_delta` som applicerar mobilens live-fält store-direkt (INTE satt_resultat — inget moln-eko/omstämpling), App.svelte pollar var 15s → `dpt-synk`-event → Matcher laddar om. 3 tester. Baslinje-anropet tyst |
 
+## M18 · Matchens fynd 18/7 em (källa: `~/Downloads/dpt2-backlogg-match.md`)
+
+*Skarptestet MFF–Bröndby: D6-kedjan fungerade före→live→slut. Punkterna =
+Stigs numrering. 2+4+5 är ETT klockmodul-paket.*
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| M18-7 | **AKUT: Avsluta live-match gick inte att hitta** — match låg kvar som live | ✅ **LÖST 18/7 em**: (a) datat sanerat direkt (KDFF-matchen 27/6 hade resultat 6-0 men status 'kommande' — pre-slutsignalfix-kvarleva; satt till avslutad) + (b) ios `4ac414a` (INSTALLERAD): "Matchen är slut"-raden PERMANENT för alla ostängda matcher med passerad avspark (krävde förr 'idag' → äldre häng gick ej att stänga) |
+| M18-1 | Startelva-overlayn ritar inte spelarnamnen — bara rubriken "startelva" | Trolig: rostern når inte renderaren (spec-bygget i workern skickar inte roster till skapa_story, eller lineup-grenen läser fel nyckel). Felsök hela kedjan app→worker→render |
+| M18-6 | Snabbplockade bilder går inte att återfinna i Lightroom mobil — flödet BRUTET | Hög prio. Öppen designfråga: eget album/mapp som LR ser, kopierbar filnamnslista, eller tumnaglar m filnamn i plockordning |
+| M18-2 | Klockmodulen: manuell tidssynk mot hallens matchur ("sätt matchtid": skriv 07:32 → synka; inte +/−) | Täcker sen avspark + utdragna pauser. Paket med M18-4/5 |
+| M18-4 | Tilläggstid + räkning per halvlek (fotboll): 0–45 → 45+X; 2:a halvlek STARTAR alltid 45:00 → 90 → 90+X; händelser loggas "45+2"; "Starta andra halvlek" = synkpunkt som nollar till 45:00 | Klockmodul-paketet |
+| M18-5 | Automatisk halvleksdetektering ur klockslaget (0–45 = första; efter ~60 min = andra) — följer manuell synk när den finns | Klockmodul-paketet |
+| M18-3 | Snabbredigering av mål: korrigera minut/målskytt direkt på händelsen i matchflödet (utan ta bort + lägg om) | Hänger ihop m klocksynken (fel minuter) men behövs oavsett |
+| M18-8 | Gradienten över loggorna för kraftig — MFF-märket äts upp | Tona ner opacitet eller korta räckvidden (var? overlay-rendern eller appens brickor — verifiera vilken yta han såg) |
+| M18-9 | Automatisk HEMRESA efter match: som resan till, default Kajgatan 2B Lomma; överstyrbar (nästa uppdrag/hotell) — enkel inmatning i matchvyn/inställningar | Restidsinfran finns (RestidService); hemadress = ny inställning |
+
 ## G · Spikes DPT2
 
 SPIKE-01 importera spelschema → absorberad av F18-3 · SPIKE-03 ML/modell-bibliotek ·
