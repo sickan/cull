@@ -60,7 +60,7 @@ röst→action är LÅG prio.
 | C-försl | Beslut om C-förslagen (design/C-FORSLAG.md) | Stig-beslut |
 | FEAT-14 | **EPIC: Ackrediteringssvar → DPT2** (svarsmail blir förslag Beviljad/Nekad + notering i appen) | Handoff §8 senare-fas; skivor nedan |
 | V2-01 | Versionsvisning i ALLA appar (bokstaverat namn "två punkt ett" synligt + tekniskt byggnr under Om/Inställningar) | v2 §1 · litet, tre kodbaser |
-| V2-02 | Väderväxling "där jag är" ↔ "dit jag ska" (plats från nästa match/heldagsevent i På gång; samma tidsspann) | v2 §2 · koppling V5 §4 (destinationsväder vid deltillfälle) |
+| V2-02 | Väderväxling "där jag är" ↔ "dit jag ska" | ✅ **KLAR 18/7** (ios `d5d6ac0`, INSTALLERAD): tap på väderremsan växlar GPS ↔ arenan (nästa match/deltillfälle), samma tidsspann; "DIT JAG SKA"-etikett + växlingspil. Destinationsväder vid deltillfälle (V5 §4) fanns redan i cirkeln (arena + deltillfälletid) |
 | V2-10 | Leveranskrav per uppdragsgivare sparas + visas i publiceringsflödet (ex CEV: 30 JPG, 2500×1500, ≤7 MB, efter set 1) | v2 §10 |
 | V2-12 | Utrustningspackning: packmallar per eventtyp → packlista vid planering | v2 §12 · matas av V2-06-noteringar |
 | V2-13 | Publiceringsstatistik: vad publicerats var, per match/event och kanal (underlag åt klubbar/sponsorer) | v2 §13 · bygger naturligt på V5 §10 publiceringskö |
@@ -160,7 +160,7 @@ visar riktiga server-renderade Horisont-bilden.*
 | B-003 | Röst → transkribering → action | **LÅG prio (Stig 16 jul)** |
 | B-008 | iPad-spike + D3-implementation | Stigs prio 4-spår |
 | B-009 | Widgets (hem + låsskärm) | |
-| B-010 | Låsskärm som startsida (Live Activity) | → **D6** |
+| B-010 | Låsskärm som startsida (Live Activity) | **SKIVA 1 ✅ KLAR 18/7** (ios `ea9cb88`, INSTALLERAD): widget-extension NEFBryggaWidgets — kompakt Island (LIVE-puls + lagkoder + ställning, klocka accent/tabular via timerInterval), expanderad + låsskärmskort (från avspark-läget per D6); LIVE-läget startar/uppdaterar, slutsignal → SLUT + 30 min kvar. **Kvar (D6-rest):** före-läget (åk senast + restid + tidsprogress), auto-start på jobbdagen, nästa åtgärd-radens deep-link, icke-match-jobb, B-009-widgets |
 | B-011 | Realtid utan batteridränering (spike) | Läs-features utbrutna till iOS-läs ovan |
 
 ## E · Webb/sajt
