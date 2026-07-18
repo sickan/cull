@@ -105,6 +105,35 @@ def berakna_uppratning(img_bgr):
     return float(np.clip(float(np.median(vinklar)), -5.0, 5.0))
 
 
+def las_roll_vinklar(raw_paths, env=None, max_grader=8.0):
+    """Kamerans gyro-RollAngle (grader) för flera raw-filer i ETT exiftool-
+    anrop. Returnerar {Path: grader} — filer utan taggen (D3S/Df…) eller med
+    |roll| > max_grader (medveten lutning, räta inte) utelämnas.
+
+    Teckenkonvention LR-katalog-verifierad 2026-07-18 (MFF–Bröndby, Z8+D5):
+    crs:CropAngle = +RollAngle rakt av. (Obs: LR:s Angle-REGLAGE visar
+    minus det lagrade värdet — låt inte UI:t lura tecknet åt fel håll.)"""
+    import json
+    import subprocess
+    if not raw_paths:
+        return {}
+    cmd = ["exiftool", "-j", "-RollAngle"] + [str(p) for p in raw_paths]
+    ut = {}
+    try:
+        rå = subprocess.run(cmd, capture_output=True, text=True,
+                            env=env, timeout=120).stdout
+        for post in json.loads(rå):
+            try:
+                grader = float(post.get("RollAngle"))
+            except (TypeError, ValueError):
+                continue
+            if abs(grader) <= max_grader:
+                ut[Path(post["SourceFile"])] = grader
+    except Exception:
+        pass
+    return ut
+
+
 def brus_av_iso(iso):
     """Mappar ISO till (luminans-NR, färg-NR, luminans-detalj) för crs.
 

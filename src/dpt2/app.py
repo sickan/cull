@@ -1583,12 +1583,14 @@ class Api:
         return {"ok": True, "antal": kopierade, "path": str(ut_dir)}
 
     def rata_upp_mapp(self, mapp, _status=None):
-        """Upprätning: räknar korrektionsvinkeln per raw (inbäddad preview →
-        Hough-horisontdetektorn i xmp_writer) och skriver XMP-sidecars.
+        """Upprätning: kamerans gyro-RollAngle först (exakt, ur NEF —
+        CropAngle = +RollAngle, LR-katalog-verifierat 18/7), Hough-horisont
+        på inbäddad preview som fallback för kroppar utan gyrotagg.
         Icke-förstörande: befintliga develop + betyg/etikett bevaras.
-        Vinkeln var tidigare en 0.0-placeholder — upprätningen gjorde då
-        ingenting alls (Stigs fynd 18/7). Returnerar {ok, n_raw, n_skriv,
-        n_ratade}."""
+        Historik: vinkeln var först en 0.0-placeholder, sedan Hough-only —
+        Hough gissar vilt på arenabilder (0.00 eller klipptak där gyron
+        träffar på hundradelen). Returnerar {ok, n_raw, n_skriv, n_ratade,
+        n_gyro}."""
         import tempfile
         import cv2
         from dpt2.motorer import xmp_writer
@@ -1614,8 +1616,12 @@ class Api:
             if extra not in env.get("PATH", "").split(os.pathsep):
                 env["PATH"] = extra + os.pathsep + env.get("PATH", "")
 
+        _status["fas"] = "Läser gyrodata"
+        roll_karta = xmp_writer.las_roll_vinklar(raw, env=env)
+
         n_skriv = 0
         n_ratade = 0
+        n_gyro = 0
         with tempfile.TemporaryDirectory() as td:
             for i, f in enumerate(raw):
                 _status["fas"] = "Räknar vinklar"
@@ -1629,17 +1635,21 @@ class Api:
                     except Exception:
                         pass
 
-                # Inbäddad preview → Hough-horisontdetektorn → vinkel.
-                vinkel = 0.0
-                try:
-                    jpg = Path(td) / (f.stem + ".jpg")
-                    if gui._extrahera_preview(f, jpg, env):
-                        img = cv2.imread(str(jpg))
-                        if img is not None:
-                            vinkel = xmp_writer.berakna_uppratning(img)
-                        jpg.unlink(missing_ok=True)
-                except Exception:
+                # Gyro-RollAngle först; Hough på inbäddad preview som fallback.
+                vinkel = roll_karta.get(f)
+                if vinkel is not None:
+                    n_gyro += 1
+                else:
                     vinkel = 0.0
+                    try:
+                        jpg = Path(td) / (f.stem + ".jpg")
+                        if gui._extrahera_preview(f, jpg, env):
+                            img = cv2.imread(str(jpg))
+                            if img is not None:
+                                vinkel = xmp_writer.berakna_uppratning(img)
+                            jpg.unlink(missing_ok=True)
+                    except Exception:
+                        vinkel = 0.0
 
                 try:
                     xmp_writer.skriv_xmp(f, vinkel=vinkel, preset=preset,
@@ -1651,9 +1661,10 @@ class Api:
                     pass
 
         return {"ok": True, "n_raw": len(raw), "n_skriv": n_skriv,
-                "n_ratade": n_ratade,
+                "n_ratade": n_ratade, "n_gyro": n_gyro,
                 "meddelande": (f"{n_skriv} sidecars skrivna, {n_ratade} med "
-                               "upprätningsvinkel. Importera mappen i Lightroom.")}
+                               f"upprätningsvinkel ({n_gyro} från kamerans "
+                               "gyro). Importera mappen i Lightroom.")}
 
     def lar_av_match(self, mapp, match_namn="", sport=""):
         """Lär av match: märker ett gallrat urval (mappen med de behållna

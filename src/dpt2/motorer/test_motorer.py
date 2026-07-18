@@ -143,6 +143,36 @@ class TestXmpWriter(unittest.TestCase):
         self.assertIn("xmp:Rating", txt)
         self.assertIn("Blue", txt)
 
+    def test_las_roll_vinklar_parsar_och_filtrerar(self):
+        import json
+        import subprocess
+        from unittest import mock
+        from dpt2.motorer import xmp_writer
+        svar = json.dumps([
+            {"SourceFile": "/x/a.nef", "RollAngle": 1.1},    # med — behålls
+            {"SourceFile": "/x/b.nef", "RollAngle": -2.0},   # tecknet ORÖRT
+            {"SourceFile": "/x/c.nef", "RollAngle": 11.8},   # >8° = medveten
+            {"SourceFile": "/x/d.nef"},                       # ingen gyrotagg
+        ])
+        with mock.patch.object(subprocess, "run",
+                               return_value=mock.Mock(stdout=svar)):
+            ut = xmp_writer.las_roll_vinklar(
+                [Path("/x/a.nef"), Path("/x/b.nef"),
+                 Path("/x/c.nef"), Path("/x/d.nef")])
+        # CropAngle = +RollAngle rakt av (LR-katalog-verifierat 18/7) —
+        # ingen negering får smyga in här.
+        self.assertEqual(ut, {Path("/x/a.nef"): 1.1, Path("/x/b.nef"): -2.0})
+
+    def test_las_roll_vinklar_tom_och_trasig(self):
+        import subprocess
+        from unittest import mock
+        from dpt2.motorer import xmp_writer
+        self.assertEqual(xmp_writer.las_roll_vinklar([]), {})
+        with mock.patch.object(subprocess, "run",
+                               return_value=mock.Mock(stdout="inte json")):
+            self.assertEqual(
+                xmp_writer.las_roll_vinklar([Path("/x/a.nef")]), {})
+
 
 # ── bas (klassiska bildmått på syntetiska arrayer) ────────────────────────────
 @unittest.skipUnless(HAR_CV2 and HAR_NP, "cv2/numpy saknas")
