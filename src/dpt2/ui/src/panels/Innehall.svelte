@@ -205,6 +205,23 @@
     if (efter && (d.status === 'failure' || d.status === 'canceled')) return 'fel'
     return 'bygger'
   }
+  // D9 §2: orsak i klartext på fel-raden + Försök igen som öppnar posten och
+  // kör om publiceringen direkt (samma väg som editorns Publicera-knapp).
+  $: felOrsakAv = (r) => {
+    if (statusLage === 'fel' && r.post?.id === publiceradId) {
+      return statusOrsak || 'Publiceringen misslyckades — se loggen.'
+    }
+    const d = senasteDeploy
+    if (d?.status === 'failure') return 'Sajt-deployen misslyckades — innehållet är i molnet men bygget föll.'
+    if (d?.status === 'canceled') return 'Sajt-bygget avbröts innan det blev klart.'
+    return 'Publiceringen misslyckades — försök igen.'
+  }
+  function forsokIgen(post) {
+    return async () => {
+      await laddaPost(post)
+      await publicera()
+    }
+  }
   function klockan(iso) {
     try { return new Date(iso).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }) }
     catch (_) { return '' }
@@ -935,7 +952,7 @@
         </div>
 
         {#each libFiltrerade as r (r.id)}
-          <div class="ovrad" role="button" tabindex="0"
+          <div class="ovrad" class:radfel={r.status === 'fel'} role="button" tabindex="0"
             title={r.status === 'utkast' ? 'Klicka för att fortsätta' : 'Klicka för att ändra'}
             on:click={() => (r.utkast ? laddaUtkast(r.utkast) : laddaPost(r.post))}
             on:keydown={(e) => e.key === 'Enter' && (r.utkast ? laddaUtkast(r.utkast) : laddaPost(r.post))}>
@@ -945,9 +962,17 @@
             <div class="ovmitt">
               <div class="ovtitel">{r.post ? titelAv(r.post) : (r.utkast.titel || '(utan titel)')}</div>
               <div class="ovmeta">{radMetaAv(r)}</div>
+              {#if r.status === 'fel'}
+                <div class="felorsak">{felOrsakAv(r)}</div>
+              {/if}
             </div>
             {#if ['live', 'bygger', 'fel'].includes(r.status)}
               <StatusChip status={r.status} />
+            {/if}
+            {#if r.status === 'fel' && r.post}
+              <!-- D9 §2 (FEAT-12-rest): fel-raden expanderar på plats — orsak i
+                   klartext + primär Försök igen (öppnar posten och publicerar om). -->
+              <button class="felretry" on:click|stopPropagation={forsokIgen(r.post)}>Försök igen</button>
             {/if}
             <button class="ovx" class:armerad={$armerad === `rad-${r.id}`}
               title={$armerad === `rad-${r.id}` ? 'Klicka igen för att ta bort' : 'Ta bort'}
@@ -1574,4 +1599,10 @@
   .stprick.puls { animation: d9puls 1.6s ease-in-out infinite; }
   @keyframes d9puls { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
   @media (prefers-reduced-motion: reduce) { .stprick.puls { animation: none; } }
+  /* D9 §2 (FEAT-12-rest): fel-radens expansion */
+  .ovrad.radfel { border-color: rgba(192, 73, 47, 0.35); background: rgba(192, 73, 47, 0.04); }
+  .felorsak { font-size: 11px; color: #C0492F; margin-top: 2px; }
+  .felretry { flex: none; border: 1px solid rgba(192, 73, 47, 0.5); background: rgba(192, 73, 47, 0.1);
+    color: #C0492F; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .felretry:hover { background: rgba(192, 73, 47, 0.18); }
 </style>
