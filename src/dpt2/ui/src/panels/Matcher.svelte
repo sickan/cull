@@ -8,6 +8,7 @@
     listaEventer, sparaTavling,
   } from '../lib/api.js'
   import Combobox from '../lib/Combobox.svelte'
+  import ProjektLista from '../lib/ProjektLista.svelte'
   import Lagbricka from '../lib/Lagbricka.svelte'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
   import { synkFarg } from '../lib/synk.js'
@@ -601,18 +602,8 @@
 
     {#if projekt.length}
       <div class="caps proj">Tidigare projekt</div>
-      <div class="projgrid">
-        {#each projekt as pr (pr.id)}
-          <button class="projkort" on:click={() => aterUppta(pr)}>
-            <div class="projbild"><span>{(pr.skapad || '').split(' ')[0]}</span></div>
-            <div class="projtxt">
-              <div class="projnamn">{pr.lag_hemma ? `${pr.lag_hemma} – ${pr.lag_borta}` : (pr.kalla || 'Urval').split('/').pop()}</div>
-              <div class="projsub">{[pr.kamera, pr.bilder ? pr.bilder + ' bilder' : '', pr.status].filter(Boolean).join(' · ')}</div>
-              <div class="projater">Återuppta ›</div>
-            </div>
-          </button>
-        {/each}
-      </div>
+      <!-- F18-8: kompakta rader, grupperade per match, 3 + Visa alla -->
+      <ProjektLista {projekt} on:ateruppta={(e) => aterUppta(e.detail)} />
     {/if}
   {:else}
     <div class="grupper">
@@ -893,18 +884,8 @@
 
     {#if projekt.length}
       <div class="caps proj">Tidigare projekt</div>
-      <div class="projgrid">
-        {#each projekt as pr (pr.id)}
-          <button class="projkort" on:click={() => aterUppta(pr)}>
-            <div class="projbild"><span>{(pr.skapad || '').split(' ')[0]}</span></div>
-            <div class="projtxt">
-              <div class="projnamn">{pr.lag_hemma ? `${pr.lag_hemma} – ${pr.lag_borta}` : (pr.kalla || 'Urval').split('/').pop()}</div>
-              <div class="projsub">{[pr.kamera, pr.bilder ? pr.bilder + ' bilder' : '', pr.status].filter(Boolean).join(' · ')}</div>
-              <div class="projater">Återuppta ›</div>
-            </div>
-          </button>
-        {/each}
-      </div>
+      <!-- F18-8: kompakta rader, grupperade per match, 3 + Visa alla -->
+      <ProjektLista {projekt} on:ateruppta={(e) => aterUppta(e.detail)} />
     {/if}
   {/if}
 </div>

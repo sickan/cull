@@ -885,13 +885,17 @@
         <div class="ovhuvud mt14"><span class="caps nomarg">Matcher &amp; tävlingar</span></div>
         <div class="sportgrid">
           {#each sportKort as p (p.id)}
-            <button class="sportkort" on:click={() => laddaPost(p)} title="Öppna för redigering">
-              {#if publiceradPost(p)}<Hornmarkor farg="#6FB35A" r={10} titel="Publicerad" />{/if}
+            <!-- FEAT-12 sista resten: kortet talar D9-statusspråket — hörnbåge
+                 i radens statusfärg (blå utkast · gul bygger · grön live · röd
+                 fel), inte bara binär "publicerad"-grön. -->
+            {@const kst = radStatusAv(p)}
+            <button class="sportkort" class:kortfel={kst === 'fel'} on:click={() => laddaPost(p)} title="Öppna för redigering">
+              <Hornmarkor farg={D9_FARG[kst]} r={10} titel={kst[0].toUpperCase() + kst.slice(1)} />
               {#if p.typ === 'sportevent'}<span class="tavlingbadge">Tävling</span>{/if}
               <div class="skthumb">{#if heroBildUrl(p)}<img src={heroBildUrl(p)} alt="" loading="lazy" />{/if}</div>
               <div class="sktitel">{titelAv(p)}</div>
               <div class="skmeta">{[p.frontmatter?.resultat, datumKort(p.frontmatter?.datum),
-                publiceradPost(p) ? '' : 'utkast'].filter(Boolean).join(' · ') || '—'}</div>
+                kst === 'publicerad' ? '' : kst].filter(Boolean).join(' · ') || '—'}</div>
             </button>
           {/each}
           <button class="sportkort nyartikel" on:click={() => oppnaMatchArtikel()}>
@@ -1409,6 +1413,7 @@
   .toppbadge { position: absolute; top: 10px; right: 10px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
     text-transform: uppercase; background: var(--acc); color: #fff; padding: 3px 9px; border-radius: 999px; }
   .sportgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .sportkort.kortfel { border-color: rgba(192, 73, 47, 0.4); }
   .sportkort { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 6px; text-align: left;
     border: 1px solid var(--div3); border-radius: 10px; background: var(--panel); padding: 10px; cursor: pointer; }
   .sportkort:hover { border-color: var(--acc); }

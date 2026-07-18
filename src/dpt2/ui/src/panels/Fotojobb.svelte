@@ -427,12 +427,14 @@
         <span class="kallrubrik scd">Kalendrar</span>
         <!-- Jobbkalendern är låst på: DPT äger den och skriver till den. De privata
              läses skrivskyddat och kan släckas — men krocken varnar ändå. -->
-        <span class="chip kalla last" style="--kf:var(--acc)"><span class="prick"></span>Jobb</span>
+        <!-- F18-9: bara färgprickar (namnet i tooltip) — texterna radbröt
+             filterraden. Aktiv = fylld i källfärgen, släckt = urtvättad ring. -->
+        <span class="kalprick last" style="--kf:var(--acc)" title="Jobb — DPT äger kalendern (alltid på)"></span>
         {#each kalendrar as k (k.id)}
-          <button class="chip kalla" class:on={aktivaKal.has(k.id)} style="--kf:{k.farg}"
-            aria-pressed={aktivaKal.has(k.id)} on:click={() => toggleKalender(k.id)}>
-            <span class="prick"></span>{k.etikett}
-          </button>
+          <button class="kalprick" class:on={aktivaKal.has(k.id)} style="--kf:{k.farg}"
+            aria-pressed={aktivaKal.has(k.id)} aria-label={k.etikett}
+            title={k.etikett + (aktivaKal.has(k.id) ? ' — visas (klicka för att dölja)' : ' — dold (klicka för att visa)')}
+            on:click={() => toggleKalender(k.id)}></button>
         {/each}
       </div>
       <!-- Scroll-hoppen hör till de scrollade vyerna; Vecka/Månad navigerar själva. -->
@@ -861,12 +863,14 @@
   .kallrubrik { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
     color: var(--t-caps); align-self: center; margin-left: 6px; padding-left: 12px;
     border-left: 1px solid var(--div); }
-  .chip.kalla { display: inline-flex; align-items: center; gap: 7px; }
-  .chip.kalla .prick { width: 8px; height: 8px; border-radius: 2px; background: var(--kf); flex: none; }
-  .chip.kalla.on { border-color: var(--kf); color: var(--t-head); }
-  /* Släckt källa: pricken tappar färgen, inte bara chipet — annars läser den som tänd. */
-  .chip.kalla:not(.on):not(.last) .prick { background: var(--div); }
-  .chip.kalla.last { border-color: var(--kf); color: var(--t-head); cursor: default; }
+  /* F18-9: källorna som rena färgprickar — på/av-LAGER, visuellt skilda från
+     kategorifiltren (enval, text-chips). Aktiv = fylld, släckt = urtvättad ring. */
+  .kalprick { width: 16px; height: 16px; border-radius: 50%; flex: none; align-self: center;
+    border: 2px solid var(--kf); background: var(--kf); cursor: pointer; padding: 0;
+    transition: background 0.15s, opacity 0.15s; }
+  .kalprick:not(.on):not(.last) { background: transparent; opacity: 0.45; }
+  .kalprick.last { cursor: default; }
+  .kalprick:hover:not(.last) { opacity: 1; }
 
   /* Radwrap bär popovern. .rad har overflow:hidden (hörnbågarna klipps mot
      kortet) och kan därför inte hysa den själv. */
