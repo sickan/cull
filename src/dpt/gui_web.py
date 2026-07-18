@@ -31,7 +31,8 @@ SPORTER_VAL = ["handboll", "fotboll", "volleyboll", "innebandy"]
 
 
 def _b64_thumb(path, maxsize):
-    """Öppnar en bildfil, skalar ned och returnerar en data-URI (JPEG)."""
+    """Öppnar en bildfil, skalar ned och returnerar en data-URI (JPEG — eller
+    PNG när bilden har transparens: lagloggor ska inte plattas mot svart)."""
     try:
         from PIL import Image
     except ImportError:
@@ -39,9 +40,14 @@ def _b64_thumb(path, maxsize):
     try:
         img = Image.open(path)
         img.thumbnail(maxsize)
+        buf = io.BytesIO()
+        if "A" in img.getbands() or img.mode == "P":
+            img = img.convert("RGBA")
+            img.save(buf, "PNG")
+            return ("data:image/png;base64,"
+                    + base64.b64encode(buf.getvalue()).decode())
         if img.mode not in ("RGB", "L"):
             img = img.convert("RGB")
-        buf = io.BytesIO()
         img.save(buf, "JPEG", quality=82)
         return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
     except Exception:
@@ -49,8 +55,11 @@ def _b64_thumb(path, maxsize):
 
 
 def _thumb_for(path, env, maxsize=(300, 220)):
-    """Miniatyr för raw (extrahera inbäddad preview) eller jpg (direkt)."""
-    if path.suffix.lower() in (".jpg", ".jpeg"):
+    """Miniatyr för raw (extrahera inbäddad preview) eller PIL-läsbar raster-
+    bild (direkt). F18-12: PNG/WebP-lagloggor gick tidigare ner i raw-grenen,
+    där exiftool-preview saknas → miniatyren blev None och loggan visades
+    aldrig, fast filvalet och sparningen lyckats."""
+    if path.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"):
         return _b64_thumb(path, maxsize)
     with tempfile.TemporaryDirectory() as td:
         jpg = Path(td) / (path.stem + ".jpg")

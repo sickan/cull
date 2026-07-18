@@ -2788,3 +2788,33 @@ class TestMatchkontextBerikning(unittest.TestCase):
              "datum": "2026-07-17", "rond": "Semifinal", "del_av": "Nordea Open 2026"})
         self.assertEqual(fm["fas"], "Semifinal")
         self.assertEqual(fm["del_av_slug"], "nordea-open-2026")
+
+
+class TestThumbForLogga(unittest.TestCase):
+    """F18-12: PNG/WebP-lagloggor gick ner i raw-grenen (exiftool-preview
+    saknas) → miniatyren blev None och loggan visades aldrig i lagvyn."""
+
+    def test_png_med_transparens_ger_png_datauri(self):
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        api = Api(db_path=":memory:")
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "logga.png"
+            Image.new("RGBA", (64, 64), (46, 49, 145, 200)).save(p)
+            r = api.thumb_for_bild(str(p))
+            self.assertTrue(r["ok"], r.get("fel"))
+            # Transparensen ska överleva — PNG ut, inte svartplattad JPEG.
+            self.assertTrue(r["data_uri"].startswith("data:image/png;base64,"))
+
+    def test_jpg_ger_fortfarande_jpeg(self):
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        api = Api(db_path=":memory:")
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "foto.jpg"
+            Image.new("RGB", (64, 64), (200, 30, 30)).save(p, "JPEG")
+            r = api.thumb_for_bild(str(p))
+            self.assertTrue(r["ok"])
+            self.assertTrue(r["data_uri"].startswith("data:image/jpeg;base64,"))

@@ -312,7 +312,9 @@
     if (f.ok) { l.logga = f.path; lag = lag; gerLag(l) }
   }
   async function valjLoggaTavling(t) {
-    const f = await valjFil('Välj tävlingslogga (bild)', ['*.png', '*.jpg', '*.jpeg', '*.webp'])
+    // pywebview kräver "Beskrivning (*.ext;*.ext)" — nakna '*.png' kastar
+    // tyst i _dialog och dialogen öppnas aldrig (F18-12-grannen).
+    const f = await valjFil('Välj tävlingslogga (bild)', ['Bilder (*.png;*.jpg;*.jpeg;*.webp)'])
     if (f.ok) { t.logga = f.path; tavlingar = tavlingar; gerTavling(t) }
   }
   async function nyttLag() {
