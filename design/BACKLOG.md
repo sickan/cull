@@ -16,6 +16,8 @@ uppdaterad till v4.*
 
 **VECKOPRIO (Stig 18/7 kväll): SM-PAKETET ✅ KOMPLETT 18/7** — CULL-02 sportneutral gallring ✅ + M18-9 hemresan ✅ (+ bifynd CULL-04 behåll-valet ✅). **B-012 skiva 1+2 ✅ samma kväll** (skiva 3 = skarpkörning m Z8, Stigs recept §8). Nästa: klockmodulen skarptest → B-012 skiva 3 → §11 (§10 helt klar).
 
+**KVÄLLENS SLUT 19/7 00:5x — allt committat+pushat i alla tre repon.** Utöver ovan: §10 skiva 3 (v36) · kategorifacit Sport/Landskap/Människor/Film + underkategorier (v37) · BUG-DEPLOY-01 (byggfelet var CF:s byggkö, sajten omkörd och live) · kopiera-knappar för Claude-texterna i Publicera. **Stigs kö:** DPT2-omstart (plockar v37) · verifiera ⌘C-vägen i kopiera-knapparna (bara fallbacken är bevisad) · B-012 skiva 3 (Z8-receptet) · M18-8 (vilken yta har gradienten?).
+
 **Stigs prio-signaler (16 jul):** ① buggar generellt först — särskilt att
 Innehåll inte känns robust (= dubbletterna/publiceringskedjan) · ② iOS
 trupp/startelvor inför FOTBOLLSHELGEN · ③ tennis under veckan · ④ B-003
