@@ -2828,13 +2828,14 @@ class TestSynkDelta(unittest.TestCase):
         def __init__(self):
             self.ids = []
             self.live = {}
+            self.roster = {}
             self.pushade = []
 
         def delta(self, sedan=None):
-            return (self.ids if sedan else [], "2026-07-18T12:00:00.000Z")
-
-        def hamta(self, mid):
-            return self.live.get(mid)
+            rader = [{"match_id": i, "live": self.live.get(i),
+                      "paket": {"roster": self.roster.get(i) or []}}
+                     for i in self.ids]
+            return (rader if sedan else [], "2026-07-18T12:00:00.000Z")
 
         def har_nyckel(self):
             return True
@@ -2870,3 +2871,39 @@ class TestSynkDelta(unittest.TestCase):
         self.fejk.ids = ["finns-inte"]
         r = self.api.synk_delta()
         self.assertEqual(r["andrade"], ["finns-inte"])   # signalen förmedlas ändå
+
+    def test_roster_reconcilieras_fran_mobilen(self):
+        # Trupp skiva 3: mobilens startelva (inkl. OCR-tillagd spelare) tas
+        # hem — annars klobbar nästa paket-push den (18/7: 0 startande).
+        self.api.spara_match({"id": self.mid, "lag_hemma": "Malmö FF",
+                              "lag_borta": "Bröndby IF", "datum": "2026-07-18",
+                              "sport": "fotboll",
+                              "spelare": [{"nr": "1", "namn": "Musovic",
+                                           "lag": "hemma", "start": False}]})
+        self.api.synk_delta()                     # baslinje
+        self.fejk.ids = [self.mid]
+        self.fejk.roster[self.mid] = [
+            {"nr": "1", "namn": "Musovic", "lag": "hemma", "start": True},
+            {"nr": "24", "namn": "Nora Hansson", "lag": "hemma", "start": True,
+             "position": "FW"},
+        ]
+        self.api.synk_delta()
+        m = store.hamta_match(self.api.conn, self.mid)
+        per = {s["namn"]: s for s in m["spelare"]}
+        self.assertTrue(per["Musovic"]["start"])              # mobilens elva vinner
+        self.assertIn("Nora Hansson", per)                     # OCR-spelaren inne
+        self.assertTrue(per["Nora Hansson"]["start"])
+
+    def test_identisk_roster_ar_noop(self):
+        self.api.spara_match({"id": self.mid, "lag_hemma": "Malmö FF",
+                              "lag_borta": "Bröndby IF", "datum": "2026-07-18",
+                              "sport": "fotboll",
+                              "spelare": [{"nr": "1", "namn": "Musovic",
+                                           "lag": "hemma", "start": True}]})
+        self.api.synk_delta()
+        self.fejk.ids = [self.mid]
+        self.fejk.roster[self.mid] = [
+            {"nr": "1", "namn": "Musovic", "lag": "hemma", "start": True}]
+        fore = store.hamta_match(self.api.conn, self.mid)["spelare"]
+        self.api.synk_delta()
+        self.assertEqual(store.hamta_match(self.api.conn, self.mid)["spelare"], fore)

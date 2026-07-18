@@ -156,9 +156,8 @@ class LiveSynk:
         status, data = self._anrop("GET", path)
         if status != 200 or not isinstance(data, dict):
             return [], None
-        ids = [m.get("match_id") for m in (data.get("matcher") or [])
-               if m.get("match_id")]
-        return ids, data.get("nu")
+        rader = [m for m in (data.get("matcher") or []) if m.get("match_id")]
+        return rader, data.get("nu")
 
     def hamta(self, match_id):
         """Live-state för en match, eller None. Tomt state → None (ej fel)."""

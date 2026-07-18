@@ -2905,20 +2905,23 @@ class Api:
         baslinjen (allt vore 'ändrat' = brus). UI:t pollar och laddar om
         berörda vyer, så mobilens ändringar syns utan öppen Publicera-panel."""
         forsta = self._synk_stampel is None
-        ids, nu = self.live_synk.delta(self._synk_stampel)
+        rader, nu = self.live_synk.delta(self._synk_stampel)
         if nu:
             self._synk_stampel = nu
         if forsta:
             return {"ok": nu is not None, "andrade": []}
-        # Applicera mobilens live-fält på lokala matchen (store-direkt, INTE
-        # satt_resultat — den skulle eka tillbaka till molnet och stämpla om
-        # fälten med desktop-tid, vilket kan klobba en färskare mobilskrivning).
-        for mid in ids:
+        ids = []
+        for rad in rader:
+            mid = rad.get("match_id")
+            ids.append(mid)
             try:
                 m = store.hamta_match(self.conn, mid)
-                live = self.live_synk.hamta(mid) if m else None
-                if not live:
+                if not m:
                     continue
+                # Live-fälten (store-direkt, INTE satt_resultat — den skulle
+                # eka tillbaka till molnet och stämpla om fälten med
+                # desktop-tid, vilket kan klobba en färskare mobilskrivning).
+                live = rad.get("live") or {}
                 falt = {}
                 if live.get("resultat") is not None:
                     falt["resultat"] = live["resultat"]
@@ -2932,9 +2935,37 @@ class Api:
                         falt.get("resultat", m.get("resultat") or ""),
                         falt.get("mellan", m.get("mellan") or ""),
                         falt.get("malskyttar", m.get("malskyttar") or ""))
+                # Trupp skiva 3: mobilens roster (OCR-elva, strykningar, nya
+                # spelare) reconcilieras in i matchtruppen — annars klobbar
+                # nästa paket-push mobilens val med desktopens gamla flaggor
+                # (18/7: Stigs OCR-elva blev 0 startande i molnet).
+                self._reconciliera_roster(mid, m, (rad.get("paket") or {}).get("roster"))
             except Exception:
                 continue   # en trasig match får inte stoppa deltan
         return {"ok": nu is not None, "andrade": ids}
+
+    def _reconciliera_roster(self, mid, m, moln_roster):
+        """Mobilens paket-roster → lokala matchtruppen. Mobilen är auktoritativ
+        för start/med och kan bära OCR-tillagda spelare; merge-logiken låter
+        nya vinna på start och behåller lokala extraspelare (start nollas).
+        No-op när rostern redan speglar lokala truppen (DPT2:s egen push)."""
+        if not moln_roster:
+            return
+        nya = [{"nr": s.get("nr") or "", "namn": s.get("namn") or "",
+                "lag": s.get("lag") or "hemma", "start": bool(s.get("start")),
+                "info": s.get("position") or ""}
+               for s in moln_roster if (s.get("namn") or "").strip()]
+        if not nya:
+            return
+        lokal = [{"nr": str(s.get("nr") or ""), "namn": s.get("namn") or "",
+                  "lag": s.get("lag") or "hemma", "start": bool(s.get("start"))}
+                 for s in (m.get("spelare") or [])]
+        moln = [{"nr": str(s["nr"] or ""), "namn": s["namn"],
+                 "lag": s["lag"], "start": s["start"]} for s in nya]
+        if {tuple(sorted(d.items())) for d in lokal} == \
+           {tuple(sorted(d.items())) for d in moln}:
+            return
+        store.merge_in_trupp(self.conn, mid, nya)
 
     def original_status(self):
         """Pågående/senaste hemhämtningens tillstånd (UI-poll)."""
