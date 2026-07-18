@@ -65,6 +65,7 @@ class Api:
         self._synk_stampel = None   # SYNK-DPT2: senaste delta-stämpeln (session)
         # Pågående hemhämtning (en åt gången) — UI:t pollar original_status().
         self._original_hamtning = {"pagar": False}
+        self._leverans = {"pagar": False}   # bakgrundsleveransens poll-status
 
     # ── Sportprofiler ────────────────────────────────────────────────────────
     def sportprofiler(self):
@@ -1265,7 +1266,8 @@ class Api:
                                if r["ok"] and res
                                else (r.get("fel") or "Kunde inte läsa nummer."))}
 
-    def _kopiera_urval(self, urval_id, behall_stems, export_rot=None, overskriv=False):
+    def _kopiera_urval(self, urval_id, behall_stems, export_rot=None,
+                       overskriv=False, progress=None):
         """Kopierar behållna bilder från urval till export-rot eller källmappen
         under 'urval/'. Returnerar (ut_dir_path, kopierade_filer) eller (None, [])."""
         import shutil
@@ -1325,7 +1327,9 @@ class Api:
             return None, []
 
         kopierade = []
-        for f in behall_fils:
+        for i, f in enumerate(behall_fils):
+            if progress:
+                progress(i + 1, len(behall_fils))
             try:
                 mal = ut_dir / f.name
                 shutil.copy2(f, mal)
@@ -1360,10 +1364,12 @@ class Api:
         except TypeError:
             shutil.rmtree(path, onerror=_losgor)
 
-    def leverera_urval(self, urval_id, config=None):
+    def leverera_urval(self, urval_id, config=None, _status=None):
         """Skriver XMP-sidecars för urvalets behållna bilder. Om export-rot är
-        angiven: kopierar filerna där först. Sätter status → levererad."""
+        angiven: kopierar filerna där först. Sätter status → levererad.
+        `_status` (bakgrundsvägen) fylls med fas/klara/totalt för UI-pollen."""
         config = config or {}
+        _status = _status if _status is not None else {}
         urval = store.hamta_urval(self.conn, urval_id)
         if not urval:
             return {"ok": False, "fel": "Okänt urval."}
@@ -1379,10 +1385,15 @@ class Api:
         export_rot = ((config.get("exportRot") or "").strip()
                       or self._malmapp("gallring"))
         if export_rot and behall_stems:
+            def _prog(i, n):
+                _status["fas"] = "Kopierar"
+                _status["klara"] = i
+                _status["totalt"] = n
             ut_dir, kopierade = self._kopiera_urval(
                 urval_id, behall_stems,
                 export_rot=export_rot,
-                overskriv=config.get("exportOverskriv", False))
+                overskriv=config.get("exportOverskriv", False),
+                progress=_prog)
             if ut_dir and not kopierade:
                 return {"ok": False, "fel": "Kunde inte kopiera några bilder till export-rot."}
 
@@ -1394,6 +1405,7 @@ class Api:
         if not filer:
             return {"ok": False, "fel": "Hittar inga bildfiler att leverera."}
 
+        _status["fas"] = "Skriver sidecars"
         res = leverera.skriv_sidecars(
             filer, husstil_path=(config.get("husstil") or None),
             exp_bump=float(config.get("expKnuff") or 0.0),
@@ -1431,6 +1443,40 @@ class Api:
         return {"ok": True, "status": "levererad", "path": str(ut_dir) if ut_dir else None,
                 "kopierade": len(kopierade), "skrivna": res["skrivna"], "ratade": res["ratade"],
                 "iptc": iptc_res["skrivna"]}
+
+    # ── Leverans i bakgrund (UI-progress) ────────────────────────────────────
+    # Kopiering av ett matchurval är gigabyte (225 NEF à 30 MB) — synkrona
+    # brygganropet gav bara "Levererar…" utan progress. UI:t startar här och
+    # pollar leverans_status(); de synkrona metoderna finns kvar (tester m.m.).
+
+    def leverera_urval_bakgrund(self, urval_id, config=None):
+        return self._leverans_bakgrund(
+            lambda st: self.leverera_urval(urval_id, config, _status=st))
+
+    def leverera_egen_mapp_bakgrund(self, mapp, config=None):
+        return self._leverans_bakgrund(
+            lambda st: self.leverera_egen_mapp(mapp, config))
+
+    def _leverans_bakgrund(self, fn):
+        if self._leverans.get("pagar"):
+            return {"ok": False, "fel": "En leverans pågår redan."}
+        status = {"pagar": True, "fas": "Förbereder", "klara": 0, "totalt": 0,
+                  "resultat": None}
+        self._leverans = status
+
+        def _kor():
+            try:
+                status["resultat"] = fn(status)
+            except Exception as e:
+                status["resultat"] = {"ok": False, "fel": str(e)}
+            finally:
+                status["pagar"] = False
+
+        threading.Thread(target=_kor, daemon=True).start()
+        return {"ok": True}
+
+    def leverans_status(self):
+        return dict(self._leverans)
 
     def leverera_egen_mapp(self, mapp, config=None):
         """§6: bildkälla i Leverera — 'Egen mapp' (t.ex. redan gallrat i Photo

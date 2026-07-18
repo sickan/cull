@@ -1,6 +1,7 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte'
-  import { listaUrval, levereraUrval, levereraEgenMapp, startaNummer, valjMapp, aktivtUrval, hamtaMalmappar } from '../lib/api.js'
+  import { listaUrval, levereraUrval, levereraEgenMapp, startaNummer, valjMapp, aktivtUrval, hamtaMalmappar,
+    levereraUrvalBakgrund, levereraEgenMappBakgrund, leveransStatus } from '../lib/api.js'
   import AktivMatchRad from '../lib/AktivMatchRad.svelte'
 
   const dispatch = createEventDispatcher()
@@ -45,13 +46,28 @@
     const r = await valjMapp('Välj mapp att leverera från')
     if (r.ok) egenMapp = r.path
   }
+  // Leveransen kör i BAKGRUNDSTRÅD (gigabyte kopieras) — pollen driver
+  // progressbaren tills resultatet landar.
+  let levProgress = null   // {fas, klara, totalt} under körning
   async function levereraNu() {
     if (!kanLevererera) return
-    levererar = true; status = ''
-    const r = bildkalla === 'gallra' ? await levereraUrval(mal.id, cfg) : await levereraEgenMapp(egenMapp, cfg)
-    levererar = false
-    status = r.ok ? (r.skrivna ? `${r.skrivna} sidecars skrivna.` : 'Levererat.') : (r.fel || 'Fel vid leverans.')
-    if (r.ok && bildkalla === 'gallra') { mal = { ...mal, status: 'levererad' }; dispatch('urval') }
+    levererar = true; status = ''; levProgress = null
+    const start = bildkalla === 'gallra'
+      ? await levereraUrvalBakgrund(mal.id, cfg)
+      : await levereraEgenMappBakgrund(egenMapp, cfg)
+    if (!start?.ok) { levererar = false; status = start?.fel || 'Kunde inte starta leveransen.'; return }
+    const poll = setInterval(async () => {
+      const st = await leveransStatus().catch(() => null)
+      if (!st) return
+      levProgress = { fas: st.fas, klara: st.klara, totalt: st.totalt }
+      if (!st.pagar) {
+        clearInterval(poll)
+        levererar = false; levProgress = null
+        const r = st.resultat || {}
+        status = r.ok ? (r.skrivna ? `${r.skrivna} sidecars skrivna.` : 'Levererat.') : (r.fel || 'Fel vid leverans.')
+        if (r.ok && bildkalla === 'gallra') { mal = { ...mal, status: 'levererad' }; dispatch('urval') }
+      }
+    }, 400)
   }
   async function korNummer() {
     if (!mal) return
@@ -130,6 +146,12 @@
 
     <div class="levrad">
       {#if status}<span class="ok">✓ {status}</span>{/if}
+      {#if levererar && levProgress}
+        <div class="levprog">
+          <div class="levbar"><div class="levfyll" style="width:{levProgress.totalt ? Math.round(levProgress.klara / levProgress.totalt * 100) : 5}%"></div></div>
+          <span class="levtxt">{levProgress.fas}{levProgress.totalt ? ` ${levProgress.klara}/${levProgress.totalt}` : '…'}</span>
+        </div>
+      {/if}
       <button class="prim" on:click={levereraNu} disabled={levererar || !kanLevererera}>{levererar ? 'Levererar…' : 'Leverera urval ›'}</button>
     </div>
   {/if}
@@ -188,4 +210,9 @@
   .ok { font-size: 12.5px; color: var(--ok); font-weight: 600; }
   .prim { background: var(--acc); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; }
   .prim:disabled { opacity: 0.5; }
+  /* Leveransprogress */
+  .levprog { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 160px; }
+  .levbar { flex: 1; height: 6px; border-radius: 4px; background: var(--div3); overflow: hidden; }
+  .levfyll { height: 100%; background: var(--acc); border-radius: 4px; transition: width 0.3s; }
+  .levtxt { font-size: 11px; color: var(--t-mut); white-space: nowrap; font-variant-numeric: tabular-nums; }
 </style>

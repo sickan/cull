@@ -1136,6 +1136,24 @@ export async function valjFil(titel = 'Välj fil', filter = null) {
   return wait(_promptPath(titel))
 }
 
+// Leveransprogress: starta i bakgrund + polla status.
+export async function levereraUrvalBakgrund(urvalId, cfg) {
+  const api = brygga()
+  if (api) return api.leverera_urval_bakgrund(urvalId, cfg)
+  return wait({ ok: true })
+}
+export async function levereraEgenMappBakgrund(mapp, cfg) {
+  const api = brygga()
+  if (api) return api.leverera_egen_mapp_bakgrund(mapp, cfg)
+  return wait({ ok: true })
+}
+export async function leveransStatus() {
+  const api = brygga()
+  if (api) return api.leverans_status()
+  return wait({ pagar: false, fas: 'Kopierar', klara: 8, totalt: 8,
+    resultat: { ok: true, skrivna: 8 } })
+}
+
 // FEAT-15: telefonens uppladdade original på molnets privata yta — lista,
 // hämta hem (bakgrund, polla status). Mock: en grupp med två NEF:er.
 let MOCK_ORIGINAL_STATUS = { pagar: false }
