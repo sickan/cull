@@ -35,6 +35,13 @@
   let mellan = ''
   let malskyttar = ''
   let savedAt = ''
+  // F18FM-1: per-fält-status — tom cirkel (ej ifyllt) · puls (osparat) ·
+  // grön bock (sparat). Snapshot av senast sparade värden är facit.
+  let sparatVals = { resultat: '', mellan: '', malskyttar: '' }
+  const faltStatus = (v, sp) => !(v || '').trim() ? 'tom' : v === sp ? 'sparad' : 'osparad'
+  $: st = { resultat: faltStatus(resultat, sparatVals.resultat),
+            mellan: faltStatus(mellan, sparatVals.mellan),
+            malskyttar: faltStatus(malskyttar, sparatVals.malskyttar) }
   let laddar = false     // sant medan lokala fält resyncas från en ny match — spärrar autospar
   let saveTimer = null
 
@@ -44,6 +51,7 @@
     resultat = match?.resultat || ''
     mellan = match?.mellan || ''
     malskyttar = match?.malskyttar || ''
+    sparatVals = { resultat, mellan, malskyttar }   // matchens värden ÄR sparade
     savedAt = ''
     // setTimeout(0): Sveltes reaktivitet flushar efter denna funktion (inte
     // mellan raderna i den), så en synkron laddar=false här hinner INTE
@@ -67,6 +75,7 @@
     if (e.resultat !== undefined) resultat = e.resultat
     if (e.mellan !== undefined) mellan = e.mellan
     if (e.malskyttar !== undefined) malskyttar = e.malskyttar
+    sparatVals = { resultat, mellan, malskyttar }   // mobilens värden är sparade
     setTimeout(() => (laddar = false), 0)
   }
 
@@ -83,6 +92,7 @@
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(async () => {
       await sattResultat(match.id, resultat, mellan, malskyttar)
+      sparatVals = { resultat, mellan, malskyttar }
       dispatch('sparat', { resultat, mellan, malskyttar })   // panelen kan rita om previews
       const d = new Date()
       savedAt = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -124,14 +134,16 @@
   <div class="remsa" style={remsaStil}>
     <div class="vanster">
       <Lagbricka namn={match.lag_hemma} farg={fargForLag(match.lag_hemma)} logga={loggaForLag(match.lag_hemma)} storlek={32} />
-      <input class="res scd" bind:value={resultat} placeholder={profil.res_ph} size="6" />
+      <input class="res scd" class:ifylld={st.resultat !== 'tom'} bind:value={resultat} placeholder="–:–" size="6" />
+      <span class="fstat {st.resultat}" title={st.resultat === 'sparad' ? 'Sparat' : st.resultat === 'osparad' ? 'Sparar…' : 'Ej ifyllt'}>{st.resultat === 'sparad' ? '✓' : ''}</span>
       <Lagbricka namn={match.lag_borta} farg={fargForLag(match.lag_borta)} logga={loggaForLag(match.lag_borta)} storlek={32} />
     </div>
     <div class="mitt">
       <div class="fixtur">{match.lag_hemma} – {match.lag_borta}</div>
       <div class="undertext">
         {profil.mid_label}
-        <input class="mid" bind:value={mellan} placeholder={profil.mid_ph} size="12" />
+        <input class="mid" class:ifylld={st.mellan !== 'tom'} bind:value={mellan} placeholder="–:–" size="12" />
+        <span class="fstat {st.mellan}" title={st.mellan === 'sparad' ? 'Sparat' : st.mellan === 'osparad' ? 'Sparar…' : 'Ej ifyllt'}>{st.mellan === 'sparad' ? '✓' : ''}</span>
         {#if match.liga}· {match.liga}{/if}
       </div>
     </div>
@@ -144,11 +156,12 @@
         {:else}
           {#each chips as c}<span class="chip">{c}</span>{/each}
           <button class="laggmal" on:click={oppnaScorers}>+ mål</button>
+          <span class="fstat {st.malskyttar}" title={st.malskyttar === 'sparad' ? 'Sparat' : st.malskyttar === 'osparad' ? 'Sparar…' : 'Ej ifyllt'}>{st.malskyttar === 'sparad' ? '✓' : ''}</span>
         {/if}
       </div>
     {:else}
       <div class="chips">
-        <input class="mid bred" bind:value={mellan} placeholder={profil.mid_ph} />
+        <input class="mid bred" class:ifylld={st.mellan !== 'tom'} bind:value={mellan} placeholder="–:–" />
       </div>
     {/if}
     <div class="hoger">
@@ -190,6 +203,18 @@
   .klar { font-size: 11px; font-weight: 600; color: var(--acc); background: transparent; border: none; cursor: pointer; }
   .hoger { display: flex; align-items: center; gap: 9px; flex: none; margin-left: auto; }
   .sparad { font-size: 10.5px; color: var(--ok); font-weight: 600; }
+  /* F18FM-1: tomt = streckad ram + dämpad placeholder; ifyllt = solid ram +
+     full kontrast. Indikatorn: tom cirkel → puls (sparar) → grön bock. */
+  .res::placeholder, .mid::placeholder { color: var(--t-help); opacity: 0.5; }
+  .res.ifylld, .mid.ifylld { border-bottom: 1px solid var(--t-mut); }
+  .fstat { width: 15px; height: 15px; border-radius: 50%; flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800; border: 1.5px solid var(--div);
+    color: transparent; }
+  .fstat.osparad { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 25%, transparent);
+    animation: fpuls 1.2s ease-in-out infinite; }
+  .fstat.sparad { border-color: var(--ok); background: var(--ok); color: #fff; }
+  @keyframes fpuls { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
   /* Närvaro (Del D). Sea-färg #9CC6E0 enligt Designs handoff — ren hex, samma
      i ljust och mörkt tema, precis som gren-paletten. */
   .mobilpill { display: inline-flex; align-items: center; gap: 5px;
