@@ -351,7 +351,8 @@ CREATE TABLE publicera_material (
   channels   TEXT,                       -- some: json-lista ['story','ig','fb']
   caption    TEXT,                       -- some: bildtext
   banor      TEXT,
-  referat    TEXT,   -- källfältet för webben (F18FM-2) — sociala texten är caption                       -- some: json {story:{mapp,bilder},ig:{...},fb:{...}}
+  referat    TEXT,   -- källfältet för webben (F18FM-2) — sociala texten är caption
+  publiceras TEXT,   -- schemalagd publiceringstidpunkt (§10 publiceringskön)                       -- some: json {story:{mapp,bilder},ig:{...},fb:{...}}
   ch_results TEXT,                       -- some: json {story:'ok'|'fail',ig:...,fb:...} — driver delvis-läget & retry
   uppdaterad TEXT NOT NULL
 );

@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 34
+SCHEMA_VERSION = 35
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -893,6 +893,14 @@ def _migrera(conn, fran_version):
         if (_har_tabell(conn, "publicera_material")
                 and not _har_kolumn(conn, "publicera_material", "referat")):
             conn.execute("ALTER TABLE publicera_material ADD COLUMN referat TEXT")
+
+    if fran_version < 35:
+        # v35 (UX-lyftet §10): publiceringskön — materialet kan schemaläggas
+        # (`publiceras` = ISO-tidpunkt). Steg 1 är manuell påminnelse i kön;
+        # auto-utskick per kanal är ett senare beslut (per handoffen).
+        if (_har_tabell(conn, "publicera_material")
+                and not _har_kolumn(conn, "publicera_material", "publiceras")):
+            conn.execute("ALTER TABLE publicera_material ADD COLUMN publiceras TEXT")
 
 
 def _har_kolumn(conn, tabell, kolumn):

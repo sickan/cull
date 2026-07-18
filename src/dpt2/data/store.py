@@ -1553,6 +1553,7 @@ def spara_publicera_material(conn, *, kind, status, match_id=None, match_namn=No
                              mal_typ="match", tavling_id=None,
                              moment=None, tema=None, dropbox=None, foto=None,
                              channels=None, caption=None, referat=None, banor=None,
+                             publiceras=None,
                              ch_results=None, historik_note=None,
                              id=None, uppdaterad=None):
     """Skapar (eller ersätter, om id anges) ett sparat material — utkast eller
@@ -1571,15 +1572,16 @@ def spara_publicera_material(conn, *, kind, status, match_id=None, match_namn=No
     conn.execute(
         "INSERT INTO publicera_material"
         "(id,kind,mal_typ,match_id,tavling_id,match_namn,status,moment,tema,dropbox,"
-        "foto,channels,caption,referat,banor,ch_results,uppdaterad) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+        "foto,channels,caption,referat,banor,ch_results,publiceras,uppdaterad) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, mal_typ=excluded.mal_typ, "
         "match_id=excluded.match_id, tavling_id=excluded.tavling_id, "
         "match_namn=excluded.match_namn, status=excluded.status, moment=excluded.moment, "
         "tema=excluded.tema, dropbox=excluded.dropbox, foto=excluded.foto, "
         "channels=excluded.channels, caption=excluded.caption, "
         "referat=excluded.referat, banor=excluded.banor, "
-        "ch_results=excluded.ch_results, uppdaterad=excluded.uppdaterad",
+        "ch_results=excluded.ch_results, publiceras=excluded.publiceras, "
+        "uppdaterad=excluded.uppdaterad",
         (mid, kind, mal_typ, match_id, tavling_id, match_namn, status, moment, tema,
          dropbox, foto,
          json.dumps(channels, ensure_ascii=False) if channels is not None else None,
@@ -1587,6 +1589,7 @@ def spara_publicera_material(conn, *, kind, status, match_id=None, match_namn=No
          referat,
          json.dumps(banor, ensure_ascii=False) if banor is not None else None,
          json.dumps(ch_results, ensure_ascii=False) if ch_results is not None else None,
+         publiceras,
          uppdaterad or _nu()))
     if status in ("publicerad", "delvis"):
         lagg_material_historik(conn, mid, status, note=historik_note or "")

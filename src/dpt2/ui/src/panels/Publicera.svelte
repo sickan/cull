@@ -97,9 +97,10 @@
     // Utan material: nollställ texten till mallen — förra matchens caption
     // ska inte läcka in i en färsk match. (Kanal-/bildval lämnas som de är —
     // fotografens arbetsinställningar, inte innehåll.)
-    if (!mt) { caption = CAPTION_DEFAULT; referat = ''; return }
+    if (!mt) { caption = CAPTION_DEFAULT; referat = ''; publiceras = ''; return }
     if (mt.caption) caption = mt.caption
     referat = mt.referat || ''
+    publiceras = mt.publiceras || ''
     const banor = mt.banor || {}
     const kanaler = mt.channels || []
     if (kanaler.length) {
@@ -329,6 +330,9 @@
   // F18FM-2: referatet är ett EGET källfält — webben byggs från det, aldrig
   // genom att strippa sociala texten (som läckte rubrikblock/länkrad/@?-taggar).
   let referat = ''
+  // §10 publiceringskön: schemalagd tidpunkt (fältdelta `publiceras`) —
+  // steg 1 = manuell påminnelse i kön, inget auto-utskick.
+  let publiceras = ''
   let capEl
   const TOKENS = ['{resultat}', '{målskyttar}', '{arena}', '{@lag}', '{galleri}', '{hemsida}']
   function insertToken(tok) {
@@ -481,7 +485,8 @@
     // gav en json-sträng inuti en json-sträng).
     const r = await sparaMaterial({ id: materialId || undefined,
       kind: 'some', status: 'utkast', ...malFalt,
-      match_namn: fixtur, caption, referat, channels: aktiva.map((k) => k.key), foto: coverPath,
+      match_namn: fixtur, caption, referat, publiceras: publiceras || null,
+      channels: aktiva.map((k) => k.key), foto: coverPath,
       // Bildval + kanalconfig följer med även i UTKAST (tidigare bara vid
       // publicering) — annars går bildvalet inte att återställa vid återbesök.
       banor: Object.fromEntries(aktiva.map((k) => [k.key, kanalConfig(k.key)])) })
@@ -592,7 +597,7 @@
     // Testläge persisterar aldrig material (samma kontrakt som lib/testlage.js).
     if (!test) {
       const r = await sparaUtfall({ id: materialId || undefined, ...malFalt,
-        match_namn: fixtur, caption, referat, foto: coverPath }, chRes, cfgs)
+        match_namn: fixtur, caption, referat, publiceras: publiceras || null, foto: coverPath }, chRes, cfgs)
       if (r?.ok) materialId = r.id
     }
   }
@@ -611,14 +616,25 @@
     return d ? `${d} ${MKR[m - 1]} ${(tid || '').slice(0, 5)}` : (iso || '')
   }
 
+  // §10: kön — schemalagda utkast överst (närmast tid först), sedan övrigt
+  // nyast först. Ett schemalagt material vars tid passerat är "försenat".
+  const arSchemalagd = (m) => m.status === 'utkast' && (m.publiceras || '').trim()
   $: matSorterat = [...(materials || [])]
-    .sort((a, b) => (b.uppdaterad || '').localeCompare(a.uppdaterad || ''))
+    .sort((a, b) => {
+      const sa = arSchemalagd(a), sb = arSchemalagd(b)
+      if (sa !== sb) return sa ? -1 : 1
+      if (sa && sb) return (a.publiceras || '').localeCompare(b.publiceras || '')
+      return (b.uppdaterad || '').localeCompare(a.uppdaterad || '')
+    })
   $: matFiltrerat = matSorterat.filter((m) => matFilter === 'alla' || m.status === matFilter)
   $: matVy = matFiltrerat.map((m) => {
     const chRes = m.ch_results || {}
     const cfgs = m.banor || {}
     const fel = felKanaler(chRes)
+    const schemalagd = arSchemalagd(m)
+    const forsenad = schemalagd && m.publiceras.replace(' ', 'T') < new Date().toISOString().slice(0, 16)
     return { ...m,
+      schemalagd, forsenad,
       titel: m.kind === 'live' ? `${m.moment || 'Story'}-story` : 'SoMe-paket',
       nar: nartext(m.uppdaterad),
       kanaler: m.channels || Object.keys(chRes),
@@ -656,7 +672,7 @@
     }
     // Historiken namnger vilka kanaler DETTA försök gällde — inte de som är kvar.
     await sparaUtfall({ id: mt.id, match_id: mt.match_id, match_namn: mt.match_namn,
-      caption: mt.caption, referat: mt.referat, foto: mt.foto }, nya, cfgs,
+      caption: mt.caption, referat: mt.referat, publiceras: mt.publiceras, foto: mt.foto }, nya, cfgs,
       `omförsök — ${fel.map((k) => KANALNAMN[k] || k).join(', ')}`)
     retryId = null
     if (!felKanaler(nya).length) {
@@ -1088,8 +1104,11 @@
               <!-- Klick öppnar materialets match med arbetsytan återställd -->
               <button class="matnamn" title="Öppna i arbetsytan"
                 on:click={async () => { if (mt.match_id) { await valjMatch(mt.match_id); mpTab = 'innehall' } }}>{mt.titel}</button>
-              <span class="matstatus" class:pub={mt.status === 'publicerad'} class:delvis={mt.status === 'delvis'}>
-                {STATUSTEXT[mt.status] || mt.status}
+              <span class="matstatus" class:pub={mt.status === 'publicerad'} class:delvis={mt.status === 'delvis'}
+                class:schemalagd={mt.schemalagd} class:forsenad={mt.forsenad}>
+                {mt.schemalagd
+                  ? (mt.forsenad ? `Dags att publicera · ${nartext(mt.publiceras)}` : `Schemalagd · ${nartext(mt.publiceras)}`)
+                  : (STATUSTEXT[mt.status] || mt.status)}
               </span>
               {#if mt.historik.length > 1}
                 <button class="histchip" on:click={() => toggleHistorik(mt.id)}>
@@ -1158,6 +1177,12 @@
     {/if}
   </div>
   {#if pubFlash}<span class="ok">✓ Utkast sparat</span>{/if}
+  <!-- §10: schemaläggning — sparas med utkastet, kön visar/påminner. -->
+  <label class="schemafalt" title="Schemalägg — materialet hamnar överst i kön och flaggas när tiden är inne (utskicket är fortfarande ditt knapptryck)">
+    <span>Publiceras</span>
+    <input type="datetime-local" bind:value={publiceras} />
+    {#if publiceras}<button class="schemarensa" on:click={() => (publiceras = '')} title="Rensa schemaläggningen">×</button>{/if}
+  </label>
   <button class="sek" on:click={spara} disabled={!match}>Spara utkast</button>
   <button class="prim" on:click={publicera} disabled={!match || !aktiva.length || pubKor}>{pubKor ? 'Publicerar…' : `Publicera ${aktiva.length}`}</button>
 </div>
@@ -1575,4 +1600,13 @@
   .ingsel { margin-top: 8px; }
   .ingrad { display: flex; gap: 8px; margin: 8px 0 10px; }
   .ingrad input { flex: 1; min-width: 0; }
+  /* §10: publiceringskön */
+  .schemafalt { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px;
+    color: var(--t-mut); font-weight: 600; }
+  .schemafalt input { padding: 6px 8px; border: 1px solid var(--div); border-radius: 8px;
+    background: var(--panel); color: var(--t-head); font-size: 12px; font-family: inherit; }
+  .schemarensa { border: none; background: none; color: var(--t-mut); font-size: 14px; cursor: pointer; padding: 0 2px; }
+  .matstatus.schemalagd { color: var(--acc); background: color-mix(in srgb, var(--acc) 13%, transparent); }
+  .matstatus.forsenad { color: #C0492F; background: rgba(192, 73, 47, 0.12); animation: fpuls2 1.4s ease-in-out infinite; }
+  @keyframes fpuls2 { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 </style>
