@@ -206,6 +206,15 @@ MFF–Bröndby 14:00 → snabba fixar 1/4/10/7 → formulärsvepet 5+6 → utred
 | F18-11 | Tydligare logotyp på startskärmen (iOS) | Vit logotyp (logotype_vit.png) m drop shadow, hästen bär hörnet, DPT sekundär; "v1.0 · build 1" → Inställningar. Viktig inför ★-bakgrunden (V5-D-resten) |
 | F18-13 | **NY: Ladda upp bilder från iOS-appen** in i matchens bildflöde | Avgränsning att bekräfta m Stig: matchbilder, lagloggor eller båda? Knyter an till original-bryggan (FEAT-15) och loggor→R2-blockeraren |
 
+## IB · iOS-backloggen 18/7 (källa: `~/Downloads/dpt2-ios-backlogg.md`)
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| IB-3 | **KRITISK: Loggor synkas inte till iOS** — appen faller tillbaka på initialer fast DPT2 har loggorna | = kända **loggor→R2-blockeraren** (FEAT-iOS-01, #27-polish, ML-E2). Verifiera server- vs appsida; löses troligen delvis av IB-4 men verifieras separat |
+| IB-1 | Trupp-OCR: inläsning körs mot valt lag + auto-komplettering (spelare i inläst elva som saknas i truppen läggs till, markerade för verifiering) | Bygger på trupp skiva 2 (18/7) |
+| IB-2 | Bilder → På telefonen: Töm-knapp m bekräftelse | Litet |
+| IB-4 | Robustare DPT2↔iOS-synk: silent push (`content-available:1`, payload `{match_id, changed}`) som signal + `updated_since`-delta vid start/förgrund; ev. WS/SSE i live-läge senare | Backend + iOS; APNs-infran finns (design-lyftet etapp 3) |
+
 ## G · Spikes DPT2
 
 SPIKE-01 importera spelschema → absorberad av F18-3 · SPIKE-03 ML/modell-bibliotek ·
