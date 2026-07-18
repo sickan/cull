@@ -145,6 +145,21 @@ class TestListaOchHough(unittest.TestCase):
         v = leverera.hough_vinkel(p)
         self.assertGreater(abs(v), 1.0)                # hittar lutningen
         self.assertLessEqual(abs(v), 5.0)              # klippt till ±5
+        # Linjen stiger åt höger (moturs-lutad horisont) → korrektionen ska
+        # vara MEDURS = negativ vinkel. Vaktar tecknet (var vänt före fixen).
+        self.assertLess(v, 0)
+
+    def test_hough_vinkel_tecken_at_andra_hallet(self):
+        import cv2
+        import numpy as np
+        from dpt2.tjanster import leverera
+        # linje som sluttar nedåt höger (medurs-lutad horisont)
+        img = np.full((400, 600, 3), 255, np.uint8)
+        cv2.line(img, (50, 285), (550, 320), (0, 0, 0), 3)
+        p = Path(tempfile.mkdtemp()) / "lutar2.jpg"
+        cv2.imwrite(str(p), img)
+        v = leverera.hough_vinkel(p)
+        self.assertGreater(v, 1.0)                     # moturs korrektion = positiv
 
     def test_hough_vinkel_oläsbar_fil(self):
         from dpt2.tjanster import leverera

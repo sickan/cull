@@ -116,8 +116,8 @@ def estetik_poang_bgr(img_bgr):
 
 
 def horisont_vinkel(path, max_grader=8.0):
-    """Returnerar upprätningsvinkel i grader (crs:StraightenAngle-konvention),
-    eller None om Vision inte hittar en horisont."""
+    """Returnerar upprätningsvinkel i grader (crs:CropAngle-/cv2-konvention,
+    positiv = moturs), eller None om Vision inte hittar en horisont."""
     try:
         import Vision
     except Exception:
@@ -135,8 +135,9 @@ def horisont_vinkel(path, max_grader=8.0):
         if not res:
             return None
         # VNHorizonObservation.angle() = horisontens lutning i radianer.
-        # Negativ för att rätta upp (samma konvention som Hough-vägen).
-        deg = -math.degrees(res[0].angle())
+        # Samma konvention som Hough-vägen (berakna_uppratning): lutningen
+        # oförändrad är korrektionsvinkeln — negeringen vände fel håll.
+        deg = math.degrees(res[0].angle())
         if abs(deg) > max_grader:
             return None   # orimligt → lita inte på den
         return float(deg)

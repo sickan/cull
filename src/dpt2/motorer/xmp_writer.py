@@ -98,7 +98,11 @@ def berakna_uppratning(img_bgr):
             vinklar.append(v)
     if not vinklar:
         return 0.0
-    return float(np.clip(-float(np.median(vinklar)), -5.0, 5.0))
+    # Linjens lutning i bildkoordinater (y nedåt) ÄR korrektionsvinkeln i både
+    # cv2:s och Lightrooms (crs:CropAngle) konvention: horisont som sluttar
+    # nedåt höger (positiv lutning) → positiv vinkel → moturs upprätning.
+    # Negeringen som låg här vände upprätningen åt fel håll.
+    return float(np.clip(float(np.median(vinklar)), -5.0, 5.0))
 
 
 def brus_av_iso(iso):
