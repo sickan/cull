@@ -234,6 +234,15 @@ splash, hemskärm, låsskärm, widget, jobbdetalj och som "levererad"-stämpel.
 (large/medium multi-target, small + låsskärm single → Jobb) · "dagen först" ·
 "heldag = bara dagen" · låsskärm monokrom utan kategorifärg · hemskärm ljus.*
 
+### C-iOS-F · Fältfynd 19/7 kväll (skarpt på Stigs telefon, jobb = Friidrotts-SM heldag)
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| F-1 | **Widgeten stod tom under mästerskap** — inget ÅK SENAST-block, ingen nedräkning, ingen temperatur | ✅ **LÖST 19/7** (ios `6cb2bba`, 165 gröna, INSTALLERAD+PUSHAD): roten var `SnapshotSkrivare` rad ~57 — restid räknades bara `if !j.heldag`, så ett heldagsjobb fick ALDRIG `akSenast`. **Ett heldagsjobb har ingen egen klocka, men dess deltillfällen har det.** Härledningen bor nu i `HemLogik.nastaSikte(event:matcher:)` som BÅDE `HemView.nasta` och `SnapshotSkrivare` läser (den låg inlinad i vyn förut) — fjärde dubbleringen som städats bort denna omgång. Nytt optionellt snapshotfält `siktarPa`/`maltid`; siktets egen arena vinner över eventets (en gren kan ligga på annan plan). **Presentationsinvarianten orörd** — heldag visar fortfarande bara dagen; heldag UTAN tidsatta punkter beter sig exakt som förut |
+| F-2 | **Cirkeln ritade grå placeholder-block + en båge** på låsskärmen | ✅ **LÖST 19/7** (samma commit): `placeholder(in:)` satte `akSenast = nu + 1 h` → nedräkningsfönster → en båge. WidgetKit renderar platshållaren med `.redacted(.placeholder)` så text/bild blir grå block — **men bågen redigeras INTE bort, för `ProgressView(timerInterval:)` ritar ur tiden, inte ur innehåll som går att gråmarkera.** Platshållaren bär ingen avgång längre. Dessutom skiljer sig `getSnapshot(in:)` nu från `placeholder(in:)` som den ska — exempelkortet visas bara i galleriet (`context.isPreview`); förut gav `DelatLager.las() ?? placeholder(...)` en påhittad match med påhittad restid när snapshotet inte gick att läsa. **Uteslutet hårt:** `HastOrange` finns i extensionens byggda `Assets.car` (verifierat m `assetutil`) — template-bilden var aldrig problemet |
+| F-3 | **Soltiderna räknades för `Date()` i stället för jobbets dygn** — ett jobb fem dagar bort visade DAGENS soluppgång som om den vore arenans den dagen | ✅ **LÖST 19/7** (samma commit). Bifynd |
+| F-4 | ⛔ **ÖPPET: väderremsan är tom i widgeten** (soltiderna syns, vädret inte) | **Horisonthypotesen MOTBEVISAD:** MET svarar utmärkt för Uppsala 24 juli (fyra punkter 00/06/12/18 UTC, 12:00Z = 22,2° "cloudy", serien går till 29 juli), och workern (`content-sync/src/vader.ts`) matchar med `narmast()` — inte exakt tidsstämpel — så en förfrågan blir aldrig tom av tidsskäl. Att soltiderna syns BEVISAR att arenakoordinaten var känd (båda räknas i samma `if let p = arena`), alltså gjordes väderanropen och kom tillbaka tomma. **Kvar att skilja på: saknad API-nyckel i Keychain · nätfel vid skrivtillfället · KV-cache (TTL 2 h) fylld med nullar.** Går inte att avgöra utan Stigs nyckel. **Ingen fallback byggd som döljer att vädret saknas** |
+
 ### C-iOS-H · Ny startskärm (hemskärmen/hjälten)
 
 | ID | Vad | Beroende |
