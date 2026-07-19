@@ -531,6 +531,29 @@ class TestLagTavling(unittest.TestCase):
         self.assertIsNone(lag["press_email"])
         self.assertIsNone(lag["ackr_dagar"])
 
+    def test_upsert_lag_anteckning(self):
+        # C12/M-1: anteckningen på utövaren följer samma fältkontrakt som
+        # ackrediteringsfälten — None rör inte, tom sträng rensar.
+        lid = store.upsert_lag(self.c, "Wilma Ek", kind="individ",
+                               klubb="Turebergs FK", anteckning="Vill ha låg vinkel")
+        self.assertEqual(store.hamta_lag(self.c, lid)["anteckning"],
+                         "Vill ha låg vinkel")
+        store.upsert_lag(self.c, "Wilma Ek", logga="/p.png")      # rör ej
+        self.assertEqual(store.hamta_lag(self.c, lid)["anteckning"],
+                         "Vill ha låg vinkel")
+        store.upsert_lag(self.c, "Wilma Ek", anteckning="")       # rensar
+        self.assertIsNone(store.hamta_lag(self.c, lid)["anteckning"])
+
+    def test_registret_bar_bada_slagen(self):
+        # M-1: ETT register — utövare och lag ligger i samma tabell och skiljs
+        # bara av kind. Registerlistan måste returnera båda.
+        store.upsert_lag(self.c, "Wilma Ek", kind="individ", gren="dam",
+                         klubb="Turebergs FK")
+        store.upsert_lag(self.c, "Malmö FF", kind="team", gren="herr",
+                         stall_hemma="#87CEEB", stall_borta="#16181C")
+        slag = {l["namn"]: l["kind"] for l in store.lista_lag(self.c)}
+        self.assertEqual(slag, {"Wilma Ek": "individ", "Malmö FF": "team"})
+
     def test_upsert_tavling_ackrediteringsregler(self):
         store.upsert_tavling(self.c, "OBOS Damallsvenskan", sport="fotboll",
                              press_email="press@obos.se", ackr_dagar=14)

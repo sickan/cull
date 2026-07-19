@@ -410,7 +410,8 @@ def facit_for_traning(conn):
 def upsert_lag(conn, namn, *, id=None, kind=None, sport=None, gren=None,
                logga=None, instagram=None, hemsida=None, stall_hemma=None,
                stall_borta=None, stall_tredje=None, profilfarg=None, klubb=None,
-               arkiverad=None, press_email=None, ackr_dagar=None):
+               arkiverad=None, press_email=None, ackr_dagar=None,
+               anteckning=None):
     """Skapar/uppdaterar ett lag. Tomma fält rör inte befintliga värden.
     kind = 'team' | 'individ' (lagsport vs utövare).
 
@@ -451,12 +452,13 @@ def upsert_lag(conn, namn, *, id=None, kind=None, sport=None, gren=None,
         conn.execute(
             "INSERT INTO lag(id,namn,kind,sport,gren,hemsida,instagram,logga,"
             "stall_hemma,stall_borta,stall_tredje,profilfarg,klubb,arkiverad,"
-            "press_email,ackr_dagar) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "press_email,ackr_dagar,anteckning) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (lid, namn, kind or "team", sport, gren, hemsida, instagram, logga,
              stall_hemma, stall_borta, stall_tredje, profilfarg, klubb,
              int(bool(arkiverad)),
-             (press_email or "").strip() or None, _heltal(ackr_dagar)))
+             (press_email or "").strip() or None, _heltal(ackr_dagar),
+             (anteckning or "").strip() or None))
     else:
         ny = {"namn": namn, "kind": kind, "sport": sport, "gren": gren,
               "hemsida": hemsida, "instagram": instagram, "logga": logga,
@@ -474,6 +476,9 @@ def upsert_lag(conn, namn, *, id=None, kind=None, sport=None, gren=None,
             satt["press_email"] = (press_email or "").strip() or None
         if ackr_dagar is not None:
             satt["ackr_dagar"] = _heltal(ackr_dagar)
+        # Anteckningen (M-1) följer samma kontrakt: '' rensar, None rör inte.
+        if anteckning is not None:
+            satt["anteckning"] = (anteckning or "").strip() or None
         if satt:
             kol = ", ".join(f"{k}=?" for k in satt)
             conn.execute(f"UPDATE lag SET {kol} WHERE id=?",

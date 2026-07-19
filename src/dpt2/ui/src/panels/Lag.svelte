@@ -25,6 +25,15 @@
   const TYP_ETIKETT = { liga: 'Liga', turnering: 'Turnering', masterskap: 'Mästerskap' }
   const GRENAR = ['dam', 'herr', 'mixed']
   const GREN_ETIKETT = { dam: 'Dam', herr: 'Herr', mixed: 'Mixed' }
+  // C12/M-1: ETT register, ett *Slag*-val som byter formulär. Slaget bor redan
+  // i lag.kind (team|individ, D11b §2 / schema v40) — detta är presentation.
+  const SLAG = [['alla', 'Alla'], ['individ', 'Utövare'], ['team', 'Lag']]
+  const SLAG_ETIKETT = { individ: 'Utövare', team: 'Lag' }
+  const SLAG_HINT = {
+    individ: 'individ i grenar — namn, klubb, klass, @-konto',
+    team: 'team — trupp, ställfärger, arkivera',
+  }
+  const slagAv = (l) => (l.kind === 'individ' ? 'individ' : 'team')
   const MK = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
 
   onMount(async () => {
@@ -115,7 +124,7 @@
   // ── Flikar, sök, gren-filter, A–Ö-sortering ────────────────────────────────
   let lagTab = 'lag'             // 'lag' | 'tavlingar'
   let lagSearch = ''
-  let lagGren = 'alla'           // 'alla' | 'dam' | 'herr' | 'mixed'
+  let lagSlag = 'alla'           // M-1: 'alla' | 'individ' (Utövare) | 'team' (Lag)
   let visaArkiv = false          // B1: växlar listan mellan aktiva och arkiverade
   const norm = (s) => (s || '').toLowerCase()
 
@@ -125,9 +134,11 @@
   // anropad funktion. Med closure-varianten (`filtreraLag(basLag)`) blev varken
   // gren-chipsen eller sökrutan en dependency → listan filtrerades aldrig om
   // fast chip/räknare uppdaterades. Explicita argument gör dem spårbara.
-  const filtreraLag = (lista, gren = lagGren, sok = lagSearch) => lista
-    .filter((l) => gren === 'alla' || l.gren === gren)
-    .filter((l) => !sok || norm(l.namn).includes(norm(sok)))
+  // M-1: filtret är SLAG (Alla/Utövare/Lag) och söket träffar namn ELLER klubb
+  // — registret är ett, och klubben är det man minns när namnet sviker.
+  const filtreraLag = (lista, slag = lagSlag, sok = lagSearch) => lista
+    .filter((l) => slag === 'alla' || slagAv(l) === slag)
+    .filter((l) => !sok || norm(`${l.namn} ${l.klubb || ''}`).includes(norm(sok)))
   // B1: gruppera efter sport för visning (fotboll/handboll/etc)
   function grupperaPerSport(lista) {
     const g = {}
@@ -145,13 +156,12 @@
   $: aktivaLag = lagSorterad.filter((l) => !l.arkiverad)
   $: arkiveradeLag = lagSorterad.filter((l) => l.arkiverad)
   $: basLag = visaArkiv ? arkiveradeLag : aktivaLag
-  $: lagGrenCounts = {
+  $: lagSlagCounts = {
     alla: basLag.length,
-    dam: basLag.filter((l) => l.gren === 'dam').length,
-    herr: basLag.filter((l) => l.gren === 'herr').length,
-    mixed: basLag.filter((l) => l.gren === 'mixed').length,
+    individ: basLag.filter((l) => slagAv(l) === 'individ').length,
+    team: basLag.filter((l) => slagAv(l) === 'team').length,
   }
-  $: lagFiltrerat = filtreraLag(basLag, lagGren, lagSearch)
+  $: lagFiltrerat = filtreraLag(basLag, lagSlag, lagSearch)
 
   // Ordningen FRYSES medan en rad redigeras: namn-sortering, sport-gruppering och
   // arkiv-filter är alla reaktiva på fälten man skriver i, så utan frysning
@@ -187,17 +197,8 @@
 
   // Tydlig tom-status: gren-filtret kan träffa 0 aktiva men N arkiverade
   // (upplevdes som en bugg — laget fanns, men bara i arkivet).
-  $: arkivTraff = filtreraLag(arkiveradeLag, lagGren, lagSearch).length
-  $: aktivTraff = filtreraLag(aktivaLag, lagGren, lagSearch).length
-
-  function hexToRgba(hex, a) {
-    const n = parseInt((hex || '').replace('#', ''), 16)
-    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`
-  }
-  function grenChipStil(g) {
-    if (g === 'alla' || lagGren !== g) return ''
-    return `color:${grenFarg(g)};background:${hexToRgba(grenFarg(g), 0.14)}`
-  }
+  $: arkivTraff = filtreraLag(arkiveradeLag, lagSlag, lagSearch).length
+  $: aktivTraff = filtreraLag(aktivaLag, lagSlag, lagSearch).length
 
   function periodText(t) {
     const f = t.fran || '', ti = t.till || ''
@@ -276,11 +277,12 @@
     if (e.key === 'Escape' && (teamOpen != null || compOpen != null)) stangRad()
   }
 
+  // Klassen (dam/herr/mixed) står ALDRIG som textetikett här — den bärs av
+  // avatarens färgkant (låst invariant). Meta = sport · klubb · trupp.
   function metaRad(l) {
     return [
-      SPORT_ETIKETT[l.sport], GREN_ETIKETT[l.gren],
-      l.kind === 'individ' ? 'Individ' : 'Lag',
-      l.trupp_n ? `${l.trupp_n} spelare` : null,
+      SPORT_ETIKETT[l.sport], l.klubb || null,
+      l.kind === 'individ' ? null : (l.trupp_n ? `${l.trupp_n} spelare` : null),
     ].filter(Boolean).join(' · ')
   }
   function tavlingNamn(tid) {
@@ -326,10 +328,14 @@
   }
   async function nyttLag() {
     const id = 'nytt-' + Date.now()
-    lag = [...lag, { id, namn: '', kind: 'team', sport: 'fotboll', gren: 'dam',
+    // Slaget följer det filter man står i — står man i Utövare vill man skapa
+    // en utövare. Under "Alla" är lag fortsatt det vanligaste.
+    const kind = lagSlag === 'individ' ? 'individ' : 'team'
+    lag = [...lag, { id, namn: '', kind, sport: 'fotboll', gren: 'dam',
       instagram: '', hemsida: '', logga: null, stall_hemma: '#2f7cb0',
       stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '#2f7cb0',
-      klubb: '', comps: [], arkiverad: false, press_email: '', ackr_dagar: null }]
+      klubb: '', comps: [], arkiverad: false, press_email: '', ackr_dagar: null,
+      anteckning: '' }]
     apnaLag({ id })
     // Direkt in i namnfältet — det är det enda obligatoriska på en ny post.
     await tick()
@@ -443,8 +449,8 @@
 
 <div class="panel">
   <header>
-    <h1 class="scd">Lag</h1>
-    <span class="sub">Registret som matcherna delar — loggor, hemsidor och Instagram. Tävlingar &amp; ligor redigeras under Tävlingar.</span>
+    <h1 class="scd">Lag &amp; Utövare</h1>
+    <span class="sub">Ett register — utövare och lag i samma lista, rätt fält per slag. Tävlingar &amp; ligor redigeras under Tävlingar.</span>
   </header>
 
   {#if laddar}
@@ -459,12 +465,12 @@
       <div class="toolrad">
         <div class="sokbox">
           <svg class="sokik" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-          <input bind:value={lagSearch} placeholder="Sök lag eller utövare…" />
+          <input bind:value={lagSearch} placeholder="Sök namn eller klubb…" />
         </div>
         <div class="grenchips">
-          {#each ['alla', ...GRENAR] as g (g)}
-            <button class="grenchip" class:on={lagGren === g} style={grenChipStil(g)} on:click={() => (lagGren = g)}>
-              {g === 'alla' ? 'Alla' : GREN_ETIKETT[g]} · {lagGrenCounts[g]}
+          {#each SLAG as [v, etikett] (v)}
+            <button class="grenchip" class:on={lagSlag === v} on:click={() => (lagSlag = v)}>
+              {etikett} · {lagSlagCounts[v]}
             </button>
           {/each}
         </div>
@@ -475,7 +481,7 @@
           </button>
         {/if}
         <!-- 7A: "+ Nytt" ligger i filterraden, utanför scroll-ytan. -->
-        <button class="ny irad" on:click={nyttLag}>+ Nytt lag</button>
+        <button class="ny irad" on:click={nyttLag}>+ Ny post</button>
       </div>
 
       {#if !lagGrupperat.length}
@@ -483,7 +489,7 @@
           <p class="tom">{aktivTraff} aktiva · {arkivTraff} arkiverade —
             <button class="tomlank" on:click={() => { visaArkiv = true; teamOpen = null }}>visa arkivet ›</button></p>
         {:else}
-          <p class="tom">{visaArkiv ? 'Inget arkiverat.' : 'Inga lag eller utövare hittades.'}</p>
+          <p class="tom">{visaArkiv ? 'Inget arkiverat.' : 'Inga poster i registret hittades.'}</p>
         {/if}
       {:else}
         <div class="lista">
@@ -499,13 +505,24 @@
             <div class="kkort" data-lagid={l.id} style={l.gren ? `border-left:3px solid ${grenFarg(l.gren)}` : ''}>
               <div class="krad" role="button" tabindex="0" on:click={(e) => apnaLag(l, e.currentTarget)}
                 on:keydown={(e) => e.key === 'Enter' && apnaLag(l, e.currentTarget)}>
-                <button class="logoslot" on:click|stopPropagation={() => valjLoggaLag(l)} title="Välj logga/porträtt">
-                  <Lagbricka namn={l.namn} farg={(l.kind === 'individ' ? l.profilfarg : l.stall_hemma) || '#8A8172'} logga={l.logga} storlek={28} />
+                <!-- M-1-avatarerna: utövare = cirkel med initialer + klass-
+                     färgkant (ingen kant när klassen är okänd); lag = rundad
+                     kvadrat med diagonal 50/50-gradient i ställfärgerna. -->
+                <button class="logoslot" class:kvadratslot={l.kind !== 'individ'}
+                  on:click|stopPropagation={() => valjLoggaLag(l)}
+                  title={l.kind === 'individ' ? 'Välj porträtt' : 'Välj lagemblem'}>
+                  {#if l.kind === 'individ'}
+                    <Lagbricka namn={l.namn} farg="#8A8172" logga={l.logga} storlek={28}
+                      kant={l.gren ? grenFarg(l.gren) : ''} />
+                  {:else}
+                    <Lagbricka namn={l.namn} form="kvadrat" logga={l.logga} storlek={28}
+                      farg={l.stall_hemma || '#8A8172'} farg2={l.stall_borta || ''} />
+                  {/if}
                 </button>
                 <div class="ktxt2">
                   <div class="rad1b">
-                    {#if l.gren}<span class="grenlbl2 scd" style="color:{grenFarg(l.gren)}">{GREN_ETIKETT[l.gren]}</span>{/if}
-                    <span class="namn2 scd">{l.namn || 'Namnlöst lag'}</span>
+                    <span class="namn2 scd">{l.namn || (l.kind === 'individ' ? 'Namnlös utövare' : 'Namnlöst lag')}</span>
+                    <span class="slaglbl">{SLAG_ETIKETT[slagAv(l)]}</span>
                   </div>
                   <div class="kmeta2">{[metaRad(l) || 'Ofullständig post', kopplingsText(l)].filter(Boolean).join(' · ')}</div>
                   {#if loggaVarningar[l.id]}
@@ -521,21 +538,37 @@
               {#if teamOpen === l.id}
                 <div class="inlineform">
                   <div class="falt">
-                    <div class="rad1">
+                    <!-- M-1: EN delad editor. Slag-valet byter formulär —
+                         utövaren får bara det som hör en person till. -->
+                    <div class="slagrad">
+                      <span class="lbl">Slag</span>
                       <div class="seg">
+                        <button class:on={l.kind === 'individ'} on:click={() => sattKind(l, 'individ')}>Utövare</button>
                         <button class:on={l.kind !== 'individ'} on:click={() => sattKind(l, 'team')}>Lag</button>
-                        <button class:on={l.kind === 'individ'} on:click={() => sattKind(l, 'individ')}>Individ</button>
+                      </div>
+                      <span class="slaghint">{SLAG_HINT[slagAv(l)]}</span>
+                    </div>
+
+                    <div class="rad1">
+                      <div class="portrattslot">
+                        {#if l.kind === 'individ'}
+                          <Lagbricka namn={l.namn} farg="#8A8172" logga={l.logga} storlek={40}
+                            kant={l.gren ? grenFarg(l.gren) : ''} />
+                        {:else}
+                          <Lagbricka namn={l.namn} form="kvadrat" logga={l.logga} storlek={40}
+                            farg={l.stall_hemma || '#8A8172'} farg2={l.stall_borta || ''} />
+                        {/if}
+                        <button class="bytbild" on:click={() => valjLoggaLag(l)}>
+                          {l.kind === 'individ' ? 'Byt porträtt…' : 'Byt lagemblem…'}
+                        </button>
                       </div>
                       <input class="namn-in scd" bind:value={l.namn} on:change={() => gerLag(l)}
                         placeholder={l.kind === 'individ' ? 'Namn' : 'Lagnamn'} />
-                      <div class="seg">
-                        {#each GRENAR as g}
-                          {#if g !== 'mixed' || l.kind !== 'individ'}
-                            <button class:on={l.gren === g} on:click={() => sattGren(l, g)}>{GREN_ETIKETT[g]}</button>
-                          {/if}
-                        {/each}
-                      </div>
                     </div>
+
+                    <input class="klubb-in" bind:value={l.klubb} on:change={() => gerLag(l)}
+                      placeholder={l.kind === 'individ' ? 'Klubb' : 'Förening / förbund'} />
+
                     <label class="sportrad">
                       <span class="lbl">Sport</span>
                       <select bind:value={l.sport} on:change={() => gerLag(l)}>
@@ -543,16 +576,59 @@
                         {#each SPORTER as s}<option value={s}>{SPORT_ETIKETT[s]}</option>{/each}
                       </select>
                     </label>
-                    <label class="arkivrad">
-                      <input type="checkbox" bind:checked={l.arkiverad} on:change={() => gerLag(l)} />
-                      <span class="lbl">Arkiverat</span>
-                      <span class="help">Göms i registret. Matcher som redan använder laget påverkas inte.</span>
-                    </label>
-                    <div class="dubbel">
-                      <input bind:value={l.hemsida} on:change={() => gerLag(l)} placeholder="Hemsida" />
-                      <input bind:value={l.instagram} on:change={() => gerLag(l)} placeholder="@instagram" />
-                    </div>
-                    {#if l.kind !== 'individ'}
+
+                    {#if l.kind === 'individ'}
+                      <!-- Klassen är PERSONENS egen (D12 fråga 8) — tävlingens/
+                           grenens klass bor på grenen. Färgstapel i knappen,
+                           aldrig en färgad textetikett. -->
+                      <div class="klassrad">
+                        <span class="lbl">Klass</span>
+                        <span class="klasshint">— personens egen</span>
+                        <div class="klassval">
+                          {#each ['dam', 'herr'] as g}
+                            <button class="klassknapp" class:on={l.gren === g} on:click={() => sattGren(l, g)}>
+                              <span class="klasstapel" style="background:{grenFarg(g)}"></span>{GREN_ETIKETT[g]}
+                            </button>
+                          {/each}
+                        </div>
+                      </div>
+
+                      <label class="handlerad">
+                        <span class="lbl">@-konto (Instagram)</span>
+                        <span class="handlefalt">
+                          <span class="atprefix">@</span>
+                          <input bind:value={l.instagram} on:change={() => gerLag(l)} placeholder="konto" />
+                        </span>
+                      </label>
+
+                      <label class="anteckningsrad">
+                        <span class="lbl">Anteckning</span>
+                        <textarea bind:value={l.anteckning} on:change={() => gerLag(l)} rows="2"
+                          placeholder="Fri anteckning — syns bara här."></textarea>
+                      </label>
+                      {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
+
+                      <!-- ── PLATS FÖR M-2 ────────────────────────────────────
+                           Här bygger M-2 sektionen "Tävlar i": HÄRLEDD ur
+                           disciplin_deltagare (gren m egen färgkant + "Del av
+                           {tävling}"), och den driver Kommande starter. Inget
+                           byggs här förrän dess — och den flata tävling-chippen
+                           kommer ALDRIG tillbaka på en utövare. -->
+                      <div class="tavlarplats">
+                        <div class="truppcaps">Tävlar i <span class="klasshint">härlett — kopplingen bor på grenen</span></div>
+                        <p class="tavlartext">Utövaren kopplas till <strong>grenen</strong> (dess klass syns där),
+                          inte via en lös tävling-chip. Byggs i M-2.</p>
+                      </div>
+                    {:else}
+                      <div class="rad1">
+                        <div class="seg">
+                          {#each GRENAR as g}
+                            <button class:on={l.gren === g} on:click={() => sattGren(l, g)}>{GREN_ETIKETT[g]}</button>
+                          {/each}
+                        </div>
+                        <input bind:value={l.hemsida} on:change={() => gerLag(l)} placeholder="Hemsida" />
+                        <input bind:value={l.instagram} on:change={() => gerLag(l)} placeholder="@instagram" />
+                      </div>
                       <!-- Ackreditering: i seriespel äger HEMMAKLUBBEN processen för
                            sina hemmamatcher — klubbens fält vinner över tävlingens
                            (som är fallback för mästerskap/turneringar). -->
@@ -560,16 +636,6 @@
                         <input bind:value={l.press_email} on:change={() => gerLag(l)} placeholder="Pressadress (ackreditering hemmamatcher)" />
                         <input bind:value={l.ackr_dagar} on:change={() => gerLag(l)} inputmode="numeric" placeholder="Ackr: dagar före match" />
                       </div>
-                    {/if}
-
-                    {#if l.kind === 'individ'}
-                      <div class="stall">
-                        <span class="lbl">Profil</span>
-                        <input type="color" bind:value={l.profilfarg} on:change={() => gerLag(l)} title="Profilfärg" />
-                        <input class="klubb" bind:value={l.klubb} on:change={() => gerLag(l)} placeholder="Klubb / land" />
-                        {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
-                      </div>
-                    {:else}
                       <div class="stall">
                         <span class="lbl">Ställ</span>
                         <input type="color" bind:value={l.stall_hemma} on:change={() => gerLag(l)} title="Hemma" />
@@ -623,28 +689,37 @@
                           {:else}<div class="trupphint">Sidan/filen tolkas och spelarna läggs i lagets trupp.</div>{/if}
                         </div>
                       {/if}
-                    {/if}
 
-                    <div class="kopplbox">
-                      <div class="truppcaps">Kopplad till liga / tävling / mästerskap</div>
-                      <div class="chips">
-                        {#each l.comps || [] as tid (tid)}
-                          <span class="chip">{tavlingChip(tid)}
-                            <button class="chipx" title="Koppla bort" on:click={() => kopplaBort(l, tid)}>×</button>
-                          </span>
-                        {/each}
-                        {#if (tavlingar.filter((t) => !(l.comps || []).includes(t.id))).length}
-                          <select class="chipny" value="" on:change={(e) => { kopplaTill(l, e.target.value); e.target.value = '' }}>
-                            <option value="" disabled>+ Koppla till…</option>
-                            {#each tavlingar.filter((t) => !(l.comps || []).includes(t.id)) as t (t.id)}
-                              <option value={t.id}>{tavlingEtikett(t)}</option>
-                            {/each}
-                          </select>
-                        {:else if !(l.comps || []).length}
-                          <span class="kmeta">Inga tävlingar i registret ännu.</span>
-                        {/if}
+                      <!-- Arkivera hör hemma HÄR: matchspråket ("matcher som
+                           redan använder laget påverkas inte") är lag-språk och
+                           läckte tidigare in på utövaren. -->
+                      <label class="arkivrad">
+                        <input type="checkbox" bind:checked={l.arkiverad} on:change={() => gerLag(l)} />
+                        <span class="lbl">Arkivera lag — göms i registret.</span>
+                        <span class="help">Matcher som redan använder laget påverkas inte.</span>
+                      </label>
+
+                      <div class="kopplbox">
+                        <div class="truppcaps">Kopplad till liga / tävling / mästerskap</div>
+                        <div class="chips">
+                          {#each l.comps || [] as tid (tid)}
+                            <span class="chip">{tavlingChip(tid)}
+                              <button class="chipx" title="Koppla bort" on:click={() => kopplaBort(l, tid)}>×</button>
+                            </span>
+                          {/each}
+                          {#if (tavlingar.filter((t) => !(l.comps || []).includes(t.id))).length}
+                            <select class="chipny" value="" on:change={(e) => { kopplaTill(l, e.target.value); e.target.value = '' }}>
+                              <option value="" disabled>+ Koppla till…</option>
+                              {#each tavlingar.filter((t) => !(l.comps || []).includes(t.id)) as t (t.id)}
+                                <option value={t.id}>{tavlingEtikett(t)}</option>
+                              {/each}
+                            </select>
+                          {:else if !(l.comps || []).length}
+                            <span class="kmeta">Inga tävlingar i registret ännu.</span>
+                          {/if}
+                        </div>
                       </div>
-                    </div>
+                    {/if}
                   </div>
                 </div>
                 <div class="formfot"><button class="klart" on:click={stangRad}>Klart</button></div>
@@ -821,11 +896,14 @@
   .krad { display: flex; align-items: center; gap: 12px; padding: 8px 12px; cursor: pointer; }
   .krad:hover { background: var(--div3); }
   .logoslot { border: 0; background: transparent; padding: 0; border-radius: 50%; flex: none; cursor: pointer; }
+  .logoslot.kvadratslot { border-radius: 8px; }
   .logoslot:hover { outline: 2px solid var(--acc); outline-offset: 1px; }
   .ktxt2 { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .rad1b { display: flex; align-items: center; gap: 7px; }
   .namn2 { font-size: 12.5px; font-weight: 700; color: var(--t-head); }
-  .grenlbl2 { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; flex: none; }
+  /* Slag-märket är neutralt grått — det kodar Utövare/Lag, inte klass. */
+  .slaglbl { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--t-mut); background: var(--div3); border-radius: 5px; padding: 2px 7px; flex: none; }
   .kmeta2 { font-size: 11px; color: var(--t-mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* M18-8: varning, inte fel — loggan ÄR sparad och renderas snyggt ändå. */
   .loggavarning { margin-top: 3px; font-size: 11px; line-height: 1.35; color: var(--varn, #C9871F); white-space: normal; }
@@ -854,6 +932,37 @@
   .chipny:hover { border-color: var(--acc); color: var(--acc); }
   .sportrad { display: flex; align-items: center; gap: 10px; }
   .sportrad select { flex: 1; min-width: 0; }
+
+  /* ── M-1: delad editor ─────────────────────────────────────────────────── */
+  .slagrad { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .slaghint { font-size: 11.5px; color: var(--t-help); }
+  .portrattslot { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: none; }
+  .bytbild { border: 0; background: none; padding: 0; font-size: 10.5px; color: var(--acc);
+    font-weight: 600; cursor: pointer; }
+  .klubb-in { width: 100%; box-sizing: border-box; }
+  .klassrad { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .klasshint { font-size: 11px; font-weight: 400; color: var(--t-help);
+    text-transform: none; letter-spacing: 0; }
+  .klassval { display: flex; gap: 8px; }
+  /* Klassen visas som färgSTAPEL i knappen — aldrig som färgad textetikett,
+     och ingen markör alls när klassen inte är satt (låst invariant). */
+  .klassknapp { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--div);
+    border-radius: 8px; background: var(--panel); color: var(--t-mut); padding: 7px 12px;
+    font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .klassknapp.on { background: var(--acc-soft); border-color: var(--acc-border); color: var(--t-head); }
+  .klasstapel { width: 3px; height: 14px; border-radius: 2px; flex: none; }
+  .handlerad, .anteckningsrad { display: flex; flex-direction: column; gap: 5px; }
+  .handlefalt { display: flex; align-items: center; gap: 0; border: 1px solid var(--div);
+    border-radius: 8px; background: var(--panel); overflow: hidden; max-width: 280px; }
+  .atprefix { padding: 0 4px 0 10px; font-size: 13px; color: var(--t-help); flex: none; }
+  .handlefalt input { border: 0; border-radius: 0; flex: 1; min-width: 0; padding-left: 2px; }
+  .anteckningsrad textarea { border: 1px solid var(--div); border-radius: 8px; background: var(--panel);
+    color: var(--t-head); font-family: inherit; font-size: 13px; padding: 8px 10px; resize: vertical; }
+  .anteckningsrad textarea:focus { outline: none; border-color: var(--acc); }
+  /* Plats för M-2 ("Tävlar i" — härlett ur disciplin_deltagare). */
+  .tavlarplats { border: 1px dashed var(--div); border-radius: 9px; background: var(--panel);
+    padding: 11px; display: flex; flex-direction: column; gap: 5px; }
+  .tavlartext { margin: 0; font-size: 12px; line-height: 1.45; color: var(--t-mut); }
   .arkivrad { display: flex; align-items: center; gap: 8px; }
   .arkivrad input[type="checkbox"] { flex: none; }
   .arkivrad .lbl { font-size: 13px; }
@@ -946,7 +1055,6 @@
   .seg button.on { background: var(--acc); color: var(--kort); }
 
   .stall { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .klubb { flex: 1; min-width: 120px; }
   .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.05em; color: var(--t-caps); }
   .lbl.mut { font-weight: 500; color: var(--t-help); text-transform: none; letter-spacing: 0; }

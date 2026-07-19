@@ -8,6 +8,14 @@
   export let farg = '#8A8172'
   export let logga = ''
   export let storlek = 34
+  // M-1 (registersammanslagning): brickan bär nu båda slagen.
+  //   form   — 'cirkel' (utövare/porträtt, oförändrat) | 'kvadrat' (lag/emblem)
+  //   farg2  — andra ställfärgen; satt → diagonal 50/50-gradient (lag-emblem)
+  //   kant   — klass-färgkant (dam/herr/mixed). ALDRIG textetikett, och ingen
+  //            kant alls när klassen är okänd (låst invariant).
+  export let form = 'cirkel'
+  export let farg2 = ''
+  export let kant = ''
 
   // Loggan (lokal sökväg) visas som data-URI — file:// blockeras i WKWebView.
   $: begarLogga(logga)
@@ -37,10 +45,16 @@
   $: harFlagga = !!flaggUri
   $: fgColor = lum(farg) > 0.6 ? 'rgba(24,22,18,.9)' : '#fff'
   $: initSize = Math.round(storlek * (init.length >= 4 ? 0.26 : 0.34))
+  // Emblemets yta: logga/flagga vinner alltid, annars ställfärgerna som
+  // diagonal 50/50 (två mättade färger — max enligt färgsystemet) eller en ton.
+  $: yta = harLogga || harFlagga
+    ? '#FBF8F1'
+    : (farg2 ? `linear-gradient(135deg, ${farg} 50%, ${farg2} 50%)` : farg)
+  $: kantStil = kant ? `border-left:3px solid ${kant};` : ''
 </script>
 
-<div class="bricka" title={namn}
-  style="width:{storlek}px;height:{storlek}px;background:{harLogga ? '#FBF8F1' : (harFlagga ? '#FBF8F1' : farg)}">
+<div class="bricka" class:kvadrat={form === 'kvadrat'} title={namn}
+  style="width:{storlek}px;height:{storlek}px;background:{yta};{kantStil}">
   {#if harLogga}
     <img src={loggaUri} alt="" style="width:78%;height:78%" />
   {:else if harFlagga}
@@ -51,6 +65,7 @@
 </div>
 
 <style>
+  .bricka.kvadrat { border-radius: 8px; }
   .bricka { border-radius: 50%; border: 1px solid var(--div); flex: none;
     display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .bricka img { object-fit: contain; display: block; }

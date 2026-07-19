@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 40
+SCHEMA_VERSION = 41
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -950,6 +950,11 @@ def _migrera(conn, fran_version):
         # event_deltagare pekas om till lag(id). individ-tabellen lämnas kvar som
         # alias tills alla läsare flyttats.
         _migrera_utovare(conn)
+    if fran_version < 41:
+        # v41 (C12/M-1): delad editor för ETT register — utövar-formuläret får
+        # ett Anteckning-fält. Additiv nullable kolumn, ingen modelländring.
+        if _har_tabell(conn, "lag") and not _har_kolumn(conn, "lag", "anteckning"):
+            conn.execute("ALTER TABLE lag ADD COLUMN anteckning TEXT")
 
 
 def _har_kolumn(conn, tabell, kolumn):

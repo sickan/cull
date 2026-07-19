@@ -165,7 +165,9 @@ CREATE TABLE lag (
   press_email  TEXT,                     -- klubbens press/ackrediteringsadress
                                          -- (hemmaklubben äger seriematcherna;
                                          -- vinner över tävlingens fält)
-  ackr_dagar   INTEGER                   -- klubbens "begär senast"-dagar
+  ackr_dagar   INTEGER,                  -- klubbens "begär senast"-dagar
+  anteckning   TEXT                      -- fri anteckning i registret (M-1);
+                                         -- utövarens fältnot, aldrig publicerad
 );
 
 -- Vilka lag som deltar i en tävling (tävling äger sina lag). Fyller lagväljaren

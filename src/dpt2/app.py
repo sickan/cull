@@ -609,7 +609,8 @@ class Api:
             profilfarg=lag.get("profilfarg"), klubb=lag.get("klubb"),
             arkiverad=lag.get("arkiverad"),
             press_email=lag.get("press_email"),
-            ackr_dagar=lag.get("ackr_dagar"))
+            ackr_dagar=lag.get("ackr_dagar"),
+            anteckning=lag.get("anteckning"))
         return {"ok": bool(lid), "id": lid,
                 "logga_varning": _logga_varning(lag.get("logga"))}
 
