@@ -1749,13 +1749,13 @@ def sok_globalt(conn, q, grans=8):
     return ut
 
 
-def utovare_starter(conn, utovare_id):
-    """Utövarens starter — HÄRLEDDA pass i alla grenar hen är kopplad till (via
-    disciplin_deltagare eller event_deltagare.grenar), med tävlingskontext.
-    Sorterat på datum+tid. Aldrig lagrat på utövaren — alltid frågat.
+def utovare_discipliner(conn, utovare_id):
+    """EN härledning av vilka grenar en utövare är kopplad till — `disciplin_
+    deltagare` är kopplingen (C12/M-2), `event_deltagare.grenar` läses med som
+    kvarleva från övergången.
 
-    UI:t avgör själv vad som är 'kommande' (mot dagens datum) — store känner
-    inte till 'idag' (skulle bryta reproducerbara tester)."""
+    Både "Tävlar i" (editorn) och "Kommande starter" (utövarsidan) går genom
+    den här mängden, så de två vyerna aldrig kan säga olika saker."""
     disc = set()
     for r in conn.execute(
             "SELECT disciplin_id FROM disciplin_deltagare WHERE lag_id=?",
@@ -1764,6 +1764,67 @@ def utovare_starter(conn, utovare_id):
     for r in conn.execute(
             "SELECT grenar FROM event_deltagare WHERE lag_id=?", (utovare_id,)):
         disc.update(json.loads(r["grenar"] or "[]"))
+    return disc
+
+
+def utovare_grenar(conn, utovare_id):
+    """C12/M-2: sektionen "Tävlar i" — HÄRLEDD ur grendeltagandet, aldrig
+    lagrad på personen (den flata tävling-chippen finns inte längre).
+
+    En rad per gren: grenens namn, **grenens EGEN klass** (`disciplin.gren` —
+    personens klass bor på personen och blandas aldrig in här), tävlingen den
+    är del av, och grenens pass. UI:t avgör själv vad som är nästa start eller
+    avslutat; store känner inte till 'idag'."""
+    disc = utovare_discipliner(conn, utovare_id)
+    if not disc:
+        return []
+    qm = ",".join("?" * len(disc))
+    rader = [dict(r) for r in conn.execute(
+        "SELECT d.id AS disciplin_id, d.namn AS gren, d.gren AS klass, "
+        "d.typ, d.tavling_id, COALESCE(e.namn, t.namn) AS tavling, "
+        "COALESCE(e.fran, t.fran) AS tavling_fran, "
+        "COALESCE(e.till, t.till) AS tavling_till "
+        "FROM disciplin d "
+        "LEFT JOIN event e ON e.id=d.tavling_id "
+        "LEFT JOIN tavling t ON t.id=d.tavling_id "
+        f"WHERE d.id IN ({qm}) "
+        "ORDER BY COALESCE(e.fran, t.fran, ''), tavling, d.ordning, d.namn",
+        tuple(disc))]
+    for g in rader:
+        g["pass"] = lista_pass(conn, g["disciplin_id"])
+    return rader
+
+
+def gren_kandidater(conn, utovare_id=None, sport=None):
+    """Grenar att koppla en utövare till ("+ Koppla till en gren…").
+
+    Redan kopplade grenar utelämnas — knappen ska bara erbjuda det som går att
+    lägga till. `sport` filtrerar på tävlingens sport när den är känd."""
+    redan = utovare_discipliner(conn, utovare_id) if utovare_id else set()
+    rader = [dict(r) for r in conn.execute(
+        "SELECT d.id AS disciplin_id, d.namn AS gren, d.gren AS klass, "
+        "d.tavling_id, COALESCE(e.namn, t.namn) AS tavling, "
+        "COALESCE(e.sport, t.sport) AS sport, "
+        "COALESCE(e.fran, t.fran) AS tavling_fran "
+        "FROM disciplin d "
+        "LEFT JOIN event e ON e.id=d.tavling_id "
+        "LEFT JOIN tavling t ON t.id=d.tavling_id "
+        "ORDER BY COALESCE(e.fran, t.fran, ''), tavling, d.ordning, d.namn")]
+    return [r for r in rader
+            if r["disciplin_id"] not in redan
+            and (not sport or not r["sport"] or r["sport"] == sport)]
+
+
+def utovare_starter(conn, utovare_id):
+    """Utövarens starter — HÄRLEDDA pass i alla grenar hen är kopplad till,
+    med tävlingskontext. Sorterat på datum+tid. Aldrig lagrat på utövaren.
+
+    Samma grenmängd som "Tävlar i" (`utovare_discipliner`) — utövarsidan och
+    editorn får aldrig ha var sin härledning.
+
+    UI:t avgör själv vad som är 'kommande' (mot dagens datum) — store känner
+    inte till 'idag' (skulle bryta reproducerbara tester)."""
+    disc = utovare_discipliner(conn, utovare_id)
     if not disc:
         return []
     qm = ",".join("?" * len(disc))

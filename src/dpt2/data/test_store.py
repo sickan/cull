@@ -2142,6 +2142,71 @@ class TestUtovareStarter(unittest.TestCase):
         self.assertEqual(store.utovare_starter(self.c, ovrig), [])
 
 
+class TestUtovareGrenar(unittest.TestCase):
+    """C12/M-2 — "Tävlar i": härledd ur disciplin_deltagare, aldrig lagrad."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.ev = store.upsert_tavling(self.c, "SM 2026", sport="friidrott",
+                                       typ="masterskap", fran="2026-07-24",
+                                       till="2026-07-26")
+        # Grenen bär sin EGEN klass — 100 m dam och 100 m herr är två grenar.
+        self.dam = store.upsert_disciplin(self.c, self.ev, "100 m", gren="dam")
+        self.herr = store.upsert_disciplin(self.c, self.ev, "200 m", gren="herr")
+        self.lid = store.upsert_lag(self.c, "Anna Andersson", kind="individ",
+                                    sport="friidrott")
+        store.koppla_disciplin_deltagare(self.c, self.dam, self.lid)
+
+    def test_raden_bar_grenens_egen_klass_och_tavlingen(self):
+        store.upsert_pass(self.c, self.dam, "Final", "2026-07-25", tid="20:25")
+        g = store.utovare_grenar(self.c, self.lid)
+        self.assertEqual(len(g), 1)
+        self.assertEqual(g[0]["gren"], "100 m")
+        self.assertEqual(g[0]["klass"], "dam")           # GRENENS klass
+        self.assertEqual(g[0]["tavling"], "SM 2026")     # "Del av {tävling}"
+        self.assertEqual([(p["namn"], p["tid"]) for p in g[0]["pass"]],
+                         [("Final", "20:25")])
+
+    def test_personens_klass_smittar_aldrig_grenraden(self):
+        # Utövaren är dam men kopplas (av misstag eller för att hen tävlar i
+        # herrklass) till en herr-gren: raden ska bära GRENENS klass.
+        store.upsert_lag(self.c, "Anna Andersson", id=self.lid, kind="individ",
+                         gren="dam")
+        store.koppla_disciplin_deltagare(self.c, self.herr, self.lid)
+        klasser = {g["gren"]: g["klass"]
+                   for g in store.utovare_grenar(self.c, self.lid)}
+        self.assertEqual(klasser, {"100 m": "dam", "200 m": "herr"})
+
+    def test_kopplingen_ar_enda_sanningen_och_gar_att_ta_bort(self):
+        store.koppla_disciplin_deltagare(self.c, self.dam, self.lid, pa=False)
+        self.assertEqual(store.utovare_grenar(self.c, self.lid), [])
+        self.assertEqual(store.utovare_starter(self.c, self.lid), [])
+
+    def test_tavlar_i_och_kommande_starter_delar_harledning(self):
+        """Låst invariant: två vyer, en härledning — aldrig var sin."""
+        store.upsert_pass(self.c, self.dam, "Försök", "2026-07-24", tid="09:00")
+        store.koppla_disciplin_deltagare(self.c, self.herr, self.lid)
+        store.upsert_pass(self.c, self.herr, "Final", "2026-07-26", tid="18:00")
+        ur_grenar = {g["gren"] for g in store.utovare_grenar(self.c, self.lid)}
+        ur_starter = {s["gren"] for s in store.utovare_starter(self.c, self.lid)}
+        self.assertEqual(ur_grenar, ur_starter)
+
+    def test_kandidater_utelamnar_redan_kopplade(self):
+        k = store.gren_kandidater(self.c, self.lid)
+        self.assertEqual([r["gren"] for r in k], ["200 m"])
+        self.assertEqual(k[0]["tavling"], "SM 2026")
+        # Utan utövare: alla grenar är kandidater.
+        self.assertEqual(len(store.gren_kandidater(self.c)), 2)
+
+    def test_kandidater_filtrerar_pa_sport(self):
+        cup = store.upsert_tavling(self.c, "Vinter-cup", sport="tennis",
+                                   typ="turnering")
+        store.upsert_disciplin(self.c, cup, "Singel")
+        grenar = {r["gren"] for r in
+                  store.gren_kandidater(self.c, self.lid, sport="friidrott")}
+        self.assertEqual(grenar, {"200 m"})
+
+
 class TestSokGlobalt(unittest.TestCase):
     """D11b §4 — ⌘K-index över utövare · tävling · fotojobb · gren."""
 

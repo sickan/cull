@@ -431,11 +431,11 @@ export async function sattDeltagareHandle(deltagareId, handle) {
 
 // ── Discipliner (B-001): tävlingens grenar + deltagare per gren ─────────────
 let MOCK_DISCIPLINER = [
-  { id: 'disc_langd', tavling_id: 'friidrotts-sm', namn: 'Längd', typ: 'hoppkast', ordning: 0,
+  { id: 'disc_langd', tavling_id: 'friidrotts-sm', namn: 'Längd', typ: 'hoppkast', ordning: 0, gren: 'dam',
     deltagare: [{ id: 'alva-hoppare', namn: 'Alva Hoppare', klubb: 'Malmö AI', gren: 'dam',
       instagram: '@alva_hoppare' }] },
   { id: 'disc_invigning', tavling_id: 'friidrotts-sm', namn: 'Invigning', typ: 'hoppkast', ordning: 2, deltagare: [] },
-  { id: 'disc_100m', tavling_id: 'friidrotts-sm', namn: '100 m', typ: 'sprint', ordning: 1,
+  { id: 'disc_100m', tavling_id: 'friidrotts-sm', namn: '100 m', typ: 'sprint', ordning: 1, gren: 'dam',
     deltagare: [{ id: 'siri-snabb', namn: 'Siri Snabb', klubb: 'IF Göta', gren: 'dam',
       instagram: '@siri_snabb' },
       { id: 'nora-nord', namn: 'Nora Nord', klubb: 'Upsala IF', gren: 'dam' }] },
@@ -590,6 +590,39 @@ export async function kopplaDisciplinDeltagare(disciplinId, lagId, pa = true) {
     }
   }
   return wait({ ok: true })
+}
+
+// ── C12/M-2: "Tävlar i" — härlett ur grendeltagandet ───────────────────────
+// Samma härledning som utövarsidans Kommande starter (store.utovare_
+// discipliner). Mockläget bygger den ur MOCK_DISCIPLINER + MOCK_PASS på samma
+// sätt som store gör ur databasen — inget lagras på personen.
+function _mockGrenrad(d) {
+  const t = MOCK_TAVLINGAR.find((x) => x.id === d.tavling_id)
+  return {
+    disciplin_id: d.id, gren: d.namn, klass: d.gren || null, typ: d.typ,
+    tavling_id: d.tavling_id, tavling: t?.namn || '', tavling_fran: t?.fran || '',
+    tavling_till: t?.till || '',
+    pass: MOCK_PASS.filter((p) => p.disciplin_id === d.id)
+      .sort((a, b) => (a.datum + (a.tid || '99:99')).localeCompare(b.datum + (b.tid || '99:99'))),
+  }
+}
+
+export async function utovareGrenar(utovareId) {
+  const api = brygga()
+  if (api) return api.utovare_grenar(utovareId)
+  return wait(structuredClone(MOCK_DISCIPLINER
+    .filter((d) => (d.deltagare || []).some((x) => x.id === utovareId))
+    .map(_mockGrenrad)))
+}
+
+export async function grenKandidater(utovareId = null, sport = null) {
+  const api = brygga()
+  if (api) return api.gren_kandidater(utovareId, sport)
+  return wait(structuredClone(MOCK_DISCIPLINER
+    .filter((d) => !(d.deltagare || []).some((x) => x.id === utovareId))
+    .map(_mockGrenrad)
+    .filter((r) => !sport || !r.tavling_id
+      || (MOCK_TAVLINGAR.find((t) => t.id === r.tavling_id)?.sport || sport) === sport)))
 }
 
 export async function listaTavlingar() {

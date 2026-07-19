@@ -109,11 +109,48 @@ class TestDeladEditor(unittest.TestCase):
                        "Matcher som redan använder laget påverkas inte."):
             self.assertIn(markor, LAG, markor)
 
-    def test_plats_lamnad_for_m2(self):
-        # "Tävlar i" byggs i M-2 (härlett ur disciplin_deltagare) — platsen ska
-        # finnas, men ingen flat tävling-chip på personen.
-        self.assertIn("Tävlar i", LAG)
-        self.assertIn("tavlarplats", LAG)
+
+class TestTavlarI(unittest.TestCase):
+    """C12/M-2: "Tävlar i" — härledd ur disciplin_deltagare, gren-först."""
+
+    def test_sektionen_ar_harledd_ur_grenkopplingen(self):
+        u = _utovargrenen(LAG)
+        self.assertIn("Tävlar i", u)
+        self.assertIn("härlett — kopplingen bor på grenen", u)
+        # Raderna kommer ur backend-härledningen, inte ur något på personen.
+        self.assertIn("utovareGrenar", LAG)
+        self.assertIn("tavlarI[l.id]", u)
+
+    def test_raden_bar_grenens_egen_klass_som_kant(self):
+        # Grenens klass (g.klass), inte personens (l.gren) — och ingen kant
+        # alls när grenens klass är okänd (låst invariant).
+        self.assertIn("const grenRadStil = (g) => g.klass ? "
+                      "`border-left:3px solid ${grenFarg(g.klass)}` : ''", LAG)
+
+    def test_del_av_tavlingen_star_aldrig_lost(self):
+        # "Del av {tävling}" hör ihop med grenraden och skrivs bara ut när
+        # tävlingen är känd.
+        self.assertIn("{#if g.tavling}<div class=\"grendel\">Del av "
+                      "{g.tavling}</div>{/if}", LAG)
+
+    def test_kopplingsknappen_gar_via_grenen(self):
+        self.assertIn("+ Koppla till en gren…", LAG)
+        self.assertIn("kopplaDisciplinDeltagare(disciplinId, l.id, true)", LAG)
+
+    def test_flata_tavlingchippen_kommer_inte_tillbaka(self):
+        u = _utovargrenen(LAG)
+        for lackage in ("kopplbox", "kopplaTill(", "l.comps"):
+            self.assertNotIn(lackage, u, lackage)
+
+    def test_kommande_starter_delar_harledning(self):
+        # Utövarsidan och editorn får inte ha var sin härledning: båda går
+        # genom store.utovare_discipliner.
+        store = (Path(__file__).parent / "data" / "store.py").read_text(
+            encoding="utf-8")
+        for fn in ("def utovare_grenar", "def utovare_starter"):
+            kropp = store[store.index(fn):]
+            kropp = kropp[:kropp.index("\ndef ", 5)]
+            self.assertIn("utovare_discipliner(conn, utovare_id)", kropp, fn)
 
 
 class TestRegisterlistan(unittest.TestCase):

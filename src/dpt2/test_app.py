@@ -2315,6 +2315,26 @@ class TestEventSektion(unittest.TestCase):
                          ["pagang_lage"], "heldag")
         self.assertFalse(self.api.satt_event_pagang_lage(self.sm, "x")["ok"])
 
+    def test_tavlar_i_via_api(self):
+        # C12/M-2: editorns "Tävlar i" och utövarsidans Kommande starter går
+        # genom SAMMA härledning — API:t får inte bygga två sanningar.
+        gid = self.api.spara_disciplin({"tavling_id": self.sm, "namn": "Stav",
+                                        "gren": "herr"})["id"]
+        lid = store.upsert_lag(self.api.conn, "E. Andersson", kind="individ",
+                               sport="friidrott", gren="dam")
+        self.assertEqual([k["gren"] for k in self.api.gren_kandidater(lid)
+                          if k["disciplin_id"] == gid], ["Stav"])
+        store.koppla_disciplin_deltagare(self.api.conn, gid, lid)
+        g = self.api.utovare_grenar(lid)
+        self.assertEqual([(x["gren"], x["klass"]) for x in g], [("Stav", "herr")])
+        # Kopplad gren är inte längre kandidat
+        self.assertNotIn(gid, [k["disciplin_id"]
+                               for k in self.api.gren_kandidater(lid)])
+        # Utövarsidan ser samma gren via sina starter
+        store.upsert_pass(self.api.conn, gid, "Final", "2026-07-25", tid="20:25")
+        self.assertEqual([s["gren"] for s in
+                          self.api.hamta_utovare(lid)["starter"]], ["Stav"])
+
     def test_individ_deltagare_och_grenbron(self):
         # Skiva 1.5 (Stigs fynd): Deltagare-kortet måste se B-001:s befintliga
         # gren-deltagare (lag-rader via disciplin_deltagare), sök måste hitta

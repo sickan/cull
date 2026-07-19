@@ -5,6 +5,7 @@
     valjFil, lasLagTrupp, hamtaLagTrupp, sparaSpelare, raderaSpelare,
     laggTavlingIKalender, taBortTavlingUrKalender, kopplaLagTavling,
     listaDiscipliner, sparaDisciplin, raderaDisciplin, kopplaDisciplinDeltagare,
+    utovareGrenar, grenKandidater,
   } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import Lagbricka from '../lib/Lagbricka.svelte'
@@ -113,6 +114,8 @@
     if (kind === 'individ' && l.gren === 'mixed') l.gren = null  // mixed bara team
     lag = lag                     // trigga re-render av villkorsfälten
     gerLag(l)
+    // "Tävlar i" är härlett — hämta det när posten blir en utövare.
+    if (kind === 'individ') sparKo.then(() => laddaTavlarI(l))
   }
   function sattGren(l, gren) {
     if (l.gren === gren) return
@@ -217,6 +220,7 @@
   function apnaLag(l, rad = null) {
     if (teamOpen === l.id) { stangLagRedigering(); return }
     teamOpen = l.id; compOpen = null
+    if (l.kind === 'individ') laddaTavlarI(l)
     fangaOrdning()                 // lås listordningen medan raden är öppen
     radTillToppen(rad)
   }
@@ -276,6 +280,52 @@
   function onKeydown(e) {
     if (e.key === 'Escape' && (teamOpen != null || compOpen != null)) stangRad()
   }
+
+  // ── C12/M-2: "Tävlar i" — HÄRLEDD, aldrig lagrad på personen ─────────────
+  // disciplin_deltagare är ENDA kopplingen person↔tävling. Raderna hämtas ur
+  // samma backend-härledning (store.utovare_discipliner) som utövarsidans
+  // Kommande starter, så de två vyerna aldrig kan säga olika saker.
+  let tavlarI = {}        // lag-id → grenrader
+  let tavlarLaddar = {}   // lag-id → bool
+  let grenval = {}        // lag-id → kandidatlista (fylls när väljaren öppnas)
+  const idag = new Date().toISOString().slice(0, 10)
+  const VECKODAG = ['sön', 'mån', 'tis', 'ons', 'tor', 'fre', 'lör']
+
+  async function laddaTavlarI(l) {
+    if (String(l.id).startsWith('nytt-')) { tavlarI = { ...tavlarI, [l.id]: [] }; return }
+    tavlarLaddar = { ...tavlarLaddar, [l.id]: true }
+    const rader = await utovareGrenar(l.id)
+    tavlarI = { ...tavlarI, [l.id]: rader || [] }
+    tavlarLaddar = { ...tavlarLaddar, [l.id]: false }
+    // Kandidatlistan speglar kopplingarna — ladda om den när de ändras.
+    grenval = { ...grenval, [l.id]: await grenKandidater(l.id, l.sport || null) }
+  }
+
+  async function kopplaGren(l, disciplinId) {
+    if (!disciplinId) return
+    await kopplaDisciplinDeltagare(disciplinId, l.id, true)
+    await laddaTavlarI(l)
+  }
+  async function kopplaBortGren(l, disciplinId) {
+    await kopplaDisciplinDeltagare(disciplinId, l.id, false)
+    await laddaTavlarI(l)
+  }
+
+  // Högerkolumnen: nästa pass ("fre 20:25") eller "avslutad". Store känner inte
+  // till "idag" — vad som är kommande avgörs här, precis som på utövarsidan.
+  function narText(g) {
+    const p = g.pass || []
+    if (!p.length) return g.tavling_fran ? 'tid ej satt' : ''
+    const nasta = p.find((x) => (x.datum || '') >= idag)
+    if (!nasta) return 'avslutad'
+    const d = new Date(nasta.datum + 'T00:00:00')
+    const dag = isNaN(d) ? nasta.datum : VECKODAG[d.getDay()]
+    return [dag, nasta.tid].filter(Boolean).join(' ')
+  }
+  // Grenens EGEN klass bär raden (D12 fråga 8) — personens klass syns bara på
+  // personen. Ingen kant när grenens klass är okänd (låst invariant).
+  const grenRadStil = (g) => g.klass ? `border-left:3px solid ${grenFarg(g.klass)}` : ''
+  const grenTitel = (g) => [g.gren, GREN_ETIKETT[g.klass]].filter(Boolean).join(' · ')
 
   // Klassen (dam/herr/mixed) står ALDRIG som textetikett här — den bärs av
   // avatarens färgkant (låst invariant). Meta = sport · klubb · trupp.
@@ -619,16 +669,45 @@
                       </label>
                       {#if sparad === l.id}<span class="flash">✓ sparat</span>{/if}
 
-                      <!-- ── PLATS FÖR M-2 ────────────────────────────────────
-                           Här bygger M-2 sektionen "Tävlar i": HÄRLEDD ur
-                           disciplin_deltagare (gren m egen färgkant + "Del av
-                           {tävling}"), och den driver Kommande starter. Inget
-                           byggs här förrän dess — och den flata tävling-chippen
-                           kommer ALDRIG tillbaka på en utövare. -->
+                      <!-- ── M-2: TÄVLAR I ───────────────────────────────────
+                           HÄRLEDD ur disciplin_deltagare — ENDA kopplingen
+                           person↔tävling. Raden bärs av GRENENS egen klassfärg
+                           (personens klass sitter på personen, aldrig här), och
+                           "Del av {tävling}" står aldrig lösryckt. Samma
+                           härledning driver Kommande starter på utövarsidan.
+                           Den flata tävling-chippen kommer aldrig tillbaka. -->
                       <div class="tavlarplats">
                         <div class="truppcaps">Tävlar i <span class="klasshint">härlett — kopplingen bor på grenen</span></div>
-                        <p class="tavlartext">Utövaren kopplas till <strong>grenen</strong> (dess klass syns där),
-                          inte via en lös tävling-chip. Byggs i M-2.</p>
+                        {#if tavlarLaddar[l.id]}
+                          <p class="tavlartext">Hämtar grenar…</p>
+                        {:else if !(tavlarI[l.id] || []).length}
+                          <p class="tavlartext">Ingen gren ännu. Utövaren kopplas till <strong>grenen</strong>
+                            (dess klass syns där) — inte via en lös tävling-chip.</p>
+                        {:else}
+                          <div class="grenrader">
+                            {#each tavlarI[l.id] as g (g.disciplin_id)}
+                              <div class="grenrad" style={grenRadStil(g)}>
+                                <div class="grentxt">
+                                  <div class="grennamn">{grenTitel(g)}</div>
+                                  {#if g.tavling}<div class="grendel">Del av {g.tavling}</div>{/if}
+                                </div>
+                                <span class="grennar">{narText(g)}</span>
+                                <button class="grenx" title="Koppla bort grenen"
+                                  on:click={() => kopplaBortGren(l, g.disciplin_id)}>×</button>
+                              </div>
+                            {/each}
+                          </div>
+                        {/if}
+                        {#if (grenval[l.id] || []).length}
+                          <select class="grenny" value="" on:change={(e) => { kopplaGren(l, e.target.value); e.target.value = '' }}>
+                            <option value="" disabled>+ Koppla till en gren…</option>
+                            {#each grenval[l.id] as k (k.disciplin_id)}
+                              <option value={k.disciplin_id}>{[grenTitel(k), k.tavling].filter(Boolean).join(' — ')}</option>
+                            {/each}
+                          </select>
+                        {:else if !tavlarLaddar[l.id]}
+                          <span class="kmeta">Inga fler grenar att koppla till — grenar skapas på tävlingen.</span>
+                        {/if}
                       </div>
                     {:else}
                       <div class="rad1">
@@ -970,10 +1049,23 @@
   .anteckningsrad textarea { border: 1px solid var(--div); border-radius: 8px; background: var(--panel);
     color: var(--t-head); font-family: inherit; font-size: 13px; padding: 8px 10px; resize: vertical; }
   .anteckningsrad textarea:focus { outline: none; border-color: var(--acc); }
-  /* Plats för M-2 ("Tävlar i" — härlett ur disciplin_deltagare). */
-  .tavlarplats { border: 1px dashed var(--div); border-radius: 9px; background: var(--panel);
-    padding: 11px; display: flex; flex-direction: column; gap: 5px; }
+  /* M-2: "Tävlar i" — härlett ur disciplin_deltagare. */
+  .tavlarplats { border: 1px solid var(--div); border-radius: 9px; background: var(--panel);
+    padding: 11px; display: flex; flex-direction: column; gap: 7px; }
   .tavlartext { margin: 0; font-size: 12px; line-height: 1.45; color: var(--t-mut); }
+  .grenrader { display: flex; flex-direction: column; gap: 6px; }
+  /* Klassfärgen på raden är GRENENS egen — aldrig personens, aldrig en
+     textetikett, och ingen kant alls när grenens klass är okänd. */
+  .grenrad { display: flex; align-items: center; gap: 10px; border: 1px solid var(--div);
+    border-radius: 8px; background: var(--kort); padding: 7px 11px; }
+  .grentxt { flex: 1; min-width: 0; }
+  .grennamn { font-size: 12.5px; font-weight: 600; color: var(--t-head); }
+  .grendel { font-size: 10.5px; color: var(--acc); }
+  .grennar { font-size: 11px; color: var(--t-mut); flex: none; }
+  .grenx { border: 0; background: none; color: var(--t-help); font-size: 14px;
+    line-height: 1; padding: 0 2px; cursor: pointer; flex: none; }
+  .grenx:hover { color: var(--acc); }
+  .grenny { align-self: flex-start; }
   .arkivrad { display: flex; align-items: center; gap: 8px; }
   .arkivrad input[type="checkbox"] { flex: none; }
   .arkivrad .lbl { font-size: 13px; }

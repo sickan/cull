@@ -697,7 +697,10 @@ class Api:
         did = store.upsert_disciplin(
             self.conn, d.get("tavling_id"), d.get("namn", ""),
             typ=d.get("typ") or "hoppkast", id=d.get("id"),
-            ordning=d.get("ordning"))
+            # Klassen är GRENENS egen (v39 / D12 fråga 8) — den bär färgkanten
+            # i "Tävlar i" och i gren-navigatorn. Föll tidigare bort här och
+            # kunde bara sättas av importen. None rör inte befintligt värde.
+            gren=d.get("gren"), ordning=d.get("ordning"))
         return {"ok": bool(did), "id": did}
 
     def radera_disciplin(self, id):
@@ -987,6 +990,15 @@ class Api:
         u["historik"] = store.individ_historik(self.conn, utovare_id)
         u["starter"] = store.utovare_starter(self.conn, utovare_id)
         return u
+
+    # C12/M-2: "Tävlar i" i den delade editorn läser SAMMA härledning som
+    # utövarsidans Kommande starter (store.utovare_discipliner) — två vyer,
+    # en sanning, inget lagrat på personen.
+    def utovare_grenar(self, utovare_id):
+        return store.utovare_grenar(self.conn, utovare_id)
+
+    def gren_kandidater(self, utovare_id=None, sport=None):
+        return store.gren_kandidater(self.conn, utovare_id, sport)
 
     def satt_utovare_handle(self, utovare_id, handle):
         return {"ok": store.satt_deltagare_handle(self.conn, utovare_id, handle)}
