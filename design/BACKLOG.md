@@ -201,7 +201,7 @@ samma form. Tröskeln är en gräns i koden, inget val Stig gör.
 programmet härlett aldrig lagrat · eventtyp = etikett utan egen färg · max två
 mättade färger per kort · DPT2:s look & feel i övrigt orörd.
 
-## C-iOS · PRIO ③ — iOS v2: ny startskärm + ny widget (Design-svar 19/7)
+## C-iOS · PRIO ③ — iOS v2: ny startskärm + ny widget (Design-svar 19/7) + kärnskärmarnas nya ton (D13, 20/7)
 
 *Källa: `HANDOFF-widget-lasskarm.md` (svar på B-009) + `HANDOFF-00-Helhet.md`
 + mockups `DPT iOS v2 - Widget & Låsskärm` · `- Event` (startskärmen) ·
@@ -245,7 +245,11 @@ splash, hemskärm, låsskärm, widget, jobbdetalj och som "levererad"-stämpel.
 | F-6 | **Appen och widgeten läser OLIKA objekt för samma verkliga händelse** | `HemView.kandidater` = `matcher.map(Matchdag.match)` + heldagsjobb. Hjälten sa "AVSPARK OM", vilket `toppText` bara ger när `m.heldag == false` → **appens hjälte är MATCHPAKETET** (en `Match` m avspark 08:00 + ANKOMST/UPPVÄRMNING/AVSPARK), **widgetens hjälte är `Jobb`-posten** m `heldag: true`. De konvergerar på 08:00 efter F-5, men modellerna är två. `Jobb.matchId` finns REDAN i snapshotet och skulle kunna ge widgeten matchens avspark direkt — egen post |
 | SPORT-ORD-iOS | **Hem-hjälten säger "MATCHDAG" · "AVSPARK OM" · "Till matchen →" för ett FRIIDROTTSMÄSTERSKAP** | Tre hårdkodade konstanter i `HemView.swift`: `Matchdag.etikett` (.match), `toppText` (~rad 642), och knapptexten. Ska komma ur **sportprofilens `start_moment`** — friidrott = "Start", inte "Avspark" (se SPORT-ORD i sektion B). Samma familj som handbollens `Avkast`-fix 18/7. Upptäckt på skärmbild 19/7, EJ byggt |
 | F-7 | ⛔ **ÖPPET: åk-senast divergerar fortfarande — samma glapp som F-5, ett lager till** | Appen sa 00:27, widgeten 04:57 för samma jobb. **Ingen av dem siktar på ANKOMST 06:00** (det är bara `start − 2 h` i schemaraden): appen räknar 08:00 − (60 framförhållning + 382 restid + 10 parkering) = 00:28 ✓, widgeten 04:57 + 452 min = **12:29** = ett deltillfälle. Roten: `Matchdag.event(j).start` ger ALLTID `heldagStart` (08:00) medan `HemLogik.malTid` (som `SnapshotSkrivare` läser) föredrar `nastaSikte`. **W-6:s test `XCTAssertEqual(malTid, Matchdag.event(jobbet).start)` håller bara när `matcher` är TOM** — med SM-programmet inläst går de isär igen. Fixen kräver att `Matchdag` bär `matcher`, vilket rör hjältens semantik + "Sikta på annan tid" → **eget jobb, smygs inte in under en renderingsfix** |
-| F-8 | **Workern ekar tillbaka BEGÄRD tidsstämpel i stället för den prognos som användes** | `content-sync/src/routes/vader.ts` → `vader.ts:hamtaSerie` matchar med `narmast()` mot MET men returnerar `{ tid: t }` = det man frågade efter. När MET glesnat till 6 h-steg kan snapshotets tid ligga **upp till 3 h** från den prognos som faktiskt användes. Egen worker-fix; iOS kompenserar nu vid läsning (W-7) men källan ljuger fortfarande |
+| J-4/J-5 | **Sigillet försvann ur jobbdetaljen vid okänd arena — OCH "VALD"-brickan ljög. Samma rot.** | ✅ **LÖST 20/7** (ios `eccfa62`, INSTALLERAD+PUSHAD): **Sikta-arkets "Eget klockslag" startar sin DatePicker på `Date()`** → trycker man "Sikta" utan att röra ratten blir valet passerat i samma sekund. Beteendet föll tyst till auto (rätt), men brickan läste RÅVALET (`sikta != .auto`) och sa VALD. Samma passerade val gav `akSenast == nil`, och `JobbDetaljView.akSenast` krävde BÅDE starttid och restid → hela `sigillkort` föll till else-benet som bara var sikta-raden. **Två symptom, en kedja.** Nu: nedräkningen kräver bara en starttid; utan arena visas Start medan Åk senast/Restid får dämpade streck (samma språk som VAR-kortets "Karta — Restid — Väder —"). *Kvar (ofarligt): DatePickern startar fortfarande på `Date()` — delad yta med Hem-vyn* |
+| J-6 | Kartkortets rubrik var hela postadressen ("Uppåkra kyrka, Gamla Trelleborgsvägen 310, 245 93 Staffanstorp, Sverige" i tre rader) | ✅ **LÖST 20/7** (ios `6b16512`): `Jobbdetalj.arenalage` returnerade `jobb.plats` rakt av (kalenderns adress). Nu platsens namn som rubrik, adressen dämpad/i navigeringsmålet |
+| J-7 | "LJUSET IDAG" i ologisk ordning — blå timmen 22:09 listad FÖRE gyllene 20:39 och solnedgång 21:38 | ✅ **LÖST 20/7** (ios `5668eff`): `ljusetIdag` skrev fälten i strukturens deklarationsordning, inte i tidsordning, och `ljuset()` kastade bort morgon/kväll-vetskapen den redan räknat fram. Nu kronologiskt + morgon/kväll-text; kolumnrubrikerna radbryter inte |
+| J-8 | **Fyra identiska väderpunkter (20° rakt igenom) presenterade som fyra oberoende mätpunkter** | ✅ **LÖST 20/7** (ios `f857c15` + worker `9d4d6a1`): **mätt, inte gissat.** MET för Eleda Stadion 20/7: 87 punkter, `2026-07-19T22:00Z … 2026-07-29T18:00Z`, timsteg t.o.m. 22/7 sedan 6 h-steg. **Serien slutar två dygn FÖRE matchen 31/7** → alla fyra begärda tider mappade till `2026-07-29T18:00Z`, 20,4°, samma symbol. Uppsalas 08–20-remsa reproducerade INTE felet (nära dagar är timupplösta) — mekanismen slår bara till långt fram, men "dit jag ska" kan peka dit. Appen viker ihop dubbletter (`VaderService.unika`) + dämpad rad om grovkornig prognos. **Ingen påhittad fallback** |
+| F-8 | **Workern ekar tillbaka BEGÄRD tidsstämpel i stället för den prognos som användes** | ✅ **LÖST 20/7** (`~/dalecarlia-photo` `9d4d6a1`, **DEPLOYAD**): `vader.ts` svarar med den FAKTISKA prognostimmen + nytt fält `begard` (spårbarhet), och `null` när närmaste punkt ligger >3 h bort (`MAX_GLAPP_MS`). KV-nycklarna bumpade `vader:` → `vader2:` så gammal cache dör direkt. **Enda konsumenten är iOS-appen** — DPT2 och sajten rör inte endpointen (kontrollerat). Ursprunglig beskrivning: | `content-sync/src/routes/vader.ts` → `vader.ts:hamtaSerie` matchar med `narmast()` mot MET men returnerar `{ tid: t }` = det man frågade efter. När MET glesnat till 6 h-steg kan snapshotets tid ligga **upp till 3 h** från den prognos som faktiskt användes. Egen worker-fix; iOS kompenserar nu vid läsning (W-7) men källan ljuger fortfarande |
 | F-4 | ✅ **LÖST 20/7** — vädret finns i widgeten (16°/22°/22° verifierat på skärmbild); kortet som saknade det var skrivet före W-5 | **Horisonthypotesen MOTBEVISAD:** MET svarar utmärkt för Uppsala 24 juli (fyra punkter 00/06/12/18 UTC, 12:00Z = 22,2° "cloudy", serien går till 29 juli), och workern (`content-sync/src/vader.ts`) matchar med `narmast()` — inte exakt tidsstämpel — så en förfrågan blir aldrig tom av tidsskäl. Att soltiderna syns BEVISAR att arenakoordinaten var känd (båda räknas i samma `if let p = arena`), alltså gjordes väderanropen och kom tillbaka tomma. **Kvar att skilja på: saknad API-nyckel i Keychain · nätfel vid skrivtillfället · KV-cache (TTL 2 h) fylld med nullar.** Går inte att avgöra utan Stigs nyckel. **Ingen fallback byggd som döljer att vädret saknas.** ⚠️ **Frestande att avskriva 20/7 — gör INTE det:** appens "16° prognos" bevisar bara att nyckeln finns NU, inte vid skrivtillfället. Snapshotet skrivs EN gång och fryser. **Kortet på telefonen 19/7 skrevs av en app FÖRE W-5** — bevisat av soltiderna: widgeten visade 04:02 · 21:50 = Uppsala den **19 juli**; den 24 juli är det 04:13 · 21:40 (uträknat ur repots `SolTid`). Soltiderna finns ⇒ `arena != nil` (båda räknas i samma `if let p = arena`) ⇒ arenan gick att slå upp, och den GAMLA koden hämtade väder ändå (ankare 12:00). Att båda nätanropen gav tomt medan den rena matematiken lyckades pekar på att `Keychain.read()`/nätet fallerade **just då**. **Verifieringssignal:** byter soltiderna till 04:13 · 21:40 har kortet skrivits om |
 
 ### C-iOS-H · Ny startskärm (hemskärmen/hjälten)
@@ -276,9 +280,44 @@ ring kontakt, öppna gallring/leverera.*
 | S-2 | **Våttstämpel "LEVERERAD"** — samma sigill m ringtexten `· LEVERERAD · 22 JULI 2026 ·`, lätt lutad. Sätts när sista bilden gått till kund; syns på leverera-kvittot, jobbkortet i listan och som overlay på omslagsbilden | S-1 + leverera-flödet sätter flaggan |
 | S-3 | **Färgsystemet: fem roller, var sin zon och form.** ① **Brand** orange — enda färgen som får *agera* (knapp/ring/siffra) ② **Kategori** — prick eller tunn vänsterkant, **aldrig fyllda ytor** ③ **Gren** — kant/markör, **endast i sport**, ingen textetikett ④ **Status** — fyra fasta betydelser (synk blågrå · klar grön · väntar gul · fel röd), liten prick/pill, vinner blicken bara vid handling ⑤ **Lagfärger** — **karantän inuti lagbrickan**. Regel: **max två mättade färger per kort.** **Eventtyp tappar sin egen färg** (den återanvände grenens hex — cup delade Herr-teal, turnering delade Mixed-olive) → bara etikett, ärver kategorin | **iOS-lyftet är INTE:** DPT desktop rörs, nya hex, ny navigation. Genomförs ihop m W-8 (delad plist) |
 
+### C-iOS-K · Kärnskärmarna i ny grafisk ton (D13, levererad 20/7)
+
+*Källa: `HANDOFF-D13-kärnskärmar-ny-ton.md` + mockup `DPT iOS v2 - Kärnskärmar.dc.html`
+(insynkad 20/7). **Ingen funktion ändras — bara den grafiska tonen.***
+
+**Tonen (gäller alla fyra skärmarna):** bakgrund `#0a0d11` m Skagen Hav-glimt
+`radial-gradient(circle at 28% -5%, #12171d, #0b0e12 62%)` (aldrig platt svart) ·
+**accent = mässing `#F0B45A`** (→ `#E39C3E` i knapp-gradient), **enda** accentfärgen,
+inget rent orange/gult · Saira Condensed 700 i rubriker/siffror, Saira i brödtext ·
+kort `rgba(255,255,255,.04)` + `1px rgba(255,255,255,.08)`, radie 16–20 · grenfärg
+som vänsterkant utan textetikett · kategorifärger bara på ikonrutor · **inga emoji**,
+rena SVG-ikoner.
+
+| ID | Vad | Beroende |
+|----|-----|----------|
+| K-1 | **Hem — Matchdag.** Nedräkningen bor i **sigillet** (hästmärket opacity ~.13 i dubbel mässingsring, "AVSPARK OM / 5 dagar / 16° prognos · kl 08:00") — samma komponent som låsskärmens gauge, återanvänd den. Foto fyller toppen (~430 px) m mörk vinjett ned mot `#0a0d11`; header (logga + DPT + synk-chip) ligger **på** fotot i glas-pill. HÄR I DAG-kort: 5 tidpunkter 08–20 m mässings-väderikoner + restidsrad + ankomst/uppvärmning/avspark (avspark i mässing). CTA "Till matchen →" = mässings-gradient m mörk text | **S-1** (sigillkomponenten finns redan) · fotot i toppen överlappar **H-2** (★-bakgrundspotten) |
+| K-2 | **Bilder** (På telefonen / Kortet / Kameran). Titel i Saira Condensed, sigill-diskret rund knapp uppe till höger, segmenterad flikrad i kort-stil. **FTP-adressen `192.168.1.181:2121` i Saira Condensed mässing** — det enda man skriver av, ska sticka ut. Statuspunkt följer synksystemet (gul väntar · grön uppe · röd fel). Tomlägen: dämpad SVG-ikon + Saira Condensed-rubrik | B-012:s Kameran-segment finns redan |
+| K-3 | **Ny story.** MOMENT-rutnät: valt moment i mässings-gradient m mörk text, övriga i kort-stil; sektionsetiketter mässing-caps `.14em`. Foto- och Overlay-väljare som segmenterade kontroller i kort, LR-export-raden i mässing. **"Rendera & dela" tänds först när en fotokälla är vald** — annars nedtonad | ren presentation |
+| K-4 | **Matchdetalj.** Matchkort m **grenkant** (Damallsvenskan → Dam `#8E5A86`), arena/datum centrerat, sköldar som cirklar. **"Starta LIVE-läge" i statusrött** `#E06A5A` (fyllnad `rgba(224,106,90,.1)`) — enda röda ytan, precis som färgsystemet föreskriver. Handlingsrader m kategori-/grenfärgade SVG-ikonrutor: Publicera story (mässing ✦) · Matchtrupp (Sport-blå) · Föra matchen (Herr-teal) · Matchens bilder (Mixed-grön) | S-3 |
+
+**Design säger uttryckligen kvar/öppet:** Jobb-fliken och LIVE-läget är **inte**
+omgjorda — säg till om de ska med i nästa runda. Fältflödet är redan i denna ton
+och hänger ihop m "Publicera story" → "Skapa SoMe".
+
+**Bonus i leveransen:** `wallpapers/` — fyra iPhone 17 Pro-bakgrunder
+(Skagen Hav · Solljus · Minimal · Häst) + `wallpapers/ren/` (lås-Skagen,
+mörk mono, sten ljus). Rena tillgångar, inget att bygga.
+
 ### ⚠️ Två punkter att stämma av INNAN bygge
 
-**(a) Hex-konflikt.** Färgsystem-canvasen anger kategorierna som Sport/Hav
+**(a) Hex-konflikt.** ✅ **Sannolikt avgjord av D13 (20/7):** kärnskärms-handoffen
+listar kategorierna som **kanonvärdena** Sport `#2F7CB0` · Landskap `#C9871F` ·
+Människor `#C9657F` · Film `#8A6FB0` — alltså inte färgsystem-canvasens ljusare
+uppsättning. Nytt att notera: D13 inför **mässing `#F0B45A`** som appens enda
+accent, där tidigare underlag säger "brand orange" — stäm av att det är samma
+roll, ny ton, och inte två parallella accenter. Ursprungskonflikten nedan:
+
+**(a-original) Hex-konflikt.** Färgsystem-canvasen anger kategorierna som Sport/Hav
 `#4E93C4` · Landskap/Sol `#D19A3E` · Människor/Rosé `#D07E93` · Film `#A188C4`,
 medan widget-handoffen och branch-CLAUDE anger kanonvärdena
 Sport `#2F7CB0` · Landskap `#C9871F` · Människor `#C9657F` · Film `#8A6FB0`.
