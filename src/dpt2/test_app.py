@@ -3405,6 +3405,173 @@ class TestMasterskapsArbetsytan(unittest.TestCase):
         self.assertIsNone(self.api.hamta_gren_detalj("finns-inte"))
 
 
+class TestMasterskapsProgram(unittest.TestCase):
+    """C12/M-4 — mästerskaps-arbetsytan, läge *Program*.
+
+    37 deltillfällen per dag rakt ned ger varken överblick eller fokus.
+    Dagflikar + tidsaxel ger överblicken, ★-filtret fokus — i EN vy.
+
+    ⚠️ Programmet HÄRLEDS, det lagras ALDRIG: raderna kommer ur den befintliga
+    store.program() (pass + tidsatta matcher + fria hållpunkter). Testerna
+    nedan bevakar just det.
+    """
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.ev = store.upsert_tavling(
+            self.api.conn, "Friidrotts-SM 2026", sport="friidrott",
+            typ="masterskap", fran="2026-07-24", till="2026-07-26")
+
+    def _gren(self, namn, klass=None, pass_=(), favorit=False):
+        gid = self.api.spara_disciplin(
+            {"tavling_id": self.ev, "namn": namn, "gren": klass})["id"]
+        for i, (typ, datum, tid) in enumerate(pass_):
+            self.api.spara_pass({"disciplin_id": gid, "namn": typ,
+                                 "datum": datum, "tid": tid, "ordning": i})
+        if favorit:
+            self.api.satt_disciplin_favorit(gid, True)
+        return gid
+
+    # ── Dagsgruppering ─────────────────────────────────────────────────────
+    def test_dagflikar_ur_tavlingens_dagar(self):
+        self._gren("100 m", "dam", [("Försök", "2026-07-24", "18:40"),
+                                    ("Final", "2026-07-25", "20:25")])
+        self._gren("Kula", "dam", [("Final", "2026-07-26", "14:00")])
+        svar = self.api.hamta_masterskap_program(self.ev)
+        self.assertEqual([d["etikett"] for d in svar["dagar"]],
+                         ["Dag 1", "Dag 2", "Dag 3"])
+        self.assertEqual([d["datum"] for d in svar["dagar"]],
+                         ["2026-07-24", "2026-07-25", "2026-07-26"])
+
+    def test_dagfliken_visar_bara_sin_egen_dag(self):
+        self._gren("100 m", "dam", [("Försök", "2026-07-24", "18:40"),
+                                    ("Final", "2026-07-25", "20:25")])
+        dag1 = self.api.hamta_masterskap_program(self.ev, dag=1)
+        self.assertEqual([r["typ"] for r in dag1["rader"]], ["Försök"])
+        self.assertEqual(dag1["datum"], "2026-07-24")
+        dag2 = self.api.hamta_masterskap_program(self.ev, dag=2)
+        self.assertEqual([r["typ"] for r in dag2["rader"]], ["Final"])
+
+    def test_dagnumret_klamps_till_tavlingens_dagar(self):
+        self._gren("100 m", "dam", [("Final", "2026-07-24", "18:40")])
+        self.assertEqual(self.api.hamta_masterskap_program(self.ev, dag=9)["dag"], 1)
+        self.assertEqual(self.api.hamta_masterskap_program(self.ev, dag=0)["dag"], 1)
+
+    # ── Sortering på tid ───────────────────────────────────────────────────
+    def test_raderna_sorteras_pa_tid_inte_pa_gren(self):
+        """Tidsaxeln är dagens ordning — inte grenlistans."""
+        self._gren("Kula", "dam", [("Final", "2026-07-24", "14:00")])
+        self._gren("100 m", "dam", [("Försök", "2026-07-24", "18:40")])
+        self._gren("Diskus", "herr", [("Final", "2026-07-24", "16:10")])
+        rader = self.api.hamta_masterskap_program(self.ev)["rader"]
+        self.assertEqual([r["tid"] for r in rader], ["14:00", "16:10", "18:40"])
+        self.assertEqual([r["gren"] for r in rader], ["Kula", "Diskus", "100 m"])
+
+    def test_matcher_och_pass_vavs_ihop_i_tidsordning(self):
+        self._gren("100 m", "dam", [("Final", "2026-07-24", "20:25")])
+        store.spara_match(self.api.conn, {
+            "lag_hemma": "Sverige", "lag_borta": "Norge", "sport": "friidrott",
+            "datum": "2026-07-24", "tid": "11:30", "tavling_id": self.ev})
+        rader = self.api.hamta_masterskap_program(self.ev)["rader"]
+        self.assertEqual([r["tid"] for r in rader], ["11:30", "20:25"])
+        self.assertEqual([r["slag"] for r in rader], ["match", "pass"])
+
+    # ── ★-filtret ──────────────────────────────────────────────────────────
+    def test_favoritfiltret_kramper_dagen_till_de_stjarnmarkta(self):
+        self._gren("100 m", "dam", [("Final", "2026-07-24", "18:40")],
+                   favorit=True)
+        self._gren("Kula", "dam", [("Final", "2026-07-24", "14:00")])
+        self._gren("Diskus", "herr", [("Final", "2026-07-24", "16:10")])
+        allt = self.api.hamta_masterskap_program(self.ev)
+        self.assertEqual(len(allt["rader"]), 3)
+        self.assertEqual(allt["antal_favoriter"], 1)
+        bara = self.api.hamta_masterskap_program(self.ev, bara_favoriter=True)
+        self.assertEqual([r["gren"] for r in bara["rader"]], ["100 m"])
+        self.assertTrue(bara["rader"][0]["favorit"])
+
+    def test_ledtexten_byter_rakning_med_filtret(self):
+        self._gren("100 m", "dam", [("Försök", "2026-07-24", "18:40"),
+                                    ("Final", "2026-07-24", "20:25")],
+                   favorit=True)
+        self._gren("Kula", "dam", [("Final", "2026-07-24", "14:00")])
+        self.assertEqual(self.api.hamta_masterskap_program(self.ev)["ledtext"],
+                         "3 deltillfällen · dag 1 · tidsaxel")
+        self.assertEqual(
+            self.api.hamta_masterskap_program(self.ev, bara_favoriter=True)["ledtext"],
+            "1 favoritgrenar · dag 1 · tidsaxel")
+
+    # ── Invarianter ────────────────────────────────────────────────────────
+    def test_hallpunkt_utan_gren_saknar_klasskant(self):
+        """Invigningen är en fri hållpunkt — ingen gren, alltså ingen färg.
+        Paletten är låst till kön och gissas ALDRIG."""
+        self._gren("100 m", "dam", [("Final", "2026-07-24", "20:25")])
+        store.spara_match(self.api.conn, {
+            "lag_hemma": "Invigning", "sport": "friidrott",
+            "datum": "2026-07-24", "tid": "16:30", "tavling_id": self.ev})
+        rader = self.api.hamta_masterskap_program(self.ev)["rader"]
+        hall = next(r for r in rader if r["gren"] == "Invigning")
+        self.assertIsNone(hall["farg"])
+        self.assertIsNone(hall["gren_id"])
+        pas = next(r for r in rader if r["slag"] == "pass")
+        self.assertEqual(pas["farg"], "#8E5A86")       # dam, låst palett
+
+    def test_hallpunktens_passtyp_upprepar_inte_namnet(self):
+        """Invigningens enda pass heter också 'Invigning' — då säger
+        passtypen ingenting och ska inte skrivas två gånger."""
+        self._gren("Invigning", None, [("Invigning", "2026-07-24", "16:30")])
+        rad = self.api.hamta_masterskap_program(self.ev)["rader"][0]
+        self.assertEqual((rad["gren"], rad["typ"]), ("Invigning", ""))
+        self.assertIsNone(rad["farg"])
+
+    def test_klassfargen_skiljer_dam_och_herr_utan_textetikett(self):
+        self._gren("Diskus", "dam", [("Final", "2026-07-24", "15:30")])
+        self._gren("Diskus", "herr", [("Final", "2026-07-24", "16:10")])
+        rader = self.api.hamta_masterskap_program(self.ev)["rader"]
+        self.assertEqual([r["farg"] for r in rader], ["#8E5A86", "#3E7C87"])
+        for r in rader:
+            self.assertEqual(r["gren"], "Diskus")
+            self.assertNotIn("dam", r["typ"].lower())
+
+    def test_kat_ar_neutral_textchip_aldrig_farg(self):
+        self._gren("100 m I-20", "dam", [("Final", "2026-07-24", "17:20")])
+        rad = self.api.hamta_masterskap_program(self.ev)["rader"][0]
+        self.assertEqual((rad["gren"], rad["kat"]), ("100 m", "I-20"))
+        self.assertEqual(rad["farg"], "#8E5A86")   # färgen kommer av KLASSEN
+
+    def test_programmet_harleds_och_lagras_aldrig(self):
+        """Ändra passets tid och tidsaxeln följer med — utan att något
+        program-register finns att skriva om."""
+        gid = self._gren("100 m", "dam", [("Final", "2026-07-24", "18:40")])
+        pid = store.lista_pass(self.api.conn, gid)[0]["id"]
+        self.api.spara_pass({"id": pid, "disciplin_id": gid, "namn": "Final",
+                             "datum": "2026-07-24", "tid": "09:05"})
+        self.assertEqual(
+            self.api.hamta_masterskap_program(self.ev)["rader"][0]["tid"],
+            "09:05")
+        tabeller = {r[0] for r in self.api.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        self.assertFalse([t for t in tabeller if "program" in t.lower()])
+
+    def test_tom_tavling_ger_tom_tidsaxel_utan_krasch(self):
+        svar = self.api.hamta_masterskap_program(self.ev)
+        self.assertEqual(svar["dagar"], [])
+        self.assertEqual(svar["rader"], [])
+        self.assertEqual(svar["ledtext"], "0 deltillfällen · dag 1 · tidsaxel")
+
+    def test_navigatorns_dagnummer_delar_dagflikarnas_sanning(self):
+        """En hållpunkt på en passlös dag får inte ge navigatorn och Program
+        olika dagnummer — dagarna härleds ur EN källa."""
+        store.spara_match(self.api.conn, {
+            "lag_hemma": "Invigning", "sport": "friidrott",
+            "datum": "2026-07-24", "tid": "16:30", "tavling_id": self.ev})
+        self._gren("100 m", "dam", [("Final", "2026-07-25", "20:25")])
+        flikar = self.api.hamta_masterskap_program(self.ev)["dagar"]
+        self.assertEqual([d["datum"] for d in flikar],
+                         ["2026-07-24", "2026-07-25"])
+        grupper = self.api.hamta_masterskap_grenar(self.ev, efter="dag")["grupper"]
+        self.assertEqual([g["etikett"] for g in grupper], ["Dag 2"])
+
+
 class TestProgramTillTelefonen(unittest.TestCase):
     """V5 §8 S4 — programmet med VEM och handle ut i paketen. Utan detta
     stannar nyttan på Macen; det är på arenan taggningen ska göras."""

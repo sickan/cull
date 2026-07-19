@@ -228,3 +228,81 @@ def handletext(rader):
         return "importeras"
     med = sum(1 for r in rader if r["har_handle"])
     return f"{med} av {len(rader)} visade har @"
+
+
+# ── Läge Program (C12/M-4): dagflikar + tidsaxel ────────────────────────────
+# ⚠️ LÅST INVARIANT: **programmet HÄRLEDS, det lagras ALDRIG.** Källan är den
+# ENDA härledningen som finns — `store.program()` (V5 §8) — som slår ihop
+# grenarnas pass, tidsatta matcher som pekar hit med `event:` och eventets
+# fria hållpunkter, sorterat på datum + tid. Funktionerna nedan bygger ingen
+# andra härledning; de gör om `store.program()`-rader till tidsaxelns rader.
+#
+# 37 deltillfällen per dag blir läsbara på två sätt i EN vy: dagflikarna ger
+# överblicken, ★-filtret fokus (de 3–4 grenar Stig faktiskt jobbar med) —
+# samma favoritfokus som mobilen redan har.
+
+def programrad(rad, gren=None):
+    """En rad på tidsaxeln, härledd ur en `store.program()`-rad.
+
+    Ett *pass* bär grenens namn (kat utlyft som neutral chip) och passtypen
+    ("Försök"/"Final"). En *match* eller en fri *hållpunkt* (Invigning) bär
+    sitt eget namn — och saknar gren, alltså **ingen klasskant**: färgen är
+    låst till kön och gissas aldrig.
+    """
+    ar_pass = rad.get("slag") == "pass"
+    if ar_pass:
+        namn, kat = dela_kat(rad.get("gren"))
+        typ = (rad.get("namn") or "").strip()
+    else:
+        namn, kat = dela_kat(rad.get("namn"))
+        typ = (rad.get("gren") or "").strip()
+    # En fri hållpunkt heter ofta samma sak som sitt enda pass ("Invigning" /
+    # "Invigning") — då säger passtypen ingenting och utelämnas.
+    if typ.casefold() == namn.casefold():
+        typ = ""
+    antal = len(rad.get("deltagare") or [])
+    return {
+        "id": rad.get("id"),
+        "slag": rad.get("slag") or "",
+        "tid": (rad.get("tid") or "").strip(),
+        "datum": rad.get("datum") or "",
+        "gren": namn,
+        "kat": kat,                     # neutral textchip — ALDRIG färg
+        "typ": typ,
+        "gren_id": rad.get("gren_id"),
+        # gren_kant är klassen store redan härlett (grenens egen, annars
+        # deltagarnas om ALLA är eniga). Okänd klass → None → ingen kant.
+        "farg": klassfarg(rad.get("gren_kant")),
+        "arena": (rad.get("plats") or "").strip(),
+        "antal": f"{antal} deltagare" if (ar_pass and antal) else "",
+        "favorit": bool((gren or {}).get("favorit")),
+    }
+
+
+def tidsaxel(rader, grenar=None, *, bara_favoriter=False):
+    """Dagens program som tidsaxelrader, i tidsordning.
+
+    `rader` är `store.program()`-rader för EN dag (redan sorterade på
+    datum + tid + ordning). `grenar` är {disciplin_id: gren} för ★-flaggan.
+    ★-filtret behåller bara favoritgrenarnas deltillfällen — matcher och
+    hållpunkter hör ingen gren till och faller därför bort med filtret på.
+    """
+    kartan = grenar or {}
+    ut = [programrad(r, kartan.get(r.get("gren_id"))) for r in (rader or [])]
+    if bara_favoriter:
+        ut = [r for r in ut if r["favorit"]]
+    return ut
+
+
+def programlead(antal_rader, dagnr, *, bara_favoriter=False,
+                antal_favoriter=0):
+    """Ledtexten över tidsaxeln: 'N deltillfällen · dag N · tidsaxel'."""
+    vad = (f"{antal_favoriter} favoritgrenar" if bara_favoriter
+           else f"{antal_rader} deltillfällen")
+    return f"{vad} · dag {dagnr} · tidsaxel"
+
+
+def dagflikar(dagar):
+    """Segmented control 'Dag 1 / Dag 2 / Dag 3' ur tävlingens dagar."""
+    return [{"nr": i + 1, "datum": d, "etikett": f"Dag {i + 1}"}
+            for i, d in enumerate(dagar or [])]

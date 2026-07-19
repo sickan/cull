@@ -8,7 +8,7 @@
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
     kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle,
     sparaDisciplin, raderaDisciplin, sattDisciplinFavorit, sparaTavling, sportprofiler,
-    hamtaMasterskapGrenar, hamtaGrenDetalj,
+    hamtaMasterskapGrenar, hamtaGrenDetalj, hamtaMasterskapProgram,
     hamtaProgram, sparaPass, raderaPass } from '../lib/api.js'
   import LasInTavling from '../lib/LasInTavling.svelte'
   import { markeraAndring } from '../lib/livesynk.js'
@@ -94,6 +94,7 @@
     // M-3: arbetsytan börjar om per tävling (läge, gruppering, sök, val).
     laget = 'grenar'; gruppera = 'klass'; grenSok = ''; baraFavoriter = false
     valdGren = null; grenDetalj = null; allaDeltagare = false
+    mastDag = 1; tidsaxel = null
     await laddaProgram()
   }
   async function tillbaka() {
@@ -165,7 +166,7 @@
   // Grupperingar, kat-chips, dagnummer och @-status HÄRLEDS i backend; den
   // här komponenten ritar bara.
   let mast = null                 // navigator-svaret (grupper + arbetsyta-flagga)
-  let laget = 'grenar'            // grenar | program (M-4 hakar på här)
+  let laget = 'grenar'            // grenar | program
   let gruppera = 'klass'          // klass (default) | typ | dag
   let grenSok = ''
   let valdGren = null
@@ -193,8 +194,28 @@
   async function vaxlaFavoritArbetsyta(id, pa) {
     await sattDisciplinFavorit(id, pa)
     await laddaNavigator(vald, gruppera, grenSok, baraFavoriter)
+    await laddaTidsaxel(vald, mastDag, baraFavoriter)   // ★ styr båda lägena
     if (valdGren === id) await valjGren(id, allaDeltagare)
   }
+
+  // ── Läge Program (C12/M-4): dagflikar + tidsaxel ─────────────────────────
+  // 37 deltillfällen per dag rakt ned ger varken överblick eller väg att jobba
+  // fokuserat. Dagflikarna ger överblicken, ★-filtret fokus (de 3–4 grenar
+  // Stig faktiskt jobbar med) — i EN vy, samma favoritfokus som mobilen.
+  //
+  // ⚠️ Programmet HÄRLEDS i backend ur den ENDA härledningen (store.program:
+  // grenarnas pass + tidsatta matcher som pekar hit + fria hållpunkter) och
+  // lagras ALDRIG. Den här komponenten ritar bara.
+  let tidsaxel = null
+  let mastDag = 1
+  // Filterinput som ARGUMENT — `$:` spårar inte closure-variabler som läses
+  // inuti en anropad funktion (lärdomen från lag-panelen).
+  async function laddaTidsaxel(id, dag, favs) {
+    if (!id) { tidsaxel = null; return }
+    tidsaxel = await hamtaMasterskapProgram(id, dag, favs).catch(() => null)
+    if (tidsaxel && tidsaxel.dag !== dag) mastDag = tidsaxel.dag
+  }
+  $: laddaTidsaxel(vald, mastDag, baraFavoriter)
   // "24–26 jul" — metaradens period, kort som i mockupen.
   function periodKort(e) {
     if (!e?.fran) return ''
@@ -634,8 +655,54 @@
           </div>
         </div>
       {:else}
-        <div class="programtom">
-          <p class="tomkort">Läget <b>Program</b> (dagflikar + tidsaxel) byggs i M-4. Tills dess ligger dagsprogrammet kvar i <b>Grenar &amp; deltagare</b> → passen per gren.</p>
+        <!-- ═══ M-4: läge Program — dagflikar + tidsaxel ════════════════════
+             Programmet HÄRLEDS i backend (pass + tidsatta matcher + fria
+             hållpunkter) och lagras aldrig; här ritas det bara. -->
+        <div class="dagrad">
+          <div class="segment">
+            {#each (tidsaxel?.dagar || []) as d (d.nr)}
+              <button class="segknapp" class:pa={mastDag === d.nr}
+                title={d.datum} on:click={() => (mastDag = d.nr)}>{d.etikett}</button>
+            {/each}
+          </div>
+          <span class="spacer"></span>
+          <!-- Samma favoritfokus som mobilen: 37 rader blir de 3–4 Stig
+               faktiskt jobbar med. -->
+          <button class="favfilter" class:pa={baraFavoriter}
+            on:click={() => (baraFavoriter = !baraFavoriter)}>★ Bara favoritgrenar ({tidsaxel?.antal_favoriter ?? 0})</button>
+        </div>
+        <div class="tidsaxelyta">
+          <p class="ledtext">{tidsaxel?.ledtext || ''}</p>
+          {#each (tidsaxel?.rader || []) as p, i (p.slag + p.id)}
+            <div class="tidrad">
+              <span class="tidkol scd">{p.tid || '—'}</span>
+              <span class="tidspar">
+                <!-- Prick i klassfärg; hållpunkt utan gren får neutral prick
+                     — paletten gissas aldrig (låst invariant). -->
+                <span class="prick" class:neutral={!p.farg}
+                  style={p.farg ? `background:${p.farg}` : ''}></span>
+                <span class="linje" class:sista={i === tidsaxel.rader.length - 1}></span>
+              </span>
+              <span class="tidkort">
+                <span class="tidkant" style={p.farg ? `background:${p.farg}` : ''}></span>
+                <span class="tidmitt">
+                  <span class="tidtitel">
+                    <span class="tidgren">{p.gren}</span>
+                    {#if p.kat}<span class="kat">{p.kat}</span>{/if}
+                    {#if p.typ}<span class="tidtyp">{p.typ}</span>{/if}
+                  </span>
+                  {#if p.antal || p.arena}
+                    <span class="tidsub">{[p.antal, p.arena].filter(Boolean).join(' · ')}</span>
+                  {/if}
+                </span>
+                {#if p.favorit}<span class="tidstjarna">★</span>{/if}
+              </span>
+            </div>
+          {:else}
+            <p class="tomkort">{baraFavoriter
+              ? 'Ingen favoritgren har något deltillfälle den här dagen.'
+              : 'Inget program den här dagen än — läs in tidsprogrammet eller lägg pass på grenarna.'}</p>
+          {/each}
         </div>
       {/if}
     {:else}
@@ -1160,6 +1227,40 @@
   .visaalla { margin-top: 9px; border: 0; background: none; font-family: inherit;
     font-size: 12px; font-weight: 600; color: var(--acc); cursor: pointer; padding: 0; }
   .programtom { padding: 22px; }
+
+  /* ── Läge Program (C12/M-4): dagflikar + tidsaxel ─────────────────────
+     Tid i egen 56 px-kolumn (tabular-nums), prick i klassfärg med ringkant,
+     vertikal linje mellan raderna och kort med 3 px klass-vänsterkant. */
+  .dagrad { flex: none; display: flex; align-items: center; gap: 12px;
+    padding: 12px 22px; border-bottom: 1px solid var(--div2, var(--div)); }
+  .tidsaxelyta { flex: 1; overflow-y: auto; padding: 16px 22px 40px; }
+  .ledtext { margin: 0 0 14px; font-size: 11.5px; color: var(--t-mut); }
+  .tidrad { display: flex; gap: 14px; align-items: stretch; }
+  .tidkol { width: 56px; flex: none; text-align: right; padding-top: 11px;
+    font-size: 15px; font-weight: 700; color: var(--t-head);
+    font-variant-numeric: tabular-nums; }
+  .tidspar { display: flex; flex-direction: column; align-items: center;
+    width: 14px; flex: none; }
+  .prick { width: 11px; height: 11px; border-radius: 50%; flex: none;
+    margin-top: 11px; border: 2px solid var(--panel);
+    box-shadow: 0 0 0 1px var(--div); }
+  /* Hållpunkt utan gren: neutral prick — klassfärgen gissas aldrig. */
+  .prick.neutral { background: var(--div); }
+  .linje { width: 2px; flex: 1; background: var(--div); }
+  .linje.sista { background: none; }
+  .tidkort { flex: 1; min-width: 0; margin-bottom: 11px; display: flex;
+    align-items: stretch; gap: 10px; background: var(--kort);
+    border: 1px solid var(--div); border-radius: 10px;
+    padding: 10px 13px 10px 0; overflow: hidden; }
+  /* 3 px klass-vänsterkant — färg, aldrig textetikett; tom vid okänd klass. */
+  .tidkant { width: 3px; flex: none; margin: -10px 0; }
+  .tidmitt { flex: 1; min-width: 0; display: flex; flex-direction: column;
+    justify-content: center; padding-left: 10px; }
+  .tidtitel { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .tidgren { font-size: 13.5px; font-weight: 600; color: var(--t-head); }
+  .tidtyp { font-size: 11px; color: var(--t-mut); }
+  .tidsub { font-size: 10.5px; color: var(--t-help); margin-top: 1px; }
+  .tidstjarna { align-self: center; flex: none; font-size: 13px; color: var(--acc); }
 
   /* Deltagarrad m gren-chips (skiva 1.5) */
   .drad { border: 1px solid var(--div3, var(--div)); border-radius: 9px; padding: 8px 10px;

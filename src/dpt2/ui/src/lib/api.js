@@ -559,6 +559,51 @@ export async function hamtaGrenDetalj(disciplinId, alla = false) {
       : 'importeras' }))
 }
 
+// ── Läge Program (C12/M-4) ─────────────────────────────────────────────────
+// ⚠️ Programmet HÄRLEDS, det lagras ALDRIG: skarpt läge går till
+// app.hamta_masterskap_program → store.program() (V5 §8, den ENDA
+// härledningen). Nedan står bara mock-spegeln för webbläsarläget.
+export async function hamtaMasterskapProgram(tavlingId, dag = 1,
+                                             baraFavoriter = false) {
+  const api = brygga()
+  if (api) return api.hamta_masterskap_program(tavlingId, dag, baraFavoriter)
+  const tid = tavlingId === 'friidrotts-sm-2026' ? 'friidrotts-sm' : tavlingId
+  const grenar = MOCK_DISCIPLINER.filter((d) => d.tavling_id === tid)
+  const ider = new Set(grenar.map((g) => g.id))
+  const matcher = (MOCK_EVENT_MATCHER[tavlingId] || []).filter((m) => m.datum)
+  const dagar = [...new Set([
+    ...MOCK_PASS.filter((p) => ider.has(p.disciplin_id)).map((p) => p.datum),
+    ...matcher.map((m) => m.datum)].filter(Boolean))].sort()
+  const nr = dagar.length ? Math.min(Math.max(Number(dag) || 1, 1), dagar.length) : 1
+  const datum = dagar[nr - 1] || ''
+  const rader = []
+  for (const p of MOCK_PASS.filter((x) => ider.has(x.disciplin_id) && x.datum === datum)) {
+    const g = grenar.find((x) => x.id === p.disciplin_id)
+    const rad = mockRad(g)
+    rader.push({ id: p.id, slag: 'pass', tid: p.tid || '', datum: p.datum,
+      gren: rad.namn, kat: rad.kat, gren_id: g.id,
+      typ: (p.namn || '').toLowerCase() === rad.namn.toLowerCase() ? '' : (p.namn || ''),
+      farg: rad.farg, arena: p.plats || '',
+      antal: (g.deltagare || []).length ? `${g.deltagare.length} deltagare` : '',
+      favorit: !!g.favorit })
+  }
+  for (const m of matcher.filter((x) => x.datum === datum)) {
+    // Fri hållpunkt / match: ingen gren → ingen klasskant (låst invariant).
+    rader.push({ id: m.id, slag: 'match', tid: m.tid || '', datum: m.datum,
+      gren: [m.lag_hemma, m.lag_borta].filter(Boolean).join(' – ') || 'Match',
+      kat: '', typ: m.rond || '', gren_id: null, farg: null,
+      arena: m.arena || '', antal: '', favorit: false })
+  }
+  rader.sort((a, b) => (a.tid || '99:99').localeCompare(b.tid || '99:99'))
+  const synliga = baraFavoriter ? rader.filter((r) => r.favorit) : rader
+  const favoriter = grenar.filter((g) => g.favorit).length
+  return wait(structuredClone({
+    dagar: dagar.map((d, i) => ({ nr: i + 1, datum: d, etikett: `Dag ${i + 1}` })),
+    dag: nr, datum, antal_favoriter: favoriter, rader: synliga,
+    ledtext: `${baraFavoriter ? `${favoriter} favoritgrenar`
+      : `${synliga.length} deltillfällen`} · dag ${nr} · tidsaxel` }))
+}
+
 export async function raderaDisciplin(id) {
   const api = brygga()
   if (api) return api.radera_disciplin(id)
@@ -577,6 +622,18 @@ let MOCK_PASS = [
   { id: 'p3', disciplin_id: 'disc_100m', namn: 'Semi', datum: '2026-07-24', tid: '16:00', plats: '', ordning: 1 },
   { id: 'p4', disciplin_id: 'disc_100m', namn: 'Final', datum: '2026-07-25', tid: '19:10', plats: '', ordning: 2 },
   { id: 'p5', disciplin_id: 'disc_invigning', namn: 'Invigning', datum: '2026-07-24', tid: '16:30', plats: '', ordning: 0 },
+  // C12/M-4: mockläget behöver deltillfällen över flera dagar för att dag-
+  // flikarna och tidsaxeln alls ska gå att se i webbläsaren.
+  { id: 'p6', disciplin_id: 'disc_100m_i20', namn: 'Final', datum: '2026-07-24', tid: '17:20', plats: 'Bana', ordning: 0 },
+  { id: 'p7', disciplin_id: 'disc_diskus_d', namn: 'Final', datum: '2026-07-24', tid: '15:30', plats: 'Bur', ordning: 0 },
+  { id: 'p8', disciplin_id: 'disc_diskus_h', namn: 'Final', datum: '2026-07-24', tid: '16:10', plats: 'Bur', ordning: 0 },
+  { id: 'p9', disciplin_id: 'disc_100m_h', namn: 'Försök', datum: '2026-07-24', tid: '18:55', plats: 'Bana', ordning: 0 },
+  { id: 'p10', disciplin_id: 'disc_tiokamp', namn: 'Grenar 1–5', datum: '2026-07-24', tid: '10:00', plats: 'Flera', ordning: 0 },
+  { id: 'p11', disciplin_id: 'disc_tiokamp', namn: 'Grenar 6–10', datum: '2026-07-25', tid: '10:00', plats: 'Flera', ordning: 0 },
+  { id: 'p12', disciplin_id: 'disc_200m_d', namn: 'Final', datum: '2026-07-25', tid: '18:10', plats: 'Bana', ordning: 0 },
+  { id: 'p13', disciplin_id: 'disc_110h_h', namn: 'Final', datum: '2026-07-25', tid: '17:45', plats: 'Bana', ordning: 0 },
+  { id: 'p14', disciplin_id: 'disc_hojd_d', namn: 'Final', datum: '2026-07-25', tid: '16:00', plats: 'Mattan', ordning: 0 },
+  { id: 'p15', disciplin_id: 'disc_stav_h', namn: 'Final', datum: '2026-07-26', tid: '16:00', plats: 'Stav', ordning: 0 },
 ]
 
 export async function listaPass(disciplinId) {

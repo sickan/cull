@@ -729,6 +729,19 @@ class Api:
             "SELECT p.* FROM pass p JOIN disciplin d ON d.id=p.disciplin_id "
             "WHERE d.tavling_id=? ORDER BY p.datum, p.tid", (tavling_id,))]
 
+    def _tavlingsdagar(self, tavling_id):
+        """Tävlingens dagar — EN sanning för både navigatorns "dag N" (M-3) och
+        Program-lägets dagflikar (M-4). Härledd ur samma källor som
+        store.program() (pass + tidsatta matcher/hållpunkter), aldrig lagrad.
+        Utan den skulle en hållpunkt på en passlös dag ge navigatorn och
+        dagflikarna olika dagnummer. Billig: bara datumkolumnerna."""
+        rader = [{"datum": r[0]} for r in self.conn.execute(
+            "SELECT p.datum FROM pass p JOIN disciplin d ON d.id=p.disciplin_id "
+            "WHERE d.tavling_id=? "
+            "UNION SELECT datum FROM matchen WHERE event_id=? OR tavling_id=?",
+            (tavling_id, tavling_id, tavling_id))]
+        return masterskap.tavlingsdagar(rader)
+
     def hamta_masterskap_grenar(self, tavling_id, efter="klass", sok="",
                                 bara_favoriter=False):
         """Gren-navigatorn: grupper + rader, samt om tävlingen alls ska ritas
@@ -737,7 +750,7 @@ class Api:
         for g in grenar:
             g["antal_deltagare"] = len(g.get("deltagare") or [])
         alla_pass = self._tavlingspass(tavling_id)
-        dagar = masterskap.tavlingsdagar(alla_pass)
+        dagar = self._tavlingsdagar(tavling_id)
         per_gren = {}
         for p in alla_pass:
             per_gren.setdefault(p["disciplin_id"], []).append(p)
@@ -761,8 +774,7 @@ class Api:
             return None
         tav = store.hamta_event(self.conn, g["tavling_id"]) \
             or store.hamta_tavling(self.conn, g["tavling_id"]) or {}
-        alla_pass = self._tavlingspass(g["tavling_id"])
-        dagar = masterskap.tavlingsdagar(alla_pass)
+        dagar = self._tavlingsdagar(g["tavling_id"])
         mina = store.lista_pass(self.conn, disciplin_id)
         rad = masterskap.gren_rad(g, dagar, mina)
         pass_ut = []
@@ -787,6 +799,38 @@ class Api:
             "handletext": masterskap.handletext(delt[:gransen]),
             "mer_deltagare": len(delt) > gransen,
             "antal_deltagare": len(delt),
+        }
+
+    def hamta_masterskap_program(self, tavling_id, dag=1, bara_favoriter=False):
+        """Läge "Program" (C12/M-4): dagflikar + tidsaxel i stället för 37
+        rader rakt ned.
+
+        ⚠️ Programmet HÄRLEDS, det lagras ALDRIG (låst invariant). Källan är
+        den befintliga och enda härledningen, `store.program()` (V5 §8) — alla
+        grenars pass + tidsatta matcher som pekar hit + eventets fria
+        hållpunkter, sorterat på tid. Här görs bara presentation ovanpå den.
+        """
+        dagar = self._tavlingsdagar(tavling_id)
+        dagnr = int(dag or 1)
+        if dagar:
+            dagnr = min(max(dagnr, 1), len(dagar))
+        datum = dagar[dagnr - 1] if dagar else ""
+        block = store.program(self.conn, tavling_id, datum=datum) if datum else []
+        grenar = {g["id"]: g for g in
+                  store.lista_discipliner(self.conn, tavling_id)}
+        favoriter = sum(1 for g in grenar.values() if g.get("favorit"))
+        rader = masterskap.tidsaxel(
+            block[0]["rader"] if block else [], grenar,
+            bara_favoriter=bool(bara_favoriter))
+        return {
+            "dagar": masterskap.dagflikar(dagar),
+            "dag": dagnr,
+            "datum": datum,
+            "antal_favoriter": favoriter,
+            "rader": rader,
+            "ledtext": masterskap.programlead(
+                len(rader), dagnr, bara_favoriter=bool(bara_favoriter),
+                antal_favoriter=favoriter),
         }
 
     def koppla_disciplin_deltagare(self, disciplin_id, lag_id, pa=True):
