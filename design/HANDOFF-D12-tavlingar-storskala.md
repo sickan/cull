@@ -1,10 +1,11 @@
-# Design-handoff D12 — Tävlingar i stor skala (NYTT design-jobb)
+# Design-handoff D12 — Tävlingar + Lag & Utövare i stor skala (NYTT design-jobb)
 
 *2026-07-19 · Till: Claude Design · Från: Code*
 
 *Stigs beställning: "Vi måste se över Tävlingar och t.ex. Friidrott även om det
 inte är så många sådana tävlingar. Men skidåkning är lite på samma håll. Sidan
-är helt ohållbar nu. Ta ett helt nytt grepp."*
+är helt ohållbar nu. Ta ett helt nytt grepp." + "Lika bra att ta med Lag och
+Utövare också. Känns inte rätt nu den heller."*
 
 *Kontext: eventmodellen + fältflödet (D11-svaret) är byggda och SM-testade. Det
 som nu visat sig är att Tävlingar-DETALJVYN i DPT2 inte skalar för ett stort
@@ -45,6 +46,32 @@ att jobba fokuserat (jfr mobilens favoritgrenar, som vi redan byggt där).
 program, deltagare per gren), men detaljvyn presenterar allt platt och
 allt-på-en-gång. Det som saknas är STRUKTUR för skala: gruppering, klass,
 sök/filter, och en arbetsyta byggd för hundratals rader.
+
+### 4. Lag & Utövare — editorn och sidorna känns fel (Stigs andra ask)
+Efter Utövare-mergen (D11b §2) bor lag OCH utövare i ETT register, men UI:t
+speglar inte det:
+
+- **Utövar-editorn ÄR den gamla LAG-editorn** med en Lag/Individ-toggle. Lag-
+  centrerade fält läcker på en individ: **profil-FÄRG** (klubbfärg för ett lag),
+  **"ARKIVERAT — göms i registret. Matcher som redan använder laget påverkas
+  inte"** (matcher/lag-språk för en person), ställfärger osv. En utövare behöver
+  namn · klubb · klass · @-konto · ev. porträtt — inte en lag-editor med en
+  bock i.
+- **Klass-krock:** editorn har en Dam/Herr-toggle på personen, men koppling-
+  chippet visar TÄVLINGENS klass: *"Friidrotts-SM 2026 · **Mixed** · Friidrott"*
+  bredvid personens "Dam". Två olika klass-begrepp (personens vs tävlingens) i
+  samma vy → förvirrande.
+- **Fel kopplingsbegrepp:** "KOPPLAD TILL LIGA / TÄVLING / MÄSTERSKAP" som en
+  flat chip på personen. Men den RIKTIGA kopplingen är gren-deltagande
+  (`disciplin_deltagare` per gren) — det är den som ger "Kommande starter" på
+  utövarsidan. En flat tävling-chip på personen är ett tredje, krockande sätt
+  att koppla.
+- **Utövarsidan** (byggd, D11b §2 — profil + Kommande starter + Historik) är i
+  sig läsbar, men den, editorn och Lag-registret hör ihop och bör tänkas om
+  tillsammans nu när allt är ETT register.
+
+Kort: lag (team, spelartrupp, ställfärger) och utövare (individ i grenar) har
+olika behov men delar i dag en editor byggd för lag.
 
 ---
 
@@ -93,14 +120,25 @@ färg; DPT2:s look & feel i övrigt.
    bör täcka flergrens-/flerklass-mästerskap generellt, inte bara friidrott.
 6. **Läs in / granskning:** räcker C8–C10-granskningen för 845 rader, eller
    behöver den samma skal-tänk?
+7. **Lag vs Utövare — en editor eller två?** Efter mergen är det ETT register
+   men två slags poster (lag/team med trupp+ställfärger; utövare/individ i
+   grenar). Ska editorn dela form men visa rätt fält per slag, eller är det två
+   editorer? Vilka fält hör egentligen till en utövare?
+8. **Utövarens koppling:** hur ska en utövare kopplas till det den tävlar i —
+   via grenen (disciplin_deltagare, som redan driver Kommande starter) i stället
+   för en flat tävling-chip? Och hur undviker vi klass-krocken (personens klass
+   vs tävlingens)? Utövarsidan (Kommande starter/Historik) får gärna tänkas om i
+   samma veva.
 
 ---
 
 ## Avgränsning
-- Detaljvyn för STORA tävlingar (mästerskap/flergrens). Små cups/turneringar med
-  en handfull grenar fungerar redan — men en gemensam form som klarar båda är
+- Detaljvyn för STORA tävlingar (mästerskap/flergrens) + **Lag & Utövare-
+  registret/editorn/sidorna** (Stigs andra ask). Små cups/turneringar med en
+  handfull grenar fungerar redan — men en gemensam form som klarar båda är
   önskvärd.
 - Ingen datamodell-ändring krävs (men Design får föreslå fält om det behövs).
+  Utövare + lag är ETT register i `lag` (kind team/individ) efter D11b §2.
 - Rör inte fältflödet (D11) eller mobilens favoritgrenar — de är byggda och
   fungerar; de kan tvärtom vara mönster att låna.
 
