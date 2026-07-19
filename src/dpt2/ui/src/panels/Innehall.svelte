@@ -118,15 +118,32 @@
 
   let editorEl                        // editorns topp (scroll vid öppning)
 
-  onMount(async () => {
-    lasUtkast()
-    ;[matcher, lagAlla, profiler, materials, fotojobb, tavlingar] = await Promise.all(
-      [listaMatcher(), listaLag(), sportprofiler(), listaMaterial(), listaFotojobb(), listaTavlingar()])
-    await Promise.all([laddaOversikt(), laddaPagang(), laddaTopp()])
-    // Matchartikeln utgår från aktiv match tills man byter (README §3).
-    const am = await aktivMatch()
-    if (am?.id) artMatchId = am.id
-  })
+  // Laddningstillstånd: en långsam hämtning får ALDRIG se ut som tom data.
+  // Visar tydlig progress medan det laddar, och ett fel med "Försök igen" om
+  // något brakar — aldrig en tyst tom vy (Stigs CMS-skräck 19/7).
+  let laddar = true
+  let laddfel = ''
+  let laddSteg = 'Startar…'
+
+  async function laddaAllt() {
+    laddar = true; laddfel = ''
+    try {
+      laddSteg = 'Hämtar matcher, lag & tävlingar…'
+      ;[matcher, lagAlla, profiler, materials, fotojobb, tavlingar] = await Promise.all(
+        [listaMatcher(), listaLag(), sportprofiler(), listaMaterial(), listaFotojobb(), listaTavlingar()])
+      laddSteg = 'Hämtar innehåll & På gång…'
+      await Promise.all([laddaOversikt(), laddaPagang(), laddaTopp()])
+      // Matchartikeln utgår från aktiv match tills man byter (README §3).
+      const am = await aktivMatch()
+      if (am?.id) artMatchId = am.id
+    } catch (e) {
+      laddfel = 'Kunde inte ladda innehållet. Kontrollera att DPT2 kör och försök igen.'
+    } finally {
+      laddar = false
+    }
+  }
+
+  onMount(() => { lasUtkast(); laddaAllt() })
 
   function setLibType(t) { libType = t }
   function oppnaEditor(typ) {
@@ -863,7 +880,18 @@
       {#if libType === 'sport'}<span class="cmshint2">Matchartiklar skapas från en match · tävling från en heldagsaktivitet i Fotojobb.</span>{/if}
     </div>
 
-    {#if libType === 'sport'}
+    {#if laddar}
+      <!-- En långsam hämtning får aldrig se ut som tom data (Stigs CMS-skräck). -->
+      <div class="laddstatus">
+        <span class="laddspinner"></span>
+        <span class="laddtext">{laddSteg}</span>
+      </div>
+    {:else if laddfel}
+      <div class="laddstatus fel">
+        <span class="laddtext">⚠ {laddfel}</span>
+        <button class="omforsok" on:click={laddaAllt}>Försök igen</button>
+      </div>
+    {:else if libType === 'sport'}
       <!-- ── Sport = startsidan (4a) ── -->
       <div class="kort sportstart">
         <div class="ovhuvud">
@@ -1374,6 +1402,20 @@
   .nyknapp { flex: none; background: var(--acc); color: #fff; border: 0; border-radius: 9px;
     padding: 10px 15px; font-size: 12.5px; font-weight: 600; }
   .cmssub { font-size: 11.5px; color: var(--t-mut); margin: 8px 2px 0; }
+  /* Laddindikator — tydlig progress så en långsam hämtning inte ser ut som
+     tom data; fel visas med "Försök igen" i stället för tyst tomhet. */
+  .laddstatus { display: flex; align-items: center; gap: 12px; margin: 18px 2px;
+    padding: 16px 18px; background: var(--kort); border: 1px solid var(--div);
+    border-radius: 12px; }
+  .laddstatus.fel { border-color: var(--rose, #C9657F); flex-wrap: wrap; }
+  .laddtext { font-size: 13px; color: var(--t-mut); }
+  .laddspinner { width: 18px; height: 18px; flex: none; border-radius: 50%;
+    border: 2.5px solid var(--div); border-top-color: var(--acc);
+    animation: laddsnurr 0.8s linear infinite; }
+  @keyframes laddsnurr { to { transform: rotate(360deg); } }
+  .omforsok { margin-left: auto; border: 1px solid var(--acc); background: var(--acc);
+    color: #fff; border-radius: 8px; padding: 6px 14px; font-family: inherit;
+    font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .cmshint2 { color: var(--t-help); }
 
   /* Bibliotekets rader (publicerat & utkast) */
