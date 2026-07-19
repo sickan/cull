@@ -322,6 +322,29 @@ export async function listaIndivider() {
   return wait(structuredClone(MOCK_INDIVIDER))
 }
 
+// Utövare-sidan (D11b §2) — ett register (lag kind='individ'), historik/starter
+// härledda i backend. @-handle enda skrivbara.
+export async function listaUtovare() {
+  const api = brygga()
+  if (api) return api.lista_utovare()
+  return wait(structuredClone(MOCK_INDIVIDER))
+}
+
+export async function hamtaUtovare(id) {
+  const api = brygga()
+  if (api) return api.hamta_utovare(id)
+  const u = MOCK_INDIVIDER.find((x) => x.id === id)
+  return wait(u ? { ...u, historik: [], starter: [] } : null)
+}
+
+export async function sattUtovareHandle(id, handle) {
+  const api = brygga()
+  if (api) return api.satt_utovare_handle(id, handle)
+  const u = MOCK_INDIVIDER.find((x) => x.id === id)
+  if (u) u.instagram = handle
+  return wait({ ok: !!u })
+}
+
 export async function sparaIndivid(d) {
   const api = brygga()
   if (api) return api.spara_individ(d)

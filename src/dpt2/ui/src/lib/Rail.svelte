@@ -16,6 +16,7 @@
       { id: 'matcher', namn: 'Matcher' },
       { id: 'eventsektion', namn: 'Tävlingar' },          // V5-C (handoff §2); D11b §1: 'Event' försvinner ur UI
       { id: 'lag', namn: 'Lag & ligor' },                 // V5-C: omdöpt
+      { id: 'utovare', namn: 'Utövare' },                 // D11b §2: eget register
     ] },
     // §8 (UX-lyftet): jobbet som nav — "Efter jobb" + "Publicera" (inte
     // match-specifikt); §9: Träna har lämnat naven (tyst träning + rad i

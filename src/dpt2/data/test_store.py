@@ -2091,3 +2091,29 @@ class TestUtovareMigrering(unittest.TestCase):
         self.assertTrue(db._har_kolumn(self.c, "event_deltagare", "lag_id"))
         self.assertEqual(
             self.c.execute("SELECT COUNT(*) FROM event_deltagare").fetchone()[0], 1)
+
+
+class TestUtovareStarter(unittest.TestCase):
+    """D11b §2 — utövarsidans härledda starter (pass, aldrig lagrade)."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.ev = store.upsert_tavling(self.c, "SM 2026", sport="friidrott",
+                                       typ="masterskap", fran="2026-07-24",
+                                       till="2026-07-26")
+        self.gren = store.upsert_disciplin(self.c, self.ev, "100 m", gren="dam")
+        self.lid = store.upsert_lag(self.c, "Anna Andersson", kind="individ",
+                                    sport="friidrott")
+        store.koppla_disciplin_deltagare(self.c, self.gren, self.lid)
+
+    def test_starter_harleds_ur_grenkopplingen_med_tavlingskontext(self):
+        store.upsert_pass(self.c, self.gren, "Försök", "2026-07-24", tid="09:00")
+        store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:10")
+        s = store.utovare_starter(self.c, self.lid)
+        self.assertEqual([(x["pass"], x["klass"], x["event_namn"]) for x in s],
+                         [("Försök", "dam", "SM 2026"),
+                          ("Final", "dam", "SM 2026")])
+
+    def test_okopplad_utovare_har_inga_starter(self):
+        ovrig = store.upsert_lag(self.c, "Bea Berg", kind="individ")
+        self.assertEqual(store.utovare_starter(self.c, ovrig), [])

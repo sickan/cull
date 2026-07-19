@@ -1671,6 +1671,33 @@ def individ_historik(conn, utovare_id):
     return ut
 
 
+def utovare_starter(conn, utovare_id):
+    """Utövarens starter — HÄRLEDDA pass i alla grenar hen är kopplad till (via
+    disciplin_deltagare eller event_deltagare.grenar), med tävlingskontext.
+    Sorterat på datum+tid. Aldrig lagrat på utövaren — alltid frågat.
+
+    UI:t avgör själv vad som är 'kommande' (mot dagens datum) — store känner
+    inte till 'idag' (skulle bryta reproducerbara tester)."""
+    disc = set()
+    for r in conn.execute(
+            "SELECT disciplin_id FROM disciplin_deltagare WHERE lag_id=?",
+            (utovare_id,)):
+        disc.add(r["disciplin_id"])
+    for r in conn.execute(
+            "SELECT grenar FROM event_deltagare WHERE lag_id=?", (utovare_id,)):
+        disc.update(json.loads(r["grenar"] or "[]"))
+    if not disc:
+        return []
+    qm = ",".join("?" * len(disc))
+    return [dict(r) for r in conn.execute(
+        "SELECT p.namn AS pass, p.datum, p.tid, p.plats, d.namn AS gren, "
+        "d.gren AS klass, d.tavling_id AS event_id, e.namn AS event_namn "
+        "FROM pass p JOIN disciplin d ON d.id=p.disciplin_id "
+        "LEFT JOIN event e ON e.id=d.tavling_id "
+        f"WHERE p.disciplin_id IN ({qm}) "
+        "ORDER BY p.datum, COALESCE(p.tid,'99:99'), p.namn", tuple(disc))]
+
+
 KATEGORI_TOPP = ("sport", "landskap", "manniskor", "film")
 
 

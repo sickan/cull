@@ -971,6 +971,23 @@ class Api:
         store.radera_individ(self.conn, individ_id)
         return {"ok": True}
 
+    # ── Utövare-sidan (D11b §2) ──────────────────────────────────────────────
+    # Ett register (lag kind='individ'). Historik + starter HÄRLEDS, aldrig
+    # lagrade på utövaren. @-handle är det enda skrivbara på kortet.
+    def lista_utovare(self):
+        return store.lista_individer(self.conn)
+
+    def hamta_utovare(self, utovare_id):
+        u = store.hamta_individ(self.conn, utovare_id)
+        if not u:
+            return None
+        u["historik"] = store.individ_historik(self.conn, utovare_id)
+        u["starter"] = store.utovare_starter(self.conn, utovare_id)
+        return u
+
+    def satt_utovare_handle(self, utovare_id, handle):
+        return {"ok": store.satt_deltagare_handle(self.conn, utovare_id, handle)}
+
     def koppla_event_deltagare(self, event_id, individ_id, grenar=None):
         store.satt_event_deltagare(self.conn, event_id, individ_id, grenar)
         return {"ok": True}

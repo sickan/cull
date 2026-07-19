@@ -5,6 +5,7 @@
   import Matcher from './panels/Matcher.svelte'
   import EventSektion from './panels/EventSektion.svelte'
   import Lag from './panels/Lag.svelte'
+  import Utovare from './panels/Utovare.svelte'
   import Gallra from './panels/Gallra.svelte'
   import Leverera from './panels/Leverera.svelte'
   import Snabbplock from './panels/Snabbplock.svelte'
@@ -138,6 +139,8 @@
       <EventSektion on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'lag'}
       <Lag />
+    {:else if aktiv === 'utovare'}
+      <Utovare />
     {:else if aktiv === 'gallra'}
       <Gallra {aktivMatchData} on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
     {:else if aktiv === 'leverera'}
