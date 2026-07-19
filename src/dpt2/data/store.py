@@ -1176,6 +1176,13 @@ def _gren_for_namn(conn, event_id, namn, skapade, klass=None):
             continue
         namnlika.append(d["id"])
         if d["gren"] == klass:
+            # Samma gren, annan stavning ("100m" ur PDF:en → "100 m" ur
+            # startlistan): låt den inkommande källan rätta namnet. Nyckeln är
+            # redan lika, så det kan aldrig bli ett riktigt namnbyte.
+            if d["namn"] != namn:
+                conn.execute("UPDATE disciplin SET namn=? WHERE id=?",
+                             (namn, d["id"]))
+                conn.commit()
             return d["id"]
         if d["gren"] is None and utan_klass is None:
             utan_klass = d["id"]

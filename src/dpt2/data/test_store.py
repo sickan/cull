@@ -1963,3 +1963,24 @@ class TestGrenklassOchFaslosa(unittest.TestCase):
         store.koppla_disciplin_deltagare(self.c, h, lid)
         self.assertEqual(store.backfilla_deltagarklass(self.c, self.ev), 0)
         self.assertIsNone(store.hamta_lag(self.c, lid)["gren"])
+
+    def test_farskare_kallan_rattar_stavningen(self):
+        """PDF:en gav '100m', startlistan ger '100 m' — samma gren, och namnet
+        ska följa den nyare källan så dam och herr inte stavas olika."""
+        store.importera_program(self.c, self.ev, [
+            {"gren": "100m", "pass": "Final", "datum": "2026-07-24",
+             "tid": "20:35", "klass": "herr"}])
+        store.importera_program(self.c, self.ev, [
+            {"gren": "100 m", "pass": "Final", "datum": "2026-07-24",
+             "tid": "20:35", "klass": "herr"}])
+        grenar = store.lista_discipliner(self.c, self.ev)
+        self.assertEqual([g["namn"] for g in grenar], ["100 m"])
+
+    def test_stavningsrattning_ar_inte_ett_namnbyte(self):
+        """Bara när nyckeln redan är lika — 'Höjd' blir aldrig 'Längd'."""
+        gid = store.upsert_disciplin(self.c, self.ev, "Höjd", gren="dam")
+        store.importera_program(self.c, self.ev, [
+            {"gren": "Längd", "pass": "Final", "datum": "2026-07-24",
+             "tid": "19:00", "klass": "dam"}])
+        namn = sorted(g["namn"] for g in store.lista_discipliner(self.c, self.ev))
+        self.assertEqual(namn, ["Höjd", "Längd"])
