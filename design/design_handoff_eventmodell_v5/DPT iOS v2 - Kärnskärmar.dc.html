@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700;800&family=Saira+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;background:#0b0e12;font-family:'Saira',system-ui,sans-serif;color:#f3f5f7;}
+  a{color:#F0B45A;} a:hover{color:#F4C277;}
+  .sc{font-family:'Saira Condensed',sans-serif;}
+  .scr::-webkit-scrollbar{width:0;height:0;}
+</style>
+</helmet>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#0a0d11"/><circle cx="50" cy="40" r="20" fill="none" stroke="#F0B45A" stroke-width="3.5"/><path d="M50 30v11l7 4" stroke="#F0B45A" stroke-width="3.5" fill="none" stroke-linecap="round"/><rect x="30" y="72" width="40" height="7" rx="3.5" fill="#F0B45A"/></svg></template>
+
+<div style="min-height:100vh;padding:46px 52px 90px;background:#0b0e12;background-image:radial-gradient(circle at 28% -5%,#12171d,#0b0e12 62%);">
+
+  <!-- HERO -->
+  <div style="position:relative;overflow:hidden;border-radius:30px;border:1px solid rgba(255,255,255,.07);background:radial-gradient(90% 130% at 16% 24%,rgba(240,180,90,.12),transparent 52%),linear-gradient(120deg,#10161d,#080b0e 74%);box-shadow:0 30px 70px rgba(0,0,0,.45);max-width:1320px;margin-bottom:46px;">
+    <img src="assets/logo-hast-orange.png" alt="" style="position:absolute;right:44px;top:50%;transform:translateY(-50%);width:210px;height:200px;object-fit:contain;opacity:.08;pointer-events:none;">
+    <div style="position:relative;padding:48px 52px;">
+      <div style="display:flex;align-items:center;gap:13px;">
+        <img src="assets/logo-hast-orange.png" alt="" style="width:36px;height:34px;object-fit:contain;filter:drop-shadow(0 2px 10px rgba(240,180,90,.35));">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.4em;color:rgba(240,180,90,.85);">DALECARLIA&nbsp;PHOTO&nbsp;TOOLS · iOS v2</div>
+      </div>
+      <div class="sc" style="font-weight:700;font-size:58px;line-height:.96;margin-top:18px;">Kärnskärmarna i ny ton</div>
+      <div style="width:60px;height:3px;border-radius:2px;background:linear-gradient(90deg,#F0B45A,rgba(240,180,90,.2));margin:20px 0 16px;"></div>
+      <div style="font-size:15px;color:rgba(243,245,247,.72);max-width:680px;line-height:1.6;">De byggda skärmarna lyfta till Skagen Hav-identiteten: <b style="color:#f3f5f7;">sigillet</b> som nedräkningsring, mässing (#F0B45A) som enda accent, Saira Condensed i rubriker, grenfärg som kant. Samma innehåll och flöde som Code redan byggt — bara den grafiska tonen. Klicka i mockuparna, de är levande.</div>
+    </div>
+  </div>
+
+  <!-- SECTION -->
+  <div style="display:flex;align-items:center;gap:14px;margin:0 0 26px;max-width:1320px;">
+    <span class="sc" style="font-weight:700;font-size:15px;color:rgba(240,180,90,.55);">→</span>
+    <span class="sc" style="font-weight:700;font-size:16px;letter-spacing:.24em;color:#f3f5f7;">HEM · BILDER · NY STORY · MATCHDETALJ</span>
+    <span style="flex:1;height:1px;background:linear-gradient(90deg,rgba(240,180,90,.4),rgba(255,255,255,.06));"></span>
+  </div>
+
+  <div style="display:flex;gap:42px;flex-wrap:wrap;align-items:flex-start;">
+
+  <!-- ============ SKÄRM 1 · HEM ============ -->
+  <div style="width:360px;flex:none;">
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="360px,780px">
+  <div data-screen-label="Hem" class="scr" style="position:relative;height:100%;overflow-y:auto;background:#0a0d11;color:#f3f5f7;font-family:'Saira',system-ui,sans-serif;">
+    <!-- photo hero -->
+    <div style="position:relative;height:430px;overflow:hidden;">
+      <div style="position:absolute;inset:0;background:linear-gradient(160deg,#3a5568 0%,#4a6274 38%,#2b3a44 72%,#171c20 100%);"></div>
+      <div style="position:absolute;inset:0;background:radial-gradient(80% 60% at 50% 30%,rgba(0,0,0,0),rgba(8,12,16,.55) 100%);"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:140px;background:linear-gradient(to top,#0a0d11,transparent);"></div>
+      <span style="position:absolute;left:0;right:0;top:44%;text-align:center;font-size:11px;color:rgba(255,255,255,.4);">▨ matchdagens foto</span>
+      <!-- header row -->
+      <div style="position:relative;padding:50px 18px 0;display:flex;align-items:flex-start;gap:11px;">
+        <img src="assets/logo-hast-orange.png" alt="" style="width:34px;height:32px;object-fit:contain;opacity:.9;filter:drop-shadow(0 2px 8px rgba(0,0,0,.4));">
+        <div style="line-height:1;flex:1;min-width:0;">
+          <div style="font-size:8px;font-weight:700;letter-spacing:.32em;color:rgba(255,255,255,.62);">DALECARLIA PHOTO</div>
+          <div class="sc" style="font-size:19px;font-weight:700;margin-top:3px;">DPT</div>
+          <div style="font-size:9px;color:rgba(255,255,255,.5);margin-top:2px;">v2.0.0 · build 13</div>
+        </div>
+        <div style="width:34px;height:34px;border-radius:50%;background:rgba(10,13,17,.42);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;flex:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.6v2.6M12 18.8v2.6M21.4 12h-2.6M5.2 12H2.6M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8M18.4 18.4l-1.8-1.8M7.4 7.4 5.6 5.6"/></svg></div>
+        <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(10,13,17,.42);backdrop-filter:blur(10px);border-radius:999px;padding:7px 11px;flex:none;"><span style="width:6px;height:6px;border-radius:50%;background:#6FB35A;"></span><span style="font-size:10px;font-weight:600;color:#fff;">Synkad 00:43</span></div>
+      </div>
+      <!-- countdown sigill -->
+      <div style="position:relative;margin-top:6px;display:flex;flex-direction:column;align-items:center;">
+        <div style="position:relative;width:220px;height:220px;display:flex;align-items:center;justify-content:center;">
+          <svg width="220" height="220" viewBox="0 0 220 220" style="position:absolute;inset:0;"><circle cx="110" cy="110" r="98" fill="none" stroke="rgba(240,180,90,.3)" stroke-width="1.5"/><circle cx="110" cy="110" r="80" fill="none" stroke="rgba(240,180,90,.16)" stroke-width="1"/></svg>
+          <img src="assets/logo-hast-orange.png" alt="" style="position:absolute;width:150px;height:143px;object-fit:contain;opacity:.13;"/>
+          <div style="position:relative;text-align:center;">
+            <div style="font-size:9px;font-weight:700;letter-spacing:.3em;color:rgba(255,255,255,.7);">AVSPARK OM</div>
+            <div class="sc" style="font-size:52px;font-weight:700;line-height:.9;margin-top:2px;text-shadow:0 2px 16px rgba(0,0,0,.5);">5 dagar</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.72);margin-top:6px;">16° prognos · kl 08:00</div>
+          </div>
+        </div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.28em;color:#F0B45A;margin-top:2px;">MATCHDAG</div>
+        <div class="sc" style="font-size:29px;font-weight:700;margin-top:6px;">Friidrotts-SM 2026</div>
+        <div style="font-size:12.5px;color:rgba(243,245,247,.6);margin-top:2px;">Uppsala friidrottsarena</div>
+      </div>
+    </div>
+
+    <!-- HÄR I DAG card -->
+    <div style="margin:6px 14px 0;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:15px 15px 4px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.16em;color:rgba(243,245,247,.55);">HÄR I DAG</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#F0B45A;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F0B45A" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>gyllene tim. 20:32</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(243,245,247,.5);margin-top:10px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6 7-12a7 7 0 1 0-14 0c0 6 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>IDAG · Lomma <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6FB35A" stroke-width="2"><path d="M7 10l-3 3 3 3M4 13h9M17 14l3-3-3-3M20 11h-9"/></svg></div>
+      <div style="display:flex;justify-content:space-between;gap:4px;margin-top:12px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.08);">
+        <sc-for list="{{ vader }}" as="w" hint-placeholder-count="5">
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <span style="font-size:10.5px;color:rgba(243,245,247,.5);">{{ w.tid }}</span>
+            <span style="{{ w.icon }}"></span>
+            <span class="sc" style="font-size:16px;font-weight:700;">{{ w.temp }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:13px;color:rgba(243,245,247,.85);">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(243,245,247,.7)" stroke-width="1.7"><path d="M5 16V9l1.5-4h11L19 9v7M5 16h14M5 16v2M19 16v2"/><circle cx="8" cy="16" r="1.4"/><circle cx="16" cy="16" r="1.4"/></svg>
+        6 t 25 min dit · <span style="color:#F0B45A;font-weight:600;">åk senast 00:24</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;text-align:center;padding:13px 4px 4px;">
+        <div><div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:rgba(243,245,247,.45);">ANKOMST</div><div class="sc" style="font-size:21px;font-weight:700;margin-top:4px;">06:00</div></div>
+        <div><div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:rgba(243,245,247,.45);">UPPVÄRMNING</div><div class="sc" style="font-size:21px;font-weight:700;margin-top:4px;">07:15</div></div>
+        <div><div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:#F0B45A;">AVSPARK</div><div class="sc" style="font-size:21px;font-weight:700;margin-top:4px;color:#F0B45A;">08:00</div></div>
+      </div>
+    </div>
+    <div style="margin:14px 14px 18px;border-radius:15px;padding:15px;text-align:center;font-size:15px;font-weight:700;color:#0b0e12;background:linear-gradient(180deg,#F0B45A,#E39C3E);box-shadow:0 10px 24px rgba(240,180,90,.24);">Till matchen →</div>
+
+    <!-- tabbar -->
+    <div style="position:sticky;bottom:0;display:flex;padding:8px 14px 14px;background:linear-gradient(to top,#0a0d11 70%,transparent);gap:4px;">
+      <sc-for list="{{ tabsHem }}" as="t" hint-placeholder-count="4">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><span style="{{ t.icon }}"></span><span style="{{ t.lbl }}">{{ t.name }}</span></div>
+      </sc-for>
+    </div>
+  </div>
+  </x-import>
+  <div class="sc" style="font-size:16px;font-weight:700;margin-top:14px;">Hem — Matchdag</div>
+  <div style="font-size:12px;color:rgba(243,245,247,.55);line-height:1.5;margin-top:3px;">Nedräkningen bor i <b style="color:#f3f5f7;">sigillet</b> (samma märke som låsskärmens gauge). Foto fyller toppen, mässing en enda accent, väder & restid i ett lugnt kort.</div>
+  </div>
+
+  <!-- ============ SKÄRM 2 · BILDER ============ -->
+  <div style="width:360px;flex:none;">
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="360px,780px">
+  <div data-screen-label="Bilder" class="scr" style="position:relative;height:100%;overflow-y:auto;background:#0a0d11;color:#f3f5f7;font-family:'Saira',system-ui,sans-serif;display:flex;flex-direction:column;">
+    <div style="position:absolute;inset:0 0 auto;height:200px;background:radial-gradient(120% 90% at 20% 0%,rgba(240,180,90,.10),transparent 60%);pointer-events:none;"></div>
+    <div style="position:relative;padding:50px 18px 0;flex:1;">
+      <div style="display:flex;align-items:flex-start;gap:11px;">
+        <img src="assets/logo-hast-orange.png" alt="" style="width:34px;height:32px;object-fit:contain;opacity:.55;">
+        <div style="line-height:1;flex:1;"><div style="font-size:8px;font-weight:700;letter-spacing:.32em;color:rgba(243,245,247,.5);">DALECARLIA PHOTO</div><div class="sc" style="font-size:16px;font-weight:700;margin-top:3px;">DPT</div></div>
+        <div style="width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;flex:none;opacity:.5;"><img src="assets/logo-hast-orange.png" alt="" style="width:17px;height:16px;object-fit:contain;"></div>
+      </div>
+      <div class="sc" style="font-size:34px;font-weight:700;margin-top:14px;">Bilder</div>
+
+      <!-- segmented -->
+      <div style="display:flex;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:4px;margin-top:16px;gap:3px;">
+        <sc-for list="{{ bilderTabs }}" as="b" hint-placeholder-count="3">
+          <div onClick="{{ b.set }}" style="{{ b.style }}">{{ b.label }}</div>
+        </sc-for>
+      </div>
+
+      <!-- KAMERAN -->
+      <sc-if value="{{ isKamera }}" hint-placeholder-val="{{ true }}">
+      <div style="margin-top:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:15px 16px;">
+        <div style="display:flex;align-items:center;gap:9px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#F0B45A;flex:none;box-shadow:0 0 0 4px rgba(240,180,90,.16);"></span>
+          <span style="font-size:14px;font-weight:700;flex:1;">Väntar på kameran…</span>
+          <span style="font-size:12px;font-weight:600;color:rgba(243,245,247,.8);background:rgba(255,255,255,.08);border-radius:999px;padding:6px 13px;">Stäng av</span>
+        </div>
+        <div class="sc" style="font-size:26px;font-weight:700;color:#F0B45A;margin-top:12px;font-variant-numeric:tabular-nums;letter-spacing:.01em;">192.168.1.181:2121</div>
+        <div style="font-size:11.5px;color:rgba(243,245,247,.5);margin-top:7px;line-height:1.45;">Användare <b style="color:rgba(243,245,247,.75);">dpt</b> · på internetdelning är adressen alltid 172.20.10.1</div>
+      </div>
+      </sc-if>
+
+      <!-- KORTET -->
+      <sc-if value="{{ isKort }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top:14px;text-align:center;padding:40px 20px;">
+        <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="rgba(243,245,247,.32)" stroke-width="1.5" style="margin:0 auto;display:block;"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v4h6"/></svg>
+        <div class="sc" style="font-size:22px;font-weight:700;margin-top:16px;">Väntar på kort…</div>
+        <div style="font-size:12.5px;color:rgba(243,245,247,.55);margin-top:6px;line-height:1.5;">Sätt i ett känt kort via kortläsaren så öppnas det automatiskt.</div>
+        <div style="font-size:12.5px;font-weight:600;color:#F0B45A;margin-top:14px;">Välj annat kort</div>
+      </div>
+      </sc-if>
+
+      <!-- PÅ TELEFONEN -->
+      <sc-if value="{{ isTelefon }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top:14px;text-align:center;padding:40px 20px;">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="rgba(243,245,247,.32)" stroke-width="1.5" style="margin:0 auto;display:block;"><rect x="3" y="6" width="15" height="12" rx="2"/><rect x="7" y="3" width="14" height="12" rx="2" fill="#0a0d11"/><circle cx="12" cy="8" r="1.6"/><path d="M8 15l3-3 3 3 2-2 5 5"/></svg>
+        <div class="sc" style="font-size:22px;font-weight:700;margin-top:16px;">Inga bilder på telefonen</div>
+        <div style="font-size:12.5px;color:rgba(243,245,247,.55);margin-top:6px;line-height:1.5;">Importera original från kortet så dyker de upp här — även utan kortet anslutet.</div>
+      </div>
+      </sc-if>
+
+      <!-- empty (kameran) -->
+      <sc-if value="{{ isKamera }}" hint-placeholder-val="{{ true }}">
+      <div style="text-align:center;padding:44px 20px 20px;">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="rgba(243,245,247,.28)" stroke-width="1.5" style="margin:0 auto;display:block;"><rect x="3" y="7" width="15" height="12" rx="2.5"/><rect x="7" y="4" width="14" height="12" rx="2.5" fill="#0a0d11"/><circle cx="14" cy="10" r="3"/></svg>
+        <div class="sc" style="font-size:22px;font-weight:700;margin-top:16px;">Inga bilder ännu</div>
+        <div style="font-size:12.5px;color:rgba(243,245,247,.55);margin-top:6px;line-height:1.5;">Markera bilder i kameran (i-knappen → Skicka till FTP) så landar de här inom några sekunder.</div>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="position:sticky;bottom:0;display:flex;padding:8px 14px 14px;background:linear-gradient(to top,#0a0d11 70%,transparent);gap:4px;">
+      <sc-for list="{{ tabsBilder }}" as="t" hint-placeholder-count="4">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><span style="{{ t.icon }}"></span><span style="{{ t.lbl }}">{{ t.name }}</span></div>
+      </sc-for>
+    </div>
+  </div>
+  </x-import>
+  <div class="sc" style="font-size:16px;font-weight:700;margin-top:14px;">Bilder — Kameran / Kortet / Telefon</div>
+  <div style="font-size:12px;color:rgba(243,245,247,.55);line-height:1.5;margin-top:3px;">Tryck flikarna. FTP-adressen i mässing = det enda man skriver av. Tomlägen med sigill-diskret ram, samma lugna kort som resten.</div>
+  </div>
+
+  <!-- ============ SKÄRM 3 · NY STORY ============ -->
+  <div style="width:360px;flex:none;">
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="360px,780px">
+  <div data-screen-label="Ny story" class="scr" style="position:relative;height:100%;overflow-y:auto;background:#0a0d11;color:#f3f5f7;font-family:'Saira',system-ui,sans-serif;display:flex;flex-direction:column;">
+    <div style="position:relative;flex:1;padding:50px 16px 0;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:13px;font-weight:600;color:#F0B45A;background:rgba(255,255,255,.05);border-radius:999px;padding:8px 16px;">Stäng</span>
+        <span class="sc" style="flex:1;text-align:center;font-size:18px;font-weight:700;">Ny story</span>
+        <span style="font-size:13px;font-weight:600;color:rgba(243,245,247,.4);background:rgba(255,255,255,.04);border-radius:999px;padding:8px 14px;">Spara utkast</span>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.5);margin:22px 2px 10px;">MOMENT</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <sc-for list="{{ moment }}" as="m" hint-placeholder-count="8">
+          <div onClick="{{ m.set }}" style="{{ m.style }}">{{ m.label }}</div>
+        </sc-for>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.5);margin:22px 2px 10px;">FOTO</div>
+      <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:5px 5px 0;">
+        <div style="display:flex;background:rgba(255,255,255,.04);border-radius:11px;padding:4px;gap:3px;margin:9px;">
+          <div onClick="{{ setLr }}" style="{{ lrStyle }}">Lightroom</div>
+          <div onClick="{{ setTel }}" style="{{ telStyle }}">Telefonen</div>
+        </div>
+        <div style="padding:2px 13px 13px;">
+          <sc-if value="{{ fotoLr }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 0;border-top:1px solid rgba(255,255,255,.07);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#F0B45A" stroke-width="1.7"><rect x="3" y="6" width="18" height="14" rx="2.5"/><circle cx="9" cy="12" r="2.4"/><path d="M3 18l5-4 4 3 3-2 6 5"/></svg>
+            <span style="font-size:14px;font-weight:600;color:#F0B45A;">Välj från foto-rullen (LR-export)</span>
+          </div>
+          <div style="font-size:11.5px;color:rgba(243,245,247,.5);margin-top:4px;">Exportera från Lightroom till foto-rullen — nyast först.</div>
+          </sc-if>
+          <sc-if value="{{ fotoTel }}" hint-placeholder-val="{{ false }}">
+          <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:11px;font-size:12.5px;color:rgba(243,245,247,.55);line-height:1.5;">Inga bilder på telefonen än — importera från kortet under Bilder.</div>
+          </sc-if>
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.5);margin:22px 2px 10px;">OVERLAY</div>
+      <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:9px;">
+        <div style="display:flex;background:rgba(255,255,255,.04);border-radius:11px;padding:4px;gap:3px;">
+          <div onClick="{{ setOvOn }}" style="{{ ovOnStyle }}">Med overlay</div>
+          <div onClick="{{ setOvOff }}" style="{{ ovOffStyle }}">Utan</div>
+        </div>
+        <div style="padding:11px 4px 3px;font-size:14px;color:#f3f5f7;">Malmö FF – Piteå IF DFF</div>
+        <div style="font-size:11px;color:rgba(243,245,247,.45);margin-top:7px;line-height:1.5;padding:0 4px 4px;">Förifyllt ur matchen — tryck för att ändra. Matchfakta läggs på automatiskt.</div>
+      </div>
+      <div style="height:14px;"></div>
+    </div>
+    <div style="position:sticky;bottom:0;padding:10px 16px 20px;background:linear-gradient(to top,#0a0d11 66%,transparent);">
+      <div style="{{ renderStyle }}">Rendera &amp; dela</div>
+    </div>
+  </div>
+  </x-import>
+  <div class="sc" style="font-size:16px;font-weight:700;margin-top:14px;">Ny story</div>
+  <div style="font-size:12px;color:rgba(243,245,247,.55);line-height:1.5;margin-top:3px;">Moment, foto-källa och overlay — valt moment i mässing. Väljer du foto tänds <b style="color:#f3f5f7;">Rendera &amp; dela</b>. Prova växlarna.</div>
+  </div>
+
+  <!-- ============ SKÄRM 4 · MATCHDETALJ ============ -->
+  <div style="width:360px;flex:none;">
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="360px,780px">
+  <div data-screen-label="Matchdetalj" class="scr" style="position:relative;height:100%;overflow-y:auto;background:#0a0d11;color:#f3f5f7;font-family:'Saira',system-ui,sans-serif;display:flex;flex-direction:column;">
+    <div style="position:relative;flex:1;padding:50px 16px 0;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;flex:none;"><svg width="9" height="15" viewBox="0 0 10 16" fill="none"><path d="M8 2 2 8l6 6" stroke="rgba(243,245,247,.85)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sc" style="font-size:19px;font-weight:700;">Malmö FF – Piteå IF DFF</span>
+      </div>
+
+      <!-- match card, dam = lila kant -->
+      <div style="margin-top:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-left:4px solid #8E5A86;border-radius:16px;padding:15px 16px;">
+        <div style="text-align:center;font-size:11.5px;color:rgba(243,245,247,.55);">OBOS Damallsvenskan · 31 juli 18:00 · Eleda Stadion</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;">
+          <div style="text-align:center;flex:1;"><span style="width:56px;height:56px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:9px;font-weight:800;color:#1a5fb4;">MFF</span><div style="font-size:12px;color:rgba(243,245,247,.7);margin-top:7px;">Malmö FF</div></div>
+          <div style="width:22px;height:4px;border-radius:2px;background:rgba(243,245,247,.4);"></div>
+          <div style="text-align:center;flex:1;"><span style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:12px;font-weight:800;color:#f3f5f7;">PID</span><div style="font-size:12px;color:rgba(243,245,247,.7);margin-top:7px;">Piteå IF DFF</div></div>
+        </div>
+      </div>
+
+      <!-- LIVE -->
+      <div style="margin-top:12px;display:flex;align-items:center;gap:11px;background:rgba(224,106,90,.1);border:1px solid rgba(224,106,90,.42);border-radius:14px;padding:14px 15px;">
+        <span style="width:9px;height:9px;border-radius:50%;background:#E06A5A;flex:none;box-shadow:0 0 0 4px rgba(224,106,90,.18);"></span>
+        <span class="sc" style="font-size:19px;font-weight:700;flex:1;">Starta LIVE-läge</span>
+        <span style="font-size:11px;color:rgba(243,245,247,.55);">mål · story · ställning</span>
+        <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="rgba(243,245,247,.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <!-- actions -->
+      <div style="display:flex;flex-direction:column;gap:9px;margin-top:12px;">
+        <sc-for list="{{ actions }}" as="a" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:13px 14px;">
+            <span style="{{ a.tile }}">{{ a.icon }}</span>
+            <div style="flex:1;min-width:0;"><div style="font-size:14.5px;font-weight:700;">{{ a.title }}</div><div style="font-size:11px;color:rgba(243,245,247,.5);margin-top:1px;">{{ a.sub }}</div></div>
+            <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="rgba(243,245,247,.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </sc-for>
+      </div>
+      <div style="height:14px;"></div>
+    </div>
+    <div style="position:sticky;bottom:0;display:flex;padding:8px 14px 14px;background:linear-gradient(to top,#0a0d11 70%,transparent);gap:4px;">
+      <sc-for list="{{ tabsMatch }}" as="t" hint-placeholder-count="4">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><span style="{{ t.icon }}"></span><span style="{{ t.lbl }}">{{ t.name }}</span></div>
+      </sc-for>
+    </div>
+  </div>
+  </x-import>
+  <div class="sc" style="font-size:16px;font-weight:700;margin-top:14px;">Matchdetalj</div>
+  <div style="font-size:12px;color:rgba(243,245,247,.55);line-height:1.5;margin-top:3px;">Grenkant (Dam <b style="color:#B98BB2;">#8E5A86</b>) på matchkortet. LIVE i statusrött, handlingsraderna med färgade ikonrutor som följer kategori-systemet.</div>
+  </div>
+
+  </div>
+
+  <!-- BRAND SIGN-OFF -->
+  <div style="max-width:1320px;margin-top:56px;padding-top:32px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:22px;flex-wrap:wrap;">
+    <div style="position:relative;width:66px;height:66px;flex:none;">
+      <svg width="66" height="66" viewBox="0 0 66 66"><circle cx="33" cy="33" r="30" fill="none" stroke="rgba(240,180,90,.3)" stroke-width="1.5"/><circle cx="33" cy="33" r="24" fill="none" stroke="rgba(240,180,90,.18)" stroke-width="1"/></svg>
+      <img src="assets/logo-hast-orange.png" alt="" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-52%);width:34px;height:32px;object-fit:contain;">
+    </div>
+    <div style="flex:1;min-width:200px;">
+      <div class="sc" style="font-weight:700;font-size:22px;line-height:1;">Dalecarlia Photo Tools</div>
+      <div style="font-size:12px;color:rgba(243,245,247,.5);margin-top:5px;">iOS v2 · kärnskärmarna i Skagen Hav-ton · Hem · Bilder · Ny story · Matchdetalj</div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:rgba(243,245,247,.4);line-height:1.7;"><div style="color:rgba(240,180,90,.75);font-weight:700;letter-spacing:.14em;">SAMMA FLÖDE — NY TON</div><div>innehållet är Codes, tonen är identiteten</div></div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { bilderTab:'kamera', moment:'avspark', foto:'lr', overlay:true };
+  VADER = [
+    { tid:'08', temp:'14°', t:'rain' }, { tid:'11', temp:'16°', t:'cloud' },
+    { tid:'14', temp:'18°', t:'rain' }, { tid:'17', temp:'19°', t:'cloud' },
+    { tid:'20', temp:'19°', t:'sun' },
+  ];
+  wIcon(t){
+    const b = 'display:block;width:22px;height:22px;background-repeat:no-repeat;background-position:center;background-size:contain;';
+    const enc = (svg)=>"url('data:image/svg+xml;utf8,"+encodeURIComponent(svg)+"')";
+    const cloud='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="%23F0B45A" stroke-width="1.7"><path d="M7 18h10a4 4 0 0 0 0-8 5 5 0 0 0-9.6-1.5A3.5 3.5 0 0 0 7 18z"/></svg>';
+    const rain='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="%23F0B45A" stroke-width="1.7"><path d="M7 15h10a4 4 0 0 0 0-8 5 5 0 0 0-9.6-1.5A3.5 3.5 0 0 0 7 15z"/><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2" stroke-linecap="round"/></svg>';
+    const sun='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="%23F0B45A" stroke-width="1.7"><circle cx="9" cy="13" r="4"/><path d="M15 8a4 4 0 0 1 0 8h-1" /><path d="M9 5v1.5M4 13H2.5M14.5 8.5l1-1" stroke-linecap="round"/></svg>';
+    const m = { cloud, rain, sun };
+    return b + 'background-image:' + enc(m[t]) + ';';
+  }
+  tabbar(active){
+    const ic = (name,on)=>{
+      const col = on ? '%23F0B45A' : 'rgba(243,245,247,0.42)';
+      const svgs = {
+        Hem:'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="'+col+'" stroke-width="1.8"><path d="M4 11l8-6 8 6M6 10v9h12v-9"/></svg>',
+        Matcher:'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="'+col+'" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 6l2.6 1.9-1 3h-3.2l-1-3z" fill="'+col+'"/></svg>',
+        Jobb:'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="'+col+'" stroke-width="1.8"><rect x="3.5" y="7" width="17" height="12" rx="2"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/></svg>',
+        Bilder:'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="'+col+'" stroke-width="1.8"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17l5-4 3 2.5 3-2.5 5 4"/></svg>',
+      };
+      return 'display:block;width:23px;height:23px;background:no-repeat center/contain;background-image:url(\'data:image/svg+xml;utf8,'+encodeURIComponent(svgs[name])+'\');';
+    };
+    return ['Hem','Matcher','Jobb','Bilder'].map(name=>{
+      const on = name===active;
+      return { name, icon:ic(name,on), lbl:'font-size:9.5px;font-weight:'+(on?700:500)+';color:'+(on?'#F0B45A':'rgba(243,245,247,.42)')+';' };
+    });
+  }
+  renderVals() {
+    const seg = (on)=> on
+      ? 'flex:1;text-align:center;font-size:12px;font-weight:600;color:#f3f5f7;background:rgba(255,255,255,.12);border-radius:9px;padding:8px 4px;cursor:pointer;'
+      : 'flex:1;text-align:center;font-size:12px;font-weight:500;color:rgba(243,245,247,.55);padding:8px 4px;cursor:pointer;';
+
+    // bilder tabs
+    const bt = this.state.bilderTab;
+    const bilderTabs = [['telefon','På telefonen'],['kort','Kortet · Snabbpl…'],['kamera','Kameran']].map(([k,label])=>({
+      label, set:()=>this.setState({ bilderTab:k }), style: seg(bt===k) }));
+
+    // moment
+    const mm = this.state.moment;
+    const moment = [['avspark','Avspark'],['startelva','Startelva'],['halvtid','Halvtid'],['paus','Paus'],['malgorare','Målgörare'],['resultat','Resultat'],['slutresultat','Slutresultat'],['nasta','Nästa match']].map(([k,label])=>({
+      label, set:()=>this.setState({ moment:k }),
+      style: (mm===k
+        ? 'background:linear-gradient(180deg,#F0B45A,#E39C3E);color:#0b0e12;font-weight:700;'
+        : 'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#f3f5f7;font-weight:600;')
+        + 'text-align:center;font-size:14px;border-radius:12px;padding:15px 4px;cursor:pointer;' }));
+
+    const fotoLr = this.state.foto==='lr';
+    const overlay = this.state.overlay;
+
+    // match actions — SVG icon tiles (no emoji)
+    const iconTile = (bg,stroke,svg)=>({
+      tile:'width:38px;height:38px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center;background:'+bg+';'
+        +'background-image:url(\'data:image/svg+xml;utf8,'+encodeURIComponent(svg.replace(/COL/g,stroke))+'\');background-repeat:no-repeat;background-position:center;',
+      icon:'' });
+    const svgStar='<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="COL" stroke-width="1.7"><path d="M10 3l1.6 4L16 8l-3.4 2.6.9 4.4L10 12.8 6.5 15l.9-4.4L4 8l4.4-1z"/></svg>';
+    const svgTeam='<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="COL" stroke-width="1.7"><circle cx="7" cy="8" r="2.6"/><circle cx="14" cy="8" r="2.6"/><path d="M3 16c0-2.2 1.8-3.6 4-3.6s4 1.4 4 3.6M10.5 16c0-2.2 1.8-3.6 4-3.6s3.5 1.2 3.8 3.2"/></svg>';
+    const svgFlag='<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="COL" stroke-width="1.7"><path d="M5 3v15M5 4h11l-2 3 2 3H5" stroke-linejoin="round"/></svg>';
+    const svgPics='<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="COL" stroke-width="1.7"><rect x="3" y="6" width="14" height="11" rx="2"/><circle cx="7.5" cy="10" r="1.4"/><path d="M3 15l4-3 3 2 3-3 4 4"/></svg>';
+    const actions = [
+      { title:'Publicera story', sub:'foto + overlay → Instagram', ...iconTile('rgba(240,180,90,.16)','%23F0B45A',svgStar) },
+      { title:'Matchtrupp & startelva', sub:'från uppställningen på arenan', ...iconTile('rgba(47,124,176,.18)','%235EA6D8',svgTeam) },
+      { title:'Föra matchen', sub:'resultat · målskyttar · moment', ...iconTile('rgba(62,124,135,.2)','%235FA9B4',svgFlag) },
+      { title:'Matchens bilder', sub:'på telefonen + kortet', ...iconTile('rgba(110,135,87,.2)','%2394B36F',svgPics) },
+    ];
+
+    return {
+      vader: this.VADER.map(w=>({ tid:w.tid, temp:w.temp, icon:this.wIcon(w.t) })),
+      tabsHem:this.tabbar('Hem'), tabsBilder:this.tabbar('Bilder'), tabsMatch:this.tabbar('Matcher'),
+      bilderTabs,
+      isKamera: bt==='kamera', isKort: bt==='kort', isTelefon: bt==='telefon',
+      moment,
+      fotoLr, fotoTel:!fotoLr,
+      setLr:()=>this.setState({ foto:'lr' }), setTel:()=>this.setState({ foto:'telefon' }),
+      lrStyle: seg(fotoLr), telStyle: seg(!fotoLr),
+      overlay, setOvOn:()=>this.setState({ overlay:true }), setOvOff:()=>this.setState({ overlay:false }),
+      ovOnStyle: seg(overlay), ovOffStyle: seg(!overlay),
+      renderStyle: (fotoLr||this.state.foto==='lr')
+        ? 'border-radius:15px;padding:15px;text-align:center;font-size:15px;font-weight:700;color:#0b0e12;background:linear-gradient(180deg,#F0B45A,#E39C3E);box-shadow:0 10px 24px rgba(240,180,90,.24);cursor:pointer;'
+        : 'border-radius:15px;padding:15px;text-align:center;font-size:15px;font-weight:700;color:rgba(243,245,247,.35);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);',
+      actions,
+    };
+  }
+}
+</script>
+</body>
+</html>
