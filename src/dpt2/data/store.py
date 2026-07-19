@@ -1123,6 +1123,84 @@ def program(conn, event_id, datum=None):
     return dagar
 
 
+def _gren_for_namn(conn, event_id, namn, skapade):
+    """Slår upp en gren på namn (skiftlägesokänsligt), skapar den om den
+    saknas. `skapade` räknar nyskapade grenar åt importsammanfattningen."""
+    namn = (namn or "").strip()
+    if not namn:
+        return None
+    for d in conn.execute("SELECT id, namn FROM disciplin WHERE tavling_id=?",
+                          (event_id,)):
+        if d["namn"].strip().lower() == namn.lower():
+            return d["id"]
+    did = upsert_disciplin(conn, event_id, namn)
+    if did:
+        skapade.append(namn)
+    return did
+
+
+def importera_program(conn, event_id, rader):
+    """Lägger in tolkade tidsprogramsrader (motorer.program_import) som grenar
+    och pass. Returnerar en sammanfattning för granskningsvyn.
+
+    Idempotent på (gren, passnamn): samma pass som redan finns får ny tid i
+    stället för att dubbleras — arrangörens 'version 4' ska kunna klistras in
+    ovanpå version 3 utan att programmet växer. Ett pass som bytt NAMN är ett
+    nytt pass; manuella tillägg rörs aldrig."""
+    nya_grenar, nya, uppdaterade = [], 0, 0
+    for rad in rader or []:
+        namn = (rad.get("pass") or "").strip()
+        datum = (rad.get("datum") or "").strip()
+        if not namn or not datum:
+            continue          # ofullständig rad — granskningsvyn har flaggat den
+        did = _gren_for_namn(conn, event_id, rad.get("gren"), nya_grenar)
+        if not did:
+            continue
+        fin = conn.execute(
+            "SELECT id FROM pass WHERE disciplin_id=? AND lower(namn)=lower(?)",
+            (did, namn)).fetchone()
+        upsert_pass(conn, did, namn, datum, tid=rad.get("tid"),
+                    plats=rad.get("plats"), id=fin["id"] if fin else None)
+        if fin:
+            uppdaterade += 1
+        else:
+            nya += 1
+    return {"grenar_skapade": nya_grenar, "pass_nya": nya,
+            "pass_uppdaterade": uppdaterade}
+
+
+def importera_startlista(conn, event_id, rader, sport=None):
+    """Lägger in tolkade startlisterader som deltagare kopplade till sin gren.
+
+    Deltagaren blir en utövar-post i lag-registret (kind='individ') — samma
+    rymd som Deltagare-kortet och appen läser. Befintlig deltagare återanvänds
+    på namn; handle och klubb fylls i när de saknas men skriver aldrig över
+    något du redan satt."""
+    nya_grenar, nya, befintliga = [], 0, 0
+    for rad in rader or []:
+        namn = (rad.get("namn") or "").strip()
+        if not namn:
+            continue
+        did = _gren_for_namn(conn, event_id, rad.get("gren"), nya_grenar)
+        if not did:
+            continue
+        fanns = conn.execute(
+            "SELECT id FROM lag WHERE lower(namn)=lower(?) AND kind='individ'",
+            (namn,)).fetchone()
+        lid = upsert_lag(conn, namn, kind="individ", sport=sport,
+                         klubb=rad.get("klubb") or None,
+                         instagram=rad.get("handle") or None)
+        if not lid:
+            continue
+        koppla_disciplin_deltagare(conn, did, lid)
+        if fanns:
+            befintliga += 1
+        else:
+            nya += 1
+    return {"grenar_skapade": nya_grenar, "deltagare_nya": nya,
+            "deltagare_befintliga": befintliga}
+
+
 def radera_lag(conn, lag_id):
     conn.execute("DELETE FROM lag WHERE id=?", (lag_id,))
     conn.commit()

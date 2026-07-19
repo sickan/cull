@@ -1259,6 +1259,109 @@ class TestPassOchProgram(unittest.TestCase):
         self.assertEqual(store.program(self.c, self.ev), [])
 
 
+class TestProgramImport(unittest.TestCase):
+    """V5 §8 S2 — tolkade rader in i grenar/pass/deltagare."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.ev = store.upsert_tavling(
+            self.c, "Friidrotts-SM 2026", sport="friidrott", typ="masterskap",
+            fran="2026-07-24", till="2026-07-26")
+
+    def _rad(self, gren, pas, datum="2026-07-24", tid="09:00", plats=""):
+        return {"gren": gren, "pass": pas, "datum": datum, "tid": tid,
+                "plats": plats}
+
+    def test_skapar_saknade_grenar_och_pass(self):
+        sam = store.importera_program(self.c, self.ev, [
+            self._rad("100 m dam", "Försök"),
+            self._rad("100 m dam", "Final", datum="2026-07-25", tid="19:10"),
+            self._rad("Höjd", "Kval"),
+        ])
+        self.assertEqual(sam["grenar_skapade"], ["100 m dam", "Höjd"])
+        self.assertEqual(sam["pass_nya"], 3)
+        self.assertEqual(len(store.lista_discipliner(self.c, self.ev)), 2)
+
+    def test_ateranvander_befintlig_gren_oavsett_skiftlage(self):
+        store.upsert_disciplin(self.c, self.ev, "100 m dam")
+        sam = store.importera_program(self.c, self.ev,
+                                      [self._rad("100 M DAM", "Försök")])
+        self.assertEqual(sam["grenar_skapade"], [])
+        self.assertEqual(len(store.lista_discipliner(self.c, self.ev)), 1)
+
+    def test_omimport_uppdaterar_tid_i_stallet_for_att_dubblera(self):
+        """Arrangörens version 4 klistras ovanpå version 3."""
+        store.importera_program(self.c, self.ev,
+                                [self._rad("100 m dam", "Final", tid="19:10")])
+        sam = store.importera_program(self.c, self.ev,
+                                      [self._rad("100 m dam", "Final", tid="19:40")])
+        self.assertEqual((sam["pass_nya"], sam["pass_uppdaterade"]), (0, 1))
+        gren = store.lista_discipliner(self.c, self.ev)[0]["id"]
+        pas = store.lista_pass(self.c, gren)
+        self.assertEqual(len(pas), 1)
+        self.assertEqual(pas[0]["tid"], "19:40")
+
+    def test_rader_utan_pass_eller_datum_hoppas_over(self):
+        sam = store.importera_program(self.c, self.ev, [
+            self._rad("Stavhopp", ""),               # flaggad i granskningen
+            self._rad("Kula", "Final", datum=""),
+        ])
+        self.assertEqual(sam["pass_nya"], 0)
+        self.assertEqual(store.program(self.c, self.ev), [])
+
+    def test_manuellt_tillagt_pass_overlever_omimport(self):
+        gid = store.upsert_disciplin(self.c, self.ev, "100 m dam")
+        store.upsert_pass(self.c, gid, "Uppvärmning", "2026-07-24", tid="08:00")
+        store.importera_program(self.c, self.ev,
+                                [self._rad("100 m dam", "Final", tid="19:10")])
+        namn = [p["namn"] for p in store.lista_pass(self.c, gid)]
+        self.assertEqual(namn, ["Uppvärmning", "Final"])
+
+    def test_startlista_kopplar_deltagare_till_gren(self):
+        sam = store.importera_startlista(self.c, self.ev, [
+            {"gren": "100 m dam", "namn": "Anna Andersson", "klubb": "IF Göta",
+             "handle": "@anna_a"},
+            {"gren": "100 m dam", "namn": "Beata Berg", "klubb": "Malmö AI",
+             "handle": ""},
+        ], sport="friidrott")
+        self.assertEqual(sam["deltagare_nya"], 2)
+        gid = store.lista_discipliner(self.c, self.ev)[0]["id"]
+        delt = store._pass_deltagare(self.c, gid)
+        self.assertEqual([(d["namn"], d["handle"]) for d in delt],
+                         [("Anna Andersson", "@anna_a"),
+                          ("Beata Berg", None)])
+
+    def test_startlista_skriver_inte_over_handle_du_redan_satt(self):
+        lid = store.upsert_lag(self.c, "Anna Andersson", kind="individ",
+                               sport="friidrott", instagram="@ratt_handle")
+        store.importera_startlista(self.c, self.ev, [
+            {"gren": "100 m dam", "namn": "Anna Andersson", "klubb": "",
+             "handle": ""}], sport="friidrott")
+        self.assertEqual(store.hamta_lag(self.c, lid)["instagram"],
+                         "@ratt_handle")
+
+    def test_startlista_ateranvander_befintlig_utovare(self):
+        store.upsert_lag(self.c, "Anna Andersson", kind="individ",
+                         sport="friidrott")
+        sam = store.importera_startlista(self.c, self.ev, [
+            {"gren": "100 m dam", "namn": "anna andersson", "klubb": "",
+             "handle": ""}], sport="friidrott")
+        self.assertEqual((sam["deltagare_nya"], sam["deltagare_befintliga"]),
+                         (0, 1))
+
+    def test_programmet_bar_deltagarna_efter_bada_importerna(self):
+        """Tidsprogram och startlista kommer i två omgångar — programmet ska
+        sy ihop dem."""
+        store.importera_program(self.c, self.ev,
+                                [self._rad("100 m dam", "Final", tid="19:10")])
+        store.importera_startlista(self.c, self.ev, [
+            {"gren": "100 m dam", "namn": "Anna Andersson", "klubb": "IF Göta",
+             "handle": "@anna_a"}], sport="friidrott")
+        rad = store.program(self.c, self.ev)[0]["rader"][0]
+        self.assertEqual(rad["namn"], "Final")
+        self.assertEqual([d["handle"] for d in rad["deltagare"]], ["@anna_a"])
+
+
 class TestPubliceraMaterial(unittest.TestCase):
     def setUp(self):
         self.c = db.oppna(":memory:")

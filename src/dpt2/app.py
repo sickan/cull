@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 
 from dpt2.data import db, store, sportprofil
 from dpt2.motorer import story_overlay          # hitta_logga (gamla filkonventionen)
+from dpt2.motorer import program_import         # V5 §8: tidsprogram/startlista
 from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
                            publicera_korning, publicera_some, meta_api,
                            bildhosting, story_korning, testlage)
@@ -656,6 +657,64 @@ class Api:
     def koppla_disciplin_deltagare(self, disciplin_id, lag_id, pa=True):
         store.koppla_disciplin_deltagare(self.conn, disciplin_id, lag_id, pa)
         return {"ok": True}
+
+    # ── Pass & program (V5 §8) ───────────────────────────────────────────────
+    # Passet bär eget datum+tid; dagsprogrammet LAGRAS ALDRIG utan härleds ur
+    # pass + tidsatta matcher. Ändra passets tid och programmet följer med.
+
+    def lista_pass(self, disciplin_id):
+        return store.lista_pass(self.conn, disciplin_id)
+
+    def spara_pass(self, p):
+        pid = store.upsert_pass(
+            self.conn, p.get("disciplin_id"), p.get("namn", ""),
+            p.get("datum", ""), tid=p.get("tid"), plats=p.get("plats"),
+            id=p.get("id"), ordning=p.get("ordning"))
+        return {"ok": bool(pid), "id": pid}
+
+    def radera_pass(self, id):
+        store.radera_pass(self.conn, id)
+        return {"ok": True}
+
+    def hamta_program(self, event_id, datum=None):
+        """Dagsprogrammet per dag, varje rad med deltagare + handle."""
+        return store.program(self.conn, event_id, datum=datum)
+
+    def tolka_program_text(self, event_id, text, sort="tidsprogram"):
+        """Steg 1 av inklistringen: tolka texten och visa den för granskning.
+        Sparar INGET — UI:t låter Stig rätta raderna först.
+
+        Tar både klistrad PDF-text och CSV/TSV med rubrikrad."""
+        e = store.hamta_event(self.conn, event_id) or {}
+        fran = e.get("fran") or ""
+        ar = int(fran[:4]) if fran[:4].isdigit() else None
+        csv_rader = program_import.las_csv(text)
+        if sort == "startlista":
+            kanda = [g["namn"] for g in
+                     store.lista_discipliner(self.conn, event_id)]
+            rader = csv_rader or program_import.tolka_startlista(
+                text, kanda_grenar=kanda)
+            for r in rader:
+                r.setdefault("varning",
+                             "" if r.get("gren") else "Ingen gren — välj i listan")
+        else:
+            rader = csv_rader or program_import.tolka_tidsprogram(
+                text, ar=ar, standarddatum=fran)
+            for r in rader:
+                r.setdefault("varning", "")
+        return {"ok": True, "sort": sort, "rader": rader,
+                "kalla": "csv" if csv_rader else "text"}
+
+    def importera_program(self, event_id, rader, sort="tidsprogram"):
+        """Steg 2: spara de granskade raderna. Omimport uppdaterar befintliga
+        pass i stället för att dubblera dem."""
+        if sort == "startlista":
+            e = store.hamta_event(self.conn, event_id) or {}
+            sam = store.importera_startlista(self.conn, event_id, rader,
+                                             sport=e.get("sport"))
+        else:
+            sam = store.importera_program(self.conn, event_id, rader)
+        return {"ok": True, **sam}
 
     # ── Event-sektionen (V5-C skiva 1, handoff §2) ───────────────────────────
     # Läser event-registret (speglas ur tavling under övergången — V5-B).

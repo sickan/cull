@@ -3038,3 +3038,62 @@ class TestSynkDelta(unittest.TestCase):
         fore = store.hamta_match(self.api.conn, self.mid)["spelare"]
         self.api.synk_delta()
         self.assertEqual(store.hamta_match(self.api.conn, self.mid)["spelare"], fore)
+
+
+class TestProgramBryggan(unittest.TestCase):
+    """V5 §8 — inklistring genom bryggan: tolka (utan att spara) → importera."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.ev = store.upsert_tavling(
+            self.api.conn, "Friidrotts-SM 2026", sport="friidrott",
+            typ="masterskap", fran="2026-07-24", till="2026-07-26")
+
+    RÅ = ("FREDAG 24 JULI\n"
+          "09:00   Kula damer, kval\n"
+          "10:15   Längd damer  Kval   Gropen A\n"
+          "LÖRDAG 25 JULI\n"
+          "19:10   Kula damer Final\n")
+
+    def test_tolka_sparar_ingenting(self):
+        res = self.api.tolka_program_text(self.ev, self.RÅ)
+        self.assertTrue(res["ok"])
+        self.assertEqual(len(res["rader"]), 3)
+        self.assertEqual(self.api.lista_discipliner(self.ev), [])
+
+    def test_arstalet_tas_ur_eventets_period(self):
+        rader = self.api.tolka_program_text(self.ev, self.RÅ)["rader"]
+        self.assertEqual([r["datum"] for r in rader],
+                         ["2026-07-24", "2026-07-24", "2026-07-25"])
+
+    def test_importera_bygger_program_med_deltagare(self):
+        rader = self.api.tolka_program_text(self.ev, self.RÅ)["rader"]
+        sam = self.api.importera_program(self.ev, rader)
+        self.assertEqual(sam["pass_nya"], 3)
+        self.api.importera_program(self.ev, [
+            {"gren": "Kula damer", "namn": "Anna Andersson",
+             "klubb": "IF Göta", "handle": "@anna_a"}], sort="startlista")
+        dagar = self.api.hamta_program(self.ev)
+        self.assertEqual([d["datum"] for d in dagar],
+                         ["2026-07-24", "2026-07-25"])
+        final = dagar[1]["rader"][0]
+        self.assertEqual(final["namn"], "Final")
+        self.assertEqual([d["handle"] for d in final["deltagare"]], ["@anna_a"])
+
+    def test_csv_gar_samma_vag(self):
+        res = self.api.tolka_program_text(
+            self.ev, "datum;tid;gren;pass\n2026-07-24;09:00;Kula damer;Kval")
+        self.assertEqual(res["kalla"], "csv")
+        self.assertEqual(res["rader"][0]["gren"], "Kula damer")
+
+    def test_pass_crud_genom_bryggan(self):
+        gid = self.api.spara_disciplin(
+            {"tavling_id": self.ev, "namn": "Höjd"})["id"]
+        pid = self.api.spara_pass({"disciplin_id": gid, "namn": "Final",
+                                   "datum": "2026-07-25", "tid": "19:10"})["id"]
+        self.assertEqual(len(self.api.lista_pass(gid)), 1)
+        self.api.spara_pass({"id": pid, "disciplin_id": gid, "namn": "Final",
+                             "datum": "2026-07-25", "tid": "20:00"})
+        self.assertEqual(self.api.lista_pass(gid)[0]["tid"], "20:00")
+        self.api.radera_pass(pid)
+        self.assertEqual(self.api.lista_pass(gid), [])
