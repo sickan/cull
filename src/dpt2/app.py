@@ -195,6 +195,7 @@ class Api:
             # med paketet så telefonen kan bygga story-overlayn på plats.
             # Tom lista utelämnas (matcher utan discipliner berörs inte).
             **self._paket_friidrott(m),
+            **self._paket_program_for_match(m),
         }
 
     def _tavling_till_paket(self, t, discipliner):
@@ -224,11 +225,51 @@ class Api:
             "roster": [],
             "friidrott": {"discipliner": [
                 {"id": d["id"], "namn": d["namn"], "typ": d["typ"],
+                 "gren": d.get("gren") or "",
                  "deltagare": [{"namn": p["namn"], "klubb": p.get("klubb") or "",
-                                "gren": p.get("gren") or ""}
+                                "gren": p.get("gren") or "",
+                                "handle": p.get("handle") or ""}
                                for p in d.get("deltagare", [])]}
                 for d in discipliner]},
+            # V5 §8 S4: dagsprogrammet följer med — annars kan telefonen varken
+            # visa dagens deltillfällen eller räkna restid mot nästa. Hela
+            # perioden skickas, inte bara idag: appen ska funka utan nät nästa
+            # morgon också, och den filtrerar själv på datum.
+            "program": self._paket_program(t["id"]),
         }
+
+    def _paket_program(self, event_id):
+        """Programmet som appen läser: dagar → deltillfällen med VEM och deras
+        handle. Handles är hela poängen på plats — taggningen ska gå att göra
+        ur programmet, inte genom att leta i en deltagarlista."""
+        ut = []
+        for dag in store.program(self.conn, event_id):
+            rader = []
+            for r in dag["rader"]:
+                rader.append({
+                    "id": r["id"], "slag": r["slag"], "tid": r["tid"] or "",
+                    "namn": r["namn"], "gren": r["gren"] or "",
+                    "plats": r["plats"] or "",
+                    "gren_farg": GREN_FARG.get(r.get("gren_kant") or "", ""),
+                    "resultat": r.get("resultat") or "",
+                    "deltagare": [{"namn": d["namn"],
+                                   "klubb": d.get("klubb") or "",
+                                   "handle": d.get("handle") or ""}
+                                  for d in r["deltagare"]],
+                })
+            ut.append({"datum": dag["datum"], "rader": rader})
+        return ut
+
+    def _paket_program_for_match(self, m):
+        """En match INOM ett event bär eventets dagsprogram — annars står
+        telefonen på arenan utan schema för dagen (och 'nästa deltillfälle'
+        har inget att räkna på när nästa punkt är ett grenpass, inte en match).
+        Match utan event berörs inte."""
+        eid = m.get("event_id") or m.get("tavling_id")
+        if not eid:
+            return {}
+        prog = self._paket_program(eid)
+        return {"program": prog} if prog else {}
 
     def _paket_friidrott(self, m):
         if not m.get("tavling_id"):
@@ -238,8 +279,10 @@ class Api:
             return {}
         return {"friidrott": {"discipliner": [
             {"id": d["id"], "namn": d["namn"], "typ": d["typ"],
+             "gren": d.get("gren") or "",
              "deltagare": [{"namn": p["namn"], "klubb": p.get("klubb") or "",
-                            "gren": p.get("gren") or ""}
+                            "gren": p.get("gren") or "",
+                            "handle": p.get("handle") or ""}
                            for p in d.get("deltagare", [])]}
             for d in disc]}}
 

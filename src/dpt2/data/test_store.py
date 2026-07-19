@@ -1834,3 +1834,30 @@ class TestGrenklassOchFaslosa(unittest.TestCase):
         self.assertEqual([(r["tid"], r["gren"], r["namn"]) for r in rader],
                          [("12:45", "Tiokamp 100m", "Tiokamp 100m"),
                           ("16:30", "Invigning", "Invigning")])
+
+    def test_tvetydig_gren_flaggas_i_stallet_for_att_dubbleras(self):
+        """När '100m' finns som både dam och herr får en klasslös startlista
+        inte skapa en tredje klasslös gren — och inte gissa klass åt en
+        deltagare. Hittat vid S4-arbetet."""
+        store.importera_program(self.c, self.ev, [
+            {"gren": "100m", "pass": "Final", "datum": "2026-07-24",
+             "tid": "20:25", "klass": "dam"},
+            {"gren": "100m", "pass": "Final", "datum": "2026-07-24",
+             "tid": "20:35", "klass": "herr"},
+        ])
+        sam = store.importera_startlista(self.c, self.ev, [
+            {"gren": "100m", "namn": "Anna", "klubb": "", "handle": ""}],
+            sport="friidrott")
+        self.assertEqual(sam["deltagare_nya"], 0)
+        self.assertEqual(len(sam["oklara"]), 1)
+        self.assertEqual(len(store.lista_discipliner(self.c, self.ev)), 2)
+
+    def test_entydig_gren_behover_ingen_klass(self):
+        store.importera_program(self.c, self.ev, [
+            {"gren": "Slägga", "pass": "Final", "datum": "2026-07-25",
+             "tid": "17:00", "klass": "herr"}])
+        sam = store.importera_startlista(self.c, self.ev, [
+            {"gren": "Slägga", "namn": "Bo", "klubb": "", "handle": "@bo"}],
+            sport="friidrott")
+        self.assertEqual(sam["deltagare_nya"], 1)
+        self.assertEqual(sam["oklara"], [])

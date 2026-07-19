@@ -3097,3 +3097,72 @@ class TestProgramBryggan(unittest.TestCase):
         self.assertEqual(self.api.lista_pass(gid)[0]["tid"], "20:00")
         self.api.radera_pass(pid)
         self.assertEqual(self.api.lista_pass(gid), [])
+
+
+class TestProgramTillTelefonen(unittest.TestCase):
+    """V5 §8 S4 — programmet med VEM och handle ut i paketen. Utan detta
+    stannar nyttan på Macen; det är på arenan taggningen ska göras."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.ev = store.upsert_tavling(
+            self.api.conn, "Friidrotts-SM 2026", sport="friidrott",
+            typ="masterskap", fran="2026-07-24", till="2026-07-26",
+            arena="Uppsala Friidrottsarena")
+        self.api.importera_program(self.ev, [
+            {"gren": "100m", "pass": "Final", "datum": "2026-07-24",
+             "tid": "20:25", "klass": "dam"},
+            {"gren": "100m", "pass": "Final", "datum": "2026-07-25",
+             "tid": "20:35", "klass": "herr"},
+        ])
+        self.api.importera_program(self.ev, [
+            {"gren": "100m", "klass": "dam", "namn": "Anna Andersson",
+             "klubb": "IF Göta", "handle": "@anna_a"}], sort="startlista")
+
+    def _tavlingspaket(self):
+        t = store.hamta_tavling(self.api.conn, self.ev)
+        disc = store.lista_discipliner(self.api.conn, self.ev)
+        return self.api._tavling_till_paket(t, disc)
+
+    def test_paketet_bar_programmet_per_dag(self):
+        prog = self._tavlingspaket()["program"]
+        self.assertEqual([d["datum"] for d in prog],
+                         ["2026-07-24", "2026-07-25"])
+        self.assertEqual(prog[0]["rader"][0]["tid"], "20:25")
+
+    def test_handles_foljer_med_ut(self):
+        prog = self._tavlingspaket()["program"]
+        rad = prog[0]["rader"][0]
+        self.assertEqual([(d["namn"], d["handle"]) for d in rad["deltagare"]],
+                         [("Anna Andersson", "@anna_a")])
+
+    def test_hela_perioden_skickas_inte_bara_idag(self):
+        """Telefonen ska klara nästa morgon utan nät — den filtrerar själv."""
+        self.assertEqual(len(self._tavlingspaket()["program"]), 2)
+
+    def test_grenfargen_ar_last_palett(self):
+        prog = self._tavlingspaket()["program"]
+        self.assertEqual(prog[0]["rader"][0]["gren_farg"], "#8E5A86")   # dam
+        self.assertEqual(prog[1]["rader"][0]["gren_farg"], "#3E7C87")   # herr
+
+    def test_discipliner_bar_handle_och_klass(self):
+        fri = self._tavlingspaket()["friidrott"]["discipliner"]
+        dam = next(d for d in fri if d["gren"] == "dam")
+        self.assertEqual([p["handle"] for p in dam["deltagare"]], ["@anna_a"])
+
+    def test_match_inom_event_bar_programmet(self):
+        mid = store.spara_match(self.api.conn, {
+            "lag_hemma": "Sverige", "lag_borta": "Norge", "sport": "friidrott",
+            "datum": "2026-07-24", "tid": "11:30", "tavling_id": self.ev})
+        m = store.hamta_match(self.api.conn, mid)
+        paket = self.api._match_till_paket(m, {})
+        self.assertIn("program", paket)
+        tider = [r["tid"] for d in paket["program"] for r in d["rader"]]
+        self.assertIn("11:30", tider)      # matchen själv är ett deltillfälle
+        self.assertIn("20:25", tider)      # och grenpassen finns med
+
+    def test_match_utan_event_far_inget_program(self):
+        mid = store.spara_match(self.api.conn, {
+            "lag_hemma": "A", "lag_borta": "B", "datum": "2026-07-24"})
+        m = store.hamta_match(self.api.conn, mid)
+        self.assertNotIn("program", self.api._match_till_paket(m, {}))

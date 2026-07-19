@@ -911,9 +911,11 @@ def lista_discipliner(conn, tavling_id):
         # gren (dam/herr) följer med — overlayens kantfärg ska följa INDIVIDEN,
         # inte mästerskapet (SM är mixed men man tävlar i dam-/herrklass).
         d["deltagare"] = [dict(r) for r in conn.execute(
-            "SELECT l.id, l.namn, l.klubb, l.gren FROM lag l "
+            "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram FROM lag l "
             "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
             "WHERE dd.disciplin_id=? ORDER BY l.namn", (d["id"],))]
+        for p in d["deltagare"]:
+            p["handle"] = _handle(p.pop("instagram"))
     return rader
 
 
@@ -1156,17 +1158,25 @@ def _gren_for_namn(conn, event_id, namn, skapade, klass=None):
         return None
     klass = klass if klass in ("dam", "herr", "mixed") else None
     utan_klass = None
+    namnlika = []
     for d in conn.execute(
             "SELECT id, namn, gren FROM disciplin WHERE tavling_id=?",
             (event_id,)):
         if d["namn"].strip().lower() != namn.lower():
             continue
+        namnlika.append(d["id"])
         if d["gren"] == klass:
             return d["id"]
         if d["gren"] is None and utan_klass is None:
             utan_klass = d["id"]
     if utan_klass:
         return upsert_disciplin(conn, event_id, namn, id=utan_klass, gren=klass)
+    if klass is None and namnlika:
+        # "100m" finns som både dam och herr men raden säger inte vilken.
+        # Att skapa en tredje klasslös gren vore fel — säg till i stället.
+        if len(namnlika) == 1:
+            return namnlika[0]
+        return None
     did = upsert_disciplin(conn, event_id, namn, gren=klass)
     if did:
         skapade.append(f"{namn} {klass}" if klass else namn)
@@ -1215,7 +1225,7 @@ def importera_startlista(conn, event_id, rader, sport=None):
     rymd som Deltagare-kortet och appen läser. Befintlig deltagare återanvänds
     på namn; handle och klubb fylls i när de saknas men skriver aldrig över
     något du redan satt."""
-    nya_grenar, nya, befintliga = [], 0, 0
+    nya_grenar, nya, befintliga, oklara = [], 0, 0, []
     for rad in rader or []:
         namn = (rad.get("namn") or "").strip()
         if not namn:
@@ -1223,6 +1233,9 @@ def importera_startlista(conn, event_id, rader, sport=None):
         did = _gren_for_namn(conn, event_id, rad.get("gren"), nya_grenar,
                              klass=rad.get("klass"))
         if not did:
+            # Grenen är tvetydig (finns i flera klasser) — hoppa hellre än att
+            # gissa vilken klass deltagaren tävlar i.
+            oklara.append(f"{namn} ({rad.get('gren') or 'ingen gren'})")
             continue
         fanns = conn.execute(
             "SELECT id FROM lag WHERE lower(namn)=lower(?) AND kind='individ'",
@@ -1238,7 +1251,7 @@ def importera_startlista(conn, event_id, rader, sport=None):
         else:
             nya += 1
     return {"grenar_skapade": nya_grenar, "deltagare_nya": nya,
-            "deltagare_befintliga": befintliga}
+            "deltagare_befintliga": befintliga, "oklara": oklara}
 
 
 def radera_lag(conn, lag_id):

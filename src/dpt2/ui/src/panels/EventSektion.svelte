@@ -287,6 +287,10 @@
       : `${sam.pass_nya || 0} nya pass, ${sam.pass_uppdaterade || 0} uppdaterade`
     if (sam.grenar_skapade?.length)
       inlasKvitto += ` · nya grenar: ${sam.grenar_skapade.join(', ')}`
+    // Tvetydig gren (finns i flera klasser) hoppas över — säg vilka, annars
+    // ser importen ut att ha lyckats helt.
+    if (sam.oklara?.length)
+      inlasKvitto += ` · ${sam.oklara.length} hoppades över, välj klass: ${sam.oklara.join(', ')}`
     granskning = null; inlasText = ''
     await laddaProgram()
     detalj = await hamtaEventDetalj(vald)
@@ -477,6 +481,12 @@
                 <div class="gr" class:ofullstandig={!granskadeOk.includes(r)}>
                   {#if inlasSort === 'startlista'}
                     <input class="gf" bind:value={r.gren} placeholder="Gren" />
+                    <select class="gf mini" bind:value={r.klass} title="Klass — krävs när grenen finns i flera">
+                      <option value="">–</option>
+                      <option value="dam">Dam</option>
+                      <option value="herr">Herr</option>
+                      <option value="mixed">Mixed</option>
+                    </select>
                     <input class="gf" bind:value={r.namn} placeholder="Namn" />
                     <input class="gf" bind:value={r.klubb} placeholder="Klubb" />
                     <input class="gf smal" bind:value={r.handle} placeholder="@handle" />
