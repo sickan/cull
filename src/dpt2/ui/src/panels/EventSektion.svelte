@@ -9,7 +9,7 @@
     kopplaEventIndividGren, kopplaBortEventIndivid,
     sparaDisciplin, raderaDisciplin, sparaTavling, sportprofiler,
     hamtaProgram, sparaPass, raderaPass, tolkaProgramText,
-    importeraProgram } from '../lib/api.js'
+    tolkaProgramPdf, importeraProgram } from '../lib/api.js'
   import { kopieraText } from '../lib/kopiera.js'
 
   const dispatch = createEventDispatcher()
@@ -261,11 +261,24 @@
   }
   async function tolka() {
     if (!inlasText.trim()) return
+    inlasFel = ''
     granskning = await tolkaProgramText(vald, inlasText, inlasSort)
       .catch(() => null)
   }
+
+  // PDF: arrangörens fil läses direkt, med kolumnlayouten. Klassen (dam/herr)
+  // följer med ur kolumnen och blir grenmarkörens färg.
+  let inlasFel = ''
+  async function lasPdf() {
+    inlasFel = ''
+    const r = await tolkaProgramPdf(vald).catch(() => null)
+    if (!r?.ok) { inlasFel = r?.fel || 'Kunde inte läsa PDF:en'; return }
+    inlasSort = 'tidsprogram'
+    granskning = r
+  }
+  // Utan fas-ord duger grenen ensam — posten ÄR sitt eget pass ("Invigning").
   $: granskadeOk = (granskning?.rader || []).filter((r) =>
-    inlasSort === 'startlista' ? r.namn && r.gren : r.pass && r.datum && r.gren)
+    inlasSort === 'startlista' ? r.namn && r.gren : r.datum && r.gren)
   async function sparaInlas() {
     if (!granskadeOk.length) return
     const sam = await importeraProgram(vald, granskadeOk, inlasSort)
@@ -444,9 +457,14 @@
               ? 'Klistra in startlistan — grenrubrik och en rad per deltagare.\n\n100 m dam\n1  Anna Andersson  IF Göta  @anna_a'
               : 'Klistra in arrangörens tidsprogram eller CSV.\n\nFREDAG 24 JULI\n09:00  100 m dam, Försök\n19:10  100 m dam Final'}></textarea>
             <div class="inlasfot">
+              {#if inlasSort === 'tidsprogram'}
+                <button class="avbryt liten" on:click={lasPdf}>Läs PDF…</button>
+              {/if}
               <span class="khint">Inget sparas förrän du granskat raderna.</span>
+              <span class="spacer"></span>
               <button class="prim liten" on:click={tolka} disabled={!inlasText.trim()}>Tolka ›</button>
             </div>
+            {#if inlasFel}<div class="kvitto fel">{inlasFel}</div>{/if}
           {:else}
             <div class="granskrubrik caps">
               {granskning.rader.length} rader tolkade{granskning.kalla === 'csv' ? ' ur CSV' : ''}
@@ -466,7 +484,13 @@
                     <input class="gf smal" bind:value={r.datum} placeholder="Datum" />
                     <input class="gf mini" bind:value={r.tid} placeholder="Tid" />
                     <input class="gf" bind:value={r.gren} placeholder="Gren" />
-                    <input class="gf" bind:value={r.pass} placeholder="Pass" />
+                    <input class="gf" bind:value={r.pass} placeholder="Pass (valfritt)" />
+                    <select class="gf mini" bind:value={r.klass} title="Klass — styr grenmarkörens färg">
+                      <option value="">–</option>
+                      <option value="dam">Dam</option>
+                      <option value="herr">Herr</option>
+                      <option value="mixed">Mixed</option>
+                    </select>
                     <input class="gf smal" bind:value={r.plats} placeholder="Plats" />
                   {/if}
                   {#if r.varning}<span class="varn" title={r.varning}>⚠</span>{/if}
@@ -521,7 +545,7 @@
             <span class="ptid scd">{r.tid || '—'}</span>
             <div class="pmitt">
               <span class="pnamn">
-                {#if r.gren}<span class="pgren">{r.gren}</span> · {/if}{r.namn}
+                {#if r.gren && r.gren !== r.namn}<span class="pgren">{r.gren}</span> · {/if}{r.namn}
                 {#if r.slag === 'match'}<span class="pmatch">match</span>{/if}
               </span>
               <span class="pvem">
@@ -766,6 +790,8 @@
   .gf.mini { flex: 0 0 62px; }
   .kvitto { font-size: 12px; color: var(--t-help); background: var(--panel);
     border: 1px solid var(--div); border-radius: 8px; padding: 7px 11px; margin-bottom: 10px; }
+  .kvitto.fel { color: var(--krock, #b03838); border-color: var(--krock, #b03838); margin-top: 10px; }
+  .gransktabell select.gf { padding: 5px 4px; }
   .passrad select, .passrad input { border: 1px solid var(--div); border-radius: 7px;
     padding: 6px 9px; background: var(--kort); color: var(--t-head);
     font-family: inherit; font-size: 12.5px; }

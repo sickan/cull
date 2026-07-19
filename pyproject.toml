@@ -19,6 +19,9 @@ dependencies = [
     "pyobjc-framework-Quartz",
     "pywebview",
     "httpx",
+    # V5 §8: arrangörens tidsprogram är en PDF med kolumnlayout — texten måste
+    # läsas med koordinater, annars flätas dagarna ihop (se program_import).
+    "pdfplumber",
 ]
 
 [project.optional-dependencies]

@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 38
+SCHEMA_VERSION = 39
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -934,6 +934,13 @@ def _migrera(conn, fran_version):
         );
         CREATE INDEX IF NOT EXISTS idx_pass_disciplin ON pass(disciplin_id);
         CREATE INDEX IF NOT EXISTS idx_pass_datum ON pass(datum);""")
+    if fran_version < 39:
+        # v39: disciplin.gren — klassen (dam/herr/mixed) hör till grenen, inte
+        # till deltagarna. Additiv kolumn; befintliga grenar får NULL och
+        # fortsätter härleda markören ur deltagarna som förut.
+        if _har_tabell(conn, "disciplin") and not _har_kolumn(conn, "disciplin",
+                                                              "gren"):
+            conn.execute("ALTER TABLE disciplin ADD COLUMN gren TEXT")
 
 
 def _har_kolumn(conn, tabell, kolumn):

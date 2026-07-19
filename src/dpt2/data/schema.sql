@@ -182,6 +182,10 @@ CREATE TABLE disciplin (
   namn       TEXT NOT NULL,
   typ        TEXT NOT NULL DEFAULT 'hoppkast'
                CHECK (typ IN ('sprint','medel','hoppkast','mangkamp')),
+  -- v39: klassen ÄR grenens egenskap — 100 m dam och 100 m herr är två skilda
+  -- tävlingar, inte en gren med olika deltagare. Bär grenmarkörens färg utan
+  -- att någon deltagare behöver vara inlagd (fylls av PDF-importens kolumn).
+  gren       TEXT CHECK (gren IN ('dam','herr','mixed')),
   ordning    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_disciplin_tavling ON disciplin(tavling_id);

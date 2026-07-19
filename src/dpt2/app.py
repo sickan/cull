@@ -705,6 +705,31 @@ class Api:
         return {"ok": True, "sort": sort, "rader": rader,
                 "kalla": "csv" if csv_rader else "text"}
 
+    def tolka_program_pdf(self, event_id, path=None):
+        """Läser arrangörens PDF direkt (steg 1 — sparar inget).
+
+        SM-programmet är ett rutnät med dagarna sida vid sida och en kolumn per
+        klass; utan koordinater flätas dagarna ihop. Klassen ur kolumnen blir
+        `klass` på raden → grenens dam/herr utan handpåläggning."""
+        if not path:
+            val = self.valj_fil("Välj arrangörens tidsprogram",
+                                filter=("PDF (*.pdf)",))
+            if not val.get("ok"):
+                return {"ok": False, "fel": "Ingen fil vald"}
+            path = val["path"]
+        e = store.hamta_event(self.conn, event_id) or {}
+        fran = e.get("fran") or ""
+        ar = int(fran[:4]) if fran[:4].isdigit() else None
+        try:
+            rader = program_import.las_pdf(path, ar=ar)
+        except Exception as fel:
+            return {"ok": False, "fel": f"Kunde inte läsa PDF:en: {fel}"}
+        if not rader:
+            return {"ok": False, "fel": "Hittade inget tidsprogram i PDF:en — "
+                                        "klistra in texten i stället."}
+        return {"ok": True, "sort": "tidsprogram", "rader": rader,
+                "kalla": "pdf", "fil": os.path.basename(path)}
+
     def importera_program(self, event_id, rader, sort="tidsprogram"):
         """Steg 2: spara de granskade raderna. Omimport uppdaterar befintliga
         pass i stället för att dubblera dem."""

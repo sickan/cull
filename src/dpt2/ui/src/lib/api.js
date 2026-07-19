@@ -380,6 +380,7 @@ let MOCK_DISCIPLINER = [
   { id: 'disc_langd', tavling_id: 'friidrotts-sm', namn: 'Längd', typ: 'hoppkast', ordning: 0,
     deltagare: [{ id: 'alva-hoppare', namn: 'Alva Hoppare', klubb: 'Malmö AI', gren: 'dam',
       instagram: '@alva_hoppare' }] },
+  { id: 'disc_invigning', tavling_id: 'friidrotts-sm', namn: 'Invigning', typ: 'hoppkast', ordning: 2, deltagare: [] },
   { id: 'disc_100m', tavling_id: 'friidrotts-sm', namn: '100 m', typ: 'sprint', ordning: 1,
     deltagare: [{ id: 'siri-snabb', namn: 'Siri Snabb', klubb: 'IF Göta', gren: 'dam',
       instagram: '@siri_snabb' },
@@ -419,6 +420,7 @@ let MOCK_PASS = [
   { id: 'p2', disciplin_id: 'disc_langd', namn: 'Kval', datum: '2026-07-24', tid: '10:30', plats: 'Gropen A', ordning: 0 },
   { id: 'p3', disciplin_id: 'disc_100m', namn: 'Semi', datum: '2026-07-24', tid: '16:00', plats: '', ordning: 1 },
   { id: 'p4', disciplin_id: 'disc_100m', namn: 'Final', datum: '2026-07-25', tid: '19:10', plats: '', ordning: 2 },
+  { id: 'p5', disciplin_id: 'disc_invigning', namn: 'Invigning', datum: '2026-07-24', tid: '16:30', plats: '', ordning: 0 },
 ]
 
 export async function listaPass(disciplinId) {
@@ -489,6 +491,12 @@ export async function tolkaProgramText(eventId, text, sort = 'tidsprogram') {
   const api = brygga()
   if (api) return api.tolka_program_text(eventId, text, sort)
   return wait({ ok: true, sort, kalla: 'text', rader: [] })
+}
+
+export async function tolkaProgramPdf(eventId, path = null) {
+  const api = brygga()
+  if (api) return api.tolka_program_pdf(eventId, path)
+  return wait({ ok: false, fel: 'PDF-läsning kräver appen (inte webbläsarläget)' })
 }
 
 export async function importeraProgram(eventId, rader, sort = 'tidsprogram') {

@@ -194,6 +194,140 @@ def tolka_startlista(text, kanda_grenar=()):
     return ut
 
 
+# ── PDF med kolumnlayout ─────────────────────────────────────────────────────
+# Arrangörens tidsprogram är sällan en lista. SM 2026 är ett rutnät: tre dagar
+# SIDA VID SIDA, var och en med (tid | Män | Kvinnor). Läser man texten utan
+# koordinater flätas dagarna ihop rad för rad och allt blir fel — därför
+# positionsläsning. Kolumnerna är CENTRERADE, så en post hör till den kolumn
+# vars mitt ligger närmast postens mitt (inte dess vänsterkant).
+#
+# Filen ritar dessutom varje glyf två gånger på identiska koordinater (en
+# skugg-/fetstilseffekt). pdfplumbers dedupe_chars() städar det; att i stället
+# klippa varannan TECKEN går sönder på ligaturer ("final" blir "fnal").
+
+KLASSKOLUMNER = {"män": "herr", "man": "herr", "herrar": "herr", "herr": "herr",
+                 "kvinnor": "dam", "damer": "dam", "dam": "dam"}
+
+_DAGRUBRIK = re.compile(
+    r"(måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)\s+(\d{1,2})\s+([a-zåäö]+)",
+    re.I)
+
+
+def _klustra(ord_, lucka=14):
+    """Slår ihop ord på samma rad till poster. En lucka bredare än `lucka`
+    punkter betyder ny kolumn — inom en post står orden tätt."""
+    ut = []
+    for w in sorted(ord_, key=lambda w: w["x0"]):
+        if ut and w["x0"] - ut[-1][-1]["x1"] <= lucka:
+            ut[-1].append(w)
+        else:
+            ut.append([w])
+    return ut
+
+
+def _mitt(kluster):
+    return (kluster[0]["x0"] + kluster[-1]["x1"]) / 2
+
+
+def las_pdf(path, ar=None):
+    """Läser ett tidsprogram ur en PDF med kolumnlayout.
+
+    Returnerar samma radform som tolka_tidsprogram, plus `klass` ('dam'/'herr')
+    när posten stod i en köns-kolumn — den blir grenmarkörens färg utan att
+    någon behöver skriva den. Kräver pdfplumber; utan den returneras [].
+
+    Layouten läses ur filen (dagrubriker och köns-rubriker med sina x-lägen),
+    inte ur hårdkodade mått — en annan arrangör med samma grundform fungerar
+    därför också. Allt är förslag: granskningstabellen är skyddsnätet.
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        return []
+    rader = []
+    try:
+        with pdfplumber.open(path) as pdf:
+            for sida in pdf.pages:
+                rader.extend(_las_sida(sida.dedupe_chars(), ar))
+    except Exception:
+        return []            # oläsbar/saknad fil — anroparen erbjuder inklistring
+    rader.sort(key=lambda r: (r["datum"] or "", r["tid"] or "99:99"))
+    return rader
+
+
+def _las_sida(sida, ar):
+    from collections import defaultdict
+    linjer = defaultdict(list)
+    for w in sida.extract_words():
+        linjer[round(w["top"], 1)].append(w)
+
+    # 1) Dagrubriker → varje dags x-mitt och datum.
+    dagar = []                       # [{mitt, datum}]
+    for top in sorted(linjer):
+        text = " ".join(w["text"] for w in sorted(linjer[top], key=lambda w: w["x0"]))
+        if not _DAGRUBRIK.search(text):
+            continue
+        for kl in _klustra(linjer[top], lucka=20):
+            bit = " ".join(w["text"] for w in kl)
+            m = _DAGRUBRIK.search(bit)
+            if m and m.group(3).lower() in MANADER and ar:
+                dagar.append({"mitt": _mitt(kl),
+                              "datum": f"{ar:04d}-{MANADER[m.group(3).lower()]:02d}"
+                                       f"-{int(m.group(2)):02d}"})
+        if dagar:
+            break
+    if not dagar:
+        return []
+    dagar.sort(key=lambda d: d["mitt"])
+
+    # 2) Köns-rubriker → kolumnmitter, knutna till närmaste dag.
+    kolumner = []                    # [{mitt, klass, datum}]
+    for top in sorted(linjer):
+        kl = [w for w in linjer[top]
+              if w["text"].strip().lower() in KLASSKOLUMNER]
+        if len(kl) < 2:
+            continue
+        for w in kl:
+            mitt = (w["x0"] + w["x1"]) / 2
+            dag = min(dagar, key=lambda d: abs(d["mitt"] - mitt))
+            kolumner.append({"mitt": mitt,
+                             "klass": KLASSKOLUMNER[w["text"].strip().lower()],
+                             "datum": dag["datum"]})
+        break
+    if not kolumner:
+        return []
+
+    # 3) Varje rad: tidsposten hör till en dag, övriga poster till en kolumn.
+    ut = []
+    for top in sorted(linjer):
+        poster = _klustra(linjer[top])
+        tider = {}                   # datum → tid, för denna rad
+        ovriga = []
+        for kl in poster:
+            text = " ".join(w["text"] for w in kl)
+            m = _TID.match(text.strip())
+            if m and len(kl) == 1:
+                dag = min(dagar, key=lambda d: abs(d["mitt"] - _mitt(kl)))
+                tider[dag["datum"]] = f"{int(m.group(1)):02d}:{m.group(2)}"
+            else:
+                ovriga.append(kl)
+        for kl in ovriga:
+            kol = min(kolumner, key=lambda k: abs(k["mitt"] - _mitt(kl)))
+            tid = tider.get(kol["datum"])
+            if not tid:
+                continue             # post utan tid på sin dag — hoppa
+            text = " ".join(w["text"] for w in kl).strip()
+            if not text or text.lower() in KLASSKOLUMNER:
+                continue
+            gren, pas = _dela_passord(text)
+            ut.append({
+                "datum": kol["datum"], "tid": tid, "gren": gren, "pass": pas,
+                "plats": "", "klass": kol["klass"], "radtext": text,
+                "varning": "" if pas else "Hittade inget passnamn — sätt det själv",
+            })
+    return ut
+
+
 def las_csv(text):
     """CSV/TSV med rubrikrad → lista med dictar, nycklarna gemener.
 

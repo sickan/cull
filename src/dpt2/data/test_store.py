@@ -1301,9 +1301,11 @@ class TestProgramImport(unittest.TestCase):
         self.assertEqual(len(pas), 1)
         self.assertEqual(pas[0]["tid"], "19:40")
 
-    def test_rader_utan_pass_eller_datum_hoppas_over(self):
+    def test_rad_utan_datum_hoppas_over(self):
+        """Datum är det enda som inte går att härleda — utan det kan raden
+        inte hamna i en dag. (Saknat passnamn duger däremot: se
+        TestGrenklassOchFaslosa.)"""
         sam = store.importera_program(self.c, self.ev, [
-            self._rad("Stavhopp", ""),               # flaggad i granskningen
             self._rad("Kula", "Final", datum=""),
         ])
         self.assertEqual(sam["pass_nya"], 0)
@@ -1763,3 +1765,72 @@ class TestV5Datamodell(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestGrenklassOchFaslosa(unittest.TestCase):
+    """V5 §8 — klassen på grenen (v39) + poster utan fas-ord."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.ev = store.upsert_tavling(
+            self.c, "Friidrotts-SM 2026", sport="friidrott", typ="masterskap",
+            fran="2026-07-24", till="2026-07-26")
+
+    def test_samma_gren_i_bada_klasser_blir_skilda_grenar(self):
+        """100 m dam och 100 m herr är två tävlingar, inte en."""
+        store.importera_program(self.c, self.ev, [
+            {"gren": "100m", "pass": "Final", "datum": "2026-07-24",
+             "tid": "20:25", "klass": "dam"},
+            {"gren": "100m", "pass": "Final", "datum": "2026-07-24",
+             "tid": "20:35", "klass": "herr"},
+        ])
+        self.assertEqual(len(store.lista_discipliner(self.c, self.ev)), 2)
+        rader = store.program(self.c, self.ev)[0]["rader"]
+        self.assertEqual([(r["tid"], r["gren_kant"]) for r in rader],
+                         [("20:25", "dam"), ("20:35", "herr")])
+
+    def test_grenens_klass_vinner_over_deltagarnas(self):
+        store.importera_program(self.c, self.ev, [
+            {"gren": "100m", "pass": "Final", "datum": "2026-07-24",
+             "tid": "20:25", "klass": "dam"}])
+        gid = store.lista_discipliner(self.c, self.ev)[0]["id"]
+        lid = store.upsert_lag(self.c, "Fel klass", kind="individ",
+                               sport="friidrott", gren="herr")
+        store.koppla_disciplin_deltagare(self.c, gid, lid)
+        rad = store.program(self.c, self.ev)[0]["rader"][0]
+        self.assertEqual(rad["gren_kant"], "dam")
+
+    def test_utan_klass_harleds_markoren_ur_deltagarna_som_forr(self):
+        gid = store.upsert_disciplin(self.c, self.ev, "Höjd")
+        store.upsert_pass(self.c, gid, "Final", "2026-07-25", tid="19:10")
+        lid = store.upsert_lag(self.c, "Alva", kind="individ",
+                               sport="friidrott", gren="dam")
+        store.koppla_disciplin_deltagare(self.c, gid, lid)
+        self.assertEqual(store.program(self.c, self.ev)[0]["rader"][0]["gren_kant"],
+                         "dam")
+
+    def test_befintlig_gren_utan_klass_tas_over_vid_import(self):
+        """Grenar Stig lagt in för hand ska inte dubbleras av importen."""
+        store.upsert_disciplin(self.c, self.ev, "Kula")
+        sam = store.importera_program(self.c, self.ev, [
+            {"gren": "Kula", "pass": "Final", "datum": "2026-07-24",
+             "tid": "18:30", "klass": "herr"}])
+        self.assertEqual(sam["grenar_skapade"], [])
+        grenar = store.lista_discipliner(self.c, self.ev)
+        self.assertEqual(len(grenar), 1)
+        self.assertEqual(grenar[0]["gren"], "herr")
+
+    def test_post_utan_fasord_blir_sitt_eget_pass(self):
+        """'Invigning' och 'Tiokamp 100m' saknar kval/final men är
+        deltillfällen — de ska in i programmet, inte tappas."""
+        sam = store.importera_program(self.c, self.ev, [
+            {"gren": "Invigning", "pass": "", "datum": "2026-07-24",
+             "tid": "16:30", "klass": ""},
+            {"gren": "Tiokamp 100m", "pass": "", "datum": "2026-07-24",
+             "tid": "12:45", "klass": "herr"},
+        ])
+        self.assertEqual(sam["pass_nya"], 2)
+        rader = store.program(self.c, self.ev)[0]["rader"]
+        self.assertEqual([(r["tid"], r["gren"], r["namn"]) for r in rader],
+                         [("12:45", "Tiokamp 100m", "Tiokamp 100m"),
+                          ("16:30", "Invigning", "Invigning")])

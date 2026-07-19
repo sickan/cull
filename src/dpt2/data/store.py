@@ -918,11 +918,14 @@ def lista_discipliner(conn, tavling_id):
 
 
 def upsert_disciplin(conn, tavling_id, namn, *, typ="hoppkast", id=None,
-                     ordning=None):
-    """Skapar/uppdaterar en disciplin. Returnerar id (None vid tomt namn)."""
+                     ordning=None, gren=None):
+    """Skapar/uppdaterar en disciplin. Returnerar id (None vid tomt namn).
+
+    gren ('dam'|'herr'|'mixed') är klassen; None rör inte befintligt värde."""
     if not (namn or "").strip() or not tavling_id:
         return None
     typ = typ if typ in DISCIPLIN_TYPER else "hoppkast"
+    gren = gren if gren in ("dam", "herr", "mixed") else None
     did = (id or "").strip() or ny_id()
     fin = conn.execute("SELECT 1 FROM disciplin WHERE id=?", (did,)).fetchone()
     if fin is None:
@@ -931,11 +934,14 @@ def upsert_disciplin(conn, tavling_id, namn, *, typ="hoppkast", id=None,
                 "SELECT COALESCE(MAX(ordning), -1) + 1 FROM disciplin "
                 "WHERE tavling_id=?", (tavling_id,)).fetchone()[0])
         conn.execute(
-            "INSERT INTO disciplin(id,tavling_id,namn,typ,ordning) "
-            "VALUES(?,?,?,?,?)", (did, tavling_id, namn.strip(), typ, ordning))
+            "INSERT INTO disciplin(id,tavling_id,namn,typ,gren,ordning) "
+            "VALUES(?,?,?,?,?,?)",
+            (did, tavling_id, namn.strip(), typ, gren, ordning))
     else:
         conn.execute("UPDATE disciplin SET namn=?, typ=? WHERE id=?",
                      (namn.strip(), typ, did))
+        if gren is not None:
+            conn.execute("UPDATE disciplin SET gren=? WHERE id=?", (gren, did))
         if ordning is not None:
             conn.execute("UPDATE disciplin SET ordning=? WHERE id=?",
                          (ordning, did))
@@ -1055,11 +1061,15 @@ def _pass_deltagare(conn, disciplin_id):
     return sorted(ut.values(), key=lambda p: p["namn"])
 
 
-def _gren_kant(deltagare):
-    """Gren-markören för en programrad (dam/herr/mixed). Följer INDIVIDEN, inte
-    mästerskapet — SM är mixed men man tävlar i dam-/herrklass. Bara när alla
-    deltagare är eniga; annars ingen kant (invarianten: ingen kant om grenen
-    är okänd, aldrig en gissad)."""
+def _gren_kant(deltagare, gren=None):
+    """Gren-markören för en programrad (dam/herr/mixed). Följer grenen/individen,
+    inte mästerskapet — SM är mixed men man tävlar i dam-/herrklass.
+
+    Grenens egen klass (v39) vinner när den är satt. Annars härleds den ur
+    deltagarna, och bara när alla är eniga: ingen kant om klassen är okänd,
+    aldrig en gissad (låst invariant)."""
+    if gren in ("dam", "herr", "mixed"):
+        return gren
     grenar = {d.get("gren") for d in deltagare if d.get("gren")}
     return grenar.pop() if len(grenar) == 1 else ""
 
@@ -1094,7 +1104,7 @@ def program(conn, event_id, datum=None):
     """
     rader = []
     for r in conn.execute(
-            "SELECT p.*, d.namn AS gren, d.id AS gren_id "
+            "SELECT p.*, d.namn AS gren, d.id AS gren_id, d.gren AS klass "
             "FROM pass p JOIN disciplin d ON d.id=p.disciplin_id "
             "WHERE d.tavling_id=?", (event_id,)):
         delt = _pass_deltagare(conn, r["gren_id"])
@@ -1102,7 +1112,8 @@ def program(conn, event_id, datum=None):
             "slag": "pass", "id": r["id"], "datum": r["datum"], "tid": r["tid"],
             "namn": r["namn"], "plats": r["plats"] or "",
             "gren": r["gren"], "gren_id": r["gren_id"],
-            "ordning": r["ordning"], "gren_kant": _gren_kant(delt),
+            "ordning": r["ordning"],
+            "gren_kant": _gren_kant(delt, r["klass"]),
             "deltagare": delt,
         })
     # Matcher: eventspegeln delar id med tävlingen, därför båda nycklarna.
@@ -1133,19 +1144,32 @@ def program(conn, event_id, datum=None):
     return dagar
 
 
-def _gren_for_namn(conn, event_id, namn, skapade):
-    """Slår upp en gren på namn (skiftlägesokänsligt), skapar den om den
-    saknas. `skapade` räknar nyskapade grenar åt importsammanfattningen."""
+def _gren_for_namn(conn, event_id, namn, skapade, klass=None):
+    """Slår upp en gren på namn + klass (skiftlägesokänsligt), skapar den om den
+    saknas. `skapade` räknar nyskapade grenar åt importsammanfattningen.
+
+    Klassen ingår i nyckeln: 100 m dam och 100 m herr är SKILDA grenar. En
+    befintlig gren utan klass tas över av den första klass som importeras —
+    annars skulle en omimport dubblera allt som lagts in för hand."""
     namn = (namn or "").strip()
     if not namn:
         return None
-    for d in conn.execute("SELECT id, namn FROM disciplin WHERE tavling_id=?",
-                          (event_id,)):
-        if d["namn"].strip().lower() == namn.lower():
+    klass = klass if klass in ("dam", "herr", "mixed") else None
+    utan_klass = None
+    for d in conn.execute(
+            "SELECT id, namn, gren FROM disciplin WHERE tavling_id=?",
+            (event_id,)):
+        if d["namn"].strip().lower() != namn.lower():
+            continue
+        if d["gren"] == klass:
             return d["id"]
-    did = upsert_disciplin(conn, event_id, namn)
+        if d["gren"] is None and utan_klass is None:
+            utan_klass = d["id"]
+    if utan_klass:
+        return upsert_disciplin(conn, event_id, namn, id=utan_klass, gren=klass)
+    did = upsert_disciplin(conn, event_id, namn, gren=klass)
     if did:
-        skapade.append(namn)
+        skapade.append(f"{namn} {klass}" if klass else namn)
     return did
 
 
@@ -1159,11 +1183,16 @@ def importera_program(conn, event_id, rader):
     nytt pass; manuella tillägg rörs aldrig."""
     nya_grenar, nya, uppdaterade = [], 0, 0
     for rad in rader or []:
-        namn = (rad.get("pass") or "").strip()
+        gren = (rad.get("gren") or "").strip()
         datum = (rad.get("datum") or "").strip()
+        # Utan fas-ord ("Invigning", "Tiokamp 100m") ÄR posten sitt eget pass —
+        # den ska in i programmet, inte tappas. Programmet visar då bara namnet
+        # en gång i stället för "Invigning · Invigning".
+        namn = (rad.get("pass") or "").strip() or gren
         if not namn or not datum:
             continue          # ofullständig rad — granskningsvyn har flaggat den
-        did = _gren_for_namn(conn, event_id, rad.get("gren"), nya_grenar)
+        did = _gren_for_namn(conn, event_id, rad.get("gren"), nya_grenar,
+                             klass=rad.get("klass"))
         if not did:
             continue
         fin = conn.execute(
@@ -1191,7 +1220,8 @@ def importera_startlista(conn, event_id, rader, sport=None):
         namn = (rad.get("namn") or "").strip()
         if not namn:
             continue
-        did = _gren_for_namn(conn, event_id, rad.get("gren"), nya_grenar)
+        did = _gren_for_namn(conn, event_id, rad.get("gren"), nya_grenar,
+                             klass=rad.get("klass"))
         if not did:
             continue
         fanns = conn.execute(

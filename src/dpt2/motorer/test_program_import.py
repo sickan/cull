@@ -1,6 +1,7 @@
 """V5 §8 S2 — inläsning av tidsprogram och startlista."""
 
 import unittest
+from pathlib import Path
 
 from dpt2.motorer import program_import as PI
 
@@ -146,6 +147,71 @@ class TestCSV(unittest.TestCase):
     def test_tom_text(self):
         self.assertEqual(PI.las_csv(""), [])
 
+
+
+class TestPdfKolumnlayout(unittest.TestCase):
+    """Skarp fil: SM 2026:s tidsprogram (Uppsala). Rutnät med tre dagar SIDA
+    VID SIDA, var och en med tid | Män | Kvinnor, och varje glyf ritad två
+    gånger. Läses texten utan koordinater flätas dagarna ihop."""
+
+    PDF = str(Path(__file__).parent / "testdata" / "sm26-tidsprogram.pdf")
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import pdfplumber       # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("pdfplumber saknas")
+        cls.rader = PI.las_pdf(cls.PDF, ar=2026)
+
+    def test_alla_tre_dagarna_lases(self):
+        dagar = sorted({r["datum"] for r in self.rader})
+        self.assertEqual(dagar, ["2026-07-24", "2026-07-25", "2026-07-26"])
+
+    def test_hela_programmet_kommer_med(self):
+        """108 schemaposter i filen. Sjunker siffran har layoutläsningen
+        tappat en kolumn."""
+        self.assertEqual(len(self.rader), 108)
+
+    def test_klassen_kommer_ur_kolumnen(self):
+        klasser = {r["klass"] for r in self.rader}
+        self.assertEqual(klasser, {"dam", "herr"})
+
+    def test_kolumnmitten_avgor_klassen_inte_vansterkanten(self):
+        """De två 100 m-finalerna på fredagen ligger i var sin kolumn:
+        damernas 20:25, herrarnas 20:35. Verifierat mot filens geometri."""
+        finaler = {(r["tid"], r["klass"]) for r in self.rader
+                   if r["datum"] == "2026-07-24" and r["gren"] == "100m"
+                   and r["pass"] == "Final"}
+        self.assertEqual(finaler, {("20:25", "dam"), ("20:35", "herr")})
+
+    def test_ligaturer_overlever_avdubbleringen(self):
+        """Varje glyf ritas två gånger; 'fi' är EN glyf. Klipper man varannan
+        tecken blir 'final' till 'fnal' — därför positionell avdubblering."""
+        self.assertIn("Final", {r["pass"] for r in self.rader})
+        self.assertNotIn("Fnal", {r["pass"] for r in self.rader})
+
+    def test_passnamn_delas_av_fran_grenen(self):
+        rad = next(r for r in self.rader
+                   if r["datum"] == "2026-07-24" and r["tid"] == "12:30")
+        self.assertEqual((rad["gren"], rad["pass"], rad["klass"]),
+                         ("Längd", "Kval", "herr"))
+
+    def test_grenar_utan_fas_flaggas_i_stallet_for_att_gissas(self):
+        """'Tiokamp 100m' har ingen kval/final-fas — parsern ska säga till,
+        inte hitta på ett passnamn."""
+        rad = next(r for r in self.rader if r["gren"] == "Tiokamp 100m")
+        self.assertEqual(rad["pass"], "")
+        self.assertIn("passnamn", rad["varning"])
+
+    def test_samma_gren_bada_klasserna_pa_samma_tid(self):
+        """15:05 fredag har I-20/R-stående 1500m i BÅDA kolumnerna."""
+        rader = [r for r in self.rader
+                 if r["datum"] == "2026-07-24" and r["tid"] == "15:05"]
+        self.assertEqual(sorted(r["klass"] for r in rader), ["dam", "herr"])
+
+    def test_saknad_fil_ger_tomt_inte_krasch(self):
+        self.assertEqual(PI.las_pdf("/finns/inte.pdf", ar=2026), [])
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
