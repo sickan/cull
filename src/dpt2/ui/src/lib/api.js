@@ -585,7 +585,12 @@ export async function aktiveraSynkFotojobb(utkastId) {
 export async function sparaLag(lag) {
   const api = brygga()
   if (api) return api.spara_lag(lag)
-  return wait({ ok: true, id: lag.id || slug(lag.namn) })
+  // M18-8: mockläget kan spela upp transparens-varningen — filnamn med
+  // 'ingenalfa' räcker som trigger.
+  const varning = String(lag.logga || '').includes('ingenalfa')
+    ? 'Loggan saknar transparent bakgrund — den visas på ljus bricka i publicerade bilder. Ladda hellre upp en PNG med transparens.'
+    : ''
+  return wait({ ok: true, id: lag.id || slug(lag.namn), logga_varning: varning })
 }
 
 export async function sparaTavling(tavling) {

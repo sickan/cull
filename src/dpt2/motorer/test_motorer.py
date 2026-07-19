@@ -271,6 +271,73 @@ class TestStoryOverlay(unittest.TestCase):
         self.assertEqual(sportprofil.profil("fotboll")["start_moment"], "Avspark")
 
 
+# ── M18-8: lagbrickan ─────────────────────────────────────────────────────────
+class TestLagbricka(unittest.TestCase):
+    """Roten till M18-8: loggan fyllde brickan och cirkelmasken åt upp kanterna.
+    Nu dras loggan in — och en logga utan transparens får ljus platta."""
+
+    def _logga(self, storlek=400, transparent=True, form="hog"):
+        """Bygger en syntetisk logga som når HELA vägen ut i rutan (det är den
+        formen som blev kapad — MFF:s höga sköld)."""
+        from PIL import Image, ImageDraw
+        bg = (0, 0, 0, 0) if transparent else (255, 255, 255, 255)
+        im = Image.new("RGBA", (storlek, storlek), bg)
+        d = ImageDraw.Draw(im)
+        if form == "hog":
+            d.rectangle((storlek // 3, 0, 2 * storlek // 3, storlek - 1),
+                        fill=(20, 60, 160, 255))
+        else:
+            d.ellipse((0, 0, storlek - 1, storlek - 1), fill=(20, 60, 160, 255))
+        return im
+
+    def _spara(self, im):
+        import tempfile
+        f = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        im.save(f.name)
+        return f.name
+
+    def test_har_transparens_skiljer_akta_fran_inbakad(self):
+        from dpt2.motorer import story_overlay as so
+        self.assertTrue(so.har_transparens(self._logga(transparent=True)))
+        self.assertFalse(so.har_transparens(self._logga(transparent=False)))
+
+    def test_transparent_logga_kapas_inte(self):
+        """Regressionsvakt för M18-8: märkets topp- och bottenpixlar ska
+        överleva. Före fixen nollades de av cirkelmasken."""
+        import numpy as np
+        from dpt2.motorer import story_overlay as so
+        S = 128
+        b = so._rund_bricka(self._spara(self._logga(form="hog")), S, "XX")
+        a = np.asarray(b.getchannel("A"))
+        mitt = S // 2
+        # Kolumnen genom märket ska ha synliga pixlar en bra bit upp och ner,
+        # inte bara i den innersta cirkeln.
+        kolumn = a[:, mitt]
+        synliga = np.nonzero(kolumn > 40)[0]
+        self.assertLess(synliga.min(), S * 0.25, "märkets topp kapades")
+        self.assertGreater(synliga.max(), S * 0.75, "märkets botten kapades")
+
+    def test_logga_utan_transparens_far_ljus_platta(self):
+        """Skyddsnätet: en fil med inbakad bakgrund ska bli en snygg bricka,
+        aldrig en vit fyrkant i en publicerad bild."""
+        import numpy as np
+        from dpt2.motorer import story_overlay as so
+        S = 128
+        b = so._rund_bricka(self._spara(self._logga(transparent=False)), S, "XX")
+        a = np.asarray(b)
+        # Hörnet ska vara helt genomskinligt (cirkeln klipper fyrkanten bort)
+        self.assertEqual(int(a[2, 2, 3]), 0, "hörnet är inte bortklippt")
+        # Kanten mitt på vänstersidan ska vara ogenomskinlig OCH ljus (plattan)
+        self.assertGreater(int(a[S // 2, 3, 3]), 200)
+        self.assertGreater(int(a[S // 2, 3, :3].mean()), 200)
+
+    def test_utan_logga_ger_monogram_som_forut(self):
+        from dpt2.motorer import story_overlay as so
+        b = so._rund_bricka(None, 128, "MAL")
+        self.assertEqual(b.size, (128, 128))
+        self.assertEqual(int(__import__("numpy").asarray(b)[2, 2, 3]), 0)
+
+
 # ── vision_lager (PyObjC) ─────────────────────────────────────────────────────
 @unittest.skipUnless(HAR_VISION, "Apple Vision saknas")
 class TestVisionLager(unittest.TestCase):

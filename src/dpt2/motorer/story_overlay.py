@@ -221,11 +221,49 @@ def _mjuk_cirkelmask(storlek, inner=0.62, outer=0.92):
     return _Img.fromarray((alpha * 255.0).astype("uint8"), "L")
 
 
-def _rund_bricka(logga_path, storlek, monogram, fallback_color=(70, 130, 180)):
+# M18-8: hur stor andel av loggan som måste vara genomskinlig för att räknas
+# som "levererad enligt kravet". En äkta logga ligger på 25–46 %; en PNG med
+# inbakad bakgrund på 0 %. 5 % skiljer dem med god marginal.
+_TRANSPARENSKRAV = 0.05
+
+# Loggan skalas till en ANDEL av brickan i stället för att fylla den. Cirkel-
+# masken har full täckning inom 62 % av radien och tonar ut till 92 % — en
+# logga som fyller rutan får därför kanterna uppätna (det var M18-8:s rot).
+_LOGGA_INDRAG      = 0.72   # transparent logga, ligger direkt på fotot
+_LOGGA_INDRAG_PLATTA = 0.76 # på ljus platta finns mer plats
+
+
+def har_transparens(im):
+    """True när loggan har en användbar alfakanal. En PNG som sparats med
+    bakgrunden inbakad (t.ex. en 'transparent'-förhandsvisning med rutmönster)
+    ser ut som RGBA men har noll genomskinliga pixlar."""
+    import numpy as np
+    if "A" not in im.getbands():
+        return False
+    return float((np.asarray(im.getchannel("A")) == 0).mean()) >= _TRANSPARENSKRAV
+
+
+def _skarp_cirkelmask(storlek, k=4):
+    """Hård cirkel med len kant (supersamplad). Används till den ljusa plattan —
+    den mjuka maskens breda uttoning ditterar mot ljusa loggbakgrunder."""
+    Image, ImageDraw, *_ = _pil()
+    m = Image.new("L", (storlek * k, storlek * k), 0)
+    ImageDraw.Draw(m).ellipse((0, 0, storlek * k - 1, storlek * k - 1), fill=255)
+    return m.resize((storlek, storlek), Image.LANCZOS)
+
+
+def _rund_bricka(logga_path, storlek, monogram, fallback_color=(70, 130, 180),
+                 plattfarg=(247, 247, 245)):
     """
     Returnerar RGBA-bild (storlek×storlek) med mjuk cirkelmask.
-    Logga → cover-crop + mjuk mask.
-    Saknas logga → monogram-cirkel med fallback_color.
+
+    M18-8 — tre utfall, i den här ordningen:
+      1. Logga MED transparens → indragen och lagd direkt på fotot (mjuk mask).
+         Hela märket syns; ingen bricka som stör bilden.
+      2. Logga UTAN transparens → samma indrag men på en ljus platta med skarp
+         kant. Skyddsnät: en dålig fil ska aldrig bli en vit fyrkant i en
+         publicerad bild. Uppladdningen varnar separat (satt_lag_logga).
+      3. Ingen logga → monogram-cirkel med fallback_color (oförändrad).
     """
     import numpy as np
     Image, ImageDraw, ImageFont, ImageOps = _pil()
@@ -233,15 +271,27 @@ def _rund_bricka(logga_path, storlek, monogram, fallback_color=(70, 130, 180)):
     if logga_path:
         try:
             logo = Image.open(logga_path).convert("RGBA")
-            # Contain (inte cover): skala ner så hela loggan ryms, centrera på transparent
-            logo.thumbnail((S, S), Image.LANCZOS)
-            bricka = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-            ox = (S - logo.width) // 2
-            oy = (S - logo.height) // 2
-            bricka.alpha_composite(logo, (ox, oy))
-            cirkel = np.asarray(_mjuk_cirkelmask(S), dtype=np.float32) / 255.0
-            egen   = np.asarray(bricka.getchannel("A"), dtype=np.float32) / 255.0
-            bricka.putalpha(Image.fromarray((cirkel * egen * 255).astype("uint8"), "L"))
+            transparent = har_transparens(logo)
+            andel = _LOGGA_INDRAG if transparent else _LOGGA_INDRAG_PLATTA
+            inre = max(1, int(S * andel))
+            logo.thumbnail((inre, inre), Image.LANCZOS)
+
+            if transparent:
+                bricka = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+            else:
+                bricka = Image.new("RGBA", (S, S), tuple(plattfarg) + (255,))
+
+            bricka.alpha_composite(logo, ((S - logo.width) // 2,
+                                          (S - logo.height) // 2))
+
+            if transparent:
+                # Loggan ligger innanför maskens fulla täckning → masken kapar
+                # inte längre märket, den mjukar bara upp ytterkanten.
+                cirkel = np.asarray(_mjuk_cirkelmask(S), dtype=np.float32) / 255.0
+                egen   = np.asarray(bricka.getchannel("A"), dtype=np.float32) / 255.0
+                bricka.putalpha(Image.fromarray((cirkel * egen * 255).astype("uint8"), "L"))
+            else:
+                bricka.putalpha(_skarp_cirkelmask(S))
             return bricka
         except Exception:
             pass

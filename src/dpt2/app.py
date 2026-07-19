@@ -560,7 +560,8 @@ class Api:
             arkiverad=lag.get("arkiverad"),
             press_email=lag.get("press_email"),
             ackr_dagar=lag.get("ackr_dagar"))
-        return {"ok": bool(lid), "id": lid}
+        return {"ok": bool(lid), "id": lid,
+                "logga_varning": _logga_varning(lag.get("logga"))}
 
     def spara_tavling(self, tavling):
         # Editor-raden bär sitt id ('ny-…' = ännu ej skapad → inget id) så
@@ -3123,8 +3124,34 @@ class Api:
 
     # ── Meta ─────────────────────────────────────────────────────────────────
     def info(self):
+        # V2-01: versionen med (UI:t har den redan via vite-define, men den här
+        # vägen funkar utan bygge — t.ex. vid felsökning i konsolen).
+        from dpt2 import __version__
         return {"db": str(self.db_path),
-                "schemaversion": db.schemaversion(self.conn)}
+                "schemaversion": db.schemaversion(self.conn),
+                "version": __version__}
+
+
+def _logga_varning(logga_path):
+    """M18-8: säger till när en laglogga saknar transparent bakgrund.
+
+    Blockerar aldrig sparningen — renderaren har ett skyddsnät (ljus platta),
+    så resultatet blir snyggt ändå. Men Stig ska VETA att filen inte håller
+    måttet, annars upptäcks det först i en publicerad bild."""
+    if not logga_path:
+        return ""
+    try:
+        from pathlib import Path
+        from PIL import Image
+        p = Path(logga_path).expanduser()
+        if not p.exists():
+            return ""
+        if story_overlay.har_transparens(Image.open(p).convert("RGBA")):
+            return ""
+        return ("Loggan saknar transparent bakgrund — den visas på ljus bricka "
+                "i publicerade bilder. Ladda hellre upp en PNG med transparens.")
+    except Exception:
+        return ""
 
 
 def _match_till_jobbdata(m):

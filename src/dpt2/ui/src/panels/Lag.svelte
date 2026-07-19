@@ -45,6 +45,9 @@
   // två parallella upserts av samma slug där den stale (gren=dam-default) kan
   // vinna → laget blir Dam trots valt Herr. Kedjan gör att första create sätter
   // id:t innan nästa spar körs (som då blir en update).
+  // M18-8: lag-id → varningstext när loggan saknar transparent bakgrund.
+  let loggaVarningar = {}
+
   let sparKo = Promise.resolve()
   function gerLag(l) {
     sparKo = sparKo.then(() => _gerLag(l)).catch(() => {})
@@ -56,6 +59,10 @@
     const arNy = String(l.id).startsWith('nytt-')
     const res = await sparaLag({ ...l, id: arNy ? null : l.id })
     if (!res?.ok) return
+    // M18-8: loggan sparas ändå (renderaren har skyddsnät), men Stig ska få
+    // veta att filen inte håller måttet — annars syns det först i en publicerad
+    // bild. Nyckeln på lag-id så varningen hamnar vid rätt rad.
+    loggaVarningar = { ...loggaVarningar, [l.id]: res.logga_varning || '' }
     if (res.id && res.id !== l.id) {
       const gammalt = l.id
       l.id = res.id
@@ -501,6 +508,9 @@
                     <span class="namn2 scd">{l.namn || 'Namnlöst lag'}</span>
                   </div>
                   <div class="kmeta2">{[metaRad(l) || 'Ofullständig post', kopplingsText(l)].filter(Boolean).join(' · ')}</div>
+                  {#if loggaVarningar[l.id]}
+                    <div class="loggavarning">{loggaVarningar[l.id]}</div>
+                  {/if}
                 </div>
                 {#if sparad === l.id}<span class="flash">✓</span>{/if}
                 <button class="x" class:armerad={$armerad === `lag-${l.id}`}
@@ -820,6 +830,8 @@
   .namn2 { font-size: 12.5px; font-weight: 700; color: var(--t-head); }
   .grenlbl2 { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; flex: none; }
   .kmeta2 { font-size: 11px; color: var(--t-mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* M18-8: varning, inte fel — loggan ÄR sparad och renderas snyggt ändå. */
+  .loggavarning { margin-top: 3px; font-size: 11px; line-height: 1.35; color: var(--varn, #C9871F); white-space: normal; }
   .ikalendern { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
     color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); padding: 3px 8px;
     border-radius: 6px; flex: none; }
