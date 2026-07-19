@@ -1428,23 +1428,47 @@ def lista_event_individer(conn, event_id):
     (event_deltagare; utan gren tills chips togglas). grenar = disciplin-id:n."""
     ut = {}
     for r in conn.execute(
-            "SELECT l.id, l.namn, l.klubb, l.gren AS lag_gren, dd.disciplin_id "
+            "SELECT l.id, l.namn, l.klubb, l.gren AS lag_gren, l.instagram, "
+            "dd.disciplin_id "
             "FROM disciplin d "
             "JOIN disciplin_deltagare dd ON dd.disciplin_id=d.id "
             "JOIN lag l ON l.id=dd.lag_id "
             "WHERE d.tavling_id=? ORDER BY l.namn", (event_id,)):
         p = ut.setdefault(r["id"], {"id": r["id"], "namn": r["namn"],
                                     "klubb": r["klubb"] or "",
-                                    "gren": r["lag_gren"] or "", "grenar": []})
+                                    "gren": r["lag_gren"] or "",
+                                    "handle": _handle(r["instagram"]) or "",
+                                    "grenar": []})
         p["grenar"].append(r["disciplin_id"])
     for r in conn.execute(
-            "SELECT i.id, i.namn, i.klubb FROM event_deltagare ed "
+            "SELECT i.id, i.namn, i.klubb, i.instagram FROM event_deltagare ed "
             "JOIN individ i ON i.id=ed.individ_id WHERE ed.event_id=?",
             (event_id,)):
         ut.setdefault(r["id"], {"id": r["id"], "namn": r["namn"],
                                 "klubb": r["klubb"] or "", "gren": "",
+                                "handle": _handle(r["instagram"]) or "",
                                 "grenar": []})
     return sorted(ut.values(), key=lambda p: p["namn"])
+
+
+def satt_deltagare_handle(conn, deltagare_id, handle):
+    """Sätter SoMe-handle på en deltagare — utan att veta om hen bor i lag- eller
+    individregistret (Deltagare-kortet visar unionen av båda). Skriver i BÅDA
+    när posten finns i båda, annars driver de isär.
+
+    Startlistor bär sällan handles; de fylls på när Stig hittar kontot, ofta
+    mitt i en tävlingsdag. Tom sträng rensar."""
+    h = (handle or "").strip()
+    h = h if h.startswith(("@", "?")) or not h else "@" + h
+    traff = False
+    for tabell in ("lag", "individ"):
+        if conn.execute(f"SELECT 1 FROM {tabell} WHERE id=?",
+                        (deltagare_id,)).fetchone():
+            conn.execute(f"UPDATE {tabell} SET instagram=? WHERE id=?",
+                         (h or None, deltagare_id))
+            traff = True
+    conn.commit()
+    return traff
 
 
 def individ_kandidater(conn, sport=None):

@@ -940,6 +940,12 @@ class Api:
         self.conn.commit()
         return {"ok": True}
 
+    def satt_deltagare_handle(self, deltagare_id, handle):
+        """SoMe-kontot på en deltagare, satt där Stig står — startlistor bär
+        sällan handles och de fylls på under tävlingsdagen."""
+        ok = store.satt_deltagare_handle(self.conn, deltagare_id, handle)
+        return {"ok": ok}
+
     def lagg_tavling_i_kalender(self, tavling_id):
         """Skapar ett lokalt fotojobb-utkast (Okategoriserat, EJ synkat) för
         tävlingens period — flerdagarsuppdrag. Kräver att tävlingen redan har

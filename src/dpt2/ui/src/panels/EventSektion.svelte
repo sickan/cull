@@ -6,7 +6,7 @@
   import { onMount, createEventDispatcher } from 'svelte'
   import { listaEventer, hamtaEventDetalj, sattEventPagangLage,
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
-    kopplaEventIndividGren, kopplaBortEventIndivid,
+    kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle,
     sparaDisciplin, raderaDisciplin, sparaTavling, sportprofiler,
     hamtaProgram, sparaPass, raderaPass, tolkaProgramText,
     tolkaProgramPdf, importeraProgram } from '../lib/api.js'
@@ -153,6 +153,14 @@
     await kopplaEventIndividGren(vald, individId, grenId, pa)
     detalj = await hamtaEventDetalj(vald)
   }
+  async function sparaHandle(d, varde) {
+    const ny = (varde || '').trim()
+    if (ny === (d.handle || '')) return          // orört fält — rör inte databasen
+    await sattDeltagareHandle(d.id, ny)
+    detalj = await hamtaEventDetalj(vald)
+    await laddaProgram()                          // handles syns i programraden
+  }
+
   async function taBortDeltagare(id) {
     await kopplaBortEventIndivid(vald, id)
     detalj = await hamtaEventDetalj(vald)
@@ -279,6 +287,14 @@
   // Utan fas-ord duger grenen ensam — posten ÄR sitt eget pass ("Invigning").
   $: granskadeOk = (granskning?.rader || []).filter((r) =>
     inlasSort === 'startlista' ? r.namn && r.gren : r.datum && r.gren)
+
+  /// Ta bort en rad ur inläsningen innan den sparas. Med hundratals rader ur
+  /// en PDF är det vanligare att vilja rensa bort några än att rätta dem.
+  function taBortGranskad(i) {
+    const rader = granskning.rader.slice()
+    rader.splice(i, 1)
+    granskning = { ...granskning, rader }
+  }
   async function sparaInlas() {
     if (!granskadeOk.length) return
     const sam = await importeraProgram(vald, granskadeOk, inlasSort)
@@ -504,6 +520,8 @@
                     <input class="gf smal" bind:value={r.plats} placeholder="Plats" />
                   {/if}
                   {#if r.varning}<span class="varn" title={r.varning}>⚠</span>{/if}
+                  <button class="bort synlig" title="Ta bort raden ur inläsningen"
+                    on:click={() => taBortGranskad(i)}>✕</button>
                 </div>
               {/each}
             </div>
@@ -575,6 +593,8 @@
             {#if r.id === nastId}<span class="nastbadge caps">Näst</span>{/if}
             {#if r.slag === 'pass'}
               <button class="bort" title="Ändra passet" on:click={() => redigeraPass(r)}>✎</button>
+              <button class="bort" title="Ta bort deltillfället"
+                on:click={() => taBortPass(r.id)}>✕</button>
             {/if}
           </div>
         {/each}
@@ -661,6 +681,13 @@
                   <span class="bricka">{initialer(d.namn)}</span>
                   <span class="fixture">{d.namn}</span>
                   <span class="nar">{d.klubb || ''}</span>
+                  <!-- SoMe-kontot sätts HÄR, inte i lag-editorn: startlistor
+                       bär sällan handles och de fylls på mitt i tävlingsdagen. -->
+                  <input class="handlefalt" class:tom={!d.handle}
+                    placeholder="@konto" value={d.handle || ''}
+                    title="SoMe-konto — sparas när du lämnar fältet"
+                    on:blur={(ev) => sparaHandle(d, ev.currentTarget.value)}
+                    on:keydown={(ev) => ev.key === 'Enter' && ev.currentTarget.blur()} />
                   <button class="bort" title="Ta bort från eventet (alla grenar)" on:click={() => taBortDeltagare(d.id)}>✕</button>
                 </div>
                 {#if detalj.grenar.length}
@@ -802,6 +829,13 @@
     border: 1px solid var(--div); border-radius: 8px; padding: 7px 11px; margin-bottom: 10px; }
   .kvitto.fel { color: var(--krock, #b03838); border-color: var(--krock, #b03838); margin-top: 10px; }
   .gransktabell select.gf { padding: 5px 4px; }
+  .bort.synlig { opacity: 0.65; }
+  .bort.synlig:hover { opacity: 1; }
+  .handlefalt { flex: 0 0 132px; border: 1px solid var(--div); border-radius: 7px;
+    padding: 4px 8px; background: var(--kort); color: var(--t-head);
+    font-family: inherit; font-size: 11.5px; }
+  .handlefalt.tom { border-style: dashed; color: var(--t-mut); }
+  .handlefalt:focus { border-color: var(--acc); border-style: solid; outline: none; }
   .passrad select, .passrad input { border: 1px solid var(--div); border-radius: 7px;
     padding: 6px 9px; background: var(--kort); color: var(--t-head);
     font-family: inherit; font-size: 12.5px; }

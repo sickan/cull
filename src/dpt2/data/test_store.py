@@ -1861,3 +1861,41 @@ class TestGrenklassOchFaslosa(unittest.TestCase):
             sport="friidrott")
         self.assertEqual(sam["deltagare_nya"], 1)
         self.assertEqual(sam["oklara"], [])
+
+    def test_handle_kan_sattas_i_efterhand(self):
+        """Stigs krav 19/7: SoMe-konton ska gå att lägga till senare i flödet,
+        på deltagare som saknade dem när startlistan lästes in."""
+        store.importera_startlista(self.c, self.ev, [
+            {"gren": "Kula", "namn": "Bo Berg", "klubb": "IF Göta",
+             "handle": ""}], sport="friidrott")
+        gid = store.lista_discipliner(self.c, self.ev)[0]["id"]
+        lid = store._pass_deltagare(self.c, gid)[0]["id"]
+        self.assertIsNone(store._pass_deltagare(self.c, gid)[0]["handle"])
+
+        self.assertTrue(store.satt_deltagare_handle(self.c, lid, "bo_berg"))
+        self.assertEqual(store._pass_deltagare(self.c, gid)[0]["handle"],
+                         "@bo_berg")   # snabel-a läggs till
+
+    def test_handle_skrivs_i_bada_registren(self):
+        """Deltagare-kortet visar unionen lag ∪ individregister — skrivs bara
+        det ena driver de isär."""
+        lid = store.upsert_lag(self.c, "Bo Berg", kind="individ",
+                               sport="friidrott")
+        store.sakerstall_individ_fran_lag(self.c, lid)
+        store.satt_deltagare_handle(self.c, lid, "@bo")
+        self.assertEqual(
+            self.c.execute("SELECT instagram FROM lag WHERE id=?", (lid,)).fetchone()[0],
+            "@bo")
+        self.assertEqual(
+            self.c.execute("SELECT instagram FROM individ WHERE id=?", (lid,)).fetchone()[0],
+            "@bo")
+
+    def test_tom_handle_rensar(self):
+        lid = store.upsert_lag(self.c, "Bo", kind="individ", sport="friidrott",
+                               instagram="@fel")
+        store.satt_deltagare_handle(self.c, lid, "")
+        self.assertIsNone(
+            self.c.execute("SELECT instagram FROM lag WHERE id=?", (lid,)).fetchone()[0])
+
+    def test_okand_deltagare_ger_falskt(self):
+        self.assertFalse(store.satt_deltagare_handle(self.c, "finns-inte", "@x"))

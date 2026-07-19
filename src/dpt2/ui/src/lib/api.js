@@ -270,7 +270,10 @@ let MOCK_INDIVIDER = [
   { id: 'e-andersson', namn: 'E. Andersson', sport: 'friidrott', klubb: 'Malmö AI' },
 ]
 let MOCK_EVENT_DELTAGARE = { 'friidrotts-sm-2026': [
-  { id: 'a-duplantis', namn: 'Armand Duplantis', klubb: 'Upsala IF', grenar: ['stav'] }] }
+  { id: 'a-duplantis', namn: 'Armand Duplantis', klubb: 'Upsala IF', grenar: ['stav'],
+    handle: '@mondo_duplantis' },
+  { id: 'alva-hoppare', namn: 'Alva Hoppare', klubb: 'Malmö AI',
+    grenar: ['disc_langd'], handle: '' }] }
 let MOCK_EVENT_MATCHER = { 'friidrotts-sm-2026': [
   { id: 'sm-heat1', lag_hemma: '100 m · Heat 1', lag_borta: '', datum: '2026-07-24',
     tid: '14:30', resultat: '', status: 'kommande' }] }
@@ -373,6 +376,24 @@ export async function kopplaBortEventIndivid(eventId, individId) {
   const api = brygga()
   if (api) return api.koppla_bort_event_individ(eventId, individId)
   return kopplaBortEventDeltagare(eventId, individId)
+}
+
+export async function sattDeltagareHandle(deltagareId, handle) {
+  const api = brygga()
+  if (api) return api.satt_deltagare_handle(deltagareId, handle)
+  // Skriv i BÅDA mock-källorna, precis som store.satt_deltagare_handle skriver
+  // i både lag och individ — annars visar webbläsarläget ett orört fält och
+  // döljer att skrivningen fungerade.
+  const h = handle ? (handle.startsWith('@') ? handle : '@' + handle) : ''
+  for (const d of MOCK_DISCIPLINER) {
+    const p = (d.deltagare || []).find((x) => x.id === deltagareId)
+    if (p) p.instagram = h
+  }
+  for (const lista of Object.values(MOCK_EVENT_DELTAGARE)) {
+    const p = lista.find((x) => x.id === deltagareId)
+    if (p) p.handle = h
+  }
+  return wait({ ok: true })
 }
 
 // ── Discipliner (B-001): tävlingens grenar + deltagare per gren ─────────────
