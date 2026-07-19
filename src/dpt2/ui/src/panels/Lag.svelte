@@ -601,6 +601,17 @@
                         </span>
                       </label>
 
+                      <!-- Hemsidan är personens egen (profil hos klubb/förbund)
+                           — INTE ett lag-fält. D12 stryker exakt fyra fält på
+                           utövaren (profilfärg · ställfärger · arkiv-
+                           matchspråket · flat tävling-chip); hemsidan är inget
+                           av dem och datat finns kvar i registret. -->
+                      <label class="hemsidsrad">
+                        <span class="lbl">Hemsida</span>
+                        <input bind:value={l.hemsida} on:change={() => gerLag(l)}
+                          placeholder="Länk till profil/hemsida" />
+                      </label>
+
                       <label class="anteckningsrad">
                         <span class="lbl">Anteckning</span>
                         <textarea bind:value={l.anteckning} on:change={() => gerLag(l)} rows="2"
@@ -951,7 +962,7 @@
     font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .klassknapp.on { background: var(--acc-soft); border-color: var(--acc-border); color: var(--t-head); }
   .klasstapel { width: 3px; height: 14px; border-radius: 2px; flex: none; }
-  .handlerad, .anteckningsrad { display: flex; flex-direction: column; gap: 5px; }
+  .handlerad, .anteckningsrad, .hemsidsrad { display: flex; flex-direction: column; gap: 5px; }
   .handlefalt { display: flex; align-items: center; gap: 0; border: 1px solid var(--div);
     border-radius: 8px; background: var(--panel); overflow: hidden; max-width: 280px; }
   .atprefix { padding: 0 4px 0 10px; font-size: 13px; color: var(--t-help); flex: none; }

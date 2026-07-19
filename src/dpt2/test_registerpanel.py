@@ -85,6 +85,14 @@ class TestDeladEditor(unittest.TestCase):
                        "l.anteckning"):           # anteckning
             self.assertIn(markor, u, markor)
 
+    def test_hemsidan_finns_kvar_pa_utovaren(self):
+        # M-1 tog av misstag bort hemsidan ur utövar-formuläret. D12 stryker
+        # exakt FYRA fält på utövaren (profilfärg · ställfärger · arkiv-
+        # matchspråket · flat tävling-chip) — hemsidan är inget av dem, och
+        # datat ligger kvar i registret.
+        u = _utovargrenen(LAG)
+        self.assertIn("l.hemsida", u)
+
     def test_lagfalten_lacker_inte_in_pa_utovaren(self):
         u = _utovargrenen(LAG)
         for lackage in ("profilfarg",        # profilfärg
