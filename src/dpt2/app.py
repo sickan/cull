@@ -760,9 +760,19 @@ class Api:
             if not val.get("ok"):
                 return {"ok": False, "fel": "Ingen fil vald"}
             path = val["path"]
+        if not program_import.pdf_stod():
+            return {"ok": False,
+                    "fel": "PDF-läsning saknas i den här installationen "
+                           "(pdfplumber). Kör: ~/.local/pipx/venvs/dpt/bin/python "
+                           "-m pip install pdfplumber — klistra in texten så länge."}
         e = store.hamta_event(self.conn, event_id) or {}
         fran = e.get("fran") or ""
         ar = int(fran[:4]) if fran[:4].isdigit() else None
+        if ar is None:
+            return {"ok": False,
+                    "fel": "Eventet saknar startdatum — årtalet behövs för att "
+                           "tolka dagrubrikerna ('FREDAG 24 JULI'). Sätt "
+                           "perioden på eventet först."}
         try:
             rader = program_import.las_pdf(path, ar=ar)
         except Exception as fel:

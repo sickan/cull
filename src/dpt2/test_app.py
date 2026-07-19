@@ -3166,3 +3166,38 @@ class TestProgramTillTelefonen(unittest.TestCase):
             "lag_hemma": "A", "lag_borta": "B", "datum": "2026-07-24"})
         m = store.hamta_match(self.api.conn, mid)
         self.assertNotIn("program", self.api._match_till_paket(m, {}))
+
+
+class TestPdfFeldiagnos(unittest.TestCase):
+    """Stigs fynd 19/7: 'Hittade inget tidsprogram' fast orsaken var att
+    pdfplumber saknades i APPENS interpreter (pipx-venvet, inte repots .venv).
+    Felmeddelandet ska peka på rätt sak."""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.ev = store.upsert_tavling(
+            self.api.conn, "SM", sport="friidrott", typ="masterskap",
+            fran="2026-07-24", till="2026-07-26")
+
+    def test_saknat_bibliotek_namnger_sig(self):
+        from dpt2.motorer import program_import as PI
+        orig = PI.pdf_stod
+        PI.pdf_stod = lambda: False
+        try:
+            r = self.api.tolka_program_pdf(self.ev, path="/nagon.pdf")
+        finally:
+            PI.pdf_stod = orig
+        self.assertFalse(r["ok"])
+        self.assertIn("pdfplumber", r["fel"])
+
+    def test_event_utan_period_sager_varfor(self):
+        utan = store.upsert_tavling(self.api.conn, "Utan datum",
+                                    sport="friidrott", typ="masterskap")
+        r = self.api.tolka_program_pdf(utan, path="/nagon.pdf")
+        self.assertFalse(r["ok"])
+        self.assertIn("startdatum", r["fel"])
+
+    def test_lasbar_fil_utan_program_sager_det(self):
+        r = self.api.tolka_program_pdf(self.ev, path="/finns/inte.pdf")
+        self.assertFalse(r["ok"])
+        self.assertIn("tidsprogram", r["fel"])

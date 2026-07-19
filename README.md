@@ -18,6 +18,25 @@ brew install exiftool
 pip install -e /sökväg/till/cull
 ```
 
+### DPT2 (desktop-appen) och dess beroenden
+
+DPT2 körs **från källträdet** men med **pipx-venvets** python:
+`~/.local/bin/dpt2` → `~/.local/pipx/venvs/dpt/bin/python -m dpt2.app`.
+
+Ett `pip install` i repots `.venv` når därför INTE appen. Nya beroenden i
+`pyproject.toml` måste in i pipx-venvet också:
+
+```bash
+~/.local/pipx/venvs/dpt/bin/python -m pip install <paket>
+# eller efter flera tillägg:
+pipx reinstall dpt
+```
+
+Symptomet när det missas är lömskt: funktionen faller tillbaka på sin
+fel-gren och skyller på indata. PDF-läsningen sa "Hittade inget tidsprogram i
+PDF:en" när orsaken var att `pdfplumber` saknades (19/7) — den frågar numera
+`program_import.pdf_stod()` först och namnger biblioteket.
+
 ## Användning
 
 ```bash

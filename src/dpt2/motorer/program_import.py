@@ -229,6 +229,20 @@ def _mitt(kluster):
     return (kluster[0]["x0"] + kluster[-1]["x1"]) / 2
 
 
+def pdf_stod():
+    """Går PDF-läsning att göra i den här installationen?
+
+    Egen fråga eftersom svaret annars döljs: ett saknat pdfplumber gav förut
+    samma tomma lista som en fil utan tidsprogram, och felmeddelandet skyllde
+    på filen. DPT2 körs dessutom med pipx-venvets python, inte repots — en
+    `pip install` i fel interpreter syns bara här."""
+    try:
+        import pdfplumber       # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def las_pdf(path, ar=None):
     """Läser ett tidsprogram ur en PDF med kolumnlayout.
 
