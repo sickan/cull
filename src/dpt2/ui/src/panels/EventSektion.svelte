@@ -4,7 +4,7 @@
   // Event skapas/redigeras än så länge i tävlings-editorn (Lag & ligor);
   // sektionen äger KOPPLINGARNA. Mockup: DPT v5 — Event.dc.html.
   import { onMount, createEventDispatcher } from 'svelte'
-  import { listaEventer, hamtaEventDetalj, sattEventPagangLage,
+  import { listaEventer, listaTavlingar, hamtaEventDetalj, sattEventPagangLage,
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
     kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle,
     sparaDisciplin, raderaDisciplin, sparaTavling, sportprofiler,
@@ -29,6 +29,7 @@
     turnering:  { namn: 'Turnering',  farg: '#6E8757' },
     varldscup:  { namn: 'Världscup',  farg: '#2F7CB0' },
     ovrigt:     { namn: 'Övrigt',     farg: 'var(--t-mut)' },
+    liga:       { namn: 'Liga',       farg: '#C9871F' },   // D11b §1 (Option A): ligor bor nu här
   }
   const LAGEN = [
     { id: 'auto', namn: 'Auto', text: 'Före perioden ett heldagskort, under perioden dagens matcher, efteråt resultatet.' },
@@ -71,7 +72,12 @@
   })
   async function ladda() {
     laddar = true
-    eventer = await listaEventer().catch(() => [])
+    // D11b §1 (Option A): Tävlingar äger ALLA tävlingar — events (rikt detaljvy)
+    // + ligor (metadata-editor). Ligor läses ur skrivytan; events kommer
+    // berikade med antal grenar/matcher/deltagare.
+    const [ev, tav] = await Promise.all([
+      listaEventer().catch(() => []), listaTavlingar().catch(() => [])])
+    eventer = [...ev, ...tav.filter((t) => t.typ === 'liga')]
     laddar = false
   }
   // Grenar & individer hör till GRENSPORTERNA (friidrott; skid-VC när den
@@ -369,12 +375,21 @@
   // håller event-registret i synk. Samma editor för nytt + redigering.
   const SPORTER = ['fotboll', 'handboll', 'innebandy', 'volleyboll', 'beachvolley', 'tennis', 'friidrott']
   const EVENTTYPER = [['masterskap', 'Mästerskap'], ['cup', 'Cup'],
-    ['turnering', 'Turnering'], ['varldscup', 'Världscup'], ['ovrigt', 'Övrigt']]
+    ['turnering', 'Turnering'], ['varldscup', 'Världscup'], ['liga', 'Liga'],
+    ['ovrigt', 'Övrigt']]
   let editorOppen = false
   let ev = null
   function nyttEvent() {
     ev = { id: null, namn: '', typ: 'turnering', sport: 'fotboll', gren: '',
       fran: '', till: '', ort: '', arena: '' }
+    editorOppen = true
+  }
+  // En liga har ingen grendetalj/program — klick i listan öppnar metadata-
+  // editorn direkt (Option A: ligor bor i Tävlingar men saknar event-detaljvyn).
+  function redigeraRad(e) {
+    ev = { id: e.id, namn: e.namn, typ: e.typ, sport: e.sport,
+      gren: e.gren || '', fran: e.fran || '', till: e.till || '',
+      ort: e.ort || '', arena: e.arena || '' }
     editorOppen = true
   }
   function redigeraEvent() {
@@ -401,7 +416,7 @@
     <div class="topp">
       <div>
         <span class="kicker">Planera</span>
-        <h1 class="scd">Tävlingar <span class="sub">Mästerskap, cuper, turneringar, världscupar — tidsbegränsade tävlingar med matcher och grenar</span></h1>
+        <h1 class="scd">Tävlingar <span class="sub">Ligor, mästerskap, cuper, turneringar — allt som binder ihop matcher, grenar och utövare</span></h1>
       </div>
       <button class="prim" on:click={nyttEvent}>+ Ny tävling</button>
     </div>
@@ -445,7 +460,7 @@
         {#each filtrerade as e (e.id)}
           {@const t = TYP[e.typ] || TYP.ovrigt}
           {@const s = status(e)}
-          <button class="rad" style="--typfarg:{t.farg}" on:click={() => oppna(e.id)}>
+          <button class="rad" style="--typfarg:{t.farg}" on:click={() => e.typ === 'liga' ? redigeraRad(e) : oppna(e.id)}>
             <span class="typbadge" style="color:{t.farg};border-color:{t.farg}">{t.namn}</span>
             <span class="mitt">
               <span class="namn scd">{e.namn} <span class="sport">{e.sport}{e.gren ? ` · ${e.gren}` : ''}</span></span>

@@ -443,17 +443,17 @@
 
 <div class="panel">
   <header>
-    <h1 class="scd">Lag &amp; tävlingar</h1>
-    <span class="sub">Registret som matcherna delar — loggor, hemsidor och Instagram</span>
+    <h1 class="scd">Lag</h1>
+    <span class="sub">Registret som matcherna delar — loggor, hemsidor och Instagram. Tävlingar &amp; ligor redigeras under Tävlingar.</span>
   </header>
 
   {#if laddar}
     <p class="tom">Laddar register…</p>
   {:else}
-    <div class="tabs">
-      <button class:on={lagTab === 'lag'} on:click={() => (lagTab = 'lag')}>Lag &amp; utövare · {aktivaLag.length}</button>
-      <button class:on={lagTab === 'tavlingar'} on:click={() => (lagTab = 'tavlingar')}>Tävlingar · {tavlingar.length}</button>
-    </div>
+    <!-- D11b §1 (Option A): tävlings-/liga-redigeringen bor nu i Tävlingar-
+         panelen. Fliken är borttagen så Lag & ligor blir bara Lag; koppling
+         lag↔tävling finns kvar på lag-raderna. (Tävlingar-vyns markup ligger
+         kvar oåtkomlig tills en egen städ-pass tar bort den.) -->
 
     {#if lagTab === 'lag'}
       <div class="toolrad">
@@ -790,9 +790,6 @@
   .sub { font-size: 13px; color: var(--t-mut); }
   .tom { color: var(--t-help); font-size: 13px; }
 
-  .tabs { display: inline-flex; background: var(--div3); border-radius: 9px; padding: 3px; gap: 3px; margin: 16px 0 0; }
-  .tabs button { padding: 8px 16px; border: 0; border-radius: 7px; background: transparent; color: var(--t-mut); font-size: 13px; font-weight: 600; }
-  .tabs button.on { background: var(--kort); color: var(--t-head); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 
   .toolrad { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 16px 2px 14px; }
   .sokbox { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 8px;
