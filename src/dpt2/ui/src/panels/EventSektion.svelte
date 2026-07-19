@@ -323,6 +323,10 @@
       inlasKvitto += ` · nya grenar: ${sam.grenar_skapade.join(', ')}`
     // Tvetydig gren (finns i flera klasser) hoppas över — säg vilka, annars
     // ser importen ut att ha lyckats helt.
+    if (sam.hopslagna?.length)
+      inlasKvitto += ` · ${sam.hopslagna.length} dubblerade grenar slogs ihop`
+    if (sam.klass_satt)
+      inlasKvitto += ` · klass satt på ${sam.klass_satt} deltagare`
     if (sam.oklara?.length)
       inlasKvitto += ` · ${sam.oklara.length} hoppades över, välj klass: ${sam.oklara.join(', ')}`
     granskning = null; inlasText = ''

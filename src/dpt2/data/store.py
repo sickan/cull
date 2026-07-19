@@ -1146,6 +1146,15 @@ def program(conn, event_id, datum=None):
     return dagar
 
 
+def _grennyckel(namn):
+    """Jämförelsenyckel för ett grennamn — gemener utan mellanslag.
+
+    Källorna stavar olika: arrangörens PDF skriver "100m", startlistesidan
+    "100 m". Utan normalisering blir de två grenar, och samma final hamnar två
+    gånger i programmet med var sin preliminära tid (Stigs fynd 19/7)."""
+    return "".join((namn or "").lower().split())
+
+
 def _gren_for_namn(conn, event_id, namn, skapade, klass=None):
     """Slår upp en gren på namn + klass (skiftlägesokänsligt), skapar den om den
     saknas. `skapade` räknar nyskapade grenar åt importsammanfattningen.
@@ -1159,10 +1168,11 @@ def _gren_for_namn(conn, event_id, namn, skapade, klass=None):
     klass = klass if klass in ("dam", "herr", "mixed") else None
     utan_klass = None
     namnlika = []
+    nyckel = _grennyckel(namn)
     for d in conn.execute(
             "SELECT id, namn, gren FROM disciplin WHERE tavling_id=?",
             (event_id,)):
-        if d["namn"].strip().lower() != namn.lower():
+        if _grennyckel(d["namn"]) != nyckel:
             continue
         namnlika.append(d["id"])
         if d["gren"] == klass:
@@ -1240,7 +1250,11 @@ def importera_startlista(conn, event_id, rader, sport=None):
         fanns = conn.execute(
             "SELECT id FROM lag WHERE lower(namn)=lower(?) AND kind='individ'",
             (namn,)).fetchone()
+        # Klassen hör till deltagaren också, inte bara grenen: overlayns
+        # kantfärg följer INDIVIDEN, och utan den blir hen klasslös i
+        # utövarregistret (Stigs fynd 19/7 — 34 deltagare utan tillhörighet).
         lid = upsert_lag(conn, namn, kind="individ", sport=sport,
+                         gren=rad.get("klass") or None,
                          klubb=rad.get("klubb") or None,
                          instagram=rad.get("handle") or None)
         if not lid:
@@ -1449,6 +1463,78 @@ def lista_event_individer(conn, event_id):
                                 "handle": _handle(r["instagram"]) or "",
                                 "grenar": []})
     return sorted(ut.values(), key=lambda p: p["namn"])
+
+
+def stad_grendubbletter(conn, event_id):
+    """Slår ihop grenar som bara skiljer sig i mellanslag ("100m" / "100 m").
+
+    De uppstod innan `_grennyckel` normaliserade jämförelsen: PDF:en och
+    startlistesidan stavar olika, så samma final låg två gånger i programmet
+    med var sin preliminära tid. Behåller den gren som har FLEST deltagare
+    (startlistans, i praktiken), flyttar över pass och deltagare från de andra
+    och raderar dem. Pass med samma namn dubbleras inte — den bevarade
+    grenens tid vinner, eftersom den kommer från den färskare källan.
+
+    Returnerar en lista med det som slogs ihop, för kvittens."""
+    grupper = {}
+    for d in conn.execute(
+            "SELECT id, namn, gren FROM disciplin WHERE tavling_id=?",
+            (event_id,)):
+        grupper.setdefault((_grennyckel(d["namn"]), d["gren"]), []).append(dict(d))
+    hopslagna = []
+    for (_, _klass), rader in grupper.items():
+        if len(rader) < 2:
+            continue
+        def vikt(d):
+            return conn.execute(
+                "SELECT COUNT(*) FROM disciplin_deltagare WHERE disciplin_id=?",
+                (d["id"],)).fetchone()[0]
+        rader.sort(key=vikt, reverse=True)
+        behall, ovriga = rader[0], rader[1:]
+        finns = {p["namn"].strip().lower() for p in conn.execute(
+            "SELECT namn FROM pass WHERE disciplin_id=?", (behall["id"],))}
+        for d in ovriga:
+            for p in conn.execute("SELECT * FROM pass WHERE disciplin_id=?",
+                                  (d["id"],)):
+                if p["namn"].strip().lower() in finns:
+                    continue          # bevarade grenens tid vinner
+                conn.execute("UPDATE pass SET disciplin_id=? WHERE id=?",
+                             (behall["id"], p["id"]))
+                finns.add(p["namn"].strip().lower())
+            conn.execute(
+                "INSERT OR IGNORE INTO disciplin_deltagare(disciplin_id,lag_id) "
+                "SELECT ?, lag_id FROM disciplin_deltagare WHERE disciplin_id=?",
+                (behall["id"], d["id"]))
+            conn.execute("DELETE FROM disciplin WHERE id=?", (d["id"],))
+            hopslagna.append({"behöll": behall["namn"], "tog_bort": d["namn"],
+                              "klass": behall["gren"] or ""})
+    conn.commit()
+    return hopslagna
+
+
+def backfilla_deltagarklass(conn, event_id):
+    """Sätter klass (dam/herr) på deltagare som saknar den, härledd ur den gren
+    de tävlar i. Startlistan bar klassen men skrev den bara på grenen — inte på
+    individen (Stigs fynd 19/7). Rör aldrig en deltagare som redan har klass,
+    och hoppar över den som tävlar i både dam- och herrklass."""
+    per_lag = {}
+    for r in conn.execute(
+            "SELECT dd.lag_id, d.gren FROM disciplin_deltagare dd "
+            "JOIN disciplin d ON d.id=dd.disciplin_id "
+            "JOIN lag l ON l.id=dd.lag_id "
+            "WHERE d.tavling_id=? AND (l.gren IS NULL OR l.gren='')",
+            (event_id,)):
+        if r["gren"]:
+            per_lag.setdefault(r["lag_id"], set()).add(r["gren"])
+    satta = 0
+    for lag_id, klasser in per_lag.items():
+        if len(klasser) != 1:
+            continue              # tvetydigt — gissa inte
+        conn.execute("UPDATE lag SET gren=? WHERE id=?",
+                     (klasser.pop(), lag_id))
+        satta += 1
+    conn.commit()
+    return satta
 
 
 def satt_deltagare_handle(conn, deltagare_id, handle):

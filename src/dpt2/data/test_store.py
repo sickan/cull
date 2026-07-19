@@ -1899,3 +1899,67 @@ class TestGrenklassOchFaslosa(unittest.TestCase):
 
     def test_okand_deltagare_ger_falskt(self):
         self.assertFalse(store.satt_deltagare_handle(self.c, "finns-inte", "@x"))
+
+    def test_mellanslag_gor_inte_100m_till_tva_grenar(self):
+        """Stigs fynd 19/7: PDF:en skriver '100m', startlistesidan '100 m' —
+        samma final hamnade två gånger med var sin preliminära tid."""
+        store.importera_program(self.c, self.ev, [
+            {"gren": "100m", "pass": "Final", "datum": "2026-07-24",
+             "tid": "20:25", "klass": "dam"}])
+        sam = store.importera_program(self.c, self.ev, [
+            {"gren": "100 m", "pass": "Final", "datum": "2026-07-24",
+             "tid": "20:35", "klass": "dam"}])
+        self.assertEqual(len(store.lista_discipliner(self.c, self.ev)), 1)
+        self.assertEqual((sam["pass_nya"], sam["pass_uppdaterade"]), (0, 1))
+        rad = store.program(self.c, self.ev)[0]["rader"][0]
+        self.assertEqual(rad["tid"], "20:35")      # färskare källan vinner
+
+    def test_startlistan_satter_klass_pa_deltagaren(self):
+        """Klassen ska hamna på INDIVIDEN också — overlayns kantfärg följer
+        henne, och utan den blir hon klasslös i utövarregistret."""
+        store.importera_startlista(self.c, self.ev, [
+            {"gren": "100 m", "klass": "dam", "namn": "Esther Sahlqvist",
+             "klubb": "Hammarby IF", "handle": ""}], sport="friidrott")
+        lag = self.c.execute(
+            "SELECT gren FROM lag WHERE namn='Esther Sahlqvist'").fetchone()
+        self.assertEqual(lag["gren"], "dam")
+
+    def test_stad_slar_ihop_befintliga_dubbletter(self):
+        a = store.upsert_disciplin(self.c, self.ev, "100m", gren="dam")
+        b = store.upsert_disciplin(self.c, self.ev, "100 m", gren="dam")
+        store.upsert_pass(self.c, a, "Försök", "2026-07-24", tid="18:20")
+        store.upsert_pass(self.c, a, "Final", "2026-07-24", tid="20:25")
+        store.upsert_pass(self.c, b, "Final", "2026-07-24", tid="20:35")
+        lid = store.upsert_lag(self.c, "Esther", kind="individ", sport="friidrott")
+        store.koppla_disciplin_deltagare(self.c, b, lid)
+
+        hop = store.stad_grendubbletter(self.c, self.ev)
+        self.assertEqual(len(hop), 1)
+        grenar = store.lista_discipliner(self.c, self.ev)
+        self.assertEqual(len(grenar), 1)
+        self.assertEqual(grenar[0]["namn"], "100 m")     # flest deltagare bevaras
+        pas = {p["namn"]: p["tid"] for p in store.lista_pass(self.c, grenar[0]["id"])}
+        self.assertEqual(pas, {"Försök": "18:20", "Final": "20:35"})
+        self.assertEqual(len(grenar[0]["deltagare"]), 1)
+
+    def test_stad_ror_inte_olika_klasser(self):
+        store.upsert_disciplin(self.c, self.ev, "100 m", gren="dam")
+        store.upsert_disciplin(self.c, self.ev, "100m", gren="herr")
+        self.assertEqual(store.stad_grendubbletter(self.c, self.ev), [])
+        self.assertEqual(len(store.lista_discipliner(self.c, self.ev)), 2)
+
+    def test_backfill_satter_klass_ur_grenen(self):
+        gid = store.upsert_disciplin(self.c, self.ev, "100 m", gren="dam")
+        lid = store.upsert_lag(self.c, "Esther", kind="individ", sport="friidrott")
+        store.koppla_disciplin_deltagare(self.c, gid, lid)
+        self.assertEqual(store.backfilla_deltagarklass(self.c, self.ev), 1)
+        self.assertEqual(store.hamta_lag(self.c, lid)["gren"], "dam")
+
+    def test_backfill_gissar_inte_vid_tvetydighet(self):
+        d = store.upsert_disciplin(self.c, self.ev, "Höjd", gren="dam")
+        h = store.upsert_disciplin(self.c, self.ev, "Längd", gren="herr")
+        lid = store.upsert_lag(self.c, "Oklar", kind="individ", sport="friidrott")
+        store.koppla_disciplin_deltagare(self.c, d, lid)
+        store.koppla_disciplin_deltagare(self.c, h, lid)
+        self.assertEqual(store.backfilla_deltagarklass(self.c, self.ev), 0)
+        self.assertIsNone(store.hamta_lag(self.c, lid)["gren"])

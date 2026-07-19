@@ -812,6 +812,11 @@ class Api:
             sam["grenar_skapade"] = (sam.get("grenar_skapade", [])
                                      + sam2.get("grenar_skapade", []))
             sam.update({k: v for k, v in sam2.items() if k != "grenar_skapade"})
+            # Städa efter tidigare inläsningar som stavade grennamnen olika
+            # ("100m" ur PDF:en, "100 m" ur startlistan) och fyll klassen på
+            # deltagare som saknar den. Båda är no-op när allt redan stämmer.
+            sam["hopslagna"] = store.stad_grendubbletter(self.conn, event_id)
+            sam["klass_satt"] = store.backfilla_deltagarklass(self.conn, event_id)
             return {"ok": True, **sam}
         if sort == "startlista":
             e = store.hamta_event(self.conn, event_id) or {}
@@ -819,6 +824,8 @@ class Api:
                                              sport=e.get("sport"))
         else:
             sam = store.importera_program(self.conn, event_id, rader)
+        sam["hopslagna"] = store.stad_grendubbletter(self.conn, event_id)
+        sam["klass_satt"] = store.backfilla_deltagarklass(self.conn, event_id)
         return {"ok": True, **sam}
 
     # ── Event-sektionen (V5-C skiva 1, handoff §2) ───────────────────────────
