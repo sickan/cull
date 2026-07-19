@@ -9,7 +9,7 @@
     kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle,
     sparaDisciplin, raderaDisciplin, sparaTavling, sportprofiler,
     hamtaProgram, sparaPass, raderaPass, tolkaProgramText,
-    tolkaProgramPdf, importeraProgram } from '../lib/api.js'
+    tolkaProgramPdf, importeraProgram, synkaLivePaket } from '../lib/api.js'
   import { kopieraText } from '../lib/kopiera.js'
 
   const dispatch = createEventDispatcher()
@@ -248,6 +248,21 @@
     await laddaProgram()
     detalj = await hamtaEventDetalj(vald)
   }
+  // Synken körs annars bara vid appstart och På gång-publicering. Efter en
+  // import behöver programmet kunna skickas direkt — annars ligger det kvar
+  // lokalt tills DPT2 startas om nästa gång.
+  let synkar = false
+  let synkkvitto = ''
+  async function synka() {
+    synkar = true; synkkvitto = ''
+    const r = await synkaLivePaket().catch(() => null)
+    synkar = false
+    synkkvitto = r?.ok
+      ? `Skickat — ${r.antal} paket i molnet${r.borttagna ? `, ${r.borttagna} borttagna` : ''}.`
+      : `Kunde inte skicka: ${r?.fel || 'okänt fel'}`
+    setTimeout(() => (synkkvitto = ''), 6000)
+  }
+
   async function taBortPass(id) {
     await raderaPass(id)
     passOppen = false; pas = null
@@ -456,6 +471,12 @@
         <span class="caps">Program</span>
         <span class="khint">härleds ur pass och tidsatta matcher — inget eget register</span>
         <span class="spacer"></span>
+        {#if program.length}
+          <!-- Synken går annars bara vid appstart och På gång-publicering: ett
+               nyss inläst program hade legat kvar lokalt till nästa omstart. -->
+          <button class="plus" on:click={synka} disabled={synkar}>
+            {synkar ? 'Skickar…' : 'Skicka till telefonen'}</button>
+        {/if}
         <button class="plus" on:click={() => oppnaInlas('tidsprogram')}>Klistra in / CSV</button>
         {#if detalj.grenar.length}
           <button class="plus" on:click={nyttPass}>+ Pass</button>
@@ -536,6 +557,7 @@
       {/if}
 
       {#if inlasKvitto}<div class="kvitto">{inlasKvitto}</div>{/if}
+      {#if synkkvitto}<div class="kvitto">{synkkvitto}</div>{/if}
 
       {#if passOppen}
         <div class="nyrad passrad">
