@@ -1,11 +1,14 @@
 <script>
   import { createEventDispatcher } from 'svelte'
   import logoHast from './assets/logo-hast.png'
+  import { bokstaverad } from './version.js'
   export let aktiv = 'matcher'
   export let delvis = false        // minst ett material är "Delvis publicerad"
   const dispatch = createEventDispatcher()
-  // __BUILD_NR__ injiceras av vite.config.js (git rev-list --count HEAD vid bygget).
-  const buildNr = typeof __BUILD_NR__ !== 'undefined' ? __BUILD_NR__ : '?'
+  // V2-01: versionen kommer ur src/dpt2/__init__.py via vite — aldrig hårdkodad
+  // här (raden sa 'v4.0' medan paketet sa något annat). Byggnummer/commit
+  // ligger i Inställningar → Om, inte i naven.
+  const versionsord = bokstaverad()
 
   const grupper = [
     { rubrik: 'Planera', poster: [
@@ -38,7 +41,7 @@
 <nav>
   <div class="brand">
     <img class="mark" src={logoHast} alt="" />
-    <div class="ord scd">Dalecarlia Photo<span>Photo Tools · v4.0 · Build {buildNr}</span></div>
+    <div class="ord scd">Dalecarlia Photo Tools<span>{versionsord}</span></div>
   </div>
   {#each grupper as g}
     <div class="rubrik">{g.rubrik}</div>

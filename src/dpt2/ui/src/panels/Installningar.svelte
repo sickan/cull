@@ -3,6 +3,7 @@
   import { kalenderStatus, listaFotojobb, hamtaMalmappar, sattMalmapp, valjMapp,
     privatStatus, privatKalendrar, privatSattValda, privatSattEtikett, privatLoggaIn, privatLoggaUt, privatSparaKlient } from '../lib/api.js'
   import Trana from './Trana.svelte'
+  import { version, buildNr, commit, bokstaverad } from '../lib/version.js'
 
   // §9: Träna bor här nu (rad, inte nav-post) — fälls ut vid behov.
   let visaTraning = false
@@ -277,6 +278,23 @@
       {/if}
     </div>
   {/if}
+
+  <!-- V2-01: Om-kortet. Bokstaverad version överst (den du läser upp eller
+       jämför mot telefonen), tekniska detaljer under. Ligger utanför
+       laddar-grenen — versionen ska synas även när status-anropet hänger. -->
+  <div class="kort">
+    <div class="krad">
+      <span class="titel scd">Om</span>
+      <span class="pill" style="color:var(--acc);background:color-mix(in srgb, var(--acc) 15%, transparent)">{bokstaverad()}</span>
+    </div>
+    <div class="fakta">
+      <div class="frad"><span class="fk">Dalecarlia Photo Tools</span><span class="fv">{bokstaverad()}</span></div>
+      <div class="frad"><span class="fk">Versionsnummer</span><span class="fv">{version}</span></div>
+      <div class="frad"><span class="fk">Byggnummer</span><span class="fv">{buildNr}</span></div>
+      <div class="frad slut"><span class="fk">Commit</span><span class="fv">{commit}</span></div>
+    </div>
+    <p class="not">Byggnumret räknar commits på grenen och stämplas när UI:t byggs — skiljer det sig från vad du väntar dig kör appen en gammal dist.</p>
+  </div>
 </div>
 
 <style>
