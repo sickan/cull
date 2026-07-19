@@ -1053,7 +1053,7 @@ def _pass_deltagare(conn, disciplin_id):
     if rad:
         for r in conn.execute(
                 "SELECT i.id, i.namn, i.klubb, i.instagram, ed.grenar "
-                "FROM event_deltagare ed JOIN individ i ON i.id=ed.individ_id "
+                "FROM event_deltagare ed JOIN lag i ON i.id=ed.lag_id "
                 "WHERE ed.event_id=?", (rad[0],)):
             if disciplin_id not in json.loads(r["grenar"] or "[]"):
                 continue
@@ -1198,6 +1198,88 @@ def _gren_for_namn(conn, event_id, namn, skapade, klass=None):
     if did:
         skapade.append(f"{namn} {klass}" if klass else namn)
     return did
+
+
+def _matcha_disciplin_ro(conn, event_id, namn, klass=None):
+    """Read-only-motsvarighet till _gren_for_namn: hittar en befintlig gren på
+    namn+klass utan att skapa något. Returnerar rad-dict eller None. Används av
+    omimport-diffen (C10), som aldrig får skriva."""
+    namn = (namn or "").strip()
+    if not namn:
+        return None
+    klass = klass if klass in ("dam", "herr", "mixed") else None
+    nyckel = _grennyckel(namn)
+    namnlika = []
+    for d in conn.execute(
+            "SELECT id, namn, gren FROM disciplin WHERE tavling_id=?",
+            (event_id,)):
+        if _grennyckel(d["namn"]) != nyckel:
+            continue
+        namnlika.append(dict(d))
+        if d["gren"] == klass or d["gren"] is None:
+            return dict(d)
+    # Klasslös rad mot en gren som finns i exakt en klass — samma val som
+    # _gren_for_namn (flera klasser → tvetydig, ingen träff).
+    if klass is None and len(namnlika) == 1:
+        return namnlika[0]
+    return None
+
+
+def forhandsgranska_import(conn, event_id, rader, sort="tidsprogram",
+                           deltagare=None):
+    """C10: räknar ut vad en import SKULLE ändra — utan att skriva något.
+
+    Idempotensen betyder att en omimport annars sker tyst; den här visar diffen
+    så Stig ser 't.ex. '100 m Final flyttad 20:25 → 20:35' och kan godkänna
+    eller behålla. Läser bara; själva importen är fortsatt auktoritativ."""
+    program = rader if sort in ("tidsprogram", "startlista_tider") else []
+    delt = (deltagare if sort == "startlista_tider"
+            else rader if sort == "startlista" else []) or []
+    nya_pass = uppdaterade = oforandrade = 0
+    nya_grenar, flyttningar = set(), []
+    for rad in program:
+        gren = (rad.get("gren") or "").strip()
+        datum = (rad.get("datum") or "").strip()
+        namn = (rad.get("pass") or "").strip() or gren
+        if not namn or not datum:
+            continue
+        d = _matcha_disciplin_ro(conn, event_id, gren, klass=rad.get("klass"))
+        if not d:
+            nyckel = f"{gren} {rad.get('klass')}" if rad.get("klass") else gren
+            nya_grenar.add(nyckel)
+            nya_pass += 1
+            continue
+        fin = conn.execute(
+            "SELECT namn, tid FROM pass WHERE disciplin_id=? AND lower(namn)=lower(?)",
+            (d["id"], namn)).fetchone()
+        if not fin:
+            nya_pass += 1
+            continue
+        ny_tid = (rad.get("tid") or "").strip() or None
+        if (fin["tid"] or None) == ny_tid:
+            oforandrade += 1
+        else:
+            uppdaterade += 1
+            flyttningar.append(
+                f"{d['namn']} {namn} flyttad {fin['tid'] or '—'} → {ny_tid or '—'}")
+    nya_delt = befintliga_delt = 0
+    for rad in delt:
+        namn = (rad.get("namn") or "").strip()
+        if not namn:
+            continue
+        fanns = conn.execute(
+            "SELECT 1 FROM lag WHERE lower(namn)=lower(?) AND kind='individ'",
+            (namn,)).fetchone()
+        if fanns:
+            befintliga_delt += 1
+        else:
+            nya_delt += 1
+    return {
+        "pass_nya": nya_pass, "pass_uppdaterade": uppdaterade,
+        "pass_oforandrade": oforandrade,
+        "grenar_nya": sorted(nya_grenar), "flyttningar": flyttningar,
+        "deltagare_nya": nya_delt, "deltagare_befintliga": befintliga_delt,
+    }
 
 
 def importera_program(conn, event_id, rader):
@@ -1375,67 +1457,56 @@ def satt_pagang_lage(conn, event_id, lage):
 
 def upsert_individ(conn, namn, *, id=None, sport=None, klubb=None,
                    instagram=None, bild=None):
-    """Skapar/uppdaterar en individ (register som Lag). Namnkrock med annan
-    sport ger suffixat id — samma mönster som upsert_tavling/upsert_lag."""
-    if not (namn or "").strip():
-        return None
-    namn = namn.strip()
-    iid = id or slug_id(namn)
-    fin = conn.execute("SELECT * FROM individ WHERE id=?", (iid,)).fetchone()
-    if fin is not None and not id and sport and fin["sport"] \
-            and fin["sport"] != sport:
-        iid = slug_id(f"{namn} {sport}")
-        fin = conn.execute("SELECT * FROM individ WHERE id=?", (iid,)).fetchone()
-    conn.execute(
-        "INSERT INTO individ(id,namn,sport,klubb,instagram,bild) "
-        "VALUES(?,?,?,?,?,?) "
-        "ON CONFLICT(id) DO UPDATE SET namn=excluded.namn, "
-        "sport=COALESCE(excluded.sport, individ.sport), "
-        "klubb=COALESCE(excluded.klubb, individ.klubb), "
-        "instagram=COALESCE(excluded.instagram, individ.instagram), "
-        "bild=COALESCE(excluded.bild, individ.bild)",
-        (iid, namn, sport, klubb, instagram, bild))
-    conn.commit()
-    return iid
+    """Skapar/uppdaterar en utövare. v40: Utövare = lag(kind='individ') — ETT
+    register (D11b §2). Tunn brygga så äldre anropare fungerar; bild speglas
+    till lag.logga (porträtt)."""
+    return upsert_lag(conn, namn, id=id, kind="individ", sport=sport,
+                      klubb=klubb, instagram=instagram, logga=bild)
 
 
 def lista_individer(conn):
-    return [dict(r) for r in conn.execute("SELECT * FROM individ ORDER BY namn")]
+    """Alla utövare (lag kind='individ'); `bild` speglas ur logga."""
+    return [dict(r) for r in conn.execute(
+        "SELECT id, namn, sport, klubb, instagram, logga AS bild FROM lag "
+        "WHERE kind='individ' AND arkiverad=0 ORDER BY namn")]
 
 
 def hamta_individ(conn, individ_id):
-    r = conn.execute("SELECT * FROM individ WHERE id=?", (individ_id,)).fetchone()
+    r = conn.execute(
+        "SELECT id, namn, sport, klubb, instagram, logga AS bild FROM lag "
+        "WHERE id=? AND kind='individ'", (individ_id,)).fetchone()
     return dict(r) if r else None
 
 
 def radera_individ(conn, individ_id):
-    conn.execute("DELETE FROM individ WHERE id=?", (individ_id,))
-    conn.commit()
+    """Tar bort utövaren (lag kind='individ'); kopplingar faller via FK."""
+    radera_lag(conn, individ_id)
 
 
-def satt_event_deltagare(conn, event_id, individ_id, grenar=None):
-    """Kopplar en individ till ett event med gren-lista (n:n via json).
+def satt_event_deltagare(conn, event_id, lag_id, grenar=None):
+    """Kopplar en utövare (lag_id) till ett event med gren-lista (n:n via json).
     Upsert — ny gren-lista ersätter den gamla."""
     conn.execute(
-        "INSERT INTO event_deltagare(event_id,individ_id,grenar) VALUES(?,?,?) "
-        "ON CONFLICT(event_id,individ_id) DO UPDATE SET grenar=excluded.grenar",
-        (event_id, individ_id, json.dumps(grenar or [])))
+        "INSERT INTO event_deltagare(event_id,lag_id,grenar) VALUES(?,?,?) "
+        "ON CONFLICT(event_id,lag_id) DO UPDATE SET grenar=excluded.grenar",
+        (event_id, lag_id, json.dumps(grenar or [])))
     conn.commit()
 
 
-def koppla_bort_event_deltagare(conn, event_id, individ_id):
-    conn.execute("DELETE FROM event_deltagare WHERE event_id=? AND individ_id=?",
-                 (event_id, individ_id))
+def koppla_bort_event_deltagare(conn, event_id, lag_id):
+    conn.execute("DELETE FROM event_deltagare WHERE event_id=? AND lag_id=?",
+                 (event_id, lag_id))
     conn.commit()
 
 
 def lista_event_deltagare(conn, event_id):
-    """Eventets deltagare med individdata + gren-listan uppackad."""
+    """Eventets utövare med data + gren-listan uppackad."""
     ut = []
     for r in conn.execute(
-            "SELECT i.*, ed.grenar AS _grenar FROM event_deltagare ed "
-            "JOIN individ i ON i.id=ed.individ_id "
-            "WHERE ed.event_id=? ORDER BY i.namn", (event_id,)):
+            "SELECT l.id, l.namn, l.sport, l.klubb, l.instagram, "
+            "l.logga AS bild, ed.grenar AS _grenar FROM event_deltagare ed "
+            "JOIN lag l ON l.id=ed.lag_id "
+            "WHERE ed.event_id=? ORDER BY l.namn", (event_id,)):
         d = dict(r)
         d["grenar"] = json.loads(d.pop("_grenar") or "[]")
         ut.append(d)
@@ -1463,7 +1534,7 @@ def lista_event_individer(conn, event_id):
         p["grenar"].append(r["disciplin_id"])
     for r in conn.execute(
             "SELECT i.id, i.namn, i.klubb, i.instagram FROM event_deltagare ed "
-            "JOIN individ i ON i.id=ed.individ_id WHERE ed.event_id=?",
+            "JOIN lag i ON i.id=ed.lag_id WHERE ed.event_id=?",
             (event_id,)):
         ut.setdefault(r["id"], {"id": r["id"], "namn": r["namn"],
                                 "klubb": r["klubb"] or "", "gren": "",
@@ -1545,67 +1616,55 @@ def backfilla_deltagarklass(conn, event_id):
 
 
 def satt_deltagare_handle(conn, deltagare_id, handle):
-    """Sätter SoMe-handle på en deltagare — utan att veta om hen bor i lag- eller
-    individregistret (Deltagare-kortet visar unionen av båda). Skriver i BÅDA
-    när posten finns i båda, annars driver de isär.
+    """Sätter SoMe-handle på en utövare (lag kind='individ') eller lag. v40: ETT
+    register — skriver bara i lag, inget separat individregister att hålla synk.
 
     Startlistor bär sällan handles; de fylls på när Stig hittar kontot, ofta
     mitt i en tävlingsdag. Tom sträng rensar."""
     h = (handle or "").strip()
     h = h if h.startswith(("@", "?")) or not h else "@" + h
-    traff = False
-    for tabell in ("lag", "individ"):
-        if conn.execute(f"SELECT 1 FROM {tabell} WHERE id=?",
-                        (deltagare_id,)).fetchone():
-            conn.execute(f"UPDATE {tabell} SET instagram=? WHERE id=?",
-                         (h or None, deltagare_id))
-            traff = True
-    conn.commit()
+    traff = conn.execute("SELECT 1 FROM lag WHERE id=?",
+                         (deltagare_id,)).fetchone() is not None
+    if traff:
+        conn.execute("UPDATE lag SET instagram=? WHERE id=?",
+                     (h or None, deltagare_id))
+        conn.commit()
     return traff
 
 
 def individ_kandidater(conn, sport=None):
-    """Sökbara individer för deltagar-väljaren: individ-LAG (utövar-poster —
-    här bor de befintliga deltagarna från B-001-editorn) ∪ individregistret.
-    Dedup på id; sport-filter släpper igenom poster utan satt sport."""
-    ut = {}
-    q = ("SELECT id, namn, klubb, sport FROM lag "
+    """Sökbara utövare för deltagar-väljaren: lag(kind='individ'). v40 — ETT
+    register, ingen union med ett separat individregister längre. Sport-filter
+    släpper igenom poster utan satt sport."""
+    q = ("SELECT id, namn, klubb FROM lag "
          "WHERE kind='individ' AND arkiverad=0")
     args = ()
     if sport:
         q += " AND (sport=? OR sport IS NULL)"
         args = (sport,)
-    for r in conn.execute(q, args):
-        ut[r["id"]] = {"id": r["id"], "namn": r["namn"], "klubb": r["klubb"] or ""}
-    for r in conn.execute("SELECT id, namn, klubb, sport FROM individ"):
-        if sport and r["sport"] and r["sport"] != sport:
-            continue
-        ut.setdefault(r["id"], {"id": r["id"], "namn": r["namn"],
-                                "klubb": r["klubb"] or ""})
-    return sorted(ut.values(), key=lambda p: p["namn"])
+    return sorted(
+        ({"id": r["id"], "namn": r["namn"], "klubb": r["klubb"] or ""}
+         for r in conn.execute(q, args)),
+        key=lambda p: p["namn"])
 
 
 def sakerstall_individ_fran_lag(conn, lag_id):
-    """Ser till att en individ-registerrad finns för en utövar-lagrad (samma
-    id) — event_deltagare kräver individ-FK. No-op om den redan finns."""
-    r = conn.execute("SELECT * FROM lag WHERE id=?", (lag_id,)).fetchone()
-    if r is None:
-        return None
-    conn.execute(
-        "INSERT OR IGNORE INTO individ(id,namn,sport,klubb,instagram) "
-        "VALUES(?,?,?,?,?)",
-        (r["id"], r["namn"], r["sport"], r["klubb"], r["instagram"]))
-    return lag_id
+    """v40: no-op. Utövare bor redan i lag(kind='individ') — ingen spegling till
+    ett separat register behövs. Returnerar lag_id om utövaren finns (så app.py:s
+    äldre kontroll fortsätter fungera)."""
+    r = conn.execute("SELECT 1 FROM lag WHERE id=? AND kind='individ'",
+                     (lag_id,)).fetchone()
+    return lag_id if r else None
 
 
-def individ_historik(conn, individ_id):
-    """Individens eventhistorik — HÄRLEDD ur event_deltagare (skrivs aldrig
-    på individen, kan aldrig komma i osynk). Nyast först."""
+def individ_historik(conn, utovare_id):
+    """Utövarens eventhistorik — HÄRLEDD ur event_deltagare (skrivs aldrig på
+    utövaren, kan aldrig komma i osynk). Nyast först."""
     ut = []
     for r in conn.execute(
             "SELECT e.*, ed.grenar AS _grenar FROM event_deltagare ed "
             "JOIN event e ON e.id=ed.event_id "
-            "WHERE ed.individ_id=? ORDER BY e.fran DESC, e.namn", (individ_id,)):
+            "WHERE ed.lag_id=? ORDER BY e.fran DESC, e.namn", (utovare_id,)):
         d = dict(r)
         d["grenar"] = json.loads(d.pop("_grenar") or "[]")
         ut.append(d)

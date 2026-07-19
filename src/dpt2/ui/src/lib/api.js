@@ -520,6 +520,25 @@ export async function tolkaProgramPdf(eventId, path = null) {
   return wait({ ok: false, fel: 'PDF-läsning kräver appen (inte webbläsarläget)' })
 }
 
+// En väg in (C8): backend gissar dokumenttyp och returnerar sammanfattning +
+// avvikelsemärkta rader. sort='auto' gissar; annat värde tvingar (osäkerhet).
+export async function lasIn(eventId, text, sort = 'auto') {
+  const api = brygga()
+  if (api) return api.las_in(eventId, text, sort)
+  return wait({ ok: true, sort: 'tidsprogram', sakerhet: 'saker', kalla: 'text',
+    rader: [], deltagare: [],
+    sammanfattning: { dagar: 0, grenar: 0, pass: 0, starter: 0,
+      behover_blick: 0, totalt: 0, avvikande: 0, rena: 0 } })
+}
+
+// C10: torrkörning av importen — vad skulle ändras (flyttade pass, nya grenar).
+export async function forhandsgranskaImport(eventId, rader, sort = 'tidsprogram', deltagare = null) {
+  const api = brygga()
+  if (api) return api.forhandsgranska_import(eventId, rader, sort, deltagare)
+  return wait({ pass_nya: 0, pass_uppdaterade: 0, pass_oforandrade: 0,
+    grenar_nya: [], flyttningar: [], deltagare_nya: 0, deltagare_befintliga: 0 })
+}
+
 export async function importeraProgram(eventId, rader, sort = 'tidsprogram', deltagare = null) {
   const api = brygga()
   if (api) return api.importera_program(eventId, rader, sort, deltagare)

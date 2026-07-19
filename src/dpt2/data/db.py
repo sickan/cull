@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 39
+SCHEMA_VERSION = 40
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -941,6 +941,15 @@ def _migrera(conn, fran_version):
         if _har_tabell(conn, "disciplin") and not _har_kolumn(conn, "disciplin",
                                                               "gren"):
             conn.execute("ALTER TABLE disciplin ADD COLUMN gren TEXT")
+    if fran_version < 40:
+        # v40 (D11b §2): Utövare = ETT register. `individ` och lag(kind='individ')
+        # var två register för SAMMA person, bryggade via samma-id-spegling
+        # (sakerstall_individ_fran_lag) — dubbelskrivna rader som kunde driva
+        # isär. lag(kind='individ') blir kanoniskt: SM-startlistvägen bor redan
+        # där (disciplin_deltagare↔lag rörs INTE). `individ` speglas in i lag och
+        # event_deltagare pekas om till lag(id). individ-tabellen lämnas kvar som
+        # alias tills alla läsare flyttats.
+        _migrera_utovare(conn)
 
 
 def _har_kolumn(conn, tabell, kolumn):
@@ -952,6 +961,63 @@ def _har_tabell(conn, tabell):
     return conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
         (tabell,)).fetchone() is not None
+
+
+def _migrera_utovare(conn):
+    """v40: slå ihop individ + lag(kind='individ') → ett Utövare-register i lag.
+
+    Idempotent och försiktig: matchar en individ mot en befintlig lag-utövare på
+    namn (+ sport när båda är satta) och återanvänder den; saknas träff speglas
+    individen in i lag med SAMMA id (så event_deltagares id fortsätter peka rätt).
+    event_deltagare byggs om att referera lag(id) i stället för individ(id).
+    individ-tabellen lämnas orörd som alias."""
+    if not (_har_tabell(conn, "individ") and _har_tabell(conn, "event_deltagare")):
+        return
+    if not _har_kolumn(conn, "event_deltagare", "individ_id"):
+        return                       # redan migrerad (idempotent)
+    karta = {}                       # individ.id → kanonisk lag.id
+    for i in conn.execute("SELECT * FROM individ"):
+        rad = conn.execute(
+            "SELECT id FROM lag WHERE kind='individ' AND lower(namn)=lower(?) "
+            "AND (sport=? OR sport IS NULL OR ? IS NULL) LIMIT 1",
+            (i["namn"], i["sport"], i["sport"])).fetchone()
+        if rad:
+            lag_id = rad["id"]
+        else:
+            lag_id = i["id"]
+            conn.execute(
+                "INSERT OR IGNORE INTO lag(id,namn,kind,sport,klubb,instagram,logga)"
+                " VALUES(?,?,'individ',?,?,?,?)",
+                (i["id"], i["namn"], i["sport"], i["klubb"], i["instagram"],
+                 i["bild"]))
+        # Fyll tomma fält på lag-posten ur individen — tappa ingen uppgift.
+        conn.execute(
+            "UPDATE lag SET klubb=COALESCE(NULLIF(klubb,''), ?), "
+            "instagram=COALESCE(NULLIF(instagram,''), ?), "
+            "logga=COALESCE(NULLIF(logga,''), ?) WHERE id=?",
+            (i["klubb"], i["instagram"], i["bild"], lag_id))
+        karta[i["id"]] = lag_id
+    conn.execute("PRAGMA foreign_keys=OFF")
+    conn.execute("""CREATE TABLE event_deltagare_ny (
+      event_id TEXT NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+      lag_id   TEXT NOT NULL REFERENCES lag(id) ON DELETE CASCADE,
+      grenar   TEXT,
+      PRIMARY KEY (event_id, lag_id))""")
+    for r in conn.execute(
+            "SELECT event_id, individ_id, grenar FROM event_deltagare"):
+        lag_id = karta.get(r["individ_id"], r["individ_id"])
+        if not conn.execute("SELECT 1 FROM lag WHERE id=?", (lag_id,)).fetchone():
+            continue                 # ingen lag-bärare — hoppa hellre än bryta FK
+        conn.execute(
+            "INSERT INTO event_deltagare_ny(event_id,lag_id,grenar) "
+            "VALUES(?,?,?) ON CONFLICT(event_id,lag_id) "
+            "DO UPDATE SET grenar=COALESCE(NULLIF(excluded.grenar,''), grenar)",
+            (r["event_id"], lag_id, r["grenar"]))
+    conn.execute("DROP TABLE event_deltagare")
+    conn.execute("ALTER TABLE event_deltagare_ny RENAME TO event_deltagare")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_event_deltagare_lag "
+                 "ON event_deltagare(lag_id)")
+    conn.execute("PRAGMA foreign_keys=ON")
 
 
 def tabeller(conn):

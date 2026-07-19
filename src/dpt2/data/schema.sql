@@ -82,7 +82,9 @@ CREATE TABLE event (
 );
 
 -- Individ: eget register (som Lag) — långlivad mellan event. Historiken
--- HÄRLEDS genom att fråga event_deltagare; inget skrivs på individen.
+-- HÄRLEDS genom att fråga event_deltagare; inget skrivs på utövaren.
+-- v40 (D11b §2): Utövare = ETT register i lag(kind='individ'). `individ` finns
+-- kvar som alias för äldre databaser men skrivs inte längre av koden.
 CREATE TABLE individ (
   id        TEXT PRIMARY KEY,
   namn      TEXT NOT NULL,
@@ -92,14 +94,15 @@ CREATE TABLE individ (
   bild      TEXT
 );
 
--- Kopplingen individ ⟂ gren lagras på EVENTET (en källa, ingen dubblering).
+-- Kopplingen utövare ⟂ gren lagras på EVENTET (en källa, ingen dubblering).
+-- v40: refererar lag(id) — samma register som disciplin_deltagare, ingen brygga.
 CREATE TABLE event_deltagare (
-  event_id   TEXT NOT NULL REFERENCES event(id) ON DELETE CASCADE,
-  individ_id TEXT NOT NULL REFERENCES individ(id) ON DELETE CASCADE,
-  grenar     TEXT,                      -- json-lista med gren-/disciplin-id:n
-  PRIMARY KEY (event_id, individ_id)
+  event_id TEXT NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+  lag_id   TEXT NOT NULL REFERENCES lag(id) ON DELETE CASCADE,
+  grenar   TEXT,                        -- json-lista med gren-/disciplin-id:n
+  PRIMARY KEY (event_id, lag_id)
 );
-CREATE INDEX idx_event_deltagare_individ ON event_deltagare(individ_id);
+CREATE INDEX idx_event_deltagare_lag ON event_deltagare(lag_id);
 
 -- Kategorier: toppnivån är STATISK (sport/landskap/manniskor/film — checks i
 -- kod), underkategorierna ett redigerbart register (läggs till/döps om utan

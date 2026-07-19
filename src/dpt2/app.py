@@ -762,6 +762,58 @@ class Api:
         return {"ok": True, "sort": sort, "rader": rader,
                 "kalla": "csv" if csv_rader else "text"}
 
+    def las_in(self, event_id, text, sort="auto"):
+        """En väg in (C8): gissar dokumenttyp, tolkar, och returnerar
+        granskningen med sammanfattning (C8) + avvikelsemärkta rader (C9).
+
+        `sort='auto'` låter parsern gissa; UI:t skickar en tvingad sort bara när
+        Stig själv väljer om vid osäkerhet. csv_program/csv_startlista delar
+        importväg med sin grundtyp."""
+        e = store.hamta_event(self.conn, event_id) or {}
+        fran = e.get("fran") or ""
+        ar = int(fran[:4]) if fran[:4].isdigit() else None
+        if sort == "auto":
+            rasort, sakerhet, skal = program_import.kanna_igen(text)
+        else:
+            rasort, sakerhet, skal = sort, "saker", ""
+        intern = {"csv_program": "tidsprogram",
+                  "csv_startlista": "startlista"}.get(rasort, rasort)
+        csv_rader = program_import.las_csv(text)
+        deltagare = []
+        if intern == "startlista_tider":
+            r = program_import.tolka_startlista_med_tider(
+                text, fran=e.get("fran"), till=e.get("till"))
+            rader, deltagare = r["pass"], r["deltagare"]
+            kalla = "text"
+        elif intern == "startlista":
+            kanda = [g["namn"] for g in
+                     store.lista_discipliner(self.conn, event_id)]
+            rader = csv_rader or program_import.tolka_startlista(
+                text, kanda_grenar=kanda)
+            for rr in rader:
+                rr.setdefault("varning",
+                              "" if rr.get("gren") else "Ingen gren — välj i listan")
+            kalla = "csv" if csv_rader else "text"
+        else:
+            intern = "tidsprogram"
+            rader = csv_rader or program_import.tolka_tidsprogram(
+                text, ar=ar, standarddatum=fran)
+            for rr in rader:
+                rr.setdefault("varning", "")
+            kalla = "csv" if csv_rader else "text"
+        analys = program_import.analysera(intern, rader, deltagare)
+        return {"ok": True, "sort": intern, "sakerhet": sakerhet, "skal": skal,
+                "kalla": kalla, "rader": analys["rader"],
+                "deltagare": analys["deltagare"],
+                "sammanfattning": analys["sammanfattning"]}
+
+    def forhandsgranska_import(self, event_id, rader, sort="tidsprogram",
+                               deltagare=None):
+        """C10: vad skulle en import ändra? Läser bara — visar flyttade pass,
+        nya grenar och nya/befintliga deltagare för godkännande."""
+        return store.forhandsgranska_import(self.conn, event_id, rader,
+                                            sort=sort, deltagare=deltagare)
+
     def tolka_program_pdf(self, event_id, path=None):
         """Läser arrangörens PDF direkt (steg 1 — sparar inget).
 
@@ -794,8 +846,11 @@ class Api:
         if not rader:
             return {"ok": False, "fel": "Hittade inget tidsprogram i PDF:en — "
                                         "klistra in texten i stället."}
-        return {"ok": True, "sort": "tidsprogram", "rader": rader,
-                "kalla": "pdf", "fil": os.path.basename(path)}
+        analys = program_import.analysera("tidsprogram", rader)
+        return {"ok": True, "sort": "tidsprogram", "sakerhet": "saker",
+                "rader": analys["rader"], "kalla": "pdf",
+                "sammanfattning": analys["sammanfattning"],
+                "fil": os.path.basename(path)}
 
     def importera_program(self, event_id, rader, sort="tidsprogram",
                           deltagare=None):

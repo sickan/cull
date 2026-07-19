@@ -1227,13 +1227,15 @@ class TestPassOchProgram(unittest.TestCase):
         self.assertEqual([(d["namn"], d["handle"]) for d in rad["deltagare"]],
                          [("Armand Duplantis", "@mondo_duplantis")])
 
-    def test_deltagare_ar_unionen_lag_och_individregister(self):
+    def test_deltagare_ar_unionen_gren_och_eventkoppling(self):
+        """v40: ETT register (lag kind='individ'). Unionen är nu gren-kopplade
+        (disciplin_deltagare) ∪ event-kopplade (event_deltagare) — båda mot lag."""
         lid = store.upsert_lag(self.c, "Utövarlag", kind="individ",
                                sport="friidrott", instagram="@ur_lag")
         store.koppla_disciplin_deltagare(self.c, self.gren, lid)
-        store.upsert_individ(self.c, "Ur registret", sport="friidrott",
-                             instagram="@ur_reg", id="i-reg")
-        store.satt_event_deltagare(self.c, self.ev, "i-reg", [self.gren])
+        reg = store.upsert_individ(self.c, "Ur registret", sport="friidrott",
+                                   instagram="@ur_reg")
+        store.satt_event_deltagare(self.c, self.ev, reg, [self.gren])
         store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:10")
         rad = store.program(self.c, self.ev)[0]["rader"][0]
         self.assertEqual(sorted(d["handle"] for d in rad["deltagare"]),
@@ -1241,8 +1243,8 @@ class TestPassOchProgram(unittest.TestCase):
 
     def test_individ_i_annan_gren_kommer_inte_med(self):
         annan = store.upsert_disciplin(self.c, self.ev, "Höjdhopp")
-        store.upsert_individ(self.c, "Fel gren", sport="friidrott", id="i-fel")
-        store.satt_event_deltagare(self.c, self.ev, "i-fel", [annan])
+        fel = store.upsert_individ(self.c, "Fel gren", sport="friidrott")
+        store.satt_event_deltagare(self.c, self.ev, fel, [annan])
         store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:10")
         rad = store.program(self.c, self.ev)[0]["rader"][0]
         self.assertEqual(rad["deltagare"], [])
@@ -1362,6 +1364,58 @@ class TestProgramImport(unittest.TestCase):
         rad = store.program(self.c, self.ev)[0]["rader"][0]
         self.assertEqual(rad["namn"], "Final")
         self.assertEqual([d["handle"] for d in rad["deltagare"]], ["@anna_a"])
+
+
+class TestForhandsgranskaImport(unittest.TestCase):
+    """C10 — omimporten är idempotent men inte tyst: diffen visas först."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.ev = store.upsert_tavling(
+            self.c, "Friidrotts-SM 2026", sport="friidrott", typ="masterskap",
+            fran="2026-07-24", till="2026-07-26")
+
+    def _rad(self, gren, pas, datum="2026-07-24", tid="09:00"):
+        return {"gren": gren, "pass": pas, "datum": datum, "tid": tid}
+
+    def test_nytt_program_raknas_som_nya_pass_och_grenar(self):
+        d = store.forhandsgranska_import(self.c, self.ev, [
+            self._rad("100 m", "Försök"), self._rad("Höjd", "Kval")])
+        self.assertEqual(d["pass_nya"], 2)
+        self.assertEqual(d["grenar_nya"], ["100 m", "Höjd"])
+        self.assertEqual(d["pass_uppdaterade"], 0)
+
+    def test_flyttad_tid_visas_med_gammalt_och_nytt(self):
+        store.importera_program(self.c, self.ev,
+                                [self._rad("100 m", "Final", tid="19:10")])
+        d = store.forhandsgranska_import(self.c, self.ev,
+                                         [self._rad("100 m", "Final", tid="19:40")])
+        self.assertEqual((d["pass_nya"], d["pass_uppdaterade"]), (0, 1))
+        self.assertEqual(len(d["flyttningar"]), 1)
+        self.assertIn("19:10", d["flyttningar"][0])
+        self.assertIn("19:40", d["flyttningar"][0])
+
+    def test_oforandrad_rad_raknas_som_oforandrad(self):
+        store.importera_program(self.c, self.ev,
+                                [self._rad("100 m", "Final", tid="19:10")])
+        d = store.forhandsgranska_import(self.c, self.ev,
+                                         [self._rad("100 m", "Final", tid="19:10")])
+        self.assertEqual((d["pass_nya"], d["pass_uppdaterade"], d["pass_oforandrade"]),
+                         (0, 0, 1))
+
+    def test_forhandsgranskning_skriver_inte(self):
+        """Read-only: inga grenar/pass får skapas av en torrkörning."""
+        store.forhandsgranska_import(self.c, self.ev, [self._rad("100 m", "Final")])
+        self.assertEqual(store.lista_discipliner(self.c, self.ev), [])
+
+    def test_deltagardiff_ny_kontra_befintlig(self):
+        store.importera_startlista(self.c, self.ev, [
+            {"gren": "100 m", "namn": "Anna Andersson", "klass": "dam"}],
+            sport="friidrott")
+        d = store.forhandsgranska_import(self.c, self.ev, [
+            {"gren": "100 m", "namn": "Anna Andersson"},
+            {"gren": "100 m", "namn": "Bea Berg"}], sort="startlista")
+        self.assertEqual((d["deltagare_nya"], d["deltagare_befintliga"]), (1, 1))
 
 
 class TestPubliceraMaterial(unittest.TestCase):
@@ -1876,18 +1930,14 @@ class TestGrenklassOchFaslosa(unittest.TestCase):
         self.assertEqual(store._pass_deltagare(self.c, gid)[0]["handle"],
                          "@bo_berg")   # snabel-a läggs till
 
-    def test_handle_skrivs_i_bada_registren(self):
-        """Deltagare-kortet visar unionen lag ∪ individregister — skrivs bara
-        det ena driver de isär."""
+    def test_handle_skrivs_pa_utovaren(self):
+        """v40: Utövare = ETT register (lag kind='individ'). Handle skrivs där —
+        ingen spegling till ett separat individregister som kan driva isär."""
         lid = store.upsert_lag(self.c, "Bo Berg", kind="individ",
                                sport="friidrott")
-        store.sakerstall_individ_fran_lag(self.c, lid)
         store.satt_deltagare_handle(self.c, lid, "@bo")
         self.assertEqual(
             self.c.execute("SELECT instagram FROM lag WHERE id=?", (lid,)).fetchone()[0],
-            "@bo")
-        self.assertEqual(
-            self.c.execute("SELECT instagram FROM individ WHERE id=?", (lid,)).fetchone()[0],
             "@bo")
 
     def test_tom_handle_rensar(self):
@@ -1984,3 +2034,60 @@ class TestGrenklassOchFaslosa(unittest.TestCase):
              "tid": "19:00", "klass": "dam"}])
         namn = sorted(g["namn"] for g in store.lista_discipliner(self.c, self.ev))
         self.assertEqual(namn, ["Höjd", "Längd"])
+
+
+class TestUtovareMigrering(unittest.TestCase):
+    """v40 (D11b §2): individ + lag(kind='individ') → ETT register i lag."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.ev = store.upsert_tavling(self.c, "SM 2026", sport="friidrott",
+                                       typ="masterskap", fran="2026-07-24",
+                                       till="2026-07-26")
+        # Återskapa event_deltagare i sin v31-form (individ_id → individ) så
+        # migreringen har något gammalt att bygga om.
+        self.c.execute("DROP TABLE event_deltagare")
+        self.c.execute("""CREATE TABLE event_deltagare (
+          event_id   TEXT NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+          individ_id TEXT NOT NULL REFERENCES individ(id) ON DELETE CASCADE,
+          grenar     TEXT, PRIMARY KEY (event_id, individ_id))""")
+
+    def _koppla_gammal(self, individ_id):
+        self.c.execute(
+            "INSERT INTO event_deltagare(event_id,individ_id,grenar) "
+            "VALUES(?,?, '[]')", (self.ev, individ_id))
+
+    def test_individ_utan_lagtvilling_speglas_in_i_lag(self):
+        self.c.execute("INSERT INTO individ(id,namn,sport,klubb) "
+                       "VALUES('i1','Armand Duplantis','friidrott','Upsala IF')")
+        self._koppla_gammal("i1")
+        db._migrera_utovare(self.c)
+        lag = self.c.execute("SELECT * FROM lag WHERE id='i1'").fetchone()
+        self.assertEqual((lag["kind"], lag["namn"], lag["klubb"]),
+                         ("individ", "Armand Duplantis", "Upsala IF"))
+        self.assertTrue(db._har_kolumn(self.c, "event_deltagare", "lag_id"))
+        self.assertEqual(store.individ_historik(self.c, "i1")[0]["id"], self.ev)
+
+    def test_individ_med_lagtvilling_dedupas_pa_namn(self):
+        lid = store.upsert_lag(self.c, "Bea Berg", kind="individ",
+                               sport="friidrott")
+        self.c.execute("INSERT INTO individ(id,namn,sport,instagram) "
+                       "VALUES('i2','Bea Berg','friidrott','@bea')")
+        self._koppla_gammal("i2")
+        db._migrera_utovare(self.c)
+        antal = self.c.execute(
+            "SELECT COUNT(*) FROM lag WHERE lower(namn)='bea berg'").fetchone()[0]
+        self.assertEqual(antal, 1)                    # ingen dubblett skapades
+        rad = self.c.execute("SELECT lag_id FROM event_deltagare").fetchone()
+        self.assertEqual(rad["lag_id"], lid)          # pekar på lag-tvillingen
+        self.assertEqual(store.hamta_individ(self.c, lid)["instagram"], "@bea")
+
+    def test_migrering_ar_idempotent(self):
+        self.c.execute("INSERT INTO individ(id,namn,sport) "
+                       "VALUES('i3','Cilla Cast','friidrott')")
+        self._koppla_gammal("i3")
+        db._migrera_utovare(self.c)
+        db._migrera_utovare(self.c)                    # andra körningen = no-op
+        self.assertTrue(db._har_kolumn(self.c, "event_deltagare", "lag_id"))
+        self.assertEqual(
+            self.c.execute("SELECT COUNT(*) FROM event_deltagare").fetchone()[0], 1)

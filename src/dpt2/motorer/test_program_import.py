@@ -282,5 +282,77 @@ class TestStartlistaMedTider(unittest.TestCase):
         self.assertEqual((r["pass"], r["deltagare"]), ([], []))
 
 
+class TestKannaIgen(unittest.TestCase):
+    """C8 — gissa dokumenttyp så Stig slipper välja flik."""
+
+    def test_tidsprogram_pa_klockslag(self):
+        sort, sak, _ = PI.kanna_igen(
+            "09:00  100 m dam, Försök\n19:10  100 m dam Final")
+        self.assertEqual((sort, sak), ("tidsprogram", "saker"))
+
+    def test_startlista_med_tider_pa_passrad_med_veckodag(self):
+        text = ("Kvinnor 100 m\nFörsök Fredag, 18:20\nFinal Fredag, 20:25\n"
+                "80\tEsther Sahlqvist\t06\tHammarby IF")
+        sort, sak, _ = PI.kanna_igen(text)
+        self.assertEqual((sort, sak), ("startlista_tider", "saker"))
+
+    def test_bara_deltagare_utan_tider(self):
+        sort, sak, _ = PI.kanna_igen(
+            "100 m dam\n1\tAnna Andersson\tIF Göta\t@anna_a")
+        self.assertEqual((sort, sak), ("startlista", "saker"))
+
+    def test_csv_program_pa_rubrikkolumner(self):
+        sort, _, _ = PI.kanna_igen(
+            "datum,tid,gren,pass\n2026-07-24,09:00,100 m,Försök")
+        self.assertEqual(sort, "csv_program")
+
+    def test_csv_startlista_pa_deltagarkolumner(self):
+        sort, _, _ = PI.kanna_igen("namn,klubb,handle\nAnna,IF Göta,@anna")
+        self.assertEqual(sort, "csv_startlista")
+
+    def test_tom_text_ar_osaker(self):
+        self.assertEqual(PI.kanna_igen("")[1], "osaker")
+
+
+class TestAvvikelser(unittest.TestCase):
+    """C9 — märk bara det som behöver ögon."""
+
+    def test_dubblett_pa_stavning(self):
+        rader = [{"datum": "2026-07-24", "tid": "09:00", "gren": "100 m", "pass": "Försök"},
+                 {"datum": "2026-07-25", "tid": "19:10", "gren": "100m", "pass": "Final"}]
+        PI.analysera("tidsprogram", rader)
+        self.assertTrue(all(r["avvik"] == "dubblett" for r in rader))
+
+    def test_okand_klass_nar_grenen_finns_med_klass(self):
+        rader = [{"gren": "100 m", "namn": "Anna", "klass": "dam"},
+                 {"gren": "100 m", "namn": "Bea", "klass": ""}]
+        PI.analysera("startlista", rader)
+        self.assertEqual(rader[1]["avvik"], "okand_klass")
+
+    def test_tidskrock_pa_samma_datum_och_tid(self):
+        rader = [{"datum": "2026-07-24", "tid": "09:00", "gren": "100 m", "pass": "Försök"},
+                 {"datum": "2026-07-24", "tid": "09:00", "gren": "200 m", "pass": "Försök"}]
+        PI.analysera("tidsprogram", rader)
+        self.assertTrue(all(r["avvik"] == "tidskrock" for r in rader))
+
+    def test_parserns_varning_blir_flaggad(self):
+        rader = [{"datum": "2026-07-24", "tid": "09:00", "gren": "Höjd",
+                  "pass": "", "varning": "Hittade inget passnamn"}]
+        PI.analysera("tidsprogram", rader)
+        self.assertEqual(rader[0]["avvik"], "flaggad")
+
+    def test_ren_rad_far_ingen_etikett(self):
+        rader = [{"datum": "2026-07-24", "tid": "09:00", "gren": "Höjd", "pass": "Final"}]
+        PI.analysera("tidsprogram", rader)
+        self.assertEqual(rader[0]["avvik"], "")
+
+    def test_sammanfattning_raknar_dagar_grenar_pass(self):
+        rader = [{"datum": "2026-07-24", "tid": "09:00", "gren": "100 m", "pass": "Försök"},
+                 {"datum": "2026-07-25", "tid": "19:10", "gren": "100 m", "pass": "Final"}]
+        s = PI.analysera("tidsprogram", rader)["sammanfattning"]
+        self.assertEqual((s["dagar"], s["grenar"], s["pass"]), (2, 1, 2))
+        self.assertEqual(s["rena"], 2)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

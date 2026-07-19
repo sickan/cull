@@ -469,3 +469,148 @@ def las_csv(text):
         if any(d.values()):
             ut.append(d)
     return ut
+
+
+# ── C8–C10: en väg in — igenkänning, sammanfattning, avvikelser ──────────────
+# Arrangörens fil kan vara tidsprogram, startlista med tider (EasyRecord) eller
+# bara en deltagarlista. Förr valde Stig sort själv i tre flikar; nu GISSAR vi
+# och frågar bara vid osäkerhet (C8). Granskningen visar sedan bara det som
+# sticker ut (C9) i stället för att kräva ögon på 845 rena rader.
+
+def _nyckel(namn):
+    """Grennyckel för jämförelse — gemener utan mellanslag. Samma tanke som
+    store._grennyckel: '100 m' och '100m' ur olika källor ska vara samma gren."""
+    return "".join((namn or "").lower().split())
+
+
+def kanna_igen(text):
+    """Gissar dokumenttyp (C8) → (sort, sakerhet, skal).
+
+    sort ∈ {tidsprogram, startlista_tider, startlista, csv_program, csv_startlista}.
+    sakerhet ∈ {saker, osaker} — UI:t frågar bara vid 'osaker'. `skal` är en
+    kort klartext för varför, som kan visas bredvid valet."""
+    rader = [r.strip() for r in (text or "").splitlines() if r.strip()]
+    if not rader:
+        return ("tidsprogram", "osaker", "Tom text")
+    # CSV först: en rubrikrad med kända kolumner avgör utan att gissa.
+    csv_rader = las_csv(text)
+    if csv_rader:
+        nycklar = set().union(*(set(r) for r in csv_rader))
+        if {"namn"} & nycklar and not ({"tid", "datum", "pass"} & nycklar):
+            return ("csv_startlista", "saker", "CSV med deltagarkolumner")
+        return ("csv_program", "saker", "CSV med programkolumner")
+    passrader = sum(1 for r in rader if _PASSRAD.match(r))
+    grenrubriker = sum(1 for r in rader if _GRENRUBRIK.match(r))
+    tidsrader = sum(1 for r in rader if _TID.match(r))
+    tabbrader = sum(1 for r in (text or "").splitlines() if "\t" in r)
+    handles = sum(1 for r in rader if "@" in r)
+    # Startlista med tider: passrader med veckodag ("Final Fredag, 20:25") är
+    # den signatur bara EasyRecord-sidan bär.
+    if passrader >= 1 and (grenrubriker >= 1 or tabbrader >= 1):
+        return ("startlista_tider", "saker",
+                f"{passrader} passrader med veckodag · {tabbrader} deltagarrader")
+    # Tidsprogram: rader som inleds med klockslag.
+    if tidsrader >= 2 and tidsrader >= passrader:
+        return ("tidsprogram", "saker", f"{tidsrader} tidsatta rader")
+    # Inga tider men deltagartecken (tabbar, @handle, grenrubriker) → deltagare.
+    if tabbrader >= 1 or handles >= 1 or grenrubriker >= 1:
+        return ("startlista", "saker", "Grenrubriker och deltagarrader utan tider")
+    # Osäkert: en tidsrad, eller bara löptext. Låt Stig välja.
+    if tidsrader >= 1:
+        return ("tidsprogram", "osaker", "Enstaka tidsrad — kontrollera typen")
+    return ("startlista", "osaker", "Kunde inte avgöra typen säkert")
+
+
+def _grunddata(sort):
+    """Är detta ett program (pass) eller en deltagarlista i grunden?"""
+    return "program" if sort in ("tidsprogram", "startlista_tider",
+                                 "csv_program") else "startlista"
+
+
+def sammanfatta(sort, rader, deltagare=None):
+    """C8-sammanfattning i klartext: 'N dagar · N grenar · N starter · N pass'
+    plus hur många rader som bär en varning ('behöver din blick')."""
+    rader = rader or []
+    deltagare = deltagare or []
+    prog = rader if _grunddata(sort) == "program" else []
+    delt = deltagare if deltagare else (rader if _grunddata(sort) == "startlista" else [])
+    dagar = {(r.get("datum") or "").strip() for r in prog if (r.get("datum") or "").strip()}
+    grenar = {_nyckel(r.get("gren")) for r in list(prog) + list(delt)
+              if (r.get("gren") or "").strip()}
+    behover = sum(1 for r in list(rader) + list(deltagare) if (r.get("varning") or "").strip())
+    return {
+        "dagar": len(dagar), "grenar": len(grenar),
+        "pass": len(prog), "starter": len(delt),
+        "behover_blick": behover, "totalt": len(rader) + len(deltagare),
+    }
+
+
+def _avvikelser_i(sort, rader, deltagare):
+    """Sätter `avvik`-etikett på varje rad (C9): '' | flaggad | dubblett |
+    okand_klass | tidskrock. En rad bär högst en etikett — strukturfel före
+    parserns egen varning, så det tydligaste syns."""
+    prog = rader if _grunddata(sort) == "program" else []
+    alla = list(rader) + list(deltagare)
+
+    # Dubbletter: samma grennyckel stavad på flera sätt (ur olika källor).
+    stavning = {}
+    for r in alla:
+        namn = (r.get("gren") or "").strip()
+        if namn:
+            stavning.setdefault(_nyckel(namn), set()).add(namn)
+    dubbelnycklar = {k for k, v in stavning.items() if len(v) > 1}
+
+    # Okänd klass: grennyckel finns MED klass någonstans men den här raden
+    # saknar den → tvetydig (100 m finns som dam+herr, raden säger inte vilken).
+    med_klass = {_nyckel(r.get("gren")) for r in alla
+                 if (r.get("gren") or "").strip()
+                 and (r.get("klass") or "").strip() in ("dam", "herr", "mixed")}
+
+    # Tidskrock: två programrader på samma datum+tid med olika gren/pass.
+    tidskrock = set()
+    per_tid = {}
+    for i, r in enumerate(prog):
+        d, t = (r.get("datum") or "").strip(), (r.get("tid") or "").strip()
+        if d and t:
+            per_tid.setdefault((d, t), []).append(i)
+    for (d, t), idxs in per_tid.items():
+        signaturer = {(_nyckel(prog[i].get("gren")), (prog[i].get("pass") or "").strip().lower())
+                      for i in idxs}
+        if len(signaturer) > 1:
+            tidskrock.update(id(prog[i]) for i in idxs)
+
+    for r in alla:
+        namn = (r.get("gren") or "").strip()
+        nyckel = _nyckel(namn)
+        if id(r) in tidskrock:
+            r["avvik"] = "tidskrock"
+        elif nyckel and nyckel in dubbelnycklar:
+            r["avvik"] = "dubblett"
+        elif (namn and nyckel in med_klass
+                and (r.get("klass") or "").strip() not in ("dam", "herr", "mixed")):
+            r["avvik"] = "okand_klass"
+        elif (r.get("varning") or "").strip():
+            r["avvik"] = "flaggad"
+        else:
+            r["avvik"] = ""
+    return rader, deltagare
+
+
+AVVIK_ETIKETT = {
+    "tidskrock": "Tidskrockar",
+    "dubblett": "Dubbletter (samma gren, olika stavning)",
+    "okand_klass": "Okänd klass",
+    "flaggad": "Behöver din blick",
+}
+
+
+def analysera(sort, rader, deltagare=None):
+    """Slår ihop sammanfattning (C8) + avvikelsemärkning (C9). Muterar raderna
+    med ett `avvik`-fält och returnerar allt UI:t behöver för granskningsvyn."""
+    deltagare = deltagare or []
+    _avvikelser_i(sort, rader or [], deltagare)
+    sam = sammanfatta(sort, rader or [], deltagare)
+    avvikande = sum(1 for r in list(rader or []) + list(deltagare) if r.get("avvik"))
+    sam["avvikande"] = avvikande
+    sam["rena"] = sam["totalt"] - avvikande
+    return {"sammanfattning": sam, "rader": rader or [], "deltagare": deltagare}
