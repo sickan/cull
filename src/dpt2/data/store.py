@@ -1033,11 +1033,11 @@ def _pass_deltagare(conn, disciplin_id):
     så dagen går att tagga direkt ur programmet."""
     ut = {}
     for r in conn.execute(
-            "SELECT l.id, l.namn, l.klubb, l.instagram FROM lag l "
+            "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram FROM lag l "
             "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
             "WHERE dd.disciplin_id=?", (disciplin_id,)):
         ut[r["id"]] = {"id": r["id"], "namn": r["namn"],
-                       "klubb": r["klubb"] or "",
+                       "klubb": r["klubb"] or "", "gren": r["gren"] or "",
                        "handle": _handle(r["instagram"])}
     # Individregistret: grenar[] är en json-lista med disciplin-id:n.
     rad = conn.execute("SELECT tavling_id FROM disciplin WHERE id=?",
@@ -1050,9 +1050,18 @@ def _pass_deltagare(conn, disciplin_id):
             if disciplin_id not in json.loads(r["grenar"] or "[]"):
                 continue
             ut.setdefault(r["id"], {"id": r["id"], "namn": r["namn"],
-                                    "klubb": r["klubb"] or "",
+                                    "klubb": r["klubb"] or "", "gren": "",
                                     "handle": _handle(r["instagram"])})
     return sorted(ut.values(), key=lambda p: p["namn"])
+
+
+def _gren_kant(deltagare):
+    """Gren-markören för en programrad (dam/herr/mixed). Följer INDIVIDEN, inte
+    mästerskapet — SM är mixed men man tävlar i dam-/herrklass. Bara när alla
+    deltagare är eniga; annars ingen kant (invarianten: ingen kant om grenen
+    är okänd, aldrig en gissad)."""
+    grenar = {d.get("gren") for d in deltagare if d.get("gren")}
+    return grenar.pop() if len(grenar) == 1 else ""
 
 
 def _match_deltagare(conn, match):
@@ -1088,12 +1097,13 @@ def program(conn, event_id, datum=None):
             "SELECT p.*, d.namn AS gren, d.id AS gren_id "
             "FROM pass p JOIN disciplin d ON d.id=p.disciplin_id "
             "WHERE d.tavling_id=?", (event_id,)):
+        delt = _pass_deltagare(conn, r["gren_id"])
         rader.append({
             "slag": "pass", "id": r["id"], "datum": r["datum"], "tid": r["tid"],
             "namn": r["namn"], "plats": r["plats"] or "",
             "gren": r["gren"], "gren_id": r["gren_id"],
-            "ordning": r["ordning"],
-            "deltagare": _pass_deltagare(conn, r["gren_id"]),
+            "ordning": r["ordning"], "gren_kant": _gren_kant(delt),
+            "deltagare": delt,
         })
     # Matcher: eventspegeln delar id med tävlingen, därför båda nycklarna.
     for r in conn.execute(
@@ -1108,8 +1118,8 @@ def program(conn, event_id, datum=None):
             "slag": "match", "id": r["id"], "datum": r["datum"], "tid": r["tid"],
             "namn": namn, "plats": r["arena"] or "",
             "gren": r["rond"] or "", "gren_id": None, "ordning": 0,
-            "resultat": r["resultat"] or "", "status": r["status"],
-            "deltagare": _match_deltagare(conn, r),
+            "gren_kant": "", "resultat": r["resultat"] or "",
+            "status": r["status"], "deltagare": _match_deltagare(conn, r),
         })
     rader.sort(key=lambda x: (x["datum"], x["tid"] or "99:99", x["ordning"],
                               x["namn"]))

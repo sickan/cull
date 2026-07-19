@@ -7,7 +7,10 @@
   import { listaEventer, hamtaEventDetalj, sattEventPagangLage,
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
     kopplaEventIndividGren, kopplaBortEventIndivid,
-    sparaDisciplin, raderaDisciplin, sparaTavling, sportprofiler } from '../lib/api.js'
+    sparaDisciplin, raderaDisciplin, sparaTavling, sportprofiler,
+    hamtaProgram, sparaPass, raderaPass, tolkaProgramText,
+    importeraProgram } from '../lib/api.js'
+  import { kopieraText } from '../lib/kopiera.js'
 
   const dispatch = createEventDispatcher()
 
@@ -78,6 +81,8 @@
   async function oppna(id) {
     vald = id
     detalj = await hamtaEventDetalj(id).catch(() => null)
+    dagIx = 0
+    await laddaProgram()
   }
   async function tillbaka() {
     vald = null; detalj = null
@@ -157,6 +162,122 @@
 
   const initialer = (namn) => (namn || '').split(/\s+/).map((d) => d[0]).slice(0, 2).join('').toUpperCase()
   const matchNar = (m) => [m.datum, m.tid].filter(Boolean).join(' · ')
+
+  // ── Program & deltillfällen (V5 §8) ──────────────────────────────────────
+  // Programmet HÄRLEDS i backend ur pass + tidsatta matcher — kortet visar,
+  // det äger ingenting. Vem-kolumnen och handles finns här för att dagen ska
+  // gå att tagga direkt ur programmet, utan att leta i deltagarlistan.
+  const GRENFARG = { dam: '#8E5A86', herr: '#3E7C87', mixed: '#6E8757' }
+  let program = []
+  let dagIx = 0
+  let laddarProgram = false
+
+  async function laddaProgram() {
+    if (!vald) return
+    laddarProgram = true
+    program = await hamtaProgram(vald).catch(() => [])
+    // Håll dagvalet på dagens datum när eventet pågår — annars första dagen.
+    const idag = new Date().toISOString().slice(0, 10)
+    const i = program.findIndex((d) => d.datum === idag)
+    dagIx = i >= 0 ? i : Math.min(dagIx, Math.max(program.length - 1, 0))
+    laddarProgram = false
+  }
+  $: dag = program[dagIx] || null
+
+  // "NÄST" = första raden framåt i tiden. Bara på dagens datum — en framtida
+  // dag har ingen "näst", den har bara en första rad.
+  $: nastId = (() => {
+    const nu = new Date()
+    const idag = nu.toISOString().slice(0, 10)
+    if (!dag || dag.datum !== idag) return null
+    const kl = nu.toTimeString().slice(0, 5)
+    return (dag.rader.find((r) => (r.tid || '99:99') >= kl) || {}).id || null
+  })()
+
+  const dagEtikett = (d, i) => {
+    const dat = new Date(d.datum + 'T00:00:00')
+    const kort = dat.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })
+    return `Dag ${i + 1} · ${kort}`
+  }
+  const handlar = (r) => (r.deltagare || []).map((d) => d.handle).filter(Boolean)
+  function vemText(r) {
+    const n = (r.deltagare || []).length
+    if (!n) return r.slag === 'match' ? '' : 'inga deltagare än'
+    if (n <= 3) return r.deltagare.map((d) => d.namn).join(' · ')
+    return `${n} deltagare`
+  }
+
+  let kopiestatus = {}
+  async function kopieraHandlar(r, ev) {
+    const h = handlar(r)
+    if (!h.length) return
+    const utfall = await kopieraText(h.join(' '), ev.currentTarget)
+    kopiestatus = { ...kopiestatus, [r.id]: utfall }
+    setTimeout(() => {
+      const { [r.id]: _, ...rest } = kopiestatus
+      kopiestatus = rest
+    }, 1600)
+  }
+
+  // ── Pass för hand ────────────────────────────────────────────────────────
+  let passOppen = false
+  let pas = null
+  function nyttPass() {
+    pas = { id: null, disciplin_id: (detalj?.grenar || [])[0]?.id || '',
+      namn: '', datum: dag?.datum || detalj?.event?.fran || '', tid: '', plats: '' }
+    passOppen = true
+  }
+  function redigeraPass(r) {
+    if (r.slag !== 'pass') return
+    pas = { id: r.id, disciplin_id: r.gren_id, namn: r.namn, datum: r.datum,
+      tid: r.tid || '', plats: r.plats || '' }
+    passOppen = true
+  }
+  async function sparaPasset() {
+    if (!pas?.namn?.trim() || !pas?.datum || !pas?.disciplin_id) return
+    await sparaPass(pas)
+    passOppen = false; pas = null
+    await laddaProgram()
+    detalj = await hamtaEventDetalj(vald)
+  }
+  async function taBortPass(id) {
+    await raderaPass(id)
+    passOppen = false; pas = null
+    await laddaProgram()
+  }
+
+  // ── Klistra in / CSV (S2) ────────────────────────────────────────────────
+  // Två steg, alltid: tolka och visa för granskning → spara det granskade.
+  // Parsern gissar, så raderna ska kunna rättas innan något skrivs.
+  let inlasOppen = false
+  let inlasSort = 'tidsprogram'      // tidsprogram | startlista
+  let inlasText = ''
+  let granskning = null              // { rader, kalla } efter tolkning
+  let inlasKvitto = ''
+
+  function oppnaInlas(sort) {
+    inlasSort = sort; inlasOppen = true
+    inlasText = ''; granskning = null; inlasKvitto = ''
+  }
+  async function tolka() {
+    if (!inlasText.trim()) return
+    granskning = await tolkaProgramText(vald, inlasText, inlasSort)
+      .catch(() => null)
+  }
+  $: granskadeOk = (granskning?.rader || []).filter((r) =>
+    inlasSort === 'startlista' ? r.namn && r.gren : r.pass && r.datum && r.gren)
+  async function sparaInlas() {
+    if (!granskadeOk.length) return
+    const sam = await importeraProgram(vald, granskadeOk, inlasSort)
+    inlasKvitto = inlasSort === 'startlista'
+      ? `${sam.deltagare_nya || 0} nya deltagare, ${sam.deltagare_befintliga || 0} fanns redan`
+      : `${sam.pass_nya || 0} nya pass, ${sam.pass_uppdaterade || 0} uppdaterade`
+    if (sam.grenar_skapade?.length)
+      inlasKvitto += ` · nya grenar: ${sam.grenar_skapade.join(', ')}`
+    granskning = null; inlasText = ''
+    await laddaProgram()
+    detalj = await hamtaEventDetalj(vald)
+  }
 
   // ── Event-editorn (V5-C skiva 2) ─────────────────────────────────────────
   // Skriver via tävlings-skrivytan (v32: alla fem typerna ryms) → spegeln
@@ -295,6 +416,135 @@
       </div>
       <span class="lagetext">{(LAGEN.find((l) => l.id === e.pagang_lage) || LAGEN[0]).text}
         En match med event visas aldrig utan "Del av {e.namn}".</span>
+    </div>
+
+    <div class="kort program">
+      <div class="krubrik">
+        <span class="caps">Program</span>
+        <span class="khint">härleds ur pass och tidsatta matcher — inget eget register</span>
+        <span class="spacer"></span>
+        <button class="plus" on:click={() => oppnaInlas('tidsprogram')}>Klistra in / CSV</button>
+        {#if detalj.grenar.length}
+          <button class="plus" on:click={nyttPass}>+ Pass</button>
+        {/if}
+      </div>
+
+      {#if inlasOppen}
+        <div class="inlas">
+          <div class="seg liten">
+            <button class="segval" class:pa={inlasSort === 'tidsprogram'}
+              on:click={() => oppnaInlas('tidsprogram')}>Tidsprogram</button>
+            <button class="segval" class:pa={inlasSort === 'startlista'}
+              on:click={() => oppnaInlas('startlista')}>Startlista</button>
+            <span class="spacer"></span>
+            <button class="bort" title="Stäng" on:click={() => (inlasOppen = false)}>✕</button>
+          </div>
+          {#if !granskning}
+            <textarea rows="7" bind:value={inlasText} placeholder={inlasSort === 'startlista'
+              ? 'Klistra in startlistan — grenrubrik och en rad per deltagare.\n\n100 m dam\n1  Anna Andersson  IF Göta  @anna_a'
+              : 'Klistra in arrangörens tidsprogram eller CSV.\n\nFREDAG 24 JULI\n09:00  100 m dam, Försök\n19:10  100 m dam Final'}></textarea>
+            <div class="inlasfot">
+              <span class="khint">Inget sparas förrän du granskat raderna.</span>
+              <button class="prim liten" on:click={tolka} disabled={!inlasText.trim()}>Tolka ›</button>
+            </div>
+          {:else}
+            <div class="granskrubrik caps">
+              {granskning.rader.length} rader tolkade{granskning.kalla === 'csv' ? ' ur CSV' : ''}
+              {#if granskadeOk.length < granskning.rader.length}
+                <span class="varn">· {granskning.rader.length - granskadeOk.length} ofullständiga hoppas över</span>
+              {/if}
+            </div>
+            <div class="gransktabell">
+              {#each granskning.rader as r, i}
+                <div class="gr" class:ofullstandig={!granskadeOk.includes(r)}>
+                  {#if inlasSort === 'startlista'}
+                    <input class="gf" bind:value={r.gren} placeholder="Gren" />
+                    <input class="gf" bind:value={r.namn} placeholder="Namn" />
+                    <input class="gf" bind:value={r.klubb} placeholder="Klubb" />
+                    <input class="gf smal" bind:value={r.handle} placeholder="@handle" />
+                  {:else}
+                    <input class="gf smal" bind:value={r.datum} placeholder="Datum" />
+                    <input class="gf mini" bind:value={r.tid} placeholder="Tid" />
+                    <input class="gf" bind:value={r.gren} placeholder="Gren" />
+                    <input class="gf" bind:value={r.pass} placeholder="Pass" />
+                    <input class="gf smal" bind:value={r.plats} placeholder="Plats" />
+                  {/if}
+                  {#if r.varning}<span class="varn" title={r.varning}>⚠</span>{/if}
+                </div>
+              {/each}
+            </div>
+            <div class="inlasfot">
+              <button class="avbryt liten" on:click={() => (granskning = null)}>‹ Tillbaka</button>
+              <span class="spacer"></span>
+              <button class="prim liten" on:click={sparaInlas} disabled={!granskadeOk.length}>
+                Spara {granskadeOk.length} rader</button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if inlasKvitto}<div class="kvitto">{inlasKvitto}</div>{/if}
+
+      {#if passOppen}
+        <div class="nyrad passrad">
+          <select bind:value={pas.disciplin_id}>
+            {#each detalj.grenar as g (g.id)}<option value={g.id}>{g.namn}</option>{/each}
+          </select>
+          <input class="smal" bind:value={pas.namn} placeholder="Försök, Final…" />
+          <input class="smal" type="date" bind:value={pas.datum} />
+          <input class="mini" bind:value={pas.tid} placeholder="19:10" />
+          <input class="smal" bind:value={pas.plats} placeholder="Plats (valfri)" />
+          <button class="prim liten" on:click={sparaPasset}
+            disabled={!pas.namn.trim() || !pas.datum || !pas.disciplin_id}>Spara</button>
+          {#if pas.id}<button class="bort" title="Ta bort pass" on:click={() => taBortPass(pas.id)}>✕</button>{/if}
+          <button class="avbryt liten" on:click={() => (passOppen = false)}>Avbryt</button>
+        </div>
+      {/if}
+
+      {#if laddarProgram}
+        <p class="tomkort">Läser programmet…</p>
+      {:else if !program.length}
+        <p class="tomkort">Inget program än — klistra in arrangörens tidsprogram, eller lägg pass på grenarna för hand. Kopplade matcher med klockslag dyker upp här av sig själva.</p>
+      {:else}
+        <div class="dagar">
+          {#each program as d, i}
+            <button class="dagflik" class:pa={i === dagIx} on:click={() => (dagIx = i)}>{dagEtikett(d, i)}</button>
+          {/each}
+          <span class="spacer"></span>
+          <span class="khint">{dag ? `${dag.rader.length} ${dag.rader.length === 1 ? 'deltillfälle' : 'deltillfällen'}` : ''}</span>
+        </div>
+
+        {#each (dag?.rader || []) as r (r.id)}
+          <div class="prad" class:nast={r.id === nastId}
+            style={r.gren_kant ? `--grenfarg:${GRENFARG[r.gren_kant]}` : ''}
+            class:harkant={!!r.gren_kant}>
+            <span class="ptid scd">{r.tid || '—'}</span>
+            <div class="pmitt">
+              <span class="pnamn">
+                {#if r.gren}<span class="pgren">{r.gren}</span> · {/if}{r.namn}
+                {#if r.slag === 'match'}<span class="pmatch">match</span>{/if}
+              </span>
+              <span class="pvem">
+                {vemText(r)}{#if r.plats}{vemText(r) ? ' · ' : ''}{r.plats}{/if}
+                {#if r.resultat} · <b>{r.resultat}</b>{/if}
+              </span>
+            </div>
+            {#if handlar(r).length}
+              <button class="handleknapp" title={handlar(r).join(' ')}
+                on:click={(ev) => kopieraHandlar(r, ev)}>
+                {#if kopiestatus[r.id] === 'kopierat'}✓ Kopierat
+                {:else if kopiestatus[r.id] === 'markerat'}Markerat — ⌘C
+                {:else if kopiestatus[r.id] === 'fel'}Kunde inte kopiera
+                {:else}@ {handlar(r).length}{/if}
+              </button>
+            {/if}
+            {#if r.id === nastId}<span class="nastbadge caps">Näst</span>{/if}
+            {#if r.slag === 'pass'}
+              <button class="bort" title="Ändra passet" on:click={() => redigeraPass(r)}>✎</button>
+            {/if}
+          </div>
+        {/each}
+      {/if}
     </div>
 
     <div class="tvakol" class:enkol={!arIndividSport}>
@@ -460,6 +710,67 @@
     color: var(--t-mut); cursor: pointer; }
   .segval.pa { background: var(--acc); color: #fff; }
   .lagetext { flex: 1; min-width: 220px; font-size: 12px; color: var(--t-help); line-height: 1.5; }
+
+  /* ── Program & deltillfällen (V5 §8) ─────────────────────────────────── */
+  .spacer { flex: 1; }
+  .program .krubrik { align-items: center; }
+  .dagar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--div); padding-bottom: 8px; margin-bottom: 10px; }
+  .dagflik { border: 0; background: none; padding: 5px 11px; border-radius: 8px;
+    font-size: 12.5px; font-weight: 600; color: var(--t-mut); cursor: pointer; }
+  .dagflik.pa { background: var(--acc); color: #fff; }
+
+  .prad { display: flex; align-items: center; gap: 12px; padding: 9px 12px;
+    border: 1px solid var(--div3, var(--div)); border-radius: 9px;
+    margin-bottom: 6px; background: var(--panel); }
+  /* Gren-markören är en kant i låst palett — ingen textetikett, och ingen
+     kant alls när grenen är okänd (invariant). */
+  .prad.harkant { border-left: 3px solid var(--grenfarg); }
+  .prad.nast { border-color: var(--acc); }
+  .ptid { flex: none; width: 52px; font-size: 14px; font-weight: 700; color: var(--t-head); }
+  .pmitt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pnamn { font-size: 13.5px; font-weight: 600; color: var(--t-head);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pgren { color: var(--t-mut); font-weight: 500; }
+  .pmatch { font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--t-help); margin-left: 6px; }
+  .pvem { font-size: 11.5px; color: var(--t-help); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .nastbadge { flex: none; background: var(--acc); color: #fff;
+    border-radius: 999px; padding: 2px 8px; font-size: 9.5px; }
+  .handleknapp { flex: none; border: 1px solid var(--div); background: var(--kort);
+    color: var(--t-mut); border-radius: 8px; padding: 4px 10px; font-size: 11.5px;
+    font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .handleknapp:hover { border-color: var(--acc); color: var(--acc); }
+  .prad .bort { opacity: 0; }
+  .prad:hover .bort { opacity: 1; }
+
+  .inlas { border: 1px solid var(--div); border-radius: 10px; padding: 12px;
+    margin-bottom: 12px; background: var(--panel); }
+  .seg.liten { margin-bottom: 10px; display: flex; width: 100%; border: 0; }
+  .seg.liten .segval { border: 1px solid var(--div); border-radius: 8px; margin-right: 6px; }
+  .inlas textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--div);
+    border-radius: 8px; padding: 9px 11px; background: var(--kort); color: var(--t-head);
+    font-family: inherit; font-size: 12.5px; line-height: 1.6; resize: vertical; }
+  .inlasfot { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .granskrubrik { margin-bottom: 8px; }
+  .varn { color: var(--acc); font-weight: 700; }
+  .gransktabell { max-height: 260px; overflow-y: auto; display: flex;
+    flex-direction: column; gap: 4px; }
+  .gr { display: flex; align-items: center; gap: 5px; }
+  .gr.ofullstandig { opacity: 0.55; }
+  .gf { flex: 1; min-width: 0; border: 1px solid var(--div); border-radius: 7px;
+    padding: 5px 8px; background: var(--kort); color: var(--t-head);
+    font-family: inherit; font-size: 12px; }
+  .gf.smal { flex: 0 0 108px; }
+  .gf.mini { flex: 0 0 62px; }
+  .kvitto { font-size: 12px; color: var(--t-help); background: var(--panel);
+    border: 1px solid var(--div); border-radius: 8px; padding: 7px 11px; margin-bottom: 10px; }
+  .passrad select, .passrad input { border: 1px solid var(--div); border-radius: 7px;
+    padding: 6px 9px; background: var(--kort); color: var(--t-head);
+    font-family: inherit; font-size: 12.5px; }
+  .passrad .smal { flex: 0 0 132px; }
+  .passrad .mini { flex: 0 0 72px; }
 
   .tvakol { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
   .tvakol.enkol { grid-template-columns: 1fr; max-width: 640px; }   /* lagsport: bara Matcher */

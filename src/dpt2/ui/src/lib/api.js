@@ -378,9 +378,12 @@ export async function kopplaBortEventIndivid(eventId, individId) {
 // ── Discipliner (B-001): tävlingens grenar + deltagare per gren ─────────────
 let MOCK_DISCIPLINER = [
   { id: 'disc_langd', tavling_id: 'friidrotts-sm', namn: 'Längd', typ: 'hoppkast', ordning: 0,
-    deltagare: [{ id: 'alva-hoppare', namn: 'Alva Hoppare', klubb: 'Malmö AI', gren: 'dam' }] },
+    deltagare: [{ id: 'alva-hoppare', namn: 'Alva Hoppare', klubb: 'Malmö AI', gren: 'dam',
+      instagram: '@alva_hoppare' }] },
   { id: 'disc_100m', tavling_id: 'friidrotts-sm', namn: '100 m', typ: 'sprint', ordning: 1,
-    deltagare: [] },
+    deltagare: [{ id: 'siri-snabb', namn: 'Siri Snabb', klubb: 'IF Göta', gren: 'dam',
+      instagram: '@siri_snabb' },
+      { id: 'nora-nord', namn: 'Nora Nord', klubb: 'Upsala IF', gren: 'dam' }] },
 ]
 
 export async function listaDiscipliner(tavlingId) {
@@ -404,6 +407,94 @@ export async function raderaDisciplin(id) {
   if (api) return api.radera_disciplin(id)
   MOCK_DISCIPLINER = MOCK_DISCIPLINER.filter((d) => d.id !== id)
   return wait({ ok: true })
+}
+
+// ── Pass & program (V5 §8) ──────────────────────────────────────────────────
+// Programmet HÄRLEDS i backend ur pass + tidsatta matcher — det finns ingen
+// mock-lagring att spegla, så webbläsarläget bygger sitt program ur MOCK_PASS
+// på samma sätt som store.program gör.
+
+let MOCK_PASS = [
+  { id: 'p1', disciplin_id: 'disc_100m', namn: 'Försök', datum: '2026-07-24', tid: '09:00', plats: 'arena', ordning: 0 },
+  { id: 'p2', disciplin_id: 'disc_langd', namn: 'Kval', datum: '2026-07-24', tid: '10:30', plats: 'Gropen A', ordning: 0 },
+  { id: 'p3', disciplin_id: 'disc_100m', namn: 'Semi', datum: '2026-07-24', tid: '16:00', plats: '', ordning: 1 },
+  { id: 'p4', disciplin_id: 'disc_100m', namn: 'Final', datum: '2026-07-25', tid: '19:10', plats: '', ordning: 2 },
+]
+
+export async function listaPass(disciplinId) {
+  const api = brygga()
+  if (api) return api.lista_pass(disciplinId)
+  return wait(structuredClone(MOCK_PASS.filter((p) => p.disciplin_id === disciplinId)))
+}
+
+export async function sparaPass(p) {
+  const api = brygga()
+  if (api) return api.spara_pass(p)
+  const fin = MOCK_PASS.find((x) => x.id === p.id)
+  if (fin) Object.assign(fin, p)
+  else MOCK_PASS.push({ ordning: MOCK_PASS.length, ...p, id: p.id || 'pass_' + Date.now() })
+  return wait({ ok: true, id: p.id || MOCK_PASS[MOCK_PASS.length - 1].id })
+}
+
+export async function raderaPass(id) {
+  const api = brygga()
+  if (api) return api.radera_pass(id)
+  MOCK_PASS = MOCK_PASS.filter((p) => p.id !== id)
+  return wait({ ok: true })
+}
+
+export async function hamtaProgram(eventId, datum = null) {
+  const api = brygga()
+  if (api) return api.hamta_program(eventId, datum)
+  const grenar = MOCK_DISCIPLINER.filter((d) => d.tavling_id === 'friidrotts-sm')
+  // Speglar store._handle / store._gren_kant så mockläget visar samma sak som
+  // skarpt läge — annars ser man inte handle-knappen eller gren-kanten här.
+  const handle = (v) => {
+    const s = (v || '').trim()
+    return s ? (s.startsWith('@') || s.startsWith('?') ? s : '@' + s) : null
+  }
+  const grenKant = (delt) => {
+    const g = [...new Set(delt.map((d) => d.gren).filter(Boolean))]
+    return g.length === 1 ? g[0] : ''
+  }
+  const rader = []
+  for (const g of grenar) {
+    const delt = (g.deltagare || []).map((d) => ({ ...d, handle: handle(d.instagram) }))
+    for (const p of MOCK_PASS.filter((x) => x.disciplin_id === g.id)) {
+      rader.push({ slag: 'pass', id: p.id, datum: p.datum, tid: p.tid,
+        namn: p.namn, plats: p.plats || '', gren: g.namn, gren_id: g.id,
+        ordning: p.ordning, gren_kant: grenKant(delt), deltagare: delt })
+    }
+  }
+  for (const m of MOCK_EVENT_MATCHER[eventId] || []) {
+    if (!m.datum) continue
+    rader.push({ slag: 'match', id: m.id, datum: m.datum, tid: m.tid,
+      namn: [m.lag_hemma, m.lag_borta].filter(Boolean).join(' – '),
+      plats: m.arena || '', gren: m.rond || '', gren_id: null, ordning: 0,
+      gren_kant: '', resultat: m.resultat || '', status: m.status, deltagare: [] })
+  }
+  rader.sort((a, b) => (a.datum + (a.tid || '99:99') + a.namn)
+    .localeCompare(b.datum + (b.tid || '99:99') + b.namn))
+  const dagar = []
+  for (const r of rader) {
+    if (datum && r.datum !== datum) continue
+    if (!dagar.length || dagar[dagar.length - 1].datum !== r.datum)
+      dagar.push({ datum: r.datum, rader: [] })
+    dagar[dagar.length - 1].rader.push(r)
+  }
+  return wait(dagar)
+}
+
+export async function tolkaProgramText(eventId, text, sort = 'tidsprogram') {
+  const api = brygga()
+  if (api) return api.tolka_program_text(eventId, text, sort)
+  return wait({ ok: true, sort, kalla: 'text', rader: [] })
+}
+
+export async function importeraProgram(eventId, rader, sort = 'tidsprogram') {
+  const api = brygga()
+  if (api) return api.importera_program(eventId, rader, sort)
+  return wait({ ok: true, grenar_skapade: [], pass_nya: 0, pass_uppdaterade: 0 })
 }
 
 export async function kopplaDisciplinDeltagare(disciplinId, lagId, pa = true) {
