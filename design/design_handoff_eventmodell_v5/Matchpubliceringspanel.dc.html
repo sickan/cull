@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; background:#07090c; }
+  .scd { font-family:'Saira Condensed', sans-serif; }
+  a { color:#F0B45A; } a:hover { color:#F4C277; }
+  .mp ::-webkit-scrollbar { width:9px; height:9px; }
+  .mp ::-webkit-scrollbar-thumb { background:rgba(140,130,110,.4); border-radius:6px; border:2px solid transparent; background-clip:content-box; }
+  .mp textarea:focus { border-color:#F0B45A !important; outline:none; }
+</style>
+</helmet>
+<div class="mp" style="font-family:'Saira', sans-serif; background:#07090c; color:#f3f5f7; width:100%; min-height:820px; display:flex; overflow:hidden; position:relative;">
+
+
+  <!-- ===== Arbetsyta ===== -->
+  <main style="flex:1; min-width:0; display:flex; flex-direction:column; background:#0a0d11;">
+
+    <div style="flex:1; overflow-y:auto; padding:24px 30px 20px;">
+
+      <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:18px;">
+        <div>
+          <div style="font-size:10.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#F0B45A; margin-bottom:7px;">Skapa en gång · publicera överallt</div>
+          <h1 class="scd" style="font-size:29px; font-weight:700; margin:0; letter-spacing:.005em;">Matchpublicering</h1>
+        </div>
+        <button onClick="{{ liveNow }}" style="display:inline-flex; align-items:center; gap:8px; background:rgba(142,90,134,.16); border:1px solid rgba(142,90,134,.6); color:#f3f5f7; border-radius:10px; padding:10px 15px; font-size:12.5px; font-weight:600; font-family:inherit; cursor:pointer;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#E0607F;flex:none;box-shadow:0 0 8px #E0607F;"></span>Live nu — story direkt
+        </button>
+      </div>
+
+      <!-- Sport-väljare: resultatmodellen anpassar sig -->
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+        <span style="font-size:10.5px; color:rgba(243,245,247,.45); flex:none;">Match / event</span>
+        <div style="position:relative;">
+          <button onClick="{{ matchToggle }}" style="display:flex; align-items:center; gap:11px; background:#12151b; border:1px solid rgba(255,255,255,.14); border-radius:9px; padding:8px 13px; font-family:inherit; cursor:pointer; text-align:left;">
+            <span style="font-size:13px; font-weight:600; color:#f3f5f7;">{{ matchFixture }}</span>
+            <span style="font-size:11px; color:rgba(243,245,247,.5);">{{ matchMeta }}</span>
+            <span style="color:rgba(243,245,247,.5); font-size:10px;">▾</span>
+          </button>
+          <sc-if value="{{ matchOpen }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ matchToggle }}" style="position:fixed; inset:0; z-index:30;"></div>
+            <div style="position:absolute; top:calc(100% + 6px); left:0; z-index:31; width:390px; background:#12151b; border:1px solid rgba(255,255,255,.14); border-radius:12px; box-shadow:0 16px 44px rgba(0,0,0,.55); padding:6px;">
+              <div style="font-size:9.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:rgba(243,245,247,.4); padding:8px 11px 6px;">Välj match eller heldagsevent</div>
+              <sc-for list="{{ matchList }}" as="mm" hint-placeholder-count="5">
+                <div onClick="{{ mm.pick }}" style="{{ mm.rowStyle }}">
+                  <span style="{{ mm.grenDot }}"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12.5px; font-weight:600; color:#f3f5f7;">{{ mm.fixture }}</div>
+                    <div style="font-size:10.5px; color:rgba(243,245,247,.5); margin-top:1px;">{{ mm.dateSport }}</div>
+                  </div>
+                  <sc-if value="{{ mm.played }}" hint-placeholder-val="{{ true }}"><span class="scd" style="font-size:15px; font-weight:700; color:#f3f5f7; flex:none;">{{ mm.result }}</span></sc-if>
+                  <sc-if value="{{ mm.notPlayed }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; color:rgba(243,245,247,.45); flex:none; border:1px solid rgba(255,255,255,.14); border-radius:999px; padding:2px 8px;">{{ mm.komLabel }}</span></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+        <span style="font-size:10.5px; color:rgba(243,245,247,.38);">— resultatmodellen följer matchens sport</span>
+      </div>
+
+      <!-- Delad resultat-remsa (samma spine som allt annat) -->
+      <div style="{{ resStripStyle }}">
+        <div style="display:flex; align-items:center; flex:none;">
+          <span style="width:30px;height:30px;border-radius:50%;background:#6BA0C9;color:#0a0d11;display:flex;align-items:center;justify-content:center;font-family:'Saira Condensed';font-weight:700;font-size:12px;">{{ homeAbbr }}</span>
+          <span style="width:30px;height:30px;border-radius:50%;background:#C86B8A;color:#0a0d11;display:flex;align-items:center;justify-content:center;font-family:'Saira Condensed';font-weight:700;font-size:12px;margin-left:-8px;border:2px solid #12151b;">{{ awayAbbr }}</span>
+        </div>
+        <div style="flex:none;">
+          <div style="font-size:13.5px; font-weight:600; color:#f3f5f7;">{{ fixture }}</div>
+          <div style="font-size:11px; color:rgba(243,245,247,.5); margin-top:1px;">{{ arena }} · 27 jun · {{ sportName }}</div>
+        </div>
+        <input value="{{ resResult }}" onChange="{{ setResResult }}" placeholder="{{ resPh }}" style="width:74px; text-align:center; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:6px 4px; font-family:'Saira Condensed'; font-size:22px; font-weight:700; color:#f3f5f7; margin-left:6px;">
+        <div style="flex:1; min-width:130px;">
+          <div style="font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:rgba(243,245,247,.42); margin-bottom:3px;">{{ midLabel }}</div>
+          <input value="{{ resMid }}" onChange="{{ setResMid }}" placeholder="{{ midPh }}" style="width:100%; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:6px 9px; font-family:'SF Mono',Menlo,monospace; font-size:11px; color:rgba(243,245,247,.85);">
+        </div>
+        <sc-if value="{{ hasScorers }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1; min-width:170px;">
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:3px;"><span style="font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:rgba(243,245,247,.42);">{{ scorersLabel }}</span><span style="font-size:9.5px; color:rgba(243,245,247,.35);">{{ scorersHint }}</span></div>
+          <input value="{{ resScorers }}" onChange="{{ setResScorers }}" placeholder="{{ scorersPh }}" style="width:100%; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:6px 9px; font-family:inherit; font-size:11.5px; color:rgba(243,245,247,.85);">
+        </div>
+        </sc-if>
+        <div style="display:flex; align-items:center; gap:8px; flex:none;">
+          <!-- Del D: närvaro-pill — mobilen för matchen just nu (LWW, ingen låsning) -->
+          <div title="Live-tillståndet uppdateras från mobilen (DPT2 Live). Fältvis last-write-wins — skriv här när du vill ta över." style="display:inline-flex; align-items:center; gap:7px; background:rgba(78,143,176,.14); border:1px solid rgba(78,143,176,.4); border-radius:999px; padding:5px 11px 5px 9px;">
+            <svg width="12" height="15" viewBox="0 0 12 15" fill="none" stroke="#9CC6E0" stroke-width="1.4" style="flex:none;"><rect x="1" y="1" width="10" height="13" rx="2"></rect><line x1="4.5" y1="11.5" x2="7.5" y2="11.5"></line></svg>
+            <span style="font-size:11.5px; font-weight:600; color:#9CC6E0; white-space:nowrap;">Förs från mobilen · 19:42</span>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:11px; color:rgba(243,245,247,.4); margin:-16px 0 18px 2px;">Resultat &amp; målgörare fylls i <b style="color:rgba(243,245,247,.7);">en gång här</b> — samma värden matas in i story, inlägg och webbartikel. Mobilsynken sker <b style="color:rgba(243,245,247,.7);">automatiskt i bakgrunden</b> — ingen knapp behövs.</div>
+
+      <!-- Uppdelning (backlog p.1): tre flikar — Innehåll · Kanaler & publicera · Publicerat -->
+      <div style="display:flex; gap:4px; background:#0e1217; border:1px solid rgba(255,255,255,.08); border-radius:11px; padding:4px; margin-bottom:24px; max-width:620px;">
+        <sc-for list="{{ mpTabs }}" as="mt" hint-placeholder-count="3"><button onClick="{{ mt.set }}" style="{{ mt.style }}">{{ mt.label }}</button></sc-for>
+      </div>
+
+      <!-- ===== Flik: Innehåll ===== -->
+      <sc-if value="{{ mpTabInnehall }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+        <span class="scd" style="width:24px;height:24px;border-radius:7px;background:#1b2028;color:#F0B45A;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none;">1</span>
+        <span style="font-size:16px; font-weight:600; color:#f3f5f7;">Innehåll</span>
+        <span style="font-size:12px; color:rgba(243,245,247,.45);">— skapas en gång, återanvänds i alla utgångar</span>
+      </div>
+
+      <div style="display:flex; gap:18px; margin-bottom:30px; align-items:stretch; flex-wrap:wrap;">
+        <!-- Bilder -->
+        <div style="flex:1; min-width:300px; background:#12151b; border:1px solid rgba(255,255,255,.09); border-radius:13px; padding:16px 18px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(243,245,247,.45);">Bilder</span>
+            <span style="font-size:11.5px; color:#F0B45A; font-weight:600;">{{ selCount }} valda</span>
+          </div>
+
+          <div style="margin-bottom:13px;">
+            <div style="display:flex; align-items:center; gap:9px; margin-bottom:9px; flex-wrap:wrap;">
+              <span style="font-size:10.5px; color:rgba(243,245,247,.45); flex:none;">Katalog</span>
+              <input value="{{ folderPath }}" onChange="{{ setFolder }}" style="flex:1; min-width:200px; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:8px 11px; font-family:'SF Mono',Menlo,monospace; font-size:11px; color:rgba(243,245,247,.85);">
+              <button onClick="{{ chooseFolder }}" style="flex:none; background:#12151b; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:8px 13px; font-size:11.5px; font-weight:600; color:rgba(243,245,247,.8); font-family:inherit; cursor:pointer;">Välj katalog…</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; font-size:11px; color:rgba(243,245,247,.58);">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F0B45A" stroke-width="1.8" style="flex:none;"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              <span>{{ srcInfo }}</span>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:8px;">
+            <sc-for list="{{ photos }}" as="ph" hint-placeholder-count="12">
+              <div onClick="{{ ph.pick }}" style="{{ ph.style }}">
+                <sc-if value="{{ ph.sel }}" hint-placeholder-val="{{ false }}"><button onClick="{{ ph.remove }}" style="position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:50%;border:0;background:rgba(7,9,12,.7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;cursor:pointer;z-index:3;padding:0;">✕</button></sc-if>
+                <sc-if value="{{ ph.isCover }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;bottom:3px;left:3px;font-size:7px;font-weight:700;background:#F0B45A;color:#100c05;border-radius:3px;padding:1px 4px;letter-spacing:.03em;">OMSLAG</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:10.5px; color:rgba(243,245,247,.4); margin-top:11px;">Klicka en bild för att välja + justera dess <b style="color:rgba(243,245,247,.6);font-weight:600;">beskärning</b> nedan · ✕ tar bort · omslaget sätts i editorn. Fokus + zoom följer bilden till alla kanaler.</div>
+
+          <!-- Crop-editor (per foto): hela bilden + ram (format, zoom, fokus, mörklagt utanför) -->
+          <sc-if value="{{ hasAktiv }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:14px; border:1px solid rgba(255,255,255,.1); border-radius:11px; background:#0e1217; padding:12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+              <span style="font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:rgba(243,245,247,.5);">{{ cropCaption }}</span>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <button onClick="{{ cropPrev }}" style="{{ cropNavStyle }}">‹</button>
+                <button onClick="{{ cropNext }}" style="{{ cropNavStyle }}">›</button>
+                <button onClick="{{ cropCoverToggle }}" style="{{ cropCoverStyle }}">{{ cropCoverLabel }}</button>
+              </div>
+            </div>
+            <div onPointerDown="{{ cropDown }}" onPointerMove="{{ cropMove }}" onPointerUp="{{ cropUp }}" onPointerLeave="{{ cropUp }}" style="position:relative; width:100%; aspect-ratio:3/2; border-radius:8px; overflow:hidden; background:#141a20; cursor:crosshair; touch-action:none; user-select:none;">
+              <div style="{{ cropImg }}"></div>
+              <div style="{{ cropRam }}"></div>
+              <span style="{{ cropDot }}"></span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; flex-wrap:wrap;">
+              <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                <span style="font-size:10.5px; color:rgba(243,245,247,.5); margin-right:2px;">Visa som</span>
+                <sc-for list="{{ cropFmtChips }}" as="fc" hint-placeholder-count="4"><button onClick="{{ fc.set }}" style="{{ fc.style }}">{{ fc.label }}</button></sc-for>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="range" min="1" max="2.6" step="0.05" value="{{ cropZoom }}" onChange="{{ cropSetZoom }}" style="width:120px; accent-color:#F0B45A; cursor:pointer;">
+                <span style="font-size:10px; color:rgba(243,245,247,.5); white-space:nowrap;">Zoom {{ cropZoomPct }}%</span>
+              </div>
+            </div>
+            <div style="font-size:9.5px; color:rgba(243,245,247,.4); margin-top:8px; line-height:1.4;">Klicka/dra i bilden för fokus. Fokus + zoom följer bilden till alla kanaler; ramen visar valt format.</div>
+          </div>
+          </sc-if>
+        </div>
+
+        <!-- Text -->
+        <div style="flex:1; min-width:300px; background:#12151b; border:1px solid rgba(255,255,255,.09); border-radius:13px; padding:16px 18px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(243,245,247,.45);">Text</span>
+            <span onClick="{{ genCaption }}" style="font-size:11px; color:#F0B45A; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:5px; user-select:none;">
+              <sc-if value="{{ genIdle }}" hint-placeholder-val="{{ true }}">✨ Generera</sc-if>
+              <sc-if value="{{ genBusy }}" hint-placeholder-val="{{ false }}">⟳ Skriver…</sc-if>
+              <sc-if value="{{ genDone }}" hint-placeholder-val="{{ false }}">✓ Klart</sc-if>
+            </span>
+          </div>
+          <textarea ref="{{ capRef }}" value="{{ caption }}" onChange="{{ setCaption }}" rows="4" style="width:100%; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:9px; padding:11px 12px; font-family:inherit; font-size:13px; color:#f3f5f7; line-height:1.5; resize:none;"></textarea>
+          <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:11px;">
+            <span style="font-size:10.5px; color:rgba(243,245,247,.55); margin-right:2px; align-self:center;">Infoga:</span>
+            <sc-for list="{{ insertTokens }}" as="tk" hint-placeholder-count="6">
+              <span onClick="{{ tk.ins }}" style="font-size:10.5px; background:rgba(240,180,90,.14); border:1px dashed rgba(240,180,90,.42); color:#F0B45A; border-radius:6px; padding:3px 8px; cursor:pointer; user-select:none;">{{ tk.label }}</span>
+            </sc-for>
+          </div>
+          <div style="display:flex; align-items:center; gap:5px; margin-top:9px; flex-wrap:wrap;">
+            <span style="font-size:10.5px; color:rgba(243,245,247,.55); margin-right:2px; align-self:center;">Ton:</span>
+            <sc-for list="{{ toneChips }}" as="tc" hint-placeholder-count="3"><button onClick="{{ tc.set }}" style="{{ tc.style }}">{{ tc.label }}</button></sc-for>
+          </div>
+          <!-- p.6: egna inspel till Claude-genereringen -->
+          <div style="margin-top:11px; border-top:1px dashed rgba(255,255,255,.09); padding-top:10px;">
+            <div style="font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(243,245,247,.5); margin-bottom:7px;">Inspel till genereringen</div>
+            <div style="display:flex; gap:5px; flex-wrap:wrap; margin-bottom:8px;">
+              <sc-for list="{{ genAngleChips }}" as="ga" hint-placeholder-count="3"><button onClick="{{ ga.set }}" style="{{ ga.style }}">{{ ga.label }}</button></sc-for>
+            </div>
+            <input value="{{ genPrompt }}" onChange="{{ setGenPrompt }}" placeholder="Egna detaljer — t.ex. 'avgörande i 90:e, publikrekord, lyft målvakten'" style="width:100%; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:9px 11px; font-family:inherit; font-size:12px; color:rgba(243,245,247,.9);">
+            <div style="font-size:10px; color:rgba(243,245,247,.4); margin-top:6px;">Skickas med som styrning när texten genereras — utöver matchfakta.</div>
+          </div>
+          <div style="font-size:10.5px; color:rgba(243,245,247,.55); margin-top:12px; line-height:1.45;">Sociala kanaler får @ och #. <b style="color:rgba(243,245,247,.8); font-weight:600;">Webben får samma text utan @/#</b> (rena namn, inga hashtags); storyn en kort caption.</div>
+          <div style="margin-top:13px; border-top:1px solid rgba(255,255,255,.07); padding-top:12px;">
+            <div style="font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(243,245,247,.5); margin-bottom:7px;">Förhandsvisning · sociala kanaler</div>
+            <div style="font-size:12.5px; line-height:1.55; color:#f3f5f7; background:#0e1217; border:1px solid rgba(255,255,255,.08); border-radius:8px; padding:10px 12px; white-space:pre-wrap; min-height:20px;">{{ captionResolved }}</div>
+            <div style="font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(243,245,247,.5); margin:11px 0 6px;">Förhandsvisning · webb (utan @/#)</div>
+            <div style="font-size:12px; line-height:1.55; color:rgba(243,245,247,.78); background:#0e1217; border:1px solid rgba(255,255,255,.08); border-radius:8px; padding:9px 12px; white-space:pre-wrap; min-height:18px;">{{ captionWeb }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Länkar ===== -->
+      <div style="background:#12151b; border:1px solid rgba(255,255,255,.09); border-radius:13px; padding:16px 18px; margin-bottom:30px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+          <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(243,245,247,.45);">Länkar</span>
+          <span style="font-size:11px; color:rgba(243,245,247,.45);">Fylls i en gång · bifogas automatiskt per kanal</span>
+        </div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:15px;">
+          <div style="flex:1; min-width:300px; display:flex; align-items:center; gap:11px;">
+            <span style="width:30px; height:30px; border-radius:8px; background:rgba(240,180,90,.14); color:#F0B45A; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M4 17l5-5 4 4 3-3 4 4"/></svg></span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:11px; font-weight:600; color:rgba(243,245,247,.7); margin-bottom:4px;">Galleri <span style="font-weight:400; color:rgba(243,245,247,.4);">— fler bilder / köp</span></div>
+              <input value="{{ galleriUrl }}" onChange="{{ setGalleri }}" style="width:100%; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:8px 11px; font-family:'SF Mono',Menlo,monospace; font-size:11.5px; color:rgba(243,245,247,.85);">
+            </div>
+          </div>
+          <div style="flex:1; min-width:300px; display:flex; align-items:center; gap:11px;">
+            <span style="width:30px; height:30px; border-radius:8px; background:rgba(240,180,90,.14); color:#F0B45A; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18"/></svg></span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:11px; font-weight:600; color:rgba(243,245,247,.7); margin-bottom:4px;">Hemsida <span style="font-weight:400; color:rgba(243,245,247,.4);">— matchreferat</span></div>
+              <input value="{{ hemsidaUrl }}" onChange="{{ setHemsida }}" style="width:100%; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:8px 11px; font-family:'SF Mono',Menlo,monospace; font-size:11.5px; color:rgba(243,245,247,.85);">
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:7px; align-items:center; padding-top:13px; border-top:1px solid rgba(255,255,255,.06);">
+          <span style="font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(243,245,247,.38); margin-right:4px;">Så placeras de:</span>
+          <span style="font-size:10.5px; color:rgba(243,245,247,.6); background:#1b2028; border-radius:999px; padding:4px 10px;">Live-story · länk-sticker</span>
+          <span style="font-size:10.5px; color:rgba(243,245,247,.6); background:#1b2028; border-radius:999px; padding:4px 10px;">IG-inlägg · bio + första kommentar</span>
+          <span style="font-size:10.5px; color:rgba(243,245,247,.6); background:#1b2028; border-radius:999px; padding:4px 10px;">Facebook · i inlägget</span>
+        </div>
+      </div>
+
+      </sc-if>
+
+      <!-- ===== Flik: Kanaler & publicera ===== -->
+      <sc-if value="{{ mpTabKanaler }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+        <span class="scd" style="width:24px;height:24px;border-radius:7px;background:#1b2028;color:#F0B45A;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none;">2</span>
+        <span style="font-size:16px; font-weight:600; color:#f3f5f7;">Skicka till</span>
+        <span style="font-size:12px; color:rgba(243,245,247,.45);">— välj format + på/av per kanal · beskärningen sätts per foto i Steg 1 och följer med hit</span>
+      </div>
+      <div style="font-size:11px; color:rgba(243,245,247,.4); margin:0 0 16px 34px;">Låsta förhandsvisningar: ramen visar hur omslagets beskärning (fokus + zoom) faller i varje kanalformat. Gren-kant + glow och den skarpa renderingen följer med varje utgång.</div>
+
+      <div style="display:flex; gap:16px; flex-wrap:wrap;">
+
+        <!-- Live-story 9:16 (låst preview) -->
+        <div style="{{ cLive }}">
+          <div onClick="{{ tLive }}" style="display:flex; align-items:center; gap:9px; margin-bottom:12px; cursor:pointer;">
+            <span style="{{ chkLive }}">✓</span>
+            <div style="flex:1;"><div style="font-size:13px; font-weight:600; color:#f3f5f7;">Live-story</div><div style="font-size:10px; color:rgba(243,245,247,.45);">Instagram Story</div></div>
+          </div>
+          <!-- p.4: bildantal per kanal -->
+          <div style="display:flex; align-items:center; gap:7px; margin:-3px 0 11px;">
+            <span style="font-size:10px; color:rgba(243,245,247,.5);">Bilder</span>
+            <button onClick="{{ antLiveMinus }}" style="{{ antBtn }}">−</button><span class="scd" style="font-size:15px; font-weight:700; min-width:20px; text-align:center;">{{ antLive }}</span><button onClick="{{ antLivePlus }}" style="{{ antBtn }}">+</button>
+            <span style="font-size:9.5px; color:rgba(243,245,247,.4);">max 10</span>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+            <sc-if value="{{ prevLive.multi }}" hint-placeholder-val="{{ false }}"><div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:center;"><sc-for list="{{ prevLive.fmtChips }}" as="fc" hint-placeholder-count="1"><button onClick="{{ fc.set }}" style="{{ fc.style }}">{{ fc.label }}</button></sc-for></div></sc-if>
+            <div style="{{ prevLive.box }}"><div style="{{ prevLive.img }}"></div><div style="{{ prevLive.ram }}"></div></div>
+            <div style="font-size:9.5px; color:rgba(243,245,247,.45); text-align:center; line-height:1.35;">{{ prevLive.hint }}</div>
+          </div>
+        </div>
+
+        <!-- IG-inlägg 4:5 (låst preview) -->
+        <div style="{{ cIg }}">
+          <div onClick="{{ tIg }}" style="display:flex; align-items:center; gap:9px; margin-bottom:12px; cursor:pointer;">
+            <span style="{{ chkIg }}">✓</span>
+            <div style="flex:1;"><div style="font-size:13px; font-weight:600; color:#f3f5f7;">IG-inlägg</div><div style="font-size:10px; color:rgba(243,245,247,.45);">Instagram-inlägg · karusell</div></div>
+          </div>
+          <!-- p.3: vägval — direkt via integrationen (≤10) eller export till disk (≤20) -->
+          <div style="display:flex; flex-direction:column; gap:5px; margin:-3px 0 9px;">
+            <div onClick="{{ igVagDirekt }}" style="{{ igVagDirektStyle }}"><span style="{{ igVagDirektDot }}"></span><span style="flex:1;">Posta direkt via integrationen</span><span style="font-size:9.5px; color:rgba(243,245,247,.45);">max 10</span></div>
+            <div onClick="{{ igVagDisk }}" style="{{ igVagDiskStyle }}"><span style="{{ igVagDiskDot }}"></span><span style="flex:1;">Exportera till disk</span><span style="font-size:9.5px; color:rgba(243,245,247,.45);">max 20</span></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:7px; margin-bottom:11px;">
+            <span style="font-size:10px; color:rgba(243,245,247,.5);">Bilder</span>
+            <button onClick="{{ antIgMinus }}" style="{{ antBtn }}">−</button><span class="scd" style="font-size:15px; font-weight:700; min-width:20px; text-align:center;">{{ antIg }}</span><button onClick="{{ antIgPlus }}" style="{{ antBtn }}">+</button>
+            <span style="font-size:9.5px; color:rgba(243,245,247,.4);">{{ igCapHint }}</span>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+            <sc-if value="{{ prevIg.multi }}" hint-placeholder-val="{{ true }}"><div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:center;"><sc-for list="{{ prevIg.fmtChips }}" as="fc" hint-placeholder-count="2"><button onClick="{{ fc.set }}" style="{{ fc.style }}">{{ fc.label }}</button></sc-for></div></sc-if>
+            <div style="{{ prevIg.box }}"><div style="{{ prevIg.img }}"></div><div style="{{ prevIg.ram }}"></div></div>
+            <div style="font-size:9.5px; color:rgba(243,245,247,.45); text-align:center; line-height:1.35;">{{ prevIg.hint }}</div>
+          </div>
+        </div>
+
+        <!-- Facebook 1:1 (låst preview) -->
+        <div style="{{ cFb }}">
+          <div onClick="{{ tFb }}" style="display:flex; align-items:center; gap:9px; margin-bottom:12px; cursor:pointer;">
+            <span style="{{ chkFb }}">✓</span>
+            <div style="flex:1;"><div style="font-size:13px; font-weight:600; color:#f3f5f7;">Facebook</div><div style="font-size:10px; color:rgba(243,245,247,.45);">Facebook-sida</div></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:7px; margin:-3px 0 11px;">
+            <span style="font-size:10px; color:rgba(243,245,247,.5);">Bilder</span>
+            <button onClick="{{ antFbMinus }}" style="{{ antBtn }}">−</button><span class="scd" style="font-size:15px; font-weight:700; min-width:20px; text-align:center;">{{ antFb }}</span><button onClick="{{ antFbPlus }}" style="{{ antBtn }}">+</button>
+            <span style="font-size:9.5px; color:rgba(243,245,247,.4);">max 20</span>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+            <sc-if value="{{ prevFb.multi }}" hint-placeholder-val="{{ true }}"><div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:center;"><sc-for list="{{ prevFb.fmtChips }}" as="fc" hint-placeholder-count="3"><button onClick="{{ fc.set }}" style="{{ fc.style }}">{{ fc.label }}</button></sc-for></div></sc-if>
+            <div style="{{ prevFb.box }}"><div style="{{ prevFb.img }}"></div><div style="{{ prevFb.ram }}"></div></div>
+            <div style="font-size:9.5px; color:rgba(243,245,247,.45); text-align:center; line-height:1.35;">{{ prevFb.hint }}</div>
+          </div>
+        </div>
+
+        <!-- Webbartikel-kanalen borttagen: webbartikeln byggs i Innehåll. Publicera producerar bara referat/material. -->
+
+      </div>
+
+      </sc-if>
+      <!-- På gång är flyttad härifrån (backlog p.1) — egen plats: sidonavet → Webb → På gång -->
+
+      <!-- ===== Flik: Publicerat ===== -->
+      <sc-if value="{{ mpTabPublicerat }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#12151b; border:1px solid rgba(255,255,255,.09); border-radius:13px; padding:16px 18px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(243,245,247,.45); margin-bottom:6px;">Publicerat &amp; utkast · {{ fixture }}</div>
+        <div style="display:flex; flex-direction:column;">
+          <sc-for list="{{ pubRows }}" as="pr" hint-placeholder-count="4">
+            <div style="display:flex; align-items:center; gap:13px; padding:11px 4px; border-top:1px solid rgba(255,255,255,.05);">
+              <span style="{{ pr.dot }}"></span>
+              <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:600; color:#f3f5f7;">{{ pr.title }}</div><div style="font-size:10.5px; color:rgba(243,245,247,.5); margin-top:1px;">{{ pr.meta }}</div></div>
+              <span style="{{ pr.pill }}">{{ pr.status }}</span>
+              <span style="font-size:11px; color:#F0B45A; font-weight:600; cursor:pointer;">Öppna ›</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:10.5px; color:rgba(243,245,247,.45); margin-top:12px;">Klick öppnar materialet för ändring i Innehåll/Kanaler — utkast sparas löpande.</div>
+      </div>
+      </sc-if>
+
+    </div>
+
+    <!-- Publiceringsrad -->
+    <sc-if value="{{ mpNotPublicerat }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none; border-top:1px solid rgba(255,255,255,.08); background:#06080b; padding:14px 30px; display:flex; align-items:center; gap:16px;">
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:12.5px; color:rgba(243,245,247,.82);">Skickas till <b style="color:#f3f5f7;">{{ sendCount }} {{ sendWord }}</b></div>
+        <div style="font-size:11px; color:rgba(243,245,247,.45); margin-top:1px;">{{ sendList }}</div>
+      </div>
+      <button style="background:#12151b; border:1px solid rgba(255,255,255,.14); border-radius:9px; padding:10px 16px; font-size:13px; font-weight:600; color:rgba(243,245,247,.82); font-family:inherit; cursor:pointer;">Spara utkast</button>
+      <button style="background:#F0B45A; border:none; border-radius:9px; padding:10px 20px; font-size:13px; font-weight:700; color:#100c05; font-family:inherit; cursor:pointer;">Publicera {{ sendCount }}</button>
+    </div>
+    </sc-if>
+
+  </main>
+
+    <!-- ===== Live nu — snabbflöde (slide-over) ===== -->
+    <sc-if value="{{ liveOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; inset:0; z-index:40; display:flex; justify-content:flex-end;">
+      <div onClick="{{ liveClose }}" style="position:absolute; inset:0; background:rgba(0,0,0,.55);"></div>
+      <div style="position:relative; width:440px; height:100%; background:#0d1015; border-left:1px solid rgba(255,255,255,.1); box-shadow:-24px 0 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+
+        <div style="flex:none; padding:18px 22px; border-bottom:1px solid rgba(255,255,255,.08); display:flex; align-items:center; gap:11px;">
+          <span style="width:9px;height:9px;border-radius:50%;background:#E0607F;flex:none;box-shadow:0 0 10px #E0607F;"></span>
+          <div style="flex:1;">
+            <div class="scd" style="font-size:18px; font-weight:700; letter-spacing:.01em;">Live nu</div>
+            <div style="font-size:11px; color:rgba(243,245,247,.5); margin-top:1px;">{{ fixture }} · story direkt</div>
+          </div>
+          <button onClick="{{ liveClose }}" style="width:30px;height:30px;border-radius:8px;background:#12151b;border:1px solid rgba(255,255,255,.1);color:rgba(243,245,247,.7);font-size:15px;cursor:pointer;font-family:inherit;">✕</button>
+        </div>
+
+        <sc-if value="{{ liveComposing }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1; overflow-y:auto; padding:20px 22px;">
+
+          <div style="font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:rgba(243,245,247,.45); margin-bottom:10px;">1 · Moment</div>
+          <div style="display:flex; gap:7px; margin-bottom:22px;">
+            <sc-for list="{{ liveMomChips }}" as="mm" hint-placeholder-count="4"><button onClick="{{ mm.set }}" style="{{ mm.style }}">{{ mm.label }}</button></sc-for>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:9px;">
+            <span style="font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:rgba(243,245,247,.45);">2 · Bild</span>
+            <button onClick="{{ ingestShow }}" style="background:transparent; border:1px solid rgba(255,255,255,.14); border-radius:7px; padding:5px 11px; font-size:10.5px; font-weight:600; color:rgba(243,245,247,.75); font-family:inherit; cursor:pointer;">Hämta / uppdatera ›</button>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:11px; color:rgba(243,245,247,.6);">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F0B45A" stroke-width="1.8" style="flex:none;"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <span>Matchens urval — <b style="color:rgba(243,245,247,.85); font-weight:600;">Lightroom-export i Dropbox</b> · nyast först</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; margin-bottom:11px; font-size:9.5px; color:rgba(243,245,247,.4);">
+            <span style="background:#1b2028; border-radius:5px; padding:2px 7px;">Minneskort</span><span>→</span><span style="background:#1b2028; border-radius:5px; padding:2px 7px;">Lightroom</span><span>→</span><span style="background:#1b2028; border-radius:5px; padding:2px 7px;">Dropbox</span>
+          </div>
+          <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; margin-bottom:22px;">
+            <sc-for list="{{ livePhotos }}" as="lp" hint-placeholder-count="8">
+              <div onClick="{{ lp.pick }}" style="{{ lp.style }}">
+                <sc-if value="{{ lp.newest }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-size:6.5px;font-weight:700;background:rgba(0,0,0,.62);color:#fff;border-radius:3px;padding:1px 4px;white-space:nowrap;letter-spacing:.04em;">SENAST</span></sc-if>
+                <sc-if value="{{ lp.sel }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:3px;right:3px;width:15px;height:15px;border-radius:50%;background:#F0B45A;color:#100c05;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">✓</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
+            <span style="font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:rgba(243,245,247,.45);">3 · Förhandsvisning</span>
+            <!-- A1: val vid generering — med eller utan overlay -->
+            <div style="display:flex; gap:3px; background:#12151b; border-radius:8px; padding:3px;">
+              <sc-for list="{{ liveOvChips }}" as="oc" hint-placeholder-count="2"><button onClick="{{ oc.set }}" style="{{ oc.style }}">{{ oc.label }}</button></sc-for>
+            </div>
+          </div>
+          <div style="display:flex; justify-content:center;">
+            <div style="{{ livePrevFrame }}">
+            <div style="background:linear-gradient(to top,rgb(58,74,87),rgb(22,29,36)); position:relative; width:170px; height:302px; border-radius:11px; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end;">
+              <span style="position:absolute; top:11px; left:12px; font-family:'Saira Condensed'; font-size:15px; font-weight:700; color:rgba(255,255,255,.32); letter-spacing:.02em;">{{ homeAbbr }}</span>
+              <sc-if value="{{ liveOvOn }}" hint-placeholder-val="{{ true }}">
+              <div style="position:relative; padding:16px 13px 16px; background:linear-gradient(to top,rgba(0,0,0,.66),transparent);">
+                <div style="font-family:'Saira Condensed'; font-size:11px; font-weight:700; letter-spacing:.16em; color:#9BBE86; text-align:center; text-shadow:0 1px 4px rgba(0,0,0,.6);">{{ livePrevKick }}</div>
+                <div class="scd" style="font-size:36px; font-weight:700; color:#fff; text-align:center; line-height:.95; margin-top:5px; text-shadow:0 2px 8px rgba(0,0,0,.6);">{{ livePrevBig }}</div>
+                <div style="font-size:9px; color:rgba(255,255,255,.85); text-align:center; margin-top:6px;">{{ livePrevSmall }}</div>
+              </div>
+              </sc-if>
+            </div>
+            </div>
+          </div>
+          <sc-if value="{{ liveOvOn }}" hint-placeholder-val="{{ true }}"><div style="font-size:10px; color:rgba(243,245,247,.4); text-align:center; margin-top:10px; line-height:1.45;">Skiss — den skarpa 9:16:an renderas server-side.<br>Gren-kant + glow följer dam/herr/mixed.</div></sc-if>
+          <sc-if value="{{ liveOvOff }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:rgba(243,245,247,.4); text-align:center; margin-top:10px; line-height:1.45;">Utan overlay — fotot beskärs till 9:16 och publiceras rent.<br>Gren-kant + glow följer dam/herr/mixed.</div></sc-if>
+        </div>
+
+        <div style="flex:none; padding:14px 22px; border-top:1px solid rgba(255,255,255,.08);">
+          <div onClick="{{ liveToggleTest }}" style="display:flex; align-items:center; gap:9px; margin-bottom:12px; cursor:pointer;">
+            <span style="{{ liveTestBox }}">✓</span>
+            <span style="font-size:12px; color:rgba(243,245,247,.7);">Testläge — exempelfil skrivs till disk, inget publiceras</span>
+          </div>
+          <button onClick="{{ livePublish }}" style="width:100%; background:#F0B45A; border:none; border-radius:11px; padding:14px; font-size:15px; font-weight:700; color:#100c05; font-family:inherit; cursor:pointer;">{{ livePubLabel }}</button>
+          <div style="font-size:10.5px; color:rgba(243,245,247,.4); text-align:center; margin-top:9px; line-height:1.4;">Renderas server-side → IG Story via SoMe-API → sparas i Dropbox &amp; som material</div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ livePublishing }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:flex; flex-direction:column; justify-content:center; padding:30px 34px;">
+          <div class="scd" style="font-size:18px; font-weight:700; margin-bottom:22px; text-align:center;">Publicerar…</div>
+          <div style="display:flex; flex-direction:column; gap:17px;">
+            <sc-for list="{{ liveSteps }}" as="st" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; gap:12px;"><span style="{{ st.dot }}">✓</span><span style="{{ st.labelStyle }}">{{ st.label }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ liveDone }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:flex; flex-direction:column; padding:26px 24px;">
+          <div style="display:flex; flex-direction:column; align-items:center; text-align:center; margin-bottom:20px;">
+            <div style="width:58px;height:58px;border-radius:50%;background:rgba(111,179,90,.16);border:1.5px solid rgba(111,179,90,.6);color:#6FB35A;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:13px;">✓</div>
+            <sc-if value="{{ liveLive }}" hint-placeholder-val="{{ true }}"><div class="scd" style="font-size:21px; font-weight:700;">Ute på Instagram</div></sc-if>
+            <sc-if value="{{ liveTest }}" hint-placeholder-val="{{ false }}"><div class="scd" style="font-size:21px; font-weight:700;">Testfil skapad</div></sc-if>
+          </div>
+
+          <sc-if value="{{ liveLive }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:13px; background:#0e1217; border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:16px;">
+            <div style="display:flex; align-items:flex-start; gap:10px;"><span style="width:16px;height:16px;border-radius:50%;background:#6FB35A;color:#0a0d11;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex:none;margin-top:1px;">✓</span><span style="font-size:12.5px; color:rgba(243,245,247,.82);">Renderad 9:16 — server-side</span></div>
+            <div style="display:flex; align-items:flex-start; gap:10px;"><span style="width:16px;height:16px;border-radius:50%;background:#6FB35A;color:#0a0d11;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex:none;margin-top:1px;">✓</span><span style="font-size:12.5px; color:rgba(243,245,247,.82);">Publicerad som IG Story · {{ liveChannel }}</span></div>
+            <div style="display:flex; align-items:flex-start; gap:10px;"><span style="width:16px;height:16px;border-radius:50%;background:#6FB35A;color:#0a0d11;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex:none;margin-top:1px;">✓</span><div style="min-width:0;"><div style="font-size:12.5px; color:rgba(243,245,247,.82);">Sparad i Dropbox</div><div style="font-size:10.5px; color:rgba(243,245,247,.45); font-family:'SF Mono',Menlo,monospace; margin-top:2px; word-break:break-all;">{{ livePath }}</div></div></div>
+            <div style="display:flex; align-items:flex-start; gap:10px;"><span style="width:16px;height:16px;border-radius:50%;background:#6FB35A;color:#0a0d11;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex:none;margin-top:1px;">✓</span><span style="font-size:12.5px; color:rgba(243,245,247,.82);">Sparad som material på matchen — dyker upp i Matchpublicering</span></div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ liveTest }}" hint-placeholder-val="{{ false }}">
+          <div style="background:rgba(240,180,90,.1); border:1px solid rgba(240,180,90,.3); border-radius:12px; padding:16px; font-size:12.5px; color:rgba(243,245,247,.75); line-height:1.5;">Inget publicerades. Exempelfil renderades och skrevs till <span style="font-family:'SF Mono',Menlo,monospace; color:#F0B45A;">~/DPT/test-output/</span> — bra för att prova mallen utan att posta.</div>
+          </sc-if>
+
+          <div style="display:flex; gap:10px; margin-top:22px; justify-content:center;">
+            <button onClick="{{ liveReset }}" style="background:#12151b; border:1px solid rgba(255,255,255,.14); border-radius:10px; padding:11px 18px; font-size:13px; font-weight:600; color:rgba(243,245,247,.82); font-family:inherit; cursor:pointer;">Ny story</button>
+            <button onClick="{{ liveClose }}" style="background:#F0B45A; border:none; border-radius:10px; padding:11px 20px; font-size:13px; font-weight:700; color:#100c05; font-family:inherit; cursor:pointer;">Klar</button>
+          </div>
+        </div>
+        </sc-if>
+
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ===== Hämta bilder — minneskort → Lightroom → export → urval ===== -->
+    <sc-if value="{{ ingestOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; inset:0; z-index:41; display:flex; justify-content:flex-end;">
+      <div onClick="{{ ingestClose }}" style="position:absolute; inset:0; background:rgba(0,0,0,.55);"></div>
+      <div style="position:relative; width:460px; height:100%; background:#0d1015; border-left:1px solid rgba(255,255,255,.1); box-shadow:-24px 0 60px rgba(0,0,0,.5); display:flex; flex-direction:column;">
+
+        <div style="flex:none; padding:18px 22px; border-bottom:1px solid rgba(255,255,255,.08); display:flex; align-items:center; gap:11px;">
+          <div style="flex:1;">
+            <div class="scd" style="font-size:18px; font-weight:700;">Hämta bilder</div>
+            <div style="font-size:11px; color:rgba(243,245,247,.5); margin-top:1px;">Minneskort → Lightroom → export → matchens urval</div>
+          </div>
+          <button onClick="{{ ingestClose }}" style="width:30px;height:30px;border-radius:8px;background:#12151b;border:1px solid rgba(255,255,255,.1);color:rgba(243,245,247,.7);font-size:15px;cursor:pointer;font-family:inherit;">✕</button>
+        </div>
+
+        <div style="flex:1; overflow-y:auto; padding:22px; display:flex; flex-direction:column; gap:20px;">
+
+          <div style="display:flex; gap:13px;">
+            <span style="{{ ingBadge1 }}">✓</span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13.5px; font-weight:600; color:#f3f5f7; margin-bottom:4px;">Minneskort</div>
+              <div style="font-size:11.5px; color:rgba(243,245,247,.55); margin-bottom:9px; line-height:1.45;">Peka ut kortet. Bara <b style="color:rgba(243,245,247,.8); font-weight:600;">skyddade</b> bilder (låsta på kameran) tas med.</div>
+              <select value="{{ ingCard }}" onChange="{{ setIngCard }}" style="width:100%; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:9px 11px; font-family:inherit; font-size:12px; color:#f3f5f7;">
+                <option>NIKON Z 8 — /Volumes/NIKON Z 8</option>
+                <option>SD-kort — /Volumes/EOS_DIGITAL</option>
+                <option>Välj annan mapp…</option>
+              </select>
+              <div style="font-size:11px; color:#6FB35A; margin-top:8px;">142 skyddade bilder hittades</div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:13px;">
+            <span style="{{ ingBadge2 }}">{{ ingChar2 }}</span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13.5px; font-weight:600; color:#f3f5f7; margin-bottom:4px;">Exportera skyddade &amp; öppna Lightroom</div>
+              <div style="font-size:11.5px; color:rgba(243,245,247,.55); margin-bottom:9px; line-height:1.45;">De skyddade (låsta) bilderna exporteras från kortet till mappen nedan och öppnas i Lightroom för redigering.</div>
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span style="font-size:10.5px; color:rgba(243,245,247,.5); flex:none;">Exportera till</span><input value="{{ ingProtPath }}" onChange="{{ setIngProt }}" style="flex:1; min-width:0; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:8px 10px; font-family:'SF Mono',Menlo,monospace; font-size:10.5px; color:rgba(243,245,247,.85);"><button onClick="{{ pickProt }}" style="flex:none; background:#12151b; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:8px 11px; font-size:10.5px; font-weight:600; color:rgba(243,245,247,.8); font-family:inherit; cursor:pointer;">Välj…</button></div>
+              <button onClick="{{ doImport }}" style="{{ ingBtn2 }}">{{ ingBtn2Label }}</button>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:13px;">
+            <span style="{{ ingBadge3 }}">{{ ingChar3 }}</span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13.5px; font-weight:600; color:#f3f5f7; margin-bottom:4px;">Katalog med redigerade bilder</div>
+              <div style="font-size:11.5px; color:rgba(243,245,247,.55); margin-bottom:9px; line-height:1.45;">Peka ut katalogen där Lightroom exporterat de färdigredigerade bilderna. De blir <b style="color:rgba(243,245,247,.8); font-weight:600;">matchens urval</b> — samma set i Live nu och alla utgångar.</div>
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span style="font-size:10.5px; color:rgba(243,245,247,.5); flex:none;">Katalog</span><input value="{{ ingLrPath }}" onChange="{{ setIngLr }}" style="flex:1; min-width:0; background:#0e1217; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:8px 10px; font-family:'SF Mono',Menlo,monospace; font-size:10.5px; color:rgba(243,245,247,.85);"><button onClick="{{ pickLr }}" style="flex:none; background:#12151b; border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:8px 11px; font-size:10.5px; font-weight:600; color:rgba(243,245,247,.8); font-family:inherit; cursor:pointer;">Välj…</button></div>
+              <button onClick="{{ doLoad }}" style="{{ ingBtn3 }}">{{ ingBtn3Label }}</button>
+            </div>
+          </div>
+
+        </div>
+
+        <div style="flex:none; padding:14px 22px; border-top:1px solid rgba(255,255,255,.08); display:flex; align-items:center; gap:12px;">
+          <sc-if value="{{ ingUrvalReady }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px; color:#6FB35A; font-weight:600;">✓ Urval klart · 18 bilder inlästa</span></sc-if>
+          <button onClick="{{ ingestClose }}" style="background:#F0B45A; border:none; border-radius:9px; padding:10px 20px; font-size:13px; font-weight:700; color:#100c05; font-family:inherit; cursor:pointer; margin-left:auto;">Klar</button>
+        </div>
+
+      </div>
+    </div>
+    </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    photos: [
+      {sel:true,fokus:{x:50,y:44},zoom:1.15},{sel:false,fokus:{x:50,y:50},zoom:1},{sel:true,fokus:{x:42,y:40},zoom:1.25},{sel:false,fokus:{x:50,y:50},zoom:1},{sel:true,fokus:{x:56,y:38},zoom:1.1},{sel:false,fokus:{x:50,y:50},zoom:1},
+      {sel:true,fokus:{x:48,y:46},zoom:1},{sel:false,fokus:{x:50,y:50},zoom:1},{sel:false,fokus:{x:50,y:50},zoom:1},{sel:true,fokus:{x:52,y:42},zoom:1.2},{sel:false,fokus:{x:50,y:50},zoom:1},{sel:false,fokus:{x:50,y:50},zoom:1}
+    ],
+    cover: 0, aktivIdx: 0, previewFmt: '4:5',
+    channels: { live:true, ig:true, fb:false, webb:false },
+    liveOpen:false, liveMoment:'result', livePhoto:0, livePhase:'compose', liveStep:0, liveTest:false, liveOverlay:true,
+    match:'m1', resResult:'6–0', resMid:'3–0', resScorers:'Hansson 14′, Berg 23′, Hansson 41′, Ali 58′, Lund 67′, Åkesson 82′',
+    galleriUrl:'foto.skagenhav.se/mff-kdff-27jun', hemsidaUrl:'skagenhav.se/matcher/mff-kdff',
+    caption:'Stabil hemmaseger på {arena}! {resultat} mot {motståndare}. Mål: {målskyttar}. {@lag} {#liga} #dalecarliaphoto',
+    genRun:'idle', tone:'Neutral',
+    mpTab:'innehall',
+    chAntal:{ live:3, ig:10, fb:6 }, igVag:'direkt',
+    genPrompt:'', genAngles:{},
+    pubMats:[
+      { title:'Live-story · Resultat', meta:'IG Story · 27 jun 16:03', status:'publicerad' },
+      { title:'IG-inlägg · karusell 10 bilder', meta:'Instagram (direkt) · 27 jun 17:22', status:'publicerad' },
+      { title:'Facebook · 6 bilder', meta:'Facebook-sida · 27 jun 17:24', status:'publicerad' },
+      { title:'Matchpaket · text + 8 bilder', meta:'IG + FB · 21 jun 20:11', status:'utkast' }
+    ],
+    photoSource:'export', folderPath:'/Volumes/Foto/Matcher/2026-06-27 MFF-KDFF/export/',
+    ingestOpen:false, ingStep:0, ingCard:'NIKON Z 8 — /Volumes/NIKON Z 8', ingProtPath:'/Volumes/Foto/Export/2026-06-27 MFF-KDFF/', ingLrPath:'/Volumes/Foto/Matcher/2026-06-27 MFF-KDFF/export/', matchOpen:false, pagangOn:true, pagangFlash:false, formatByCh:{ live:'9:16', ig:'4:5', fb:'1:1', webb:'2:1' }
+  };
+  _ph(i){
+    const g=[['#3a4a57','#1e2830'],['#4a3a44','#241820'],['#3e4a3a','#1e2a1a'],['#4a4436','#26200f'],['#38424e','#1a222b'],['#463642','#22161f']];
+    const c=g[i%g.length];
+    return { background:'linear-gradient(150deg,'+c[0]+','+c[1]+')' };
+  }
+  // Crop-modell: varje FOTO bär sin egen fokus+zoom (satt i Steg 1). Klick väljer
+  // + gör fotot aktivt i crop-editorn; ✕ avmarkerar; omslag sätts i editorn.
+  valjAktiv(i){ this.setState(s=>{ const ph=s.photos.slice(); if(!ph[i].sel){ ph[i]={ ...ph[i], sel:true }; } let cover=s.cover; if(cover==null||!ph[cover]||!ph[cover].sel) cover=ph.findIndex(p=>p.sel); return { photos:ph, aktivIdx:i, cover }; }); }
+  avvalj(i){ this.setState(s=>{ const ph=s.photos.slice(); ph[i]={ ...ph[i], sel:false }; let cover=s.cover; if(cover===i) cover=ph.findIndex(p=>p.sel); let aktiv=s.aktivIdx; if(aktiv===i){ aktiv=ph.findIndex(p=>p.sel); if(aktiv<0) aktiv=null; } return { photos:ph, cover, aktivIdx:aktiv }; }); }
+  sattOmslag(i){ this.setState({ cover:i }); }
+  stega(d){ const s=this.state; const valda=s.photos.map((p,j)=>p.sel?j:-1).filter(j=>j>=0); if(!valda.length) return; const pos=valda.indexOf(s.aktivIdx); const ni=valda[((pos<0?0:pos)+d+valda.length)%valda.length]; this.setState({ aktivIdx:ni }); }
+  setPreviewFmt(f){ this.setState({ previewFmt:f }); }
+  setFokus(i,e){ const t=e&&e.currentTarget; if(!t||!t.getBoundingClientRect) return; const r=t.getBoundingClientRect(); let x=Math.round(((e.clientX-r.left)/r.width)*100), y=Math.round(((e.clientY-r.top)/r.height)*100); x=Math.max(0,Math.min(100,x)); y=Math.max(0,Math.min(100,y)); this.setState(s=>{ const ph=s.photos.slice(); ph[i]={ ...ph[i], fokus:{x,y} }; return { photos:ph }; }); }
+  setZoom(i,e){ const v=parseFloat((e&&e.target)?e.target.value:e)||1; this.setState(s=>{ const ph=s.photos.slice(); ph[i]={ ...ph[i], zoom:v }; return { photos:ph }; }); }
+  fokusNed(i,e){ try{ e.currentTarget.setPointerCapture(e.pointerId); }catch(_){ } this._drar=true; this.setFokus(i,e); }
+  fokusRor(i,e){ if(this._drar) this.setFokus(i,e); }
+  fokusUpp(){ this._drar=false; }
+  toggle(k){ this.setState(s=>({ channels:{ ...s.channels, [k]:!s.channels[k] } })); }
+  liveNow(){ this.setState({ liveOpen:true, livePhase:'compose', liveStep:0 }); }
+  liveClose(){ if(this._lt) clearInterval(this._lt); this.setState({ liveOpen:false }); }
+  liveSetMoment(k){ this.setState({ liveMoment:k }); }
+  liveSetOverlay(v){ this.setState({ liveOverlay:v }); }
+  liveSetPhoto(i){ this.setState({ livePhoto:i }); }
+  liveToggleTest(){ this.setState(s=>({ liveTest:!s.liveTest })); }
+  livePublish(){
+    if(this.state.liveTest){ this.setState({ livePhase:'done', liveStep:3 }); return; }
+    this.setState({ livePhase:'publishing', liveStep:0 });
+    if(this._lt) clearInterval(this._lt);
+    this._lt=setInterval(()=>{ this.setState(st=>{ const n=st.liveStep+1; if(n>=3){ clearInterval(this._lt); return { liveStep:3, livePhase:'done' }; } return { liveStep:n }; }); }, 750);
+  }
+  liveReset(){ if(this._lt) clearInterval(this._lt); this.setState({ livePhase:'compose', liveStep:0 }); }
+  ingestShow(){ this.setState({ ingestOpen:true }); }
+  ingestClose(){ this.setState({ ingestOpen:false }); }
+  ingStepAction(i){ if(this.state.ingStep===i) this.setState(s=>({ ingStep:s.ingStep+1 })); }
+  ingRestart(){ this.setState({ ingStep:0 }); }
+  pickCatalog(k){ const C={ folderPath:['/Volumes/Foto/Matcher/2026-06-27 MFF-KDFF/export/','/Users/skagen/Lightroom/Export/mff-kdff/','/Volumes/Foto/LR-export/2026-06-27/'], ingProtPath:['/Volumes/Foto/Export/2026-06-27 MFF-KDFF/','/Volumes/NIKON Z 8/skyddade/','/Users/skagen/Pictures/Export/mff-kdff/'], ingLrPath:['/Volumes/Foto/Matcher/2026-06-27 MFF-KDFF/export/','/Users/skagen/Lightroom/Export/mff-kdff/','/Volumes/Foto/LR-export/2026-06-27/'] }; const arr=C[k]||[]; if(!arr.length) return; const i=arr.indexOf(this.state[k]); const next=arr[(i+1)%arr.length]; this.setState({ [k]:next }); }
+  setField(k,e){ const v=(e&&e.target)?e.target.value:e; this.setState({ [k]:v }); }
+  // Beskärnings-geometri (speglar story_overlay.FORMAT_H): ram i procent av
+  // hela fotot, given fokuspunkt + zoom + målformat + fotots bredd/höjd-ratio.
+  _FMT_A(){ return { '9:16':9/16, '4:5':4/5, '1:1':1, '1.91:1':1.91, '2:1':2, '16:9':16/9 }; }
+  _ramFor(fokus,zoom,fmt,ratio){ const A=this._FMT_A(); const a=A[fmt]||1; let bw,bh; if(a>=ratio){ bw=100; bh=(ratio/a)*100; } else { bh=100; bw=(a/ratio)*100; } const w=bw/(zoom||1), h=bh/(zoom||1); const cl=(v,lo,hi)=>Math.max(lo,Math.min(hi,v)); return { w, h, l:cl((fokus.x||50)-w/2,0,100-w), t:cl((fokus.y||50)-h/2,0,100-h) }; }
+  setChFmt(ch,f){ this.setState(s=>({ formatByCh:{ ...s.formatByCh, [ch]:f } })); }
+  setChFmt2(){}
+  _profiles(){
+    return {
+      Fotboll:   { sport:'Fotboll', fixture:'Malmö FF – Kristianstad DFF', arena:'Eleda Stadion', homeAbbr:'MFF', awayAbbr:'KDF', gren:'Mixed',
+                   resLabel:'Slutresultat', resPh:'6–0', midLabel:'Halvtid', midPh:'3–0', hasScorers:true, scorersLabel:'Målgörare', scorersHint:'efternamn + minut',
+                   start:'Avspark', mid:'Halvtid', exRes:'6–0', exMid:'3–0', exScorers:'Hansson 14′, Berg 23′, Hansson 41′, Ali 58′, Lund 67′, Åkesson 82′', scorersPh:'Efternamn 14′, Efternamn 23′ …' },
+      Handboll:  { sport:'Handboll', fixture:'Sverige – Danmark', arena:'Malmö Arena', homeAbbr:'SWE', awayAbbr:'DEN', gren:'Herr',
+                   resLabel:'Slutresultat', resPh:'28–24', midLabel:'Halvtid', midPh:'14–11', hasScorers:true, scorersLabel:'Målgörare', scorersHint:'efternamn + antal mål',
+                   start:'Avkast', mid:'Halvtid', exRes:'28–24', exMid:'14–11', exScorers:'Blomqvist 6, Nord 5, Ek 4, Sundberg 3', scorersPh:'Efternamn 6, Efternamn 5 …' },
+      Volleyboll:{ sport:'Volleyboll', fixture:'Sverige – Italien', arena:'Scandinavium', homeAbbr:'SWE', awayAbbr:'ITA', gren:'Dam',
+                   resLabel:'Resultat i set', resPh:'3–1', midLabel:'Setsiffror', midPh:'25–21, 23–25, 25–19, 25–17', hasScorers:false, scorersLabel:'', scorersHint:'',
+                   start:'Matchstart', mid:'Mellan set', exRes:'3–1', exMid:'25–21, 23–25, 25–19, 25–17', exScorers:'', scorersPh:'' },
+      Innebandy: { sport:'Innebandy', fixture:'Storvreta – Falun', arena:'IFU Arena', homeAbbr:'STO', awayAbbr:'FAL', gren:'Herr',
+                   resLabel:'Slutresultat', resPh:'4–1', midLabel:'Periodsiffror', midPh:'1–0, 2–1, 1–0', hasScorers:true, scorersLabel:'Målgörare', scorersHint:'efternamn + minut',
+                   start:'Nedsläpp', mid:'Periodpaus', exRes:'4–1', exMid:'1–0, 2–1, 1–0', exScorers:'Lund 08′, Ek 24′, Lund 41′, Sundström 55′', scorersPh:'Efternamn 08′, Efternamn 24′ …' },
+      Tennis:    { sport:'Tennis', fixture:'Ek – Ruud', arena:'Båstad', homeAbbr:'EK', awayAbbr:'RUU', gren:'Herr',
+                   resLabel:'Resultat i set', resPh:'2–1', midLabel:'Gamesiffror', midPh:'6–4, 3–6, 7–5', hasScorers:false, scorersLabel:'', scorersHint:'',
+                   start:'Matchstart', mid:'Mellan set', exRes:'2–1', exMid:'6–4, 3–6, 7–5', exScorers:'', scorersPh:'' }
+    };
+  }
+  _matches(){
+    return [
+      { key:'m1', fixture:'Malmö FF – Kristianstad DFF', arena:'Eleda Stadion', homeAbbr:'MFF', awayAbbr:'KDF', gren:'Mixed', sport:'Fotboll', date:'27 jun', result:'6–0' },
+      { key:'m2', fixture:'FC Rosengård – Malmö FF', arena:'Malmö IP', homeAbbr:'FCR', awayAbbr:'MFF', gren:'Dam', sport:'Fotboll', date:'21 jun', result:'1–2' },
+      { key:'m3', fixture:'Sverige – Danmark', arena:'Malmö Arena', homeAbbr:'SWE', awayAbbr:'DEN', gren:'Herr', sport:'Handboll', date:'14 jun', result:'28–24' },
+      { key:'m4', fixture:'Sverige – Italien', arena:'Scandinavium', homeAbbr:'SWE', awayAbbr:'ITA', gren:'Dam', sport:'Volleyboll', date:'21 aug', result:'3–1' },
+      { key:'m5', fixture:'Storvreta – Falun', arena:'IFU Arena', homeAbbr:'STO', awayAbbr:'FAL', gren:'Herr', sport:'Innebandy', date:'4 jul', result:'' },
+      // p.5: heldagsevent = "match utan motståndare" — samma flöde, samma kanaler
+      { key:'e1', fixture:'Partille Cup', arena:'Göteborg', homeAbbr:'PC', awayAbbr:'', gren:'Mixed', sport:'Fotboll', date:'6–11 jul', result:'', event:true }
+    ];
+  }
+  _match(){ return this._matches().find(m=>m.key===this.state.match) || this._matches()[0]; }
+  _prof(){ const m=this._match(); const model=this._profiles()[m.sport] || this._profiles().Fotboll; return { ...model, ...m }; }
+  setMatch(key){ const m=this._matches().find(x=>x.key===key); if(!m) return; const model=this._profiles()[m.sport]||this._profiles().Fotboll; const played=!!m.result;
+    this.setState({ match:key, resResult: played?m.result:'', resMid: played?model.exMid:'', resScorers: played?model.exScorers:'', liveMoment:'result' }); }
+  matchToggle(){ this.setState(s=>({ matchOpen:!s.matchOpen })); }
+  matchPick(key){ this.setMatch(key); this.setState({ matchOpen:false }); }
+  // ---- Bildtext (§24/§25): state-bunden text, Generera med progress, token-infogning med undo, realtidspreview ----
+  setCaption(e){ const v=(e&&e.target)?e.target.value:e; this.setState({ caption:v }); }
+  setTone(t){ this.setState({ tone:t }); }
+  capRef(el){ this._capEl=el; }
+  insertToken(tok){
+    const el=this._capEl;
+    if(el && typeof document!=='undefined' && document.execCommand){
+      el.focus();
+      try{ document.execCommand('insertText', false, tok); return; }catch(_){ }
+    }
+    // Fallback (bevarar inte undo): lägg vid slutet
+    this.setState(st=>({ caption:(st.caption||'')+tok }));
+  }
+  _tokenList(){
+    const toks=['{resultat}','{målskyttar}','{arena}','{@lag}','{galleri}','{hemsida}'];
+    return toks.map(t=>({ label:t, ins:()=>this.insertToken(t) }));
+  }
+  genCaption(){
+    this.setState({ genRun:'gen' });
+    if(this._gt) clearTimeout(this._gt);
+    this._gt=setTimeout(()=>{
+      const T=this.state.tone||'Neutral';
+      const built=({
+        Neutral:'Full poäng på {arena}! {resultat} mot {motståndare} — mål av {målskyttar}. Fler bilder → {galleri} {@lag} {#liga} #dalecarliaphoto',
+        Peppig:'VILKEN KVÄLL på {arena}! {resultat} mot {motståndare} — {målskyttar} bjöd på show! Fler bilder → {galleri} {@lag} {#liga} #dalecarliaphoto',
+        Kort:'{resultat} mot {motståndare} på {arena}. {@lag} {#liga} #dalecarliaphoto'
+      })[T];
+      this.setState({ caption:built, genRun:'done' });
+      this._capEl=this._capEl; // behåll ref
+      if(this._gt2) clearTimeout(this._gt2);
+      this._gt2=setTimeout(()=>this.setState({ genRun:'idle' }), 1800);
+    }, 950);
+  }
+  _slug(x){ return String(x||'').toLowerCase().replace(/[åä]/g,'a').replace(/ö/g,'o').replace(/[^a-z0-9]+/g,''); }
+  _resolveCaption(str){
+    const m=this._match(); const s=this.state;
+    const parts=(m.fixture||'').split(/\s+–\s+/); const home=parts[0]||m.fixture||''; const away=parts[1]||'';
+    const map={
+      '{arena}':m.arena||'', '{resultat}':s.resResult||m.result||'', '{motståndare}':away,
+      '{målskyttar}':s.resScorers||'', '{@lag}':'@'+this._slug(home), '{#liga}':'#'+this._slug(m.sport),
+      '{galleri}':s.galleriUrl||'', '{hemsida}':s.hemsidaUrl||''
+    };
+    return String(str||'').replace(/\{[^}]+\}/g, t=> map[t]!=null?map[t]:t);
+  }
+  _stripSocial(str){ return String(str||'').replace(/[@#][\wåäöÅÄÖ]+/g,'').replace(/[ \t]{2,}/g,' ').replace(/ +([.!,])/g,'$1').trim(); }
+  togglePagang(){ this.setState(s=>({ pagangOn:!s.pagangOn })); }
+  pagangUpdate(){ this.setState({ pagangFlash:true }); if(this._pgf) clearTimeout(this._pgf); this._pgf=setTimeout(()=>this.setState({ pagangFlash:false }), 1600); }
+  setMpTab(t){ this.setState({ mpTab:t }); }
+  _igCap(){ return this.state.igVag==='disk' ? 20 : 10; }
+  antalAdj(ch,d){ const caps={ live:10, ig:this._igCap(), fb:20 }; this.setState(s=>({ chAntal:{ ...s.chAntal, [ch]: Math.max(1, Math.min(caps[ch], (s.chAntal[ch]||1)+d)) } })); }
+  setIgVag(v){ this.setState(s=>({ igVag:v, chAntal:{ ...s.chAntal, ig: Math.min(s.chAntal.ig, v==='disk'?20:10) } })); }
+  togAngle(k){ this.setState(s=>({ genAngles:{ ...s.genAngles, [k]:!s.genAngles[k] } })); }
+  renderVals(){
+    const s=this.state;
+    const photos=s.photos.map((p,i)=>({
+      sel:p.sel, isCover:p.sel && s.cover===i,
+      pick:()=>this.valjAktiv(i), remove:(e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); this.avvalj(i); },
+      style:{ position:'relative', aspectRatio:'4/5', borderRadius:'6px', cursor:'pointer',
+        outline: (s.aktivIdx===i&&p.sel)?'3px solid #F0B45A':(p.sel?'2px solid #F0B45A':'1px solid rgba(255,255,255,.1)'),
+        boxShadow: (s.aktivIdx===i&&p.sel)?'0 0 0 2px rgba(240,180,90,.35)':'none',
+        opacity: p.sel?1:.5, ...this._ph(i) }
+    }));
+    const selCount=s.photos.filter(p=>p.sel).length;
+    // ---- Bild-källa: Lightroom-exporten i Dropbox (de redigerade bilderna), eller peka på annan mapp ----
+    const srcOrder=[['export','Från Lightroom (Dropbox)'],['mapp','Annan mapp']];
+    const srcSeg=(on)=>({ padding:'6px 11px', borderRadius:'6px', border:'none', fontSize:'11.5px', fontWeight:on?600:500, fontFamily:'inherit', cursor:'pointer', background:on?'#1b2028':'transparent', color:on?'#f3f5f7':'rgba(243,245,247,.6)' });
+    const srcModes=srcOrder.map(pr=>({ key:pr[0], label:pr[1], set:()=>this.setField('photoSource',pr[0]), style:srcSeg(s.photoSource===pr[0]) }));
+    const srcInfoMap={ export:'18 redigerade bilder i katalogen · '+this._prof().fixture, mapp:'24 bilder i katalogen' };
+    const srcInfo=srcInfoMap[s.photoSource]||'';
+    const srcIsFolder=s.photoSource==='mapp';
+    const srcIsInherited=s.photoSource!=='mapp';
+    // ---- Hämta bilder: minneskort → Lightroom → export → läs in (urval) ----
+    const ingStep=s.ingStep;
+    const st2Done=ingStep>=1, st3Done=ingStep>=2, st4Done=ingStep>=3;
+    const ingBadge=(state)=>({ width:'25px', height:'25px', borderRadius:'50%', flex:'none', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Saira Condensed'", fontSize:'13px', fontWeight:'700', marginTop:'1px',
+      background: state==='done'?'#6FB35A':(state==='active'?'#F0B45A':'#1b2028'), color: state==='pending'?'rgba(243,245,247,.4)':'#0a0d11' });
+    const ingBtn=(active)=>({ background: active?'#F0B45A':'#12151b', color: active?'#100c05':'rgba(243,245,247,.4)', border: active?'none':'1px solid rgba(255,255,255,.1)', borderRadius:'8px', padding:'9px 14px', fontSize:'12.5px', fontWeight:'600', fontFamily:'inherit', cursor: active?'pointer':'default' });
+    const st2s=st2Done?'done':(ingStep===0?'active':'pending');
+    const st3s=st3Done?'done':(ingStep===1?'active':'pending');
+    const st4s=st4Done?'done':(ingStep===2?'active':'pending');
+    const ch=s.channels;
+    const card=(on)=>({ flex:'1 1 210px', minWidth:'200px', background:'#12151b', borderRadius:'13px', padding:'15px 16px', cursor:'pointer',
+      border: on?'1px solid rgba(240,180,90,.45)':'1px solid rgba(255,255,255,.08)', opacity: on?1:.5, transition:'opacity .15s' });
+    const cardWide=(on)=>({ ...card(on), flexBasis:'100%' });
+    const chk=(on)=>({ width:'20px', height:'20px', borderRadius:'6px', display:'flex', alignItems:'center', justifyContent:'center', flex:'none', fontSize:'12px', fontWeight:'700',
+      background: on?'#F0B45A':'transparent', color: on?'#100c05':'transparent', border: on?'none':'1.6px solid rgba(255,255,255,.25)' });
+    const names=[]; if(ch.live)names.push('Live-story'); if(ch.ig)names.push('IG-inlägg'); if(ch.fb)names.push('Facebook'); if(ch.webb)names.push('Webbartikel');
+    const cnt=names.length;
+
+    // ---- Live nu — snabbflöde ----
+    const prof=this._prof();
+    const fixture=prof.fixture;
+    const GRENC={ Dam:{c:'#8E5A86',soft:'rgba(142,90,134,.16)',b:'rgba(142,90,134,.5)',glow:'rgba(142,90,134,.5)',w:'dam'}, Herr:{c:'#3E7C87',soft:'rgba(62,124,135,.16)',b:'rgba(62,124,135,.5)',glow:'rgba(62,124,135,.5)',w:'herr'}, Mixed:{c:'#6E8757',soft:'rgba(110,135,87,.16)',b:'rgba(110,135,87,.5)',glow:'rgba(110,135,87,.5)',w:'mixed'} };
+    const gc=GRENC[prof.gren]||GRENC.Mixed;
+    const grenLabel='gren: '+gc.w;
+    const grenChipStyle={ display:'inline-flex', alignItems:'center', gap:'6px', fontSize:'10.5px', fontWeight:'600', color:gc.c, background:gc.soft, border:'1px solid '+gc.b, borderRadius:'999px', padding:'4px 11px', whiteSpace:'nowrap' };
+    const grenDotStyle={ width:'8px', height:'8px', borderRadius:'2px', background:gc.c, flex:'none' };
+    const resStripStyle={ display:'flex', alignItems:'center', gap:'14px', flexWrap:'wrap', background:'#12151b', border:'1px solid rgba(255,255,255,.09)', borderLeft:'4px solid '+gc.c, borderRadius:'12px', padding:'12px 16px', marginBottom:'24px' };
+    const livePrevFrame={ display:'inline-block', borderRadius:'14px', border:'3px solid '+gc.c, boxShadow:'0 0 20px '+gc.glow };
+    const _curM=this._match();
+    const matchMeta=_curM.date+' · '+(_curM.event?'Heldagsevent':(_curM.result||'Kommande'));
+    const matchList=this._matches().map(m=>{ const g=GRENC[m.gren]||GRENC.Mixed; const played=!!m.result; const on=m.key===s.match; return {
+      key:m.key, fixture:m.fixture, dateSport:m.date+' · '+(m.event?'Heldagsevent':m.sport), played, notPlayed:!played, komLabel:m.event?'Event':'Kommande', result:m.result, grenW:g.w,
+      pick:()=>this.matchPick(m.key),
+      rowStyle:{ display:'flex', alignItems:'center', gap:'11px', padding:'10px 13px', cursor:'pointer', background:on?'rgba(240,180,90,.12)':'transparent' },
+      grenDot:{ width:'9px', height:'9px', borderRadius:'2px', background:g.c, flex:'none' } }; });
+    // ---- På gång (webb): kommande matcher som schema-modul ----
+    const pagangData=[
+      {day:'04', mon:'JUL', fixture:'FC Rosengård – Malmö FF', league:'OBOS Damallsvenskan', gren:'Dam'},
+      {day:'12', mon:'JUL', fixture:'Malmö FF – Hammarby IF', league:'OBOS Damallsvenskan', gren:'Dam'},
+      {day:'21', mon:'AUG', fixture:'Sverige – Italien', league:'EM Volleyboll', gren:'Dam'},
+      {day:'02', mon:'SEP', fixture:'Sverige – Danmark', league:'Landskamp herr', gren:'Herr'}
+    ];
+    const pagangList=pagangData.map(p=>{ const g=GRENC[p.gren]||GRENC.Mixed; return { day:p.day, mon:p.mon, fixture:p.fixture, league:p.league, grenW:g.w, grenDot:{ width:'9px', height:'9px', borderRadius:'2px', background:g.c, flex:'none' } }; });
+    const pagangCount=pagangData.length;
+    const pagangToggleBox={ width:'17px', height:'17px', borderRadius:'5px', flex:'none', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:'700', background:s.pagangOn?'#F0B45A':'transparent', color:s.pagangOn?'#100c05':'transparent', border:s.pagangOn?'none':'1.5px solid rgba(255,255,255,.28)' };
+
+    const momList=[ {k:'start',label:prof.start}, {k:'mid',label:prof.mid} ];
+    if(prof.hasScorers) momList.push({k:'scorer',label:'Målgörare'});
+    momList.push({k:'result',label:'Resultat'});
+    const curMom = momList.some(m=>m.k===s.liveMoment) ? s.liveMoment : 'result';
+    const liveMomChips=momList.map(m=>{ const on=curMom===m.k; return { key:m.k, label:m.label, set:()=>this.liveSetMoment(m.k),
+      style:{ flex:'1', textAlign:'center', padding:'10px 6px', borderRadius:'9px', fontSize:'12px', fontWeight:on?700:600, fontFamily:'inherit', cursor:'pointer',
+        background:on?'#F0B45A':'#12151b', color:on?'#100c05':'rgba(243,245,247,.7)', border:on?'none':'1px solid rgba(255,255,255,.1)' } }; });
+    const firstScorer=(s.resScorers||'').split(',')[0].trim();
+    const MOM={
+      start:{ kick:prof.start.toUpperCase(), big:'14:00', small:fixture },
+      mid:{ kick:prof.midLabel.toUpperCase(), big:(s.resMid||prof.midPh), small:fixture },
+      scorer:{ kick:'MÅL', big:(firstScorer||'MÅL'), small:fixture },
+      result:{ kick:(prof.resLabel||'Resultat').toUpperCase(), big:(s.resResult||prof.resPh), small:fixture }
+    };
+    const livePhotos=[0,1,2,3,4,5,6,7].map(i=>({ i, sel:s.livePhoto===i, newest:i===0, pick:()=>this.liveSetPhoto(i),
+      style:{ position:'relative', width:'58px', height:'82px', flex:'none', borderRadius:'7px', cursor:'pointer',
+        outline:s.livePhoto===i?'2px solid #F0B45A':'1px solid rgba(255,255,255,.1)', outlineOffset:'0', opacity:s.livePhoto===i?1:.55, ...this._ph(i) } }));
+
+    const mc=MOM[curMom]||MOM.result;
+    const livePrevBg={ ...this._ph(s.livePhoto), position:'absolute', top:'0', left:'0', width:'100%', height:'100%' };
+
+    // ── Crop-modell: beskärning per FOTO (Steg 1) · kanalerna (Steg 2) = låsta previews ──
+    const _ratio=1.5; // nominellt liggande foto-förhållande för platshållar-gradienterna
+    const _valda=s.photos.map((p,j)=>p.sel?j:-1).filter(j=>j>=0);
+    const _grad=(i)=>this._ph(i).background;
+    const _ramStyle=(ram)=>({ position:'absolute', left:ram.l+'%', top:ram.t+'%', width:ram.w+'%', height:ram.h+'%', border:'2px solid '+gc.c, borderRadius:'3px', boxShadow:'0 0 14px '+gc.glow+', 0 0 0 9999px rgba(7,9,12,.6)', pointerEvents:'none', transition:'left .08s ease-out, top .08s ease-out, width .08s ease-out, height .08s ease-out' });
+    const _aktiv=(s.aktivIdx!=null && s.photos[s.aktivIdx] && s.photos[s.aktivIdx].sel) ? s.photos[s.aktivIdx] : null;
+    let cropEditorVals={ hasAktiv:false };
+    if(_aktiv){
+      const ram=this._ramFor(_aktiv.fokus||{x:50,y:50}, _aktiv.zoom||1, s.previewFmt, _ratio);
+      const posInSel=_valda.indexOf(s.aktivIdx);
+      const isCover=s.cover===s.aktivIdx;
+      const seg=(on)=>({ padding:'3px 9px', borderRadius:'6px', border:'none', fontSize:'10px', fontWeight:on?700:600, fontFamily:'inherit', cursor:'pointer', background:on?'#F0B45A':'#12151b', color:on?'#100c05':'rgba(243,245,247,.6)' });
+      cropEditorVals={
+        hasAktiv:true,
+        cropCaption:'Beskärning · bild '+(posInSel+1)+' av '+_valda.length,
+        cropPrev:()=>this.stega(-1), cropNext:()=>this.stega(1),
+        cropNavStyle:{ width:'26px', height:'26px', borderRadius:'7px', border:'1px solid rgba(255,255,255,.14)', background:'#12151b', color:'#f3f5f7', fontSize:'15px', fontWeight:'700', cursor:'pointer', fontFamily:'inherit' },
+        cropCoverToggle:()=>this.sattOmslag(s.aktivIdx),
+        cropCoverLabel: isCover?'★ Omslag':'☆ Sätt som omslag',
+        cropCoverStyle:{ border:'1px solid '+(isCover?'rgba(240,180,90,.5)':'rgba(255,255,255,.14)'), background:isCover?'rgba(240,180,90,.14)':'#12151b', color:isCover?'#F0B45A':'rgba(243,245,247,.6)', borderRadius:'7px', padding:'5px 11px', fontSize:'11.5px', fontWeight:'600', cursor:'pointer', fontFamily:'inherit' },
+        cropDown:(e)=>this.fokusNed(s.aktivIdx,e), cropMove:(e)=>this.fokusRor(s.aktivIdx,e), cropUp:()=>this.fokusUpp(),
+        cropImg:{ position:'absolute', inset:'0', background:_grad(s.aktivIdx) },
+        cropRam:_ramStyle(ram),
+        cropDot:{ position:'absolute', left:(_aktiv.fokus?_aktiv.fokus.x:50)+'%', top:(_aktiv.fokus?_aktiv.fokus.y:50)+'%', width:'16px', height:'16px', marginLeft:'-8px', marginTop:'-8px', borderRadius:'50%', border:'2px solid #fff', boxShadow:'0 0 0 1.5px rgba(0,0,0,.5), 0 1px 4px rgba(0,0,0,.4)', zIndex:6, pointerEvents:'none' },
+        cropFmtChips:['9:16','4:5','1:1','2:1'].map(f=>({ label:f, set:()=>this.setPreviewFmt(f), style:seg(s.previewFmt===f) })),
+        cropZoom:(_aktiv.zoom||1), cropZoomPct:Math.round((_aktiv.zoom||1)*100), cropSetZoom:(e)=>this.setZoom(s.aktivIdx,e)
+      };
+    }
+    const _coverIdx=(s.cover!=null && s.photos[s.cover] && s.photos[s.cover].sel) ? s.cover : (_valda.length?_valda[0]:0);
+    const _cover=s.photos[_coverIdx] || { fokus:{x:50,y:50}, zoom:1 };
+    const _coverGrad=_grad(_coverIdx);
+    const seg2=(on)=>({ padding:'3px 8px', borderRadius:'6px', border:'none', fontSize:'10px', fontWeight:on?700:600, fontFamily:'inherit', cursor:'pointer', background:on?'#F0B45A':'#12151b', color:on?'#100c05':'rgba(243,245,247,.6)' });
+    const chanPrev=(chKey,formats,hint)=>{ const fmt=(s.formatByCh||{})[chKey]||formats[0]; const ram=this._ramFor(_cover.fokus||{x:50,y:50}, _cover.zoom||1, fmt, _ratio); return {
+      multi: formats.length>1,
+      fmtChips: formats.map(f=>({ label:f, set:()=>this.setChFmt(chKey,f), style:seg2(((s.formatByCh||{})[chKey]||formats[0])===f) })),
+      box:{ position:'relative', width:'100%', aspectRatio:'3/2', borderRadius:'8px', overflow:'hidden', background:'#141a20' },
+      img:{ position:'absolute', inset:'0', background:_coverGrad },
+      ram:_ramStyle(ram),
+      hint: hint+' · '+fmt.replace(':','∶') }; };
+    const prevLive=chanPrev('live',['9:16'],'Omslaget med overlay');
+    const prevIg=chanPrev('ig',['4:5','1:1'],'Omslag + valda foton, var sin crop');
+    const prevFb=chanPrev('fb',['1:1','4:5','1.91:1'],'Omslag + valda foton, var sin crop');
+    const prevWebb=chanPrev('webb',['2:1','16:9'],'Omslaget som hero');
+
+    // ---- Flikar (p.1) + kanalinställningar (p.3/p.4) + Claude-inspel (p.6) ----
+    const _mpTabBtn=(on)=>({ flex:1, padding:'9px 14px', borderRadius:'8px', border:'none', fontSize:'12.5px', fontWeight:on?700:600, fontFamily:'inherit', cursor:'pointer', background:on?'#F0B45A':'transparent', color:on?'#100c05':'rgba(243,245,247,.6)' });
+    const mpTabs=[['innehall','1 · Innehåll'],['kanaler','2 · Kanaler & publicera'],['publicerat','Publicerat']].map(pr=>({ label:pr[1], set:()=>this.setMpTab(pr[0]), style:_mpTabBtn(s.mpTab===pr[0]) }));
+    const antBtn={ width:'22px', height:'22px', borderRadius:'6px', border:'1px solid rgba(255,255,255,.18)', background:'#0e1217', color:'#f3f5f7', fontSize:'13px', fontWeight:700, fontFamily:'inherit', cursor:'pointer', padding:0, lineHeight:1 };
+    const _vagRow=(on)=>({ display:'flex', alignItems:'center', gap:'8px', border:'1px solid '+(on?'rgba(240,180,90,.5)':'rgba(255,255,255,.1)'), background:on?'rgba(240,180,90,.08)':'transparent', borderRadius:'8px', padding:'6px 9px', fontSize:'11px', color:on?'#f3f5f7':'rgba(243,245,247,.55)', cursor:'pointer' });
+    const _vagDot=(on)=>({ width:'12px', height:'12px', borderRadius:'50%', flex:'none', border:on?'4px solid #F0B45A':'1.5px solid rgba(255,255,255,.3)', background:'transparent' });
+    const ANGLES=[['stamning','Stämning'],['matchfakta','Matchfakta'],['vinkel','Vinkel'],['publik','Publiken']];
+    const genAngleChips=ANGLES.map(pr=>{ const on=!!s.genAngles[pr[0]]; return { label:pr[1], set:()=>this.togAngle(pr[0]), style:{ fontSize:'10.5px', background:on?'rgba(240,180,90,.16)':'transparent', border:'1px '+(on?'solid rgba(240,180,90,.55)':'dashed rgba(255,255,255,.2)'), color:on?'#F0B45A':'rgba(243,245,247,.55)', borderRadius:'6px', padding:'3px 9px', cursor:'pointer', fontFamily:'inherit' } }; });
+    const pubRows=s.pubMats.map(p=>{ const pubbed=p.status==='publicerad'; return { title:p.title, meta:p.meta, status:pubbed?'Publicerad':'Utkast',
+      dot:{ width:'9px', height:'9px', borderRadius:'50%', flex:'none', background:pubbed?'#6FB35A':'#E0A341' },
+      pill:{ fontSize:'10px', fontWeight:700, letterSpacing:'.04em', textTransform:'uppercase', color:pubbed?'#6FB35A':'#E0A341', border:'1px solid '+(pubbed?'rgba(111,179,90,.4)':'rgba(224,163,65,.4)'), borderRadius:'999px', padding:'2px 9px', flex:'none' } }; });
+
+    return {
+      ...cropEditorVals, prevLive, prevIg, prevFb, prevWebb,
+      mpTabs, mpTabInnehall:s.mpTab==='innehall', mpTabKanaler:s.mpTab==='kanaler', mpTabPublicerat:s.mpTab==='publicerat', mpNotPublicerat:s.mpTab!=='publicerat',
+      antBtn, antLive:s.chAntal.live, antIg:s.chAntal.ig, antFb:s.chAntal.fb,
+      antLiveMinus:()=>this.antalAdj('live',-1), antLivePlus:()=>this.antalAdj('live',1),
+      antIgMinus:()=>this.antalAdj('ig',-1), antIgPlus:()=>this.antalAdj('ig',1),
+      antFbMinus:()=>this.antalAdj('fb',-1), antFbPlus:()=>this.antalAdj('fb',1),
+      igVagDirekt:()=>this.setIgVag('direkt'), igVagDisk:()=>this.setIgVag('disk'),
+      igVagDirektStyle:_vagRow(s.igVag==='direkt'), igVagDiskStyle:_vagRow(s.igVag==='disk'),
+      igVagDirektDot:_vagDot(s.igVag==='direkt'), igVagDiskDot:_vagDot(s.igVag==='disk'),
+      igCapHint:'max '+this._igCap()+(s.igVag==='disk'?' · till disk':' · direkt'),
+      genAngleChips, genPrompt:s.genPrompt, setGenPrompt:(e)=>this.setField('genPrompt',e),
+      pubRows,
+      photos, selCount, srcModes, srcInfo, srcIsFolder, srcIsInherited, folderPath:s.folderPath, setFolder:(e)=>this.setField('folderPath',e), chooseFolder:()=>this.pickCatalog('folderPath'),
+      ingestOpen:s.ingestOpen, ingestShow:()=>this.ingestShow(), ingestClose:()=>this.ingestClose(), ingRestart:()=>this.ingRestart(),
+      ingCard:s.ingCard, setIngCard:(e)=>this.setField('ingCard',e), ingUrvalReady:st3Done, pickProt:()=>this.pickCatalog('ingProtPath'), pickLr:()=>this.pickCatalog('ingLrPath'),
+      ingProtPath:s.ingProtPath, setIngProt:(e)=>this.setField('ingProtPath',e), ingLrPath:s.ingLrPath, setIngLr:(e)=>this.setField('ingLrPath',e),
+      ingBadge1:ingBadge('done'), ingBadge2:ingBadge(st2s), ingBadge3:ingBadge(st3s),
+      ingChar2: st2Done?'✓':'2', ingChar3: st3Done?'✓':'3',
+      ingBtn2:ingBtn(ingStep===0), ingBtn3:ingBtn(ingStep===1),
+      ingBtn2Label: st2Done?'✓ Exporterat · öppnat i Lightroom':'Exportera skyddade + öppna i Lightroom →',
+      ingBtn3Label: st3Done?'✓ 18 redigerade bilder inlästa':'Läs in redigerade →',
+      doImport:()=>this.ingStepAction(0), doLoad:()=>this.ingStepAction(1),
+      tLive:()=>this.toggle('live'), tIg:()=>this.toggle('ig'), tFb:()=>this.toggle('fb'), tWebb:()=>this.toggle('webb'),
+      liveNow:()=>this.liveNow(),
+      cLive:card(ch.live), cIg:card(ch.ig), cFb:card(ch.fb), cWebb:cardWide(ch.webb),
+      chkLive:chk(ch.live), chkIg:chk(ch.ig), chkFb:chk(ch.fb), chkWebb:chk(ch.webb),
+      sendCount:cnt, sendWord: cnt===1?'kanal':'kanaler', sendList: cnt?names.join(' · '):'Inga kanaler valda',
+      liveOpen:s.liveOpen, liveClosed:!s.liveOpen, liveClose:()=>this.liveClose(),
+      liveComposing:s.livePhase==='compose', livePublishing:s.livePhase==='publishing', liveDone:s.livePhase==='done',
+      liveTest:s.liveTest, liveLive:!s.liveTest, liveToggleTest:()=>this.liveToggleTest(),
+      liveTestBox:{ width:'17px', height:'17px', borderRadius:'5px', flex:'none', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:'700', background:s.liveTest?'#F0B45A':'transparent', color:s.liveTest?'#100c05':'transparent', border:s.liveTest?'none':'1.5px solid rgba(255,255,255,.28)' },
+      livePubLabel: s.liveTest?'Skapa testfil':'Publicera story',
+      liveSteps: [[s.liveOverlay===false?'Renderar 9:16 — utan overlay':'Renderar 9:16 server-side', s.liveOverlay===false?'Renderad — 9:16 utan overlay':'Renderad — 9:16 skarp'],['Publicerar som IG Story','Publicerad som IG Story'],['Sparar i Dropbox + som material','Sparad i Dropbox + material']].map((d,i)=>{ const done=s.livePhase==='done'||s.liveStep>i; const active=s.livePhase==='publishing'&&s.liveStep===i; return { label: done?d[1]:d[0], done, active, pending:!done&&!active,
+        dot:{ width:'18px', height:'18px', borderRadius:'50%', flex:'none', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'700', background: done?'#6FB35A':(active?'#F0B45A':'transparent'), color:(done||active)?'#0a0d11':'transparent', border:(done||active)?'none':'1.5px solid rgba(255,255,255,.2)' },
+        labelStyle:{ fontSize:'12.5px', color: done?'rgba(243,245,247,.85)':(active?'#f3f5f7':'rgba(243,245,247,.4)') } }; }),
+      livePath:'/Dropbox/DPT/Live/'+prof.homeAbbr.toLowerCase()+'-'+curMom+'.jpg',
+      liveChannel:'@skagenhav',
+      liveMomChips, livePhotos, livePublish:()=>this.livePublish(), liveReset:()=>this.liveReset(),
+      liveOvOn:s.liveOverlay!==false, liveOvOff:s.liveOverlay===false,
+      liveOvChips:[[true,'Med overlay'],[false,'Utan overlay']].map(pr=>{ const on=(s.liveOverlay!==false)===pr[0]; return { label:pr[1], set:()=>this.liveSetOverlay(pr[0]), style:{ padding:'4px 10px', borderRadius:'6px', border:'none', fontSize:'10px', fontWeight:on?700:600, fontFamily:'inherit', cursor:'pointer', background:on?'#F0B45A':'transparent', color:on?'#100c05':'rgba(243,245,247,.55)' } }; }),
+      livePrevBg, livePrevKick:mc.kick, livePrevBig:mc.big, livePrevSmall:mc.small,
+      resResult:s.resResult, resMid:s.resMid, resScorers:s.resScorers, galleriUrl:s.galleriUrl, hemsidaUrl:s.hemsidaUrl,
+      setResResult:(e)=>this.setField('resResult',e), setResMid:(e)=>this.setField('resMid',e), setResScorers:(e)=>this.setField('resScorers',e),
+      matchFixture:fixture, matchMeta, matchList, matchOpen:s.matchOpen, matchToggle:()=>this.matchToggle(),
+      pagangList, pagangCount, pagangOn:s.pagangOn, pagangToggle:()=>this.togglePagang(), pagangToggleBox, pagangUpdate:()=>this.pagangUpdate(), pagangFlash:s.pagangFlash,
+      sportName:prof.sport, fixture, arena:prof.arena, homeAbbr:prof.homeAbbr, awayAbbr:prof.awayAbbr,
+      grenLabel, grenChipStyle, grenDotStyle, resStripStyle, livePrevFrame,
+      midLabel:prof.midLabel, midPh:prof.midPh, resPh:prof.resPh, hasScorers:prof.hasScorers, noScorers:!prof.hasScorers,
+      scorersLabel:prof.scorersLabel, scorersHint:prof.scorersHint, scorersPh:prof.scorersPh,
+      setGalleri:(e)=>this.setField('galleriUrl',e), setHemsida:(e)=>this.setField('hemsidaUrl',e),
+      caption:s.caption, setCaption:(e)=>this.setCaption(e), capRef:(el)=>this.capRef(el),
+      genCaption:()=>this.genCaption(), genIdle:s.genRun==='idle', genBusy:s.genRun==='gen', genDone:s.genRun==='done',
+      tone:s.tone, toneChips:['Neutral','Peppig','Kort'].map(t=>({ label:t, set:()=>this.setTone(t), style: s.tone===t ? { background:'#F0B45A', color:'#100c05', border:'none', borderRadius:'999px', padding:'3px 10px', fontSize:'10.5px', fontWeight:700, fontFamily:'inherit', cursor:'pointer' } : { background:'#12151b', color:'rgba(243,245,247,.6)', border:'1px solid rgba(255,255,255,.14)', borderRadius:'999px', padding:'3px 10px', fontSize:'10.5px', fontWeight:600, fontFamily:'inherit', cursor:'pointer' } })),
+      insertTokens:this._tokenList(), captionResolved:this._resolveCaption(s.caption), captionWeb:this._stripSocial(this._resolveCaption(s.caption))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -79,10 +79,22 @@ Per event, styrt av `pagang_lage` (default `auto`):
 
 - NYA collections: `liga/`, `event/` (ersätter `tavling/`), `individ/`, `kategori/` (underkategorier).
 - Match: `liga: <ref|null>`, `event: <ref|null>` (ersätter `tavling:`).
-- Event: `typ`, `period`, `ort`, `arena`, `liga?`, `kalender`, `pagang_lage: auto|heldag|matcher`, `grenar[]`, `deltagare[{individ, grenar[]}]`.
+- Event: `typ`, `period`, `ort`, `arena`, `liga?`, `kalender`, `pagang_lage: auto|heldag|matcher`, `grenar[]` (nu med `pass[{namn, datum, tid, plats?}]`), `hallpunkter[]` (fria, valfria), `deltagare[{individ, grenar[]}]`.
 - Bild (urval/leverans): `ios_bakgrund: bool`.
 - Inställningar: `mapp_snabbplock`, `mapp_gallring`, `mapp_media`.
 - iOS: UserDefaults för restid-override per event (deltillfälle-id eller klockslag; nollas när tillfället passerat).
+
+## §8 · Tidsatt program / deltillfällen — NY (spec: `DATAMODELL v5.md` → Program/deltillfällen)
+
+Mockupen `DPT iOS v2 - Jobbdetalj.dc.html` visade "dagens deltillfällen" — en tidslinje appen inte har stöd för idag. Beslutat att bygga.
+
+- **Gren (= disciplin) får `pass[]`:** valfria tidsatta tillfällen, var och en med **egen** `datum` + `tid` (+ valfri `plats`). Kval kan gå dag 1 morgon, final dag 2 kväll — därför tid på passet, inte på grenen.
+- **Program är härlett, inte lagrat:** eventets dagsprogram = alla `pass` + alla `event:`-kopplade matcher med klockslag + eventets fria hållpunkter, sorterat på datum+tid, grupperat per dag. Ändra passets tid → programmet följer med. Ingen dubbellagring.
+- **Matcher oförändrade** som sådana (fristående / liga-kopplade). Det är bara *inom ett event* de vävs in i samma tidslinje som grenpassen.
+- **Individer per deltillfälle härleds:** pass → gren → `deltagare`. Aldrig skrivet på passet.
+- **Nästa deltillfälle** (iOS restid, §4) = första pass/match med klockslag framåt. Nu väldefinierat.
+- **DPT2-UI:** event-detaljen får ett **Program-kort** (pass per gren + hållpunkter, tidslinje per dag, "näst"-markering). Lägg till/ändra/ta bort pass manuellt.
+- **Läs in spelschema — utökning:** importören (idag matchtider för ligor/säsonger) läser även ett events **startlista/program** → skapar grenar om de saknas, fyller `pass`. Plus **klistra in / CSV** från arrangörens PDF. Allt manuellt justerbart efteråt.
 
 ## Utanför denna handoff — SE `HANDOFF-etapp-2-4.md`
 

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; }
+  a { color:#F0B45A; } a:hover { color:#f6c97e; }
+  ::-webkit-scrollbar{ width:10px; height:10px; } ::-webkit-scrollbar-thumb{ background:#232a33; border-radius:6px; }
+</style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;background:#0a0d11;color:#f3f5f7;font-family:Saira,sans-serif;box-sizing:border-box;">
+
+  <!-- Topp: titel + jobb + flödes-stepper -->
+  <div style="flex:none;border-bottom:1px solid rgba(255,255,255,.08);background:#0d1015;padding:16px 26px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="width:38px;height:38px;border-radius:10px;background:rgba(240,180,90,.14);color:#F0B45A;display:flex;align-items:center;justify-content:center;flex:none;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/></svg>
+      </span>
+      <div>
+        <div style="font-family:'Saira Condensed',sans-serif;font-size:20px;font-weight:700;letter-spacing:.01em;">Snabbplock</div>
+        <div style="font-size:11.5px;color:rgba(243,245,247,.5);">{{ headerFixture }}</div>
+      </div>
+    </div>
+    <span style="flex:1;"></span>
+    <!-- B3: flödet — Lightroom öppnas sist -->
+    <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+      <sc-for list="{{ flowSteps }}" as="fs" hint-placeholder-count="4">
+        <span style="{{ fs.style }}">{{ fs.label }}</span>
+        <sc-if value="{{ fs.arrow }}" hint-placeholder-val="{{ true }}"><span style="color:rgba(243,245,247,.28);font-size:11px;">→</span></sc-if>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="flex:1;max-width:1060px;width:100%;margin:0 auto;padding:22px 26px 40px;box-sizing:border-box;">
+
+    <!-- Urvals-rad: alltid synlig — B1: urvalet överlever kortbyten -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#12151b;border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:12px 16px;margin-bottom:18px;">
+      <span style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:rgba(243,245,247,.45);">Urval</span>
+      <sc-for list="{{ cardChips }}" as="cc" hint-placeholder-count="2">
+        <span style="{{ cc.style }}"><span style="{{ cc.dot }}"></span>{{ cc.label }}</span>
+      </sc-for>
+      <sc-if value="{{ noneDone }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:rgba(243,245,247,.4);">Inga kort genomgångna ännu</span></sc-if>
+      <span style="flex:1;"></span>
+      <span style="font-family:'Saira Condensed',sans-serif;font-size:17px;font-weight:700;color:#F0B45A;">{{ totalPicked }} plockade</span>
+    </div>
+
+    <!-- ============ STEG: SÄTT I KORT ============ -->
+    <sc-if value="{{ isInsert }}" hint-placeholder-val="{{ true }}">
+    <div style="border:1.5px dashed rgba(255,255,255,.18);border-radius:16px;padding:46px 30px;text-align:center;background:rgba(255,255,255,.015);">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(243,245,247,.4)" stroke-width="1.4" style="margin-bottom:14px;"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 3v4M12 3v4M15 3v4"/></svg>
+      <div style="font-family:'Saira Condensed',sans-serif;font-size:22px;font-weight:700;">Sätt i ett minneskort</div>
+      <div style="font-size:12.5px;color:rgba(243,245,247,.5);margin-top:6px;line-height:1.5;">Kortet läses direkt — plocka medan bilderna rullar in.<br>Urvalet ligger kvar mellan korten.</div>
+      <sc-if value="{{ hasNextCard }}" hint-placeholder-val="{{ true }}">
+      <button onClick="{{ insertCard }}" style="margin-top:20px;background:#F0B45A;color:#100c05;border:none;border-radius:10px;padding:12px 22px;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;">{{ insertLabel }}</button>
+      <div style="font-size:10.5px;color:rgba(243,245,247,.35);margin-top:9px;">(prototyp — simulerar att kortet sätts i)</div>
+      </sc-if>
+      <sc-if value="{{ allCardsDone }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px;color:rgba(243,245,247,.5);margin-top:16px;">Alla kort genomgångna.</div></sc-if>
+    </div>
+    <sc-if value="{{ canReview }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;justify-content:center;margin-top:18px;">
+      <button onClick="{{ goReview }}" style="background:transparent;border:1.5px solid #F0B45A;color:#F0B45A;border-radius:10px;padding:12px 24px;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;">Klar — granska urvalet ({{ totalPicked }}) ›</button>
+    </div>
+    </sc-if>
+    </sc-if>
+
+    <!-- ============ STEG: PLOCKA ============ -->
+    <sc-if value="{{ isPick }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:13px;flex-wrap:wrap;">
+      <span style="width:9px;height:9px;border-radius:50%;background:#6FB35A;box-shadow:0 0 9px #6FB35A;flex:none;"></span>
+      <span style="font-family:'Saira Condensed',sans-serif;font-size:18px;font-weight:700;">{{ curCardName }}</span>
+      <span style="font-size:12px;color:rgba(243,245,247,.5);">{{ curCardMeta }}</span>
+      <span style="flex:1;"></span>
+      <span style="font-size:12.5px;color:rgba(243,245,247,.7);"><b style="color:#F0B45A;">{{ curPickedN }}</b> plockade på det här kortet</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">
+      <sc-for list="{{ curThumbs }}" as="t" hint-placeholder-count="10">
+        <div onClick="{{ t.toggle }}" style="{{ t.style }}">
+          <sc-if value="{{ t.on }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:#F0B45A;color:#100c05;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">★</span></sc-if>
+          <span style="position:absolute;left:7px;bottom:6px;font-family:'Saira Condensed',sans-serif;font-size:10px;color:rgba(255,255,255,.55);text-shadow:0 1px 3px rgba(0,0,0,.7);">{{ t.num }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="font-size:11px;color:rgba(243,245,247,.4);margin-top:10px;">Klicka en bild för att plocka den · klicka igen för att ångra. Visar de senaste — resten av kortet rullar in under genomgången.</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08);flex-wrap:wrap;">
+      <!-- B1: mata ut utan att tappa urvalet -->
+      <button onClick="{{ ejectCard }}" style="background:#12151b;border:1px solid rgba(255,255,255,.16);color:#f3f5f7;border-radius:10px;padding:12px 20px;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;">⏏ Mata ut kortet</button>
+      <span style="font-size:11.5px;color:rgba(243,245,247,.45);line-height:1.45;">Urvalet ligger kvar — sätt i nästa kort,<br>eller granska när alla kort är genomgångna.</span>
+      <span style="flex:1;"></span>
+      <button onClick="{{ goReviewFromPick }}" style="background:transparent;border:1.5px solid #F0B45A;color:#F0B45A;border-radius:10px;padding:12px 20px;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;">Klar — granska ({{ totalPicked }}) ›</button>
+    </div>
+    </sc-if>
+
+    <!-- ============ STEG: GRANSKA (B2: tumnaglar över urvalet) ============ -->
+    <sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:5px;flex-wrap:wrap;">
+      <span style="font-family:'Saira Condensed',sans-serif;font-size:20px;font-weight:700;">Granska urvalet</span>
+      <span style="font-size:12px;color:rgba(243,245,247,.5);">Kryssa bort det som inte ska med — sedan öppnas Lightroom med resten.</span>
+    </div>
+    <sc-for list="{{ reviewGroups }}" as="g" hint-placeholder-count="2">
+      <div style="margin-top:16px;">
+        <div style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:rgba(243,245,247,.45);margin-bottom:9px;">{{ g.label }}</div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:9px;">
+          <sc-for list="{{ g.thumbs }}" as="t" hint-placeholder-count="6">
+            <div onClick="{{ t.toggle }}" style="{{ t.style }}">
+              <sc-if value="{{ t.off }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;inset:0;background:rgba(10,13,17,.66);display:flex;align-items:center;justify-content:center;font-size:19px;color:#E0607F;">✕</span></sc-if>
+              <sc-if value="{{ t.on }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;top:5px;right:5px;width:19px;height:19px;border-radius:50%;background:rgba(10,13,17,.6);color:#F0B45A;display:flex;align-items:center;justify-content:center;font-size:11px;">★</span></sc-if>
+              <span style="position:absolute;left:6px;bottom:5px;font-family:'Saira Condensed',sans-serif;font-size:9.5px;color:rgba(255,255,255,.55);text-shadow:0 1px 3px rgba(0,0,0,.7);">{{ t.num }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08);flex-wrap:wrap;">
+      <button onClick="{{ backToInsert }}" style="background:#12151b;border:1px solid rgba(255,255,255,.16);color:#f3f5f7;border-radius:10px;padding:12px 20px;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;">‹ Fler kort</button>
+      <span style="flex:1;"></span>
+      <sc-if value="{{ removedN }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:rgba(243,245,247,.5);">{{ removedN }} bortkryssade</span></sc-if>
+      <!-- B3: Lightroom öppnas först här -->
+      <button onClick="{{ openLightroom }}" style="background:#F0B45A;color:#100c05;border:none;border-radius:10px;padding:13px 24px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;">Öppna i Lightroom · {{ finalN }} bilder</button>
+    </div>
+    </sc-if>
+
+    <!-- ============ STEG: LIGHTROOM ============ -->
+    <sc-if value="{{ isLr }}" hint-placeholder-val="{{ false }}">
+    <div style="max-width:520px;margin:40px auto 0;background:#12151b;border:1px solid rgba(255,255,255,.09);border-radius:16px;padding:28px 30px;">
+      <sc-if value="{{ lrRunning }}" hint-placeholder-val="{{ true }}">
+      <div style="font-family:'Saira Condensed',sans-serif;font-size:19px;font-weight:700;text-align:center;margin-bottom:20px;">Öppnar Lightroom …</div>
+      </sc-if>
+      <sc-if value="{{ lrDone }}" hint-placeholder-val="{{ false }}">
+      <div style="text-align:center;margin-bottom:20px;">
+        <span style="display:inline-flex;width:44px;height:44px;border-radius:50%;background:#6FB35A;color:#0a0d11;align-items:center;justify-content:center;font-size:21px;font-weight:700;margin-bottom:10px;">✓</span>
+        <div style="font-family:'Saira Condensed',sans-serif;font-size:19px;font-weight:700;">Lightroom öppnat</div>
+      </div>
+      </sc-if>
+      <div style="display:flex;flex-direction:column;gap:15px;">
+        <sc-for list="{{ lrSteps }}" as="st" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:12px;"><span style="{{ st.dot }}">✓</span><span style="{{ st.labelStyle }}">{{ st.label }}</span></div>
+        </sc-for>
+      </div>
+      <sc-if value="{{ lrDone }}" hint-placeholder-val="{{ false }}">
+      <div style="font-size:11.5px;color:rgba(243,245,247,.5);text-align:center;margin-top:18px;line-height:1.5;">{{ finalN }} bilder importerade från {{ doneCardsN }} kort.<br>Korten kan formateras när säkerhetskopian är verifierad.</div>
+      <div style="display:flex;justify-content:center;margin-top:16px;">
+        <button onClick="{{ restart }}" style="background:#12151b;border:1px solid rgba(255,255,255,.16);color:#f3f5f7;border-radius:9px;padding:10px 18px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;">Börja om (prototyp)</button>
+      </div>
+      </sc-if>
+    </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    step: 'insert',            // insert | pick | review | lr
+    cardIdx: 0,                // nästa kort att läsa
+    // B1: flera minneskort — urvalet per kort ligger kvar när kortet matas ut
+    cards: [
+      { name: 'Kort 1 · NIKON Z 8 · 277Z8_01', total: 312 },
+      { name: 'Kort 2 · NIKON Z 8 · 278Z8_02', total: 168 },
+      { name: 'Kort 3 · NIKON Z 9 · 104Z9_07', total: 96 }
+    ],
+    picks: {},                 // { cardIdx: { thumbIdx: true } }
+    removed: {},               // review: { 'c-i': true }
+    lrPhase: 'idle', lrStep: 0
+  };
+  _picksFor(c){ return this.state.picks[c] || {}; }
+  _pickedList(c){ return Object.keys(this._picksFor(c)).map(Number).sort((a,b)=>a-b); }
+  _doneCards(){ const out=[]; for(let c=0;c<this.state.cardIdx;c++){ if(c!==this._curCard()) out.push(c); } return out; }
+  _curCard(){ return this.state.step==='pick' ? this.state.cardIdx-1 : -1; }
+  insertCard(){ if(this.state.cardIdx>=this.state.cards.length) return; this.setState(s=>({ step:'pick', cardIdx:s.cardIdx+1 })); }
+  togglePick(c,i){ this.setState(s=>{ const per={ ...(s.picks[c]||{}) }; if(per[i]) delete per[i]; else per[i]=true; return { picks:{ ...s.picks, [c]:per } }; }); }
+  ejectCard(){ this.setState({ step:'insert' }); }
+  goReview(){ this.setState({ step:'review' }); }
+  toggleRemoved(k){ this.setState(s=>{ const r={ ...s.removed }; if(r[k]) delete r[k]; else r[k]=true; return { removed:r }; }); }
+  backToInsert(){ this.setState({ step:'insert' }); }
+  openLightroom(){
+    this.setState({ step:'lr', lrPhase:'running', lrStep:0 });
+    if(this._t) clearInterval(this._t);
+    this._t = setInterval(()=>{ this.setState(s=>{ const n=s.lrStep+1; if(n>=3){ clearInterval(this._t); return { lrStep:3, lrPhase:'done' }; } return { lrStep:n }; }); }, 800);
+  }
+  restart(){ if(this._t) clearInterval(this._t); this.setState({ step:'insert', cardIdx:0, picks:{}, removed:{}, lrPhase:'idle', lrStep:0 }); }
+  componentWillUnmount(){ if(this._t) clearInterval(this._t); }
+  renderVals(){
+    const s = this.state;
+    const N_THUMBS = 10;
+    const PHPOS=[[20,30],[70,20],[45,60],[85,70],[10,75],[60,45],[35,15],[90,40],[15,50],[50,25],[75,55],[30,80]];
+    const PHFILT=['none','saturate(1.15) brightness(1.05)','hue-rotate(-12deg)','brightness(.92) saturate(1.1)','hue-rotate(10deg) brightness(1.08)','contrast(1.08)','saturate(.85)','brightness(1.12)'];
+    const ph=(c,i)=>({ backgroundImage:"url('skisser_assets/hero-foto.jpg')", backgroundSize:'cover', backgroundPosition:PHPOS[(c*3+i)%12][0]+'% '+PHPOS[(c*3+i)%12][1]+'%', filter:PHFILT[(c*5+i)%8] });
+    const cur = this._curCard();
+    const curPicked = cur>=0 ? this._pickedList(cur) : [];
+    // genomgångna kort = alla med index < cardIdx, utom det som är inne just nu
+    const doneIdx=[]; for(let c=0;c<s.cardIdx;c++){ if(c!==cur) doneIdx.push(c); }
+    const totalPicked = Object.keys(s.picks).reduce((a,c)=>a+Object.keys(s.picks[c]).length,0);
+    const removedN = Object.keys(s.removed).length;
+    const finalN = totalPicked - removedN;
+
+    const cardChips = doneIdx.map(c=>{ const n=this._pickedList(c).length; return {
+      label: s.cards[c].name.split(' · ')[0]+' · '+n+' plockade',
+      style:{ display:'inline-flex', alignItems:'center', gap:'7px', background:'#1b2028', border:'1px solid rgba(255,255,255,.1)', borderRadius:'999px', padding:'4px 12px', fontSize:'11.5px', fontWeight:600, color:'rgba(243,245,247,.8)' },
+      dot:{ width:'7px', height:'7px', borderRadius:'50%', background:'#6FB35A', flex:'none' } }; });
+    if(cur>=0){ cardChips.push({ label:s.cards[cur].name.split(' · ')[0]+' · läses nu', style:{ display:'inline-flex', alignItems:'center', gap:'7px', background:'rgba(240,180,90,.1)', border:'1px solid rgba(240,180,90,.4)', borderRadius:'999px', padding:'4px 12px', fontSize:'11.5px', fontWeight:600, color:'#F0B45A' }, dot:{ width:'7px', height:'7px', borderRadius:'50%', background:'#F0B45A', flex:'none' } }); }
+
+    // Flödes-stepper (B3): kort in → plocka → kort ut → nästa → granska → Lightroom
+    const FLOW=['Kort in','Plocka','Kort ut','Granska','Lightroom'];
+    const flowActive = s.step==='insert' ? (doneIdx.length?2:0) : s.step==='pick' ? 1 : s.step==='review' ? 3 : 4;
+    const flowSteps = FLOW.map((f,i)=>({ label:f, arrow:i<FLOW.length-1,
+      style:{ fontSize:'10.5px', fontWeight:i===flowActive?700:600, letterSpacing:'.05em', textTransform:'uppercase', padding:'3px 10px', borderRadius:'999px',
+        background:i===flowActive?'rgba(240,180,90,.14)':'transparent', color:i===flowActive?'#F0B45A':(i<flowActive?'rgba(243,245,247,.6)':'rgba(243,245,247,.3)'),
+        border:i===flowActive?'1px solid rgba(240,180,90,.4)':'1px solid transparent' } }));
+
+    const curThumbs = cur<0 ? [] : Array.from({length:N_THUMBS}).map((_,i)=>{ const on=!!this._picksFor(cur)[i]; return {
+      num:'DSC_0'+(400+cur*100+i), on, toggle:()=>this.togglePick(cur,i),
+      style:{ position:'relative', aspectRatio:'3/2', borderRadius:'9px', overflow:'hidden', cursor:'pointer', ...ph(cur,i),
+        outline: on?'2.5px solid #F0B45A':'1px solid rgba(255,255,255,.09)', outlineOffset:'-2px',
+        boxShadow: on?'0 0 14px rgba(240,180,90,.35)':'none' } }; });
+
+    // B2: tumnaglar över hela urvalet, grupperat per kort, kryssa bort innan Lightroom
+    const grpIdx = Object.keys(s.picks).map(Number).sort((a,b)=>a-b).filter(c=>this._pickedList(c).length);
+    const reviewGroups = grpIdx.map(c=>({ label:s.cards[c].name+' — '+this._pickedList(c).length+' plockade',
+      thumbs:this._pickedList(c).map(i=>{ const k=c+'-'+i; const off=!!s.removed[k]; return {
+        num:'DSC_0'+(400+c*100+i), on:!off, off, toggle:()=>this.toggleRemoved(k),
+        style:{ position:'relative', aspectRatio:'3/2', borderRadius:'8px', overflow:'hidden', cursor:'pointer', ...ph(c,i),
+          outline: off?'1px solid rgba(224,96,127,.5)':'1px solid rgba(255,255,255,.12)', outlineOffset:'-1px' } }; }) }));
+
+    const lrDot=(done,active)=>({ width:'18px', height:'18px', borderRadius:'50%', flex:'none', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'700', background: done?'#6FB35A':(active?'#F0B45A':'transparent'), color:(done||active)?'#0a0d11':'transparent', border:(done||active)?'none':'1.5px solid rgba(255,255,255,.2)' });
+    const lrSteps=[['Kopierar '+finalN+' bilder till arbetsdisken','Urvalet kopierat — korten orörda'],['Bygger import med husstil + metadata','Import byggd'],['Öppnar Lightroom med urvalet','Lightroom öppnat med urvalet']].map((d,i)=>{ const done=s.lrPhase==='done'||s.lrStep>i; const active=s.lrPhase==='running'&&s.lrStep===i; return { label:done?d[1]:d[0], dot:lrDot(done,active), labelStyle:{ fontSize:'12.5px', color: done?'rgba(243,245,247,.85)':(active?'#f3f5f7':'rgba(243,245,247,.4)') } }; });
+
+    return {
+      headerFixture: this.props.fixture ?? 'Malmö FF – Kristianstad DFF · 27 jun',
+      isInsert:s.step==='insert', isPick:s.step==='pick', isReview:s.step==='review', isLr:s.step==='lr',
+      flowSteps, cardChips, noneDone: doneIdx.length===0 && cur<0, totalPicked,
+      hasNextCard: s.cardIdx < s.cards.length, allCardsDone: s.cardIdx >= s.cards.length,
+      insertLabel: 'Kort upptäckt: '+(s.cards[s.cardIdx] ? s.cards[s.cardIdx].name : '')+' — läs kortet',
+      insertCard:()=>this.insertCard(),
+      canReview: s.step==='insert' && totalPicked>0,
+      goReview:()=>this.goReview(), goReviewFromPick:()=>this.goReview(),
+      curCardName: cur>=0 ? s.cards[cur].name : '', curCardMeta: cur>=0 ? (s.cards[cur].total+' bilder på kortet · nyast först') : '',
+      curPickedN: curPicked.length, curThumbs, ejectCard:()=>this.ejectCard(),
+      reviewGroups, removedN, finalN, backToInsert:()=>this.backToInsert(), openLightroom:()=>this.openLightroom(),
+      lrRunning:s.lrPhase==='running', lrDone:s.lrPhase==='done', lrSteps, doneCardsN:grpIdx.length,
+      restart:()=>this.restart()
+    };
+  }
+}
+</script>
+</body>
+</html>

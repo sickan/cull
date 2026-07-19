@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700;800&family=Saira+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;background:#0b0e12;font-family:'Saira',system-ui,sans-serif;color:#f3f5f7;}
+  a{color:#F0B45A;} a:hover{color:#F4C277;}
+</style>
+</helmet>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#0a0d11"/><circle cx="34" cy="40" r="12" fill="#4E93C4"/><circle cx="58" cy="40" r="12" fill="#D19A3E"/><circle cx="46" cy="62" r="12" fill="#D07E93"/></svg></template>
+
+<div style="min-height:100vh;padding:46px 52px 90px;background:#0b0e12;background-image:radial-gradient(circle at 28% -5%,#12171d,#0b0e12 62%);">
+
+  <!-- HERO -->
+  <div style="position:relative;overflow:hidden;border-radius:30px;border:1px solid rgba(255,255,255,.07);background:linear-gradient(120deg,#10161d,#080b0e 74%);box-shadow:0 30px 70px rgba(0,0,0,.45);max-width:1180px;margin-bottom:52px;">
+    <div style="position:absolute;right:44px;top:50%;transform:translateY(-50%);display:flex;gap:10px;opacity:.5;">
+      <span style="width:46px;height:96px;border-radius:24px;background:#4E93C4;"></span>
+      <span style="width:46px;height:96px;border-radius:24px;background:#D19A3E;"></span>
+      <span style="width:46px;height:96px;border-radius:24px;background:#D07E93;"></span>
+      <span style="width:46px;height:96px;border-radius:24px;background:#A188C4;"></span>
+      <span style="width:46px;height:96px;border-radius:24px;background:#F0B45A;"></span>
+    </div>
+    <div style="position:relative;padding:48px 52px;">
+      <div style="display:flex;align-items:center;gap:13px;">
+        <img src="assets/logo-hast-orange.png" alt="" style="width:36px;height:34px;object-fit:contain;filter:drop-shadow(0 2px 10px rgba(240,180,90,.35));">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.4em;color:rgba(240,180,90,.85);">DALECARLIA&nbsp;PHOTO · iOS v2</div>
+      </div>
+      <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:60px;line-height:.96;margin-top:18px;">Färgsystemet</div>
+      <div style="width:60px;height:3px;border-radius:2px;background:linear-gradient(90deg,#F0B45A,rgba(240,180,90,.2));margin:20px 0 16px;"></div>
+      <div style="font-size:15px;color:rgba(243,245,247,.72);max-width:640px;line-height:1.6;">Sport, landskap, människor, film — kategorier, grenar, lagfärger, status. Många lager. För att de ska samsas trivsamt får varje färg <b style="color:#f3f5f7;">en roll, en zon och en form</b>. Här är reglerna, och hur de samexisterar på riktiga kort.</div>
+    </div>
+  </div>
+
+  <!-- 01 ROLLER -->
+  <div style="display:flex;align-items:center;gap:14px;margin:0 0 12px;max-width:1180px;">
+    <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:15px;color:rgba(240,180,90,.55);">01</span>
+    <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.24em;color:#f3f5f7;">FEM ROLLER · VAR OCH EN SIN ZON</span>
+    <span style="flex:1;height:1px;background:linear-gradient(90deg,rgba(240,180,90,.4),rgba(255,255,255,.06));"></span>
+  </div>
+  <div style="font-size:12.5px;color:rgba(243,245,247,.5);margin-bottom:24px;max-width:1180px;">Regeln som håller ihop allt: <b style="color:#f3f5f7;">max två mättade färger syns per kort.</b> Resten är mörkt neutralt. Krockar löses genom att en färg bara får finnas i sin zon och sin form.</div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;max-width:1180px;">
+
+    <!-- BRAND -->
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 20px;">
+      <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:19px;color:#f3f5f7;">1 · Brand</span><span style="font-size:11px;color:rgba(243,245,247,.45);">Dalahäst-orange</span></div>
+      <div style="display:flex;align-items:center;gap:10px;margin:14px 0;">
+        <span style="width:44px;height:44px;border-radius:11px;background:#F0B45A;box-shadow:0 4px 12px rgba(240,180,90,.3);"></span>
+        <div style="font-size:11.5px;color:rgba(243,245,247,.6);font-variant-numeric:tabular-nums;">#F0B45A<br><span style="color:rgba(243,245,247,.4);">print #C9871F</span></div>
+      </div>
+      <div style="font-size:12.5px;color:rgba(243,245,247,.7);line-height:1.55;"><b style="color:#f3f5f7;">Zon:</b> interaktion, sigill, fokus, nedräkning. <b style="color:#f3f5f7;">Form:</b> knapp, ring, siffra. En konstant varm röst — den enda färg som får agera.</div>
+    </div>
+
+    <!-- KATEGORI -->
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 20px;">
+      <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:19px;color:#f3f5f7;">2 · Kategori</span><span style="font-size:11px;color:rgba(243,245,247,.45);">Hav · Sol · Rosé · Film · Blogg</span></div>
+      <div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;">
+        <div style="text-align:center;"><span style="display:block;width:34px;height:34px;border-radius:50%;background:#4E93C4;"></span><span style="font-size:9px;color:rgba(243,245,247,.5);">Sport</span></div>
+        <div style="text-align:center;"><span style="display:block;width:34px;height:34px;border-radius:50%;background:#D19A3E;"></span><span style="font-size:9px;color:rgba(243,245,247,.5);">Landskap</span></div>
+        <div style="text-align:center;"><span style="display:block;width:34px;height:34px;border-radius:50%;background:#D07E93;"></span><span style="font-size:9px;color:rgba(243,245,247,.5);">Människor</span></div>
+        <div style="text-align:center;"><span style="display:block;width:34px;height:34px;border-radius:50%;background:#A188C4;"></span><span style="font-size:9px;color:rgba(243,245,247,.5);">Film</span></div>
+        <div style="text-align:center;"><span style="display:block;width:34px;height:34px;border-radius:50%;background:#8B97A3;"></span><span style="font-size:9px;color:rgba(243,245,247,.5);">Blogg</span></div>
+      </div>
+      <div style="font-size:12.5px;color:rgba(243,245,247,.7);line-height:1.55;"><b style="color:#f3f5f7;">Zon:</b> vilken värld jobbet tillhör. <b style="color:#f3f5f7;">Form:</b> prick eller tunn vänsterkant — aldrig stora fyllda ytor. Låg mättnad, alltid liten.</div>
+    </div>
+
+    <!-- GREN -->
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 20px;">
+      <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:19px;color:#f3f5f7;">3 · Gren</span><span style="font-size:11px;color:rgba(243,245,247,.45);">endast inom sport</span></div>
+      <div style="display:flex;gap:14px;margin:14px 0;">
+        <div style="display:flex;align-items:center;gap:7px;"><span style="width:5px;height:30px;border-radius:3px;background:#8E5A86;"></span><div style="font-size:10px;color:rgba(243,245,247,.6);">Dam<br><span style="color:rgba(243,245,247,.4);">#8E5A86</span></div></div>
+        <div style="display:flex;align-items:center;gap:7px;"><span style="width:5px;height:30px;border-radius:3px;background:#3E7C87;"></span><div style="font-size:10px;color:rgba(243,245,247,.6);">Herr<br><span style="color:rgba(243,245,247,.4);">#3E7C87</span></div></div>
+        <div style="display:flex;align-items:center;gap:7px;"><span style="width:5px;height:30px;border-radius:3px;background:#6E8757;"></span><div style="font-size:10px;color:rgba(243,245,247,.6);">Mixed<br><span style="color:rgba(243,245,247,.4);">#6E8757</span></div></div>
+      </div>
+      <div style="font-size:12.5px;color:rgba(243,245,247,.7);line-height:1.55;"><b style="color:#f3f5f7;">Zon:</b> bara i sport-sammanhang (match, lagbricka). <b style="color:#f3f5f7;">Form:</b> färgad kant/markör — <b style="color:#f3f5f7;">ingen textetikett</b>, ingen kant om grenen är okänd. Möter aldrig kategori på samma plats.</div>
+    </div>
+
+    <!-- STATUS -->
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 20px;">
+      <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:19px;color:#f3f5f7;">4 · Status</span><span style="font-size:11px;color:rgba(243,245,247,.45);">synk · fel · väntar · klar</span></div>
+      <div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;">
+        <div style="text-align:center;"><span style="display:block;width:34px;height:34px;border-radius:50%;background:#6E8797;"></span><span style="font-size:9px;color:rgba(243,245,247,.5);">Synk</span></div>
+        <div style="text-align:center;"><span style="display:block;width:34px;height:34px;border-radius:50%;background:#6FB35A;"></span><span style="font-size:9px;color:rgba(243,245,247,.5);">Klar</span></div>
+        <div style="text-align:center;"><span style="display:block;width:34px;height:34px;border-radius:50%;background:#E0A341;"></span><span style="font-size:9px;color:rgba(243,245,247,.5);">Väntar</span></div>
+        <div style="text-align:center;"><span style="display:block;width:34px;height:34px;border-radius:50%;background:#E06A5A;"></span><span style="font-size:9px;color:rgba(243,245,247,.5);">Fel</span></div>
+      </div>
+      <div style="font-size:12.5px;color:rgba(243,245,247,.7);line-height:1.55;"><b style="color:#f3f5f7;">Zon:</b> funktion, samma fyra betydelser överallt. <b style="color:#f3f5f7;">Form:</b> liten prick eller pill. Ligger ovanpå allt annat — vinner blicken bara när något kräver handling.</div>
+    </div>
+
+    <!-- LAG -->
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 20px;">
+      <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:19px;color:#f3f5f7;">5 · Lagfärger</span><span style="font-size:11px;color:rgba(243,245,247,.45);">klubbens egna</span></div>
+      <div style="display:flex;gap:8px;margin:14px 0;align-items:center;">
+        <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 9px;"><span style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#8FB7DE 50%,#16181C 50%);"></span><span style="font-size:11px;font-weight:600;">Malmö FF</span></span>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 9px;"><span style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#B23A36 50%,#FFF 50%);"></span><span style="font-size:11px;font-weight:600;">Kristianstad</span></span>
+      </div>
+      <div style="font-size:12.5px;color:rgba(243,245,247,.7);line-height:1.55;"><b style="color:#f3f5f7;">Zon:</b> bara inuti lagbrickan. <b style="color:#f3f5f7;">Form:</b> liten sköld/prick på brickan. Karantän — klubbfärger läcker aldrig ut i kortet.</div>
+    </div>
+
+    <!-- REGEL: eventtyp -->
+    <div style="background:rgba(240,180,90,.07);border:1px solid rgba(240,180,90,.28);border-radius:18px;padding:18px 20px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.14em;color:#F0B45A;margin-bottom:8px;">KROCKEN VI TAR BORT</div>
+      <div style="font-size:12.5px;color:rgba(243,245,247,.72);line-height:1.55;">Eventtyp (mästerskap, cup, turnering, världscup) fick tidigare <b style="color:#f3f5f7;">egna färger som återanvände grenens hex</b> — cup delade Herr-teal, turnering delade Mixed-olive. Eftersom typ bara är en <b style="color:#f3f5f7;">etikett</b>, inte beteende: <b style="color:#f3f5f7;">ingen egen färg.</b> Eventet ärver sin kategori. Krockarna försvinner.</div>
+    </div>
+  </div>
+
+  <!-- 02 SAMSPEL -->
+  <div style="display:flex;align-items:center;gap:14px;margin:56px 0 12px;max-width:1180px;">
+    <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:15px;color:rgba(240,180,90,.55);">02</span>
+    <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.24em;color:#f3f5f7;">SAMSPEL · PÅ RIKTIGA KORT</span>
+    <span style="flex:1;height:1px;background:linear-gradient(90deg,rgba(240,180,90,.4),rgba(255,255,255,.06));"></span>
+  </div>
+  <div style="font-size:12.5px;color:rgba(243,245,247,.5);margin-bottom:24px;max-width:1180px;">Alla roller på ett kort samtidigt — utan att slåss. Kategori som prick, gren som vänsterkant, status som pill, lag på brickan, orange bara till handling.</div>
+
+  <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start;max-width:1180px;">
+
+    <!-- SPORT MATCH -->
+    <div style="width:360px;">
+      <div style="position:relative;background:#12151b;border:1px solid rgba(255,255,255,.1);border-left:4px solid #8E5A86;border-radius:16px;padding:16px 18px;box-shadow:0 14px 34px rgba(0,0,0,.4);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="width:9px;height:9px;border-radius:50%;background:#4E93C4;flex:none;"></span>
+          <span style="font-size:10px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.55);">SPORT · MATCH</span>
+          <span style="flex:1;"></span>
+          <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(111,179,90,.14);border:1px solid rgba(111,179,90,.35);border-radius:999px;padding:3px 9px;"><span style="width:6px;height:6px;border-radius:50%;background:#6FB35A;"></span><span style="font-size:10px;font-weight:700;color:#8FCE7B;">SYNKAD</span></span>
+        </div>
+        <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:20px;margin-top:9px;">Malmö FF – Kristianstad DFF</div>
+        <div style="font-size:11.5px;color:rgba(243,245,247,.55);margin-top:2px;">Del av OBOS Damallsvenskan · 19 juli 14:00</div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:6px 10px;"><span style="width:15px;height:15px;border-radius:4px;background:linear-gradient(135deg,#8FB7DE 50%,#16181C 50%);"></span><span style="font-size:11.5px;font-weight:600;">Malmö FF</span></span>
+          <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:6px 10px;"><span style="width:15px;height:15px;border-radius:4px;background:linear-gradient(135deg,#B23A36 50%,#FFFFFF 50%);"></span><span style="font-size:11.5px;font-weight:600;">Kristianstad</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
+          <span style="flex:1;"></span>
+          <span style="font-size:12px;font-weight:600;color:#F0B45A;border:1px solid rgba(240,180,90,.4);border-radius:9px;padding:7px 14px;">Öppna jobb</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:rgba(243,245,247,.5);margin-top:10px;line-height:1.55;"><span style="color:#8E5A86;font-weight:700;">▍</span>gren (Dam) · <span style="color:#4E93C4;font-weight:700;">●</span>kategori (Sport) · <span style="color:#6FB35A;font-weight:700;">●</span>status · lagbrickor i karantän · <span style="color:#F0B45A;font-weight:700;">orange</span> bara på knappen.</div>
+    </div>
+
+    <!-- LANDSKAP -->
+    <div style="width:360px;">
+      <div style="position:relative;background:#12151b;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px 18px;box-shadow:0 14px 34px rgba(0,0,0,.4);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="width:9px;height:9px;border-radius:50%;background:#D19A3E;flex:none;"></span>
+          <span style="font-size:10px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.55);">LANDSKAP</span>
+          <span style="flex:1;"></span>
+          <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(224,163,65,.14);border:1px solid rgba(224,163,65,.35);border-radius:999px;padding:3px 9px;"><span style="width:6px;height:6px;border-radius:50%;background:#E0A341;"></span><span style="font-size:10px;font-weight:700;color:#E7BB6E;">VÄNTAR</span></span>
+        </div>
+        <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:20px;margin-top:9px;">Soluppgång vid Grenen</div>
+        <div style="font-size:11.5px;color:rgba(243,245,247,.55);margin-top:2px;">Blå timmen · 12 juli 04:30 · stativ + ND-filter</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
+          <span style="font-size:11px;color:rgba(243,245,247,.5);">Ingen gren, ingen lagfärg — lugnare kort</span>
+          <span style="flex:1;"></span>
+          <span style="font-size:12px;font-weight:600;color:#F0B45A;border:1px solid rgba(240,180,90,.4);border-radius:9px;padding:7px 14px;">Öppna jobb</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:rgba(243,245,247,.5);margin-top:10px;line-height:1.55;">Utanför sporten: <b style="color:#f3f5f7;">ingen vänsterkant</b>. Bara kategoripricken (Sol) + status. Ett lugnt kort, en färg.</div>
+    </div>
+
+    <!-- MÄNNISKOR -->
+    <div style="width:360px;">
+      <div style="position:relative;background:#12151b;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px 18px;box-shadow:0 14px 34px rgba(0,0,0,.4);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="width:9px;height:9px;border-radius:50%;background:#D07E93;flex:none;"></span>
+          <span style="font-size:10px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.55);">MÄNNISKOR · BRÖLLOP</span>
+          <span style="flex:1;"></span>
+          <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(110,135,151,.16);border:1px solid rgba(110,135,151,.4);border-radius:999px;padding:3px 9px;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#9DB0BE" stroke-width="3"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5" stroke-linecap="round"/></svg><span style="font-size:10px;font-weight:700;color:#9DB0BE;">SYNKAR</span></span>
+        </div>
+        <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:20px;margin-top:9px;">Bröllop — Anna &amp; Erik</div>
+        <div style="font-size:11.5px;color:rgba(243,245,247,.55);margin-top:2px;">8 aug · Rättvik · kund Anna</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
+          <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(208,126,147,.1);border:1px solid rgba(208,126,147,.32);border-radius:8px;padding:5px 10px;font-size:10.5px;font-weight:700;color:#E0A0B0;">SoMe: tjuvkik med kundens ok</span>
+          <span style="flex:1;"></span>
+          <span style="font-size:12px;font-weight:600;color:#F0B45A;border:1px solid rgba(240,180,90,.4);border-radius:9px;padding:7px 14px;">Öppna</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:rgba(243,245,247,.5);margin-top:10px;line-height:1.55;">Kategori (Rosé) + statusprick. SoMe-flaggan tonas i kategorifärgen — samma familj, ingen ny färg.</div>
+    </div>
+  </div>
+
+  <!-- 03 STATUS DETALJ -->
+  <div style="display:flex;align-items:center;gap:14px;margin:56px 0 12px;max-width:1180px;">
+    <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:15px;color:rgba(240,180,90,.55);">03</span>
+    <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.24em;color:#f3f5f7;">STATUS · SAMMA FYRA ÖVERALLT</span>
+    <span style="flex:1;height:1px;background:linear-gradient(90deg,rgba(240,180,90,.4),rgba(255,255,255,.06));"></span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px;max-width:1180px;">
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:15px 17px;display:flex;gap:13px;align-items:flex-start;">
+      <span style="width:12px;height:12px;border-radius:50%;background:#6E8797;flex:none;margin-top:3px;"></span>
+      <div><div style="font-size:13px;font-weight:700;color:#f3f5f7;">Synk / neutral</div><div style="font-size:11.5px;color:rgba(243,245,247,.62);line-height:1.5;margin-top:2px;">Synkar mot server/Google. Blågrå, roterande — pågår, inget att göra.</div></div>
+    </div>
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:15px 17px;display:flex;gap:13px;align-items:flex-start;">
+      <span style="width:12px;height:12px;border-radius:50%;background:#6FB35A;flex:none;margin-top:3px;"></span>
+      <div><div style="font-size:13px;font-weight:700;color:#f3f5f7;">Klar / live</div><div style="font-size:11.5px;color:rgba(243,245,247,.62);line-height:1.5;margin-top:2px;">Synkad, publicerad, levererad. Grön — allt gick igenom.</div></div>
+    </div>
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:15px 17px;display:flex;gap:13px;align-items:flex-start;">
+      <span style="width:12px;height:12px;border-radius:50%;background:#E0A341;flex:none;margin-top:3px;"></span>
+      <div><div style="font-size:13px;font-weight:700;color:#f3f5f7;">Väntar / bygger</div><div style="font-size:11.5px;color:rgba(243,245,247,.62);line-height:1.5;margin-top:2px;">Utkast, kö, publicerar. Gul — på väg, kan behöva ett öga.</div></div>
+    </div>
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:15px 17px;display:flex;gap:13px;align-items:flex-start;">
+      <span style="width:12px;height:12px;border-radius:50%;background:#E06A5A;flex:none;margin-top:3px;"></span>
+      <div><div style="font-size:13px;font-weight:700;color:#f3f5f7;">Fel</div><div style="font-size:11.5px;color:rgba(243,245,247,.62);line-height:1.5;margin-top:2px;">Deploy föll, synk krockade. Röd — kräver handling nu.</div></div>
+    </div>
+  </div>
+  <div style="max-width:1180px;margin-top:14px;font-size:12px;color:rgba(243,245,247,.5);line-height:1.55;">Status vinner alltid över kategori/gren i uppmärksamhet — men bara i sin lilla form. Ett rött fel-märke syns direkt utan att färga om hela kortet. Grönt/blågrått är lågmält; gult och rött lyfter.</div>
+
+  <!-- 04 LYFTET -->
+  <div style="display:flex;align-items:center;gap:14px;margin:56px 0 12px;max-width:1180px;">
+    <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:15px;color:rgba(240,180,90,.55);">04</span>
+    <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.24em;color:#f3f5f7;">iOS-LYFTET · LITET, INTE OMBYGGT</span>
+    <span style="flex:1;height:1px;background:linear-gradient(90deg,rgba(240,180,90,.4),rgba(255,255,255,.06));"></span>
+  </div>
+
+  <div style="display:flex;gap:22px;flex-wrap:wrap;max-width:1180px;">
+    <div style="flex:1;min-width:320px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:20px 22px;">
+      <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:20px;margin-bottom:12px;">Vad lyftet är</div>
+      <div style="display:flex;flex-direction:column;gap:11px;">
+        <div style="display:flex;gap:10px;"><span style="color:#6FB35A;font-weight:700;">+</span><div style="font-size:12.5px;color:rgba(243,245,247,.72);line-height:1.5;">En delad färg-plist i App Group — kategori, gren och status läses från <b style="color:#f3f5f7;">en källa</b> (samma som widget-extensionen).</div></div>
+        <div style="display:flex;gap:10px;"><span style="color:#6FB35A;font-weight:700;">+</span><div style="font-size:12.5px;color:rgba(243,245,247,.72);line-height:1.5;">Kategori blir <b style="color:#f3f5f7;">prick + tunn vänsterkant</b> på kort, inte fyllda paneler. Lugnare listor.</div></div>
+        <div style="display:flex;gap:10px;"><span style="color:#6FB35A;font-weight:700;">+</span><div style="font-size:12.5px;color:rgba(243,245,247,.72);line-height:1.5;">Gren flyttar in som <b style="color:#f3f5f7;">kant/markör</b> (ingen textetikett), bara i sport-vyer.</div></div>
+        <div style="display:flex;gap:10px;"><span style="color:#6FB35A;font-weight:700;">+</span><div style="font-size:12.5px;color:rgba(243,245,247,.72);line-height:1.5;">Status samlas till <b style="color:#f3f5f7;">fyra pill/prickar</b> med fast betydelse — synk, klar, väntar, fel.</div></div>
+        <div style="display:flex;gap:10px;"><span style="color:#6FB35A;font-weight:700;">+</span><div style="font-size:12.5px;color:rgba(243,245,247,.72);line-height:1.5;">Eventtyp tappar sin färg — blir ren textetikett, ärver kategorin.</div></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:320px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:20px 22px;">
+      <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:20px;margin-bottom:12px;">Vad lyftet inte är</div>
+      <div style="display:flex;flex-direction:column;gap:11px;">
+        <div style="display:flex;gap:10px;"><span style="color:#E06A5A;font-weight:700;">–</span><div style="font-size:12.5px;color:rgba(243,245,247,.72);line-height:1.5;"><b style="color:#f3f5f7;">DPT desktop rörs inte.</b> Look and feel där står kvar — detta gäller bara iOS-appen.</div></div>
+        <div style="display:flex;gap:10px;"><span style="color:#E06A5A;font-weight:700;">–</span><div style="font-size:12.5px;color:rgba(243,245,247,.72);line-height:1.5;">Inga nya hex-värden i kategori/gren — vi <b style="color:#f3f5f7;">återanvänder de låsta</b>, justerar bara ljushet för mörkt läge.</div></div>
+        <div style="display:flex;gap:10px;"><span style="color:#E06A5A;font-weight:700;">–</span><div style="font-size:12.5px;color:rgba(243,245,247,.72);line-height:1.5;">Ingen ny navigation eller struktur — bara hur färg <b style="color:#f3f5f7;">bär betydelse</b>.</div></div>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(243,245,247,.55);line-height:1.55;">Sigillets orange är den enda konstanten genom allt. Kategorier ger identitet, status ger tillstånd, gren och lag är sport-detaljer i karantän. Tillsammans: lugnt, läsbart, trivsamt.</div>
+    </div>
+  </div>
+
+  <!-- BRAND SIGN-OFF -->
+  <div style="max-width:1180px;margin-top:60px;padding-top:32px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:22px;flex-wrap:wrap;">
+    <div style="position:relative;width:66px;height:66px;flex:none;">
+      <svg width="66" height="66" viewBox="0 0 66 66"><circle cx="33" cy="33" r="30" fill="none" stroke="rgba(240,180,90,.3)" stroke-width="1.5"/><circle cx="33" cy="33" r="24" fill="none" stroke="rgba(240,180,90,.18)" stroke-width="1"/></svg>
+      <img src="assets/logo-hast-orange.png" alt="" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-52%);width:34px;height:32px;object-fit:contain;">
+    </div>
+    <div style="flex:1;min-width:200px;">
+      <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:22px;line-height:1;">Dalecarlia Photo</div>
+      <div style="font-size:12px;color:rgba(243,245,247,.5);margin-top:5px;">Färgsystem — en roll, en zon, en form. iOS v2.</div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:rgba(243,245,247,.4);line-height:1.7;"><div style="color:rgba(240,180,90,.75);font-weight:700;letter-spacing:.14em;">SKYLTFÖNSTER</div><div>Färgsystemet · iOS-lyftet</div></div>
+  </div>
+
+</div>
+
+</x-dc>
+</body>
+</html>

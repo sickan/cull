@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700;800&family=Saira+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;background:#0b0e12;font-family:'Saira',system-ui,sans-serif;color:#f3f5f7;}
+  a{color:#F0B45A;} a:hover{color:#F4C277;}
+  .scd{font-family:'Saira Condensed',sans-serif;}
+</style>
+</helmet>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#0a0d11"/><g stroke="#F0B45A" stroke-width="5" fill="none"><path d="M20 30h60M20 50h60M20 70h60"/></g></svg></template>
+
+<div style="min-height:100vh;padding:46px 52px 90px;background:#0b0e12;background-image:radial-gradient(circle at 28% -5%,#12171d,#0b0e12 62%);">
+
+  <!-- HERO -->
+  <div style="position:relative;overflow:hidden;border-radius:30px;border:1px solid rgba(255,255,255,.07);background:linear-gradient(120deg,#10161d,#080b0e 74%);box-shadow:0 30px 70px rgba(0,0,0,.45);max-width:1320px;margin-bottom:44px;">
+    <div style="position:relative;padding:46px 52px;">
+      <div style="display:flex;align-items:center;gap:13px;">
+        <img src="assets/logo-hast-orange.png" alt="" style="width:34px;height:32px;object-fit:contain;filter:drop-shadow(0 2px 10px rgba(240,180,90,.35));">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.4em;color:rgba(240,180,90,.85);">DALECARLIA&nbsp;PHOTO · v5 / iOS v2</div>
+      </div>
+      <div class="scd" style="font-weight:700;font-size:56px;line-height:.98;margin-top:16px;">Helheten</div>
+      <div style="width:60px;height:3px;border-radius:2px;background:linear-gradient(90deg,#F0B45A,rgba(240,180,90,.2));margin:18px 0 14px;"></div>
+      <div style="font-size:15px;color:rgba(243,245,247,.72);max-width:680px;line-height:1.6;">Varje tråd, tvärs över de fyra ytorna — låsskärm, widget, iOS-app, DPT2. Vad är <b style="color:#f3f5f7;">design</b>, vad är <b style="color:#f3f5f7;">datamodell</b>, vad är <b style="color:#f3f5f7;">både och</b>. Och vad som redan är mockat kontra kvar att bygga.</div>
+    </div>
+  </div>
+
+  <!-- LEGEND -->
+  <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center;max-width:1320px;margin-bottom:18px;font-size:12px;color:rgba(243,245,247,.6);">
+    <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:16px;height:16px;border-radius:5px;background:#4E93C4;"></span>Design</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:16px;height:16px;border-radius:5px;background:#D19A3E;"></span>Datamodell</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:16px;height:16px;border-radius:5px;background:#6FB35A;"></span>Både och</span>
+    <span style="width:1px;height:16px;background:rgba(255,255,255,.14);"></span>
+    <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:15px;height:15px;border-radius:50%;background:#6FB35A;display:inline-flex;align-items:center;justify-content:center;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#0b0e12" stroke-width="3.5"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>mockat</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:15px;height:15px;border-radius:50%;border:2px solid rgba(243,245,247,.4);"></span>att bygga</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:15px;height:2px;background:rgba(243,245,247,.3);"></span>ej relevant</span>
+  </div>
+
+  <!-- MATRIX -->
+  <div style="max-width:1320px;border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden;">
+    <!-- header -->
+    <div style="display:grid;grid-template-columns:230px repeat(4,1fr);background:rgba(255,255,255,.04);">
+      <div style="padding:13px 16px;font-size:11px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.5);">TRÅD</div>
+      <div style="padding:13px 14px;font-size:11px;font-weight:700;letter-spacing:.12em;color:#f3f5f7;border-left:1px solid rgba(255,255,255,.07);">LÅSSKÄRM</div>
+      <div style="padding:13px 14px;font-size:11px;font-weight:700;letter-spacing:.12em;color:#f3f5f7;border-left:1px solid rgba(255,255,255,.07);">WIDGET</div>
+      <div style="padding:13px 14px;font-size:11px;font-weight:700;letter-spacing:.12em;color:#f3f5f7;border-left:1px solid rgba(255,255,255,.07);">iOS-APP</div>
+      <div style="padding:13px 14px;font-size:11px;font-weight:700;letter-spacing:.12em;color:#f3f5f7;border-left:1px solid rgba(255,255,255,.07);">DPT2</div>
+    </div>
+
+    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+      <div style="{{ r.rowStyle }}">
+        <div style="padding:14px 16px;border-left:3px solid {{ r.tagColor }};">
+          <div class="scd" style="font-size:16px;font-weight:700;color:#f3f5f7;line-height:1.1;">{{ r.namn }}</div>
+          <div style="display:inline-block;margin-top:7px;font-size:9px;font-weight:700;letter-spacing:.1em;color:#0b0e12;background:{{ r.tagColor }};border-radius:5px;padding:2px 7px;">{{ r.tag }}</div>
+        </div>
+        <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="4">
+          <div style="padding:13px 14px;border-left:1px solid rgba(255,255,255,.07);display:flex;gap:9px;align-items:flex-start;">
+            <span style="{{ c.dot }}">{{ c.dotInner }}</span>
+            <div style="font-size:11.5px;color:{{ c.textColor }};line-height:1.4;">{{ c.text }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- FILES + NEXT -->
+  <div style="display:flex;gap:22px;flex-wrap:wrap;max-width:1320px;margin-top:32px;">
+    <div style="flex:1;min-width:320px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:16px;padding:20px 22px;">
+      <div class="scd" style="font-weight:700;font-size:20px;margin-bottom:12px;">Mockups &amp; spec</div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:rgba(243,245,247,.7);line-height:1.5;">
+        <div>◆ <b style="color:#f3f5f7;">DPT iOS v2 - Widget &amp; Låsskärm</b> — 6 ytor, identitet, specialfall, StandBy, sigill</div>
+        <div>◆ <b style="color:#f3f5f7;">DPT iOS v2 - Jobbdetalj</b> — sigill, dagsprogram, karta, väder, soltider</div>
+        <div>◆ <b style="color:#f3f5f7;">DPT iOS v2 - Signatur</b> — splash, hemskärm, låsskärm, levererad-stämpel</div>
+        <div>◆ <b style="color:#f3f5f7;">DPT iOS v2 - Färgsystem</b> — roller, zoner, samspel, status</div>
+        <div>◆ <b style="color:#f3f5f7;">DPT v5 - Event Program</b> — DPT2:s tidslinje-kort</div>
+        <div style="margin-top:4px;color:rgba(243,245,247,.55);">Spec: <b style="color:#f3f5f7;">DATAMODELL v5.md</b> · <b style="color:#f3f5f7;">HANDOFF.md §8</b> · <b style="color:#f3f5f7;">HANDOFF-widget-lasskarm.md</b></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:320px;background:rgba(240,180,90,.07);border:1px solid rgba(240,180,90,.28);border-radius:16px;padding:20px 22px;">
+      <div class="scd" style="font-weight:700;font-size:20px;margin-bottom:12px;color:#F0B45A;">Kvar att bygga (Code)</div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:rgba(243,245,247,.72);line-height:1.5;">
+        <div>○ Datamodell: <b style="color:#f3f5f7;">pass[]</b> på gren + härlett program</div>
+        <div>○ DPT2: Program-kort + utökad "Läs in spelschema"</div>
+        <div>○ iOS: sigill-gauge på lås/widget/hem, färg-plist i App Group</div>
+        <div>○ iOS: LA-medvetenhet, ljus/mörk-widgetval, tomläge</div>
+        <div>○ Levererad-stämpel i leverera-flödet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIGN-OFF -->
+  <div style="max-width:1320px;margin-top:44px;padding-top:30px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+    <div style="position:relative;width:60px;height:60px;flex:none;">
+      <svg width="60" height="60" viewBox="0 0 60 60"><circle cx="30" cy="30" r="27" fill="none" stroke="rgba(240,180,90,.3)" stroke-width="1.5"/><circle cx="30" cy="30" r="21" fill="none" stroke="rgba(240,180,90,.18)" stroke-width="1"/></svg>
+      <img src="assets/logo-hast-orange.png" alt="" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-52%);width:30px;height:28px;object-fit:contain;">
+    </div>
+    <div style="flex:1;min-width:200px;"><div class="scd" style="font-weight:700;font-size:20px;">Dalecarlia Photo</div><div style="font-size:12px;color:rgba(243,245,247,.5);margin-top:4px;">Helheten — en tråd genom fyra ytor.</div></div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  DESIGN = '#4E93C4'; DATA = '#D19A3E'; BADE = '#6FB35A';
+  ROWS = [
+    { namn:'Signaturen (sigill)', tag:'DESIGN', color:'DESIGN',
+      cells:[ ['ok','Gauge: häst + fyllnadsring'], ['ok','Cirkel-gauge, mono'], ['ok','Splash · nedräkning · märke · stämpel'], ['na','—'] ] },
+    { namn:'Program / deltillfällen', tag:'BÅDE', color:'BADE',
+      cells:[ ['todo','”Nästa” i sigillet'], ['todo','Nästa deltillfälle-rad'], ['ok','Jobbdetalj: dagsprogram'], ['ok','Program-kort + pass i modell'] ] },
+    { namn:'Färgsystem', tag:'DESIGN', color:'DESIGN',
+      cells:[ ['ok','Mono, ingen kategori'], ['ok','Kategoriprick + status'], ['ok','Roller · zoner · former'], ['todo','Delad färg-plist (oförändrad look)'] ] },
+    { namn:'Restid → nästa deltillfälle', tag:'BÅDE', color:'BADE',
+      cells:[ ['ok','Åk om (sigill)'], ['ok','Åk senast + restid'], ['ok','Hem + jobbdetalj'], ['todo','Matar tider ur pass'] ] },
+    { namn:'Dynamisk bakgrund (★)', tag:'BÅDE', color:'BADE',
+      cells:[ ['na','—'], ['na','—'], ['ok','Hemskärm ur ★-pott'], ['todo','★-flagga i Leverera'] ] },
+    { namn:'Event-koppling ”Del av”', tag:'BÅDE', color:'BADE',
+      cells:[ ['na','—'], ['todo','Titelrad'], ['ok','Jobbdetalj-rad + länk'], ['todo','Match ↔ event-fält'] ] },
+    { namn:'Status (synk/röd/gul/grön)', tag:'BÅDE', color:'BADE',
+      cells:[ ['na','—'], ['todo','Färskhetsdim + stämpel'], ['ok','Statuspill, 4 lägen'], ['ok','Finns (publicering)'] ] },
+    { namn:'Levererad-stämpel', tag:'BÅDE', color:'BADE',
+      cells:[ ['na','—'], ['na','—'], ['ok','Leverera-kvitto'], ['todo','Sätts vid leverans'] ] },
+  ];
+  renderVals() {
+    const col = { DESIGN:this.DESIGN, DATA:this.DATA, BADE:this.BADE };
+    const dotFor = (k) => {
+      if (k==='ok') return { dot:'width:16px;height:16px;border-radius:50%;background:#6FB35A;flex:none;margin-top:1px;display:inline-flex;align-items:center;justify-content:center;color:#0b0e12;font-size:10px;font-weight:800;', dotInner:'✓', textColor:'rgba(243,245,247,.82)' };
+      if (k==='todo') return { dot:'width:15px;height:15px;border-radius:50%;border:2px solid rgba(243,245,247,.38);flex:none;margin-top:2px;', dotInner:'', textColor:'rgba(243,245,247,.62)' };
+      return { dot:'width:14px;height:2px;background:rgba(243,245,247,.28);flex:none;margin-top:9px;', dotInner:'', textColor:'rgba(243,245,247,.3)' };
+    };
+    return {
+      rows: this.ROWS.map((r,i) => ({
+        namn:r.namn, tag:r.tag, tagColor:col[r.color],
+        rowStyle:{ display:'grid', gridTemplateColumns:'230px repeat(4,1fr)',
+          borderTop:'1px solid rgba(255,255,255,.07)',
+          background: i%2 ? 'rgba(255,255,255,.015)' : 'transparent' },
+        cells: r.cells.map(c => { const d = dotFor(c[0]); return { text:c[1], dot:d.dot, dotInner:d.dotInner, textColor:d.textColor }; }),
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

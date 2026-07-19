@@ -54,9 +54,53 @@ grenar:
 Event kräver varken matcher eller grenar — en cup-kväll med en enda
 match använder samma struktur.
 
-## Gren — byggkloss under Event (inbäddad i eventet)
+## Gren (disciplin) — byggkloss under Event (inbäddad i eventet)
 Generell för alla sporter: 100 m häck, 10 km klassisk, sprint, herr/dam.
+I andra sammanhang kan gren heta **disciplin** — samma fält (`gren`).
 Individer kopplas per gren (n:n) — se Individ.
+
+En gren bär noll eller flera **pass** (tidsatta tillfällen). Varje pass har
+**egen datum+tid** — kval kan gå på morgonen dag 1, finalen på kvällen dag 2:
+
+```yaml
+# i event-frontmatter, per gren
+grenar:
+  - id: 100m-dam
+    namn: 100 m dam
+    pass:
+      - { namn: Försök, datum: 2026-07-24, tid: "09:00", plats: arena }
+      - { namn: Semi,   datum: 2026-07-24, tid: "14:00" }
+      - { namn: Final,  datum: 2026-07-25, tid: "19:10" }
+```
+
+Pass är valfria — en gren utan pass fungerar som idag (bara programpunkt).
+Eventet kan också bära fria **hållpunkter** (utan gren, t.ex. medaljceremoni)
+för fotografens egna hållpunkter.
+
+## Program / deltillfällen (härlett) — NY
+Eventets **program** för en dag är inget eget register — det **härleds**
+genom att slå ihop och sortera på datum+tid:
+
+1. alla **pass** från eventets grenar,
+2. alla **matcher** med `event:` som pekar hit och har klockslag,
+3. eventets fria **hållpunkter** (valfria).
+
+Resultatet grupperas per dag → "dagens deltillfällen" (iOS-jobbdetalj,
+DPT2 event-detalj, hemsidan). Ingen dubbellagring — ändra tiden på passet och
+programmet följer med. **Flerdag** löses av att varje pass bär eget datum;
+inget behov av separata dag-entiteter.
+
+**Individer per deltillfälle** härleds vidare: passet hör till en gren, grenen
+har `deltagare` → passet visar de individerna. Aldrig skrivet, alltid frågat.
+
+**Nästa deltillfälle** (iOS restid, §iOS 1k) = första pass/match med klockslag
+framåt i tiden. Nu väldefinierat eftersom pass bär tider.
+
+### Läs in spelschema — utökning
+Importören läser idag matchtider för ligor/säsonger. **Utöka** den att också
+läsa ett events **startlista/program** → skapar grenar (om de saknas) och fyller
+deras `pass`. Källor: samma importflöde **plus klistra in / CSV** från
+arrangörens PDF. Allt **manuellt justerbart** efteråt (lägg till/ändra/ta bort pass).
 
 ## Individ (`content/individ/*.md`) — NY, register som Lag
 Långlivad mellan event (Duplantis finns kvar).
