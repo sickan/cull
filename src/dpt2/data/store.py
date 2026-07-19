@@ -1615,6 +1615,42 @@ def backfilla_deltagarklass(conn, event_id):
     return satta
 
 
+def stad_deltagare_fel_klass(conn, event_id):
+    """Flyttar en deltagare som kopplats till en gren med FEL klass till syskon-
+    grenen med rätt klass (samma grennyckel).
+
+    Symptomet (Stigs fynd 19/7): Vanessa Kamga (dam) hamnade på herr-Diskus
+    medan dam-Diskus stod tom — diskus dam och herr är skilda grenar och får
+    aldrig dela pass. Rör BARA en deltagare vars egen klass (lag.gren) är satt,
+    skiljer sig från grenens klass, OCH har en syskongren med sin klass att
+    flytta till — annars låter vi den vara (ingen gissning). Returnerar antal
+    flyttade."""
+    per_nyckel = {}   # grennyckel → {klass: disciplin_id}
+    grenar = [dict(r) for r in conn.execute(
+        "SELECT id, namn, gren FROM disciplin WHERE tavling_id=?", (event_id,))]
+    for d in grenar:
+        per_nyckel.setdefault(_grennyckel(d["namn"]), {})[d["gren"]] = d["id"]
+    flyttade = 0
+    for d in grenar:
+        if d["gren"] not in ("dam", "herr", "mixed"):
+            continue
+        syskon = per_nyckel.get(_grennyckel(d["namn"]), {})
+        rader = conn.execute(
+            "SELECT dd.lag_id, l.gren AS klass FROM disciplin_deltagare dd "
+            "JOIN lag l ON l.id=dd.lag_id WHERE dd.disciplin_id=?",
+            (d["id"],)).fetchall()
+        for dd in rader:
+            k = dd["klass"]
+            if k in ("dam", "herr", "mixed") and k != d["gren"] and k in syskon:
+                conn.execute("DELETE FROM disciplin_deltagare "
+                             "WHERE disciplin_id=? AND lag_id=?", (d["id"], dd["lag_id"]))
+                conn.execute("INSERT OR IGNORE INTO disciplin_deltagare"
+                             "(disciplin_id,lag_id) VALUES(?,?)", (syskon[k], dd["lag_id"]))
+                flyttade += 1
+    conn.commit()
+    return flyttade
+
+
 def satt_deltagare_handle(conn, deltagare_id, handle):
     """Sätter SoMe-handle på en utövare (lag kind='individ') eller lag. v40: ETT
     register — skriver bara i lag, inget separat individregister att hålla synk.

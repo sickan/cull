@@ -2148,3 +2148,43 @@ class TestSokGlobalt(unittest.TestCase):
 
     def test_for_kort_query_ger_inget(self):
         self.assertEqual(store.sok_globalt(self.c, "s"), [])
+
+
+class TestStadDeltagareFelKlass(unittest.TestCase):
+    """Stigs fynd 19/7 — dam-deltagare felkopplad till herr-gren flyttas rätt."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.ev = store.upsert_tavling(self.c, "SM 2026", sport="friidrott",
+                                       typ="masterskap")
+
+    def _delt(self, disc):
+        return {r["lag_id"] for r in self.c.execute(
+            "SELECT lag_id FROM disciplin_deltagare WHERE disciplin_id=?", (disc,))}
+
+    def test_flyttar_till_ratt_klassgren(self):
+        herr = store.upsert_disciplin(self.c, self.ev, "Diskus", gren="herr")
+        dam = store.upsert_disciplin(self.c, self.ev, "Diskus", gren="dam")
+        d = store.upsert_lag(self.c, "Daniel Ståhl", kind="individ",
+                             sport="friidrott", gren="herr")
+        v = store.upsert_lag(self.c, "Vanessa Kamga", kind="individ",
+                             sport="friidrott", gren="dam")
+        store.koppla_disciplin_deltagare(self.c, herr, d)
+        store.koppla_disciplin_deltagare(self.c, herr, v)   # fel: dam på herr
+        self.assertEqual(store.stad_deltagare_fel_klass(self.c, self.ev), 1)
+        self.assertEqual(self._delt(herr), {d})             # Daniel kvar
+        self.assertEqual(self._delt(dam), {v})              # Vanessa flyttad
+
+    def test_ror_inte_utan_syskongren(self):
+        herr = store.upsert_disciplin(self.c, self.ev, "Diskus", gren="herr")
+        v = store.upsert_lag(self.c, "Vanessa", kind="individ", gren="dam")
+        store.koppla_disciplin_deltagare(self.c, herr, v)
+        self.assertEqual(store.stad_deltagare_fel_klass(self.c, self.ev), 0)
+        self.assertEqual(self._delt(herr), {v})             # ingen dam-gren → lämnas
+
+    def test_ror_inte_deltagare_utan_klass(self):
+        herr = store.upsert_disciplin(self.c, self.ev, "Diskus", gren="herr")
+        store.upsert_disciplin(self.c, self.ev, "Diskus", gren="dam")
+        x = store.upsert_lag(self.c, "Okänd", kind="individ")   # ingen klass
+        store.koppla_disciplin_deltagare(self.c, herr, x)
+        self.assertEqual(store.stad_deltagare_fel_klass(self.c, self.ev), 0)

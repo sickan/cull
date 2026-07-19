@@ -872,6 +872,7 @@ class Api:
             # deltagare som saknar den. Båda är no-op när allt redan stämmer.
             sam["hopslagna"] = store.stad_grendubbletter(self.conn, event_id)
             sam["klass_satt"] = store.backfilla_deltagarklass(self.conn, event_id)
+            sam["flyttade_klass"] = store.stad_deltagare_fel_klass(self.conn, event_id)
             return {"ok": True, **sam}
         if sort == "startlista":
             e = store.hamta_event(self.conn, event_id) or {}
@@ -881,6 +882,7 @@ class Api:
             sam = store.importera_program(self.conn, event_id, rader)
         sam["hopslagna"] = store.stad_grendubbletter(self.conn, event_id)
         sam["klass_satt"] = store.backfilla_deltagarklass(self.conn, event_id)
+        sam["flyttade_klass"] = store.stad_deltagare_fel_klass(self.conn, event_id)
         return {"ok": True, **sam}
 
     # ── Event-sektionen (V5-C skiva 1, handoff §2) ───────────────────────────
