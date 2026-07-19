@@ -97,7 +97,7 @@
           {#if m.auto_dold}
             <!-- V5-C §3: automatikens beslut (pagang_lage på eventet) — inte
                  den manuella kryssrutan. Ändras i Event-sektionens På gång-kort. -->
-            <span class="autobadge" title="Styrs av eventets På gång-läge (Event-sektionen)">
+            <span class="autobadge" title="Styrs av tävlingens På gång-läge (Tävlingar)">
               {m.art === 'tavling' ? 'Matcherna visas' : 'Heldagskortet täcker'}</span>
           {:else}
             <button class="visaruta" title={m.pagang_dold ? 'Visas inte på sajten — tryck för att visa' : 'Visas på sajten — tryck för att dölja'}

@@ -401,14 +401,14 @@
     <div class="topp">
       <div>
         <span class="kicker">Planera</span>
-        <h1 class="scd">Event <span class="sub">Mästerskap, cuper, turneringar — tidsbegränsade samlingar av matcher och grenar</span></h1>
+        <h1 class="scd">Tävlingar <span class="sub">Mästerskap, cuper, turneringar, världscupar — tidsbegränsade tävlingar med matcher och grenar</span></h1>
       </div>
-      <button class="prim" on:click={nyttEvent}>+ Nytt event</button>
+      <button class="prim" on:click={nyttEvent}>+ Ny tävling</button>
     </div>
 
     {#if editorOppen && ev}
       <div class="kort editor">
-        <span class="caps">{ev.id ? 'Redigera event' : 'Nytt event'}</span>
+        <span class="caps">{ev.id ? 'Redigera tävling' : 'Ny tävling'}</span>
         <div class="edrad">
           <label class="edfalt vaxa">Namn<input bind:value={ev.namn} placeholder="EuroVolley 2026" /></label>
           <label class="edfalt">Typ<select bind:value={ev.typ}>{#each EVENTTYPER as [v, n]}<option value={v}>{n}</option>{/each}</select></label>
@@ -437,9 +437,9 @@
     </div>
 
     {#if laddar}
-      <p class="tom">Laddar event…</p>
+      <p class="tom">Laddar tävlingar…</p>
     {:else if !filtrerade.length}
-      <p class="tom">Inga event{filter !== 'alla' ? ' i det här filtret' : ' än — skapa ett i tävlings-editorn (typ turnering/mästerskap)'}.</p>
+      <p class="tom">Inga tävlingar{filter !== 'alla' ? ' i det här filtret' : ' än — skapa en med + Ny tävling'}.</p>
     {:else}
       <div class="lista">
         {#each filtrerade as e (e.id)}
@@ -461,7 +461,7 @@
     {@const e = detalj.event}
     {@const t = TYP[e.typ] || TYP.ovrigt}
     {@const s = status(e)}
-    <button class="tillbaka" on:click={tillbaka}>‹ Alla event</button>
+    <button class="tillbaka" on:click={tillbaka}>‹ Alla tävlingar</button>
     <div class="drubrik">
       <h1 class="scd">{e.namn}</h1>
       <span class="typbadge stor" style="color:{t.farg};border-color:{t.farg}">{t.namn}</span>
@@ -471,7 +471,7 @@
 
     {#if editorOppen && ev}
       <div class="kort editor">
-        <span class="caps">Redigera event</span>
+        <span class="caps">Redigera tävling</span>
         <div class="edrad">
           <label class="edfalt vaxa">Namn<input bind:value={ev.namn} /></label>
           <label class="edfalt">Typ<select bind:value={ev.typ}>{#each EVENTTYPER as [v, n]}<option value={v}>{n}</option>{/each}</select></label>
@@ -711,7 +711,7 @@
             </div>
           {/each}
         {:else}
-          <p class="tomkort">Inga matcher — grenarna är programmet. Event kräver varken matcher eller grenar.</p>
+          <p class="tomkort">Inga matcher — grenarna är programmet. En tävling kräver varken matcher eller grenar.</p>
         {/if}
         {#if detalj.okopplade.length}
           <div class="okrubrik caps">Okopplade matcher i {e.sport}</div>
@@ -785,7 +785,7 @@
                     title="SoMe-konto — sparas när du lämnar fältet"
                     on:blur={(ev) => sparaHandle(d, ev.currentTarget.value)}
                     on:keydown={(ev) => ev.key === 'Enter' && ev.currentTarget.blur()} />
-                  <button class="bort" title="Ta bort från eventet (alla grenar)" on:click={() => taBortDeltagare(d.id)}>✕</button>
+                  <button class="bort" title="Ta bort från tävlingen (alla grenar)" on:click={() => taBortDeltagare(d.id)}>✕</button>
                 </div>
                 {#if detalj.grenar.length}
                   <!-- Gren-chips: klick togglar deltagandet i grenen -->
@@ -805,7 +805,7 @@
           {:else}
             <p class="tomkort">Inga individer kopplade.</p>
           {/if}
-          <p class="fotnot">Gren-chipsen delar koppling med Grenar &amp; deltagare-editorn — appens tävlingspaket ser samma sak. Historiken härleds ur eventen, aldrig lagrad på individen.</p>
+          <p class="fotnot">Gren-chipsen delar koppling med Grenar &amp; deltagare-editorn — appens tävlingspaket ser samma sak. Historiken härleds ur tävlingarna, aldrig lagrad på utövaren.</p>
         </div>
       </div>
       {/if}

@@ -590,7 +590,7 @@
             </div>
             <div class="afixtur">
               <div class="afx scd">{matchnamn(m)}
-                {#if m.event}<span class="grenlbl scd" style="color:var(--acc)">Event</span>{/if}
+                {#if m.event}<span class="grenlbl scd" style="color:var(--acc)">Tävling</span>{/if}
                 {#if m.hem_gren}<span class="grenlbl scd" style="color:{grenFarg(m.hem_gren)}">{grenEtikett(m.hem_gren)}</span>{/if}
               </div>
               <div class="ameta">{[m.liga, m.arena, m.resultat ? `slutresultat ${m.resultat}` : ''].filter(Boolean).join(' · ')}</div>
@@ -682,12 +682,12 @@
                     <!-- F18-5: kompakt vänsterställd toggle — hjälptexten bor i
                          tooltip så raden inte konkurrerar med HELDAG-badgen. -->
                     <label class="eventtogg"
-                      title="Cup, mästerskap, läger… — matchen har inget bortalag; eventnamnet blir rubriken.">
+                      title="Cup, mästerskap, läger… — matchen har inget bortalag; tävlingsnamnet blir rubriken.">
                       <input type="checkbox" checked={!!utkast.event} on:change={(e) => sattEvent(e.target.checked)} />
-                      <span>Heldagsevent <span class="eventmut">(utan motståndare)</span></span>
+                      <span>Heldag <span class="eventmut">(utan motståndare)</span></span>
                     </label>
                     <div class="rad2" class:enkel={utkast.event}>
-                      <label>{utkast.event ? 'Eventnamn' : (uttagProfil.individ ? 'Spelare 1' : 'Hemmalag')}
+                      <label>{utkast.event ? 'Tävlingsnamn' : (uttagProfil.individ ? 'Spelare 1' : 'Hemmalag')}
                         <Combobox options={lagVal} value={utkast.lag_hemma} placeholder={uttagProfil.individ ? 'Välj spelare…' : 'Välj lag…'}
                           on:pick={(e) => valjHemma(e.detail)} on:create={(e) => skapaHemma(e.detail)} />
                       </label>
@@ -702,14 +702,15 @@
                       <Combobox options={tavlingVal} value={utkast.liga} placeholder="Välj tävling…"
                         on:pick={(e) => valjTavling(e.detail)} on:create={(e) => skapaTavling(e.detail)} />
                     </label>
-                    <!-- V5-C: andra dörren — matchen kan ingå i ett event
-                         (mästerskap/cup/turnering) oberoende av ligan -->
-                    <label class="full">Event
+                    <!-- V5-C: andra dörren — matchen kan ingå i en tävling
+                         (mästerskap/cup/turnering) oberoende av ligan.
+                         D11b §1: 'Event' försvinner ur UI, visas som Tävling. -->
+                    <label class="full">Tävling
                       <div class="eventdorr">
-                        <Combobox options={eventVal} value={eventNamn} placeholder="Del av event…"
+                        <Combobox options={eventVal} value={eventNamn} placeholder="Del av tävling…"
                           on:pick={(e) => valjEvent(e.detail)} on:create={(e) => skapaEvent(e.detail)} />
                         {#if utkast.event_id}
-                          <button type="button" class="eventrensa" title="Koppla bort eventet"
+                          <button type="button" class="eventrensa" title="Koppla bort tävlingen"
                             on:click={rensaEvent}>✕</button>
                         {/if}
                       </div>

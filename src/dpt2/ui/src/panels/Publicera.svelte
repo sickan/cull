@@ -211,7 +211,7 @@
   $: isEvent = !!(match && (match.event || match.heldag || !(match.lag_borta || '').trim()))
   $: matchTitel = match ? (isEvent ? match.lag_hemma : `${match.lag_hemma} – ${match.lag_borta}`) : 'Ingen match'
   $: matchMeta = match
-    ? [datumTxt(match.datum), arTurnering ? 'Turnering' : (isEvent ? 'Heldagsevent' : (match.resultat || 'Kommande'))].filter(Boolean).join(' · ')
+    ? [datumTxt(match.datum), arTurnering ? 'Turnering' : (isEvent ? 'Heldag' : (match.resultat || 'Kommande'))].filter(Boolean).join(' · ')
     : ''
   async function valjMatch(id) {
     matchOpen = false
@@ -832,14 +832,14 @@
       {#if matchOpen}
         <button class="mddskArm" on:click={() => (matchOpen = false)} aria-label="stäng"></button>
         <div class="mddlista">
-          <div class="mddcaps">Välj match eller heldagsevent</div>
+          <div class="mddcaps">Välj match eller heldag</div>
           {#each matcher as m (m.id)}
             {@const mEvent = m.event || m.heldag || !(m.lag_borta || '').trim()}
             <button class="mddrad" class:pa={m.id === match?.id} on:click={() => valjMatch(m.id)}>
               <span class="grendot" style="background:{grenFarg(m.hem_gren)}"></span>
               <div class="mddi"><div class="mddf">{mEvent ? m.lag_hemma : `${m.lag_hemma} – ${m.lag_borta}`}</div>
-                <div class="mdds">{[datumTxt(m.datum), mEvent ? 'Heldagsevent' : m.sport].filter(Boolean).join(' · ')}</div></div>
-              {#if mEvent}<span class="mddkom event">Event</span>
+                <div class="mdds">{[datumTxt(m.datum), mEvent ? 'Heldag' : m.sport].filter(Boolean).join(' · ')}</div></div>
+              {#if mEvent}<span class="mddkom event">Tävling</span>
               {:else if m.resultat}<span class="mddres scd">{m.resultat}</span>
               {:else}<span class="mddkom">Kommande</span>{/if}
             </button>
@@ -918,7 +918,7 @@
   {:else if match && arTurnering}
     <div class="remstext eventrem">Turnering — publicering för hela tävlingen (t.ex. dagens matcher eller vecko-svep). Inga resultatsiffror; samma bilder, text och kanaler som en match.</div>
   {:else if match && isEvent}
-    <div class="remstext eventrem">Heldagsevent — inga resultatsiffror. Samma bilder, text och kanaler som en match.</div>
+    <div class="remstext eventrem">Heldag — inga resultatsiffror. Samma bilder, text och kanaler som en match.</div>
   {/if}
 
   <!-- Flikar (p.1): Innehåll · Kanaler & publicera · Publicerat -->

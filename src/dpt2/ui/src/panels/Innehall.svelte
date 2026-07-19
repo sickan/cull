@@ -23,7 +23,7 @@
   // kureringen (hero-val, artikelkort, På gång). Matchartikeln byggs HÄR —
   // Matchpublicering gör Live/SoMe och producerar referatet vi hämtar (§4).
   const LIBTYPER = [
-    { id: 'sport', namn: 'Sport', farg: '#2F7CB0', hint: 'Startsidan för sport — hero, matchartiklar, event & På gång.' },
+    { id: 'sport', namn: 'Sport', farg: '#2F7CB0', hint: 'Startsidan för sport — hero, matchartiklar, tävlingar & På gång.' },
     { id: 'landskap', namn: 'Landskap', farg: '#C9871F', hint: 'Bildserie — landskap & natur, endast bilder.' },
     { id: 'event', namn: 'Människor', farg: '#C9657F', hint: 'Porträtt, bröllop, student & företag.' },
     { id: 'blogg', namn: 'Blogg', farg: '#7A8794', hint: 'Journal, resor & fritext — en fristående bloggpost.' },
@@ -138,7 +138,7 @@
   function stangEditor() { editorMode = false; laddaOversikt() }
 
   // ── Bibliotek: publicerat & utkast ─────────────────────────────────────────
-  const TYP_NAMN = { match: 'Matchartikel', sportevent: 'Event/mästerskap',
+  const TYP_NAMN = { match: 'Matchartikel', sportevent: 'Tävling',
     blogg: 'Blogg', event: 'Människor', landskap: 'Landskap', film: 'Film' }
   const DRAFTS_KEY = 'dpt2.drafts.v1'
   let poster = []                     // alla innehåll-rader (DB via listaInnehall)
@@ -860,7 +860,7 @@
       {/if}
     </div>
     <div class="cmssub">{libinfo?.hint}
-      {#if libType === 'sport'}<span class="cmshint2">Matchartiklar skapas från en match · event/mästerskap från en heldagsaktivitet i Fotojobb.</span>{/if}
+      {#if libType === 'sport'}<span class="cmshint2">Matchartiklar skapas från en match · tävling från en heldagsaktivitet i Fotojobb.</span>{/if}
     </div>
 
     {#if libType === 'sport'}
@@ -919,7 +919,7 @@
           </button>
           <button class="sportkort nyartikel" on:click={() => { cmsSportevent = tomSportevent(); draftId = null; oppnaEditor('sportevent') }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
-            <span>+ Nytt event/mästerskap</span>
+            <span>+ Ny tävling</span>
           </button>
         </div>
 
@@ -1114,7 +1114,7 @@
         {#if !heldagsJobb.length}<div class="ovtom">Inga heldagsaktiviteter i Fotojobb — skapa en där först.</div>{/if}
       </div>
       <div class="kort">
-        <div class="caps">Event/mästerskap</div>
+        <div class="caps">Tävling</div>
         <div class="grid2">
           <div class="f"><label>Titel</label><input bind:value={cmsSportevent.titel} on:change={forhandsgranska} /></div>
           <div class="f"><label>Kategori <span class="lblhint">— etikett på kortet</span></label>
@@ -1168,7 +1168,7 @@
             </div>
           {/if}
         </div>
-        <div class="ovfot">Underartiklarna länkas från eventsidan på sajten (/sportevent/{aktSlug || '…'}).</div>
+        <div class="ovfot">Underartiklarna länkas från tävlingssidan på sajten (/sportevent/{aktSlug || '…'}).</div>
       </div>
     {:else if ctyp === 'event'}
       <div class="kort">

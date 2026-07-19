@@ -14,7 +14,7 @@
     { rubrik: 'Planera', poster: [
       { id: 'fotojobb', namn: 'Fotojobb' },
       { id: 'matcher', namn: 'Matcher' },
-      { id: 'eventsektion', namn: 'Event' },              // V5-C (handoff §2)
+      { id: 'eventsektion', namn: 'Tävlingar' },          // V5-C (handoff §2); D11b §1: 'Event' försvinner ur UI
       { id: 'lag', namn: 'Lag & ligor' },                 // V5-C: omdöpt
     ] },
     // §8 (UX-lyftet): jobbet som nav — "Efter jobb" + "Publicera" (inte
