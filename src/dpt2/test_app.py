@@ -3167,6 +3167,21 @@ class TestProgramTillTelefonen(unittest.TestCase):
         m = store.hamta_match(self.api.conn, mid)
         self.assertNotIn("program", self.api._match_till_paket(m, {}))
 
+    def test_ligamatch_far_inget_program(self):
+        """Molnfynd 19/7: varje Damallsvenskan-match bar hela seriesäsongen som
+        sitt 'dagsprogram' — tavling_id pekar på LIGAN för en seriematch, och
+        program() svarade med alla matcher i den. En liga är inget event."""
+        liga = store.upsert_tavling(self.api.conn, "OBOS Damallsvenskan",
+                                    sport="fotboll", typ="liga")
+        for datum in ("2026-07-31", "2026-08-15", "2026-08-29"):
+            store.spara_match(self.api.conn, {
+                "lag_hemma": "Malmö FF", "lag_borta": "Piteå IF DFF",
+                "sport": "fotboll", "datum": datum, "tid": "18:00",
+                "tavling_id": liga})
+        m = store.hamta_match(self.api.conn, store.lista_matcher(self.api.conn)[0]["id"])
+        paket = self.api._match_till_paket(m, {})
+        self.assertNotIn("program", paket)
+
 
 class TestPdfFeldiagnos(unittest.TestCase):
     """Stigs fynd 19/7: 'Hittade inget tidsprogram' fast orsaken var att

@@ -268,6 +268,12 @@ class Api:
         eid = m.get("event_id") or m.get("tavling_id")
         if not eid:
             return {}
+        # BARA riktiga event. `tavling_id` pekar på LIGAN för en seriematch, och
+        # store.program() svarar då med hela säsongen som "dagsprogram" — varje
+        # Damallsvenskan-match bar 14 rader av seriens övriga matcher innan det
+        # här skyddet fanns (hittat i molnet 19/7). En liga är inget event.
+        if not store.hamta_event(self.conn, eid):
+            return {}
         prog = self._paket_program(eid)
         return {"program": prog} if prog else {}
 
