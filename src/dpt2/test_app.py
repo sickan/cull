@@ -3216,3 +3216,65 @@ class TestPdfFeldiagnos(unittest.TestCase):
         r = self.api.tolka_program_pdf(self.ev, path="/finns/inte.pdf")
         self.assertFalse(r["ok"])
         self.assertIn("tidsprogram", r["fel"])
+
+
+class TestStartlistaMedTiderBryggan(unittest.TestCase):
+    """V5 §8: arrangörens startlistesida ger BÅDE program och deltagare."""
+
+    RA = """Kvinnor 100 m
+Försök Fredag, 18:20
+Final Fredag, 20:25
+
+80\tEsther Sahlqvist\t06\tHammarby IF\t11.85\t11.682023\t
+141\tNora Lindahl\t04\tHässelby SK\t11.15\t11.152026\t
+
+Antal deltagare: 2
+
+Män Höjd
+Kval Fredag, 15:00
+Final Lördag, 16:15
+
+24\tOskar Andersson\t08\tAlunda SK\t170\t1702024\t
+
+Antal deltagare: 1
+"""
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.ev = store.upsert_tavling(
+            self.api.conn, "Friidrotts-SM 2026", sport="friidrott",
+            typ="masterskap", fran="2026-07-24", till="2026-07-26")
+
+    def test_tolkning_ger_bade_pass_och_deltagare(self):
+        r = self.api.tolka_program_text(self.ev, self.RA, sort="startlista_tider")
+        self.assertEqual(len(r["rader"]), 4)          # 2 pass × 2 grenar
+        self.assertEqual(len(r["deltagare"]), 3)
+        self.assertEqual(r["rader"][0]["datum"], "2026-07-24")   # ur perioden
+
+    def test_import_bygger_program_med_deltagare_i_ett_svep(self):
+        r = self.api.tolka_program_text(self.ev, self.RA, sort="startlista_tider")
+        sam = self.api.importera_program(self.ev, r["rader"],
+                                         sort="startlista_tider",
+                                         deltagare=r["deltagare"])
+        self.assertEqual(sam["pass_nya"], 4)
+        self.assertEqual(sam["deltagare_nya"], 3)
+        self.assertEqual(sam["oklara"], [])           # klassen gör grenen entydig
+        dagar = self.api.hamta_program(self.ev)
+        forsta = dagar[0]["rader"][0]
+        self.assertEqual(forsta["gren"], "Höjd")      # 15:00 före 18:20
+        self.assertEqual(forsta["gren_kant"], "herr")
+        hundra = next(r for d in dagar for r in d["rader"] if r["gren"] == "100 m")
+        self.assertEqual([d["namn"] for d in hundra["deltagare"]],
+                         ["Esther Sahlqvist", "Nora Lindahl"])
+
+    def test_passen_skapar_grenarna_sa_deltagarna_inte_blir_tvetydiga(self):
+        """Ordningen är hela poängen: utan klass på grenen först skulle
+        deltagarna hamna i 'oklara'."""
+        r = self.api.tolka_program_text(self.ev, self.RA, sort="startlista_tider")
+        sam = self.api.importera_program(self.ev, r["rader"],
+                                         sort="startlista_tider",
+                                         deltagare=r["deltagare"])
+        grenar = {(g["namn"], g["gren"]) for g in
+                  store.lista_discipliner(self.api.conn, self.ev)}
+        self.assertEqual(grenar, {("100 m", "dam"), ("Höjd", "herr")})
+        self.assertEqual(sam["deltagare_befintliga"], 0)

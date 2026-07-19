@@ -342,6 +342,109 @@ def _las_sida(sida, ar):
     return ut
 
 
+# ── Startlista med tider (EasyRecord m.fl.) ─────────────────────────────────
+# Arrangörens startlistesida bär BÅDE programmet och deltagarna: varje gren har
+# sina passrader ("Försök Fredag, 18:20") direkt ovanför sin deltagartabell.
+# En inklistring ger därför båda delarna — bättre källa än PDF:en, som bara har
+# tiderna.
+#
+# Formen (SM 2026, easyrecord.se) efter kopiering ur webbläsaren:
+#
+#     Kvinnor 100 m                 ← klass + gren
+#     Försök Fredag, 18:20          ← pass med veckodag
+#     Final Fredag, 20:25
+#     ...tabellhuvud...
+#     80⇥Esther Sahlqvist⇥06⇥Hammarby IF⇥11.85⇥11.682023
+#     Antal deltagare: 22
+#
+# Mångkamp har en passrad per DELGREN ("100 m Fredag, 12:45") — de blir pass på
+# grenen Tiokamp, vilket är precis vad de är.
+
+KLASSORD = {"kvinnor": "dam", "damer": "dam", "flickor": "dam",
+            "män": "herr", "man": "herr", "herrar": "herr", "pojkar": "herr"}
+
+_VECKODAG = {"måndag": 0, "tisdag": 1, "onsdag": 2, "torsdag": 3,
+             "fredag": 4, "lördag": 5, "söndag": 6,
+             "mandag": 0, "lordag": 5, "sondag": 6}
+
+_PASSRAD = re.compile(
+    r"^(?P<namn>.+?)\s+(?P<dag>" + "|".join(_VECKODAG) + r")\s*,\s*"
+    r"(?P<tid>\d{1,2}[:.]\d{2})\s*$", re.I)
+_GRENRUBRIK = re.compile(
+    r"^(?P<klass>kvinnor|damer|flickor|män|man|herrar|pojkar)\s+(?P<rest>\S.*)$",
+    re.I)
+_ANTAL = re.compile(r"^antal\s+(deltagare|starter)\s*:", re.I)
+
+
+def _dagar_i_perioden(fran, till):
+    """Veckodagsnamn → ISO-datum inom eventets period. Startlistan skriver
+    'Fredag', inte ett datum — perioden gör om det till rätt dag."""
+    from datetime import date, timedelta
+    ut = {}
+    try:
+        d0 = date.fromisoformat(fran)
+        d1 = date.fromisoformat(till or fran)
+    except (TypeError, ValueError):
+        return ut
+    d, varv = d0, 0
+    while d <= d1 and varv < 60:
+        for namn, nr in _VECKODAG.items():
+            if nr == d.weekday():
+                ut.setdefault(namn, d.isoformat())
+        d += timedelta(days=1)
+        varv += 1
+    return ut
+
+
+def tolka_startlista_med_tider(text, fran=None, till=None):
+    """Klistrad startlistesida → {"pass": [...], "deltagare": [...]}.
+
+    Passraderna får samma form som tolka_tidsprogram, deltagarraderna samma som
+    tolka_startlista — så bägge kan gå genom befintlig granskning och import.
+    Utan `fran` går passen inte att datera; de flaggas då i stället för att
+    slängas."""
+    dagar = _dagar_i_perioden(fran, till)
+    pas, delt = [], []
+    gren = klass = ""
+    for rå in (text or "").splitlines():
+        rad = rå.strip()
+        if not rad or _ANTAL.match(rad):
+            continue
+        # Deltagarrad: tabbar och startnummer först. Testas FÖRE grenrubriken —
+        # en klubb kan heta "Män..." och ska inte tolkas som ny gren.
+        if "\t" in rå:
+            d = [x.strip() for x in rå.split("\t")]
+            # Startnumret får SAKNAS: på SM 2026 står Oscar Holmin utan nummer
+            # i två grenar, och ett krav på siffror hade tappat båda tyst.
+            # Namnet i andra fältet är det som gör raden till en deltagare.
+            if (len(d) >= 3 and d[1] and not d[1].isdigit()
+                    and (not d[0] or re.fullmatch(r"\d{1,5}", d[0]))):
+                delt.append({
+                    "gren": gren, "klass": klass, "namn": d[1],
+                    "klubb": d[3] if len(d) > 3 else "", "handle": "",
+                    "varning": "" if gren else "Ingen gren — välj i listan",
+                })
+                continue
+        m = _GRENRUBRIK.match(rad)
+        if m and not m.group("rest").lower().startswith(("startlista", "gren")):
+            klass = KLASSORD.get(m.group("klass").lower(), "")
+            gren = m.group("rest").strip()
+            continue
+        m = _PASSRAD.match(rad)
+        if m and gren:
+            datum = dagar.get(m.group("dag").lower(), "")
+            t = m.group("tid").replace(".", ":")
+            tim, mi = t.split(":")
+            pas.append({
+                "datum": datum, "tid": f"{int(tim):02d}:{mi}",
+                "gren": gren, "pass": m.group("namn").strip(),
+                "plats": "", "klass": klass,
+                "varning": "" if datum else
+                           f"Kunde inte datera {m.group('dag')} — sätt eventets period",
+            })
+    return {"pass": pas, "deltagare": delt}
+
+
 def las_csv(text):
     """CSV/TSV med rubrikrad → lista med dictar, nycklarna gemener.
 

@@ -312,10 +312,13 @@
   }
   async function sparaInlas() {
     if (!granskadeOk.length) return
-    const sam = await importeraProgram(vald, granskadeOk, inlasSort)
+    const sam = await importeraProgram(vald, granskadeOk, inlasSort,
+      granskning?.deltagare || null)
     inlasKvitto = inlasSort === 'startlista'
       ? `${sam.deltagare_nya || 0} nya deltagare, ${sam.deltagare_befintliga || 0} fanns redan`
       : `${sam.pass_nya || 0} nya pass, ${sam.pass_uppdaterade || 0} uppdaterade`
+        + (inlasSort === 'startlista_tider'
+           ? ` · ${sam.deltagare_nya || 0} nya deltagare` : '')
     if (sam.grenar_skapade?.length)
       inlasKvitto += ` · nya grenar: ${sam.grenar_skapade.join(', ')}`
     // Tvetydig gren (finns i flera klasser) hoppas över — säg vilka, annars
@@ -488,13 +491,18 @@
           <div class="seg liten">
             <button class="segval" class:pa={inlasSort === 'tidsprogram'}
               on:click={() => oppnaInlas('tidsprogram')}>Tidsprogram</button>
+            <button class="segval" class:pa={inlasSort === 'startlista_tider'}
+              on:click={() => oppnaInlas('startlista_tider')}>Startlista med tider</button>
             <button class="segval" class:pa={inlasSort === 'startlista'}
-              on:click={() => oppnaInlas('startlista')}>Startlista</button>
+              on:click={() => oppnaInlas('startlista')}>Bara deltagare</button>
             <span class="spacer"></span>
             <button class="bort" title="Stäng" on:click={() => (inlasOppen = false)}>✕</button>
           </div>
           {#if !granskning}
-            <textarea rows="7" bind:value={inlasText} placeholder={inlasSort === 'startlista'
+            <textarea rows="7" bind:value={inlasText} placeholder={
+              inlasSort === 'startlista_tider'
+              ? 'Markera hela startlistesidan hos arrangören och klistra in — tider OCH deltagare läses i ett svep.\n\nKvinnor 100 m\nFörsök Fredag, 18:20\nFinal Fredag, 20:25\n80\tEsther Sahlqvist\t06\tHammarby IF'
+              : inlasSort === 'startlista'
               ? 'Klistra in startlistan — grenrubrik och en rad per deltagare.\n\n100 m dam\n1  Anna Andersson  IF Göta  @anna_a'
               : 'Klistra in arrangörens tidsprogram eller CSV.\n\nFREDAG 24 JULI\n09:00  100 m dam, Försök\n19:10  100 m dam Final'}></textarea>
             <div class="inlasfot">
@@ -508,7 +516,7 @@
             {#if inlasFel}<div class="kvitto fel">{inlasFel}</div>{/if}
           {:else}
             <div class="granskrubrik caps">
-              {granskning.rader.length} rader tolkade{granskning.kalla === 'csv' ? ' ur CSV' : ''}
+              {granskning.rader.length} rader tolkade{granskning.kalla === 'csv' ? ' ur CSV' : ''}{granskning.deltagare?.length ? ` · ${granskning.deltagare.length} deltagare följer med` : ''}
               {#if granskadeOk.length < granskning.rader.length}
                 <span class="varn">· {granskning.rader.length - granskadeOk.length} ofullständiga hoppas över</span>
               {/if}

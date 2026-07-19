@@ -213,5 +213,74 @@ class TestPdfKolumnlayout(unittest.TestCase):
     def test_saknad_fil_ger_tomt_inte_krasch(self):
         self.assertEqual(PI.las_pdf("/finns/inte.pdf", ar=2026), [])
 
+class TestStartlistaMedTider(unittest.TestCase):
+    """Skarp källa: arrangörens startlistesida (easyrecord.se, SM 2026).
+    Den bär BÅDE passtiderna och deltagarna — en inklistring ger båda."""
+
+    RA = (Path(__file__).parent / "testdata"
+          / "sm26-startlista-utdrag.txt").read_text(encoding="utf-8")
+
+    def setUp(self):
+        self.r = PI.tolka_startlista_med_tider(
+            self.RA, fran="2026-07-24", till="2026-07-26")
+
+    def test_veckodag_blir_datum_ur_perioden(self):
+        """Sidan skriver 'Fredag', inte ett datum."""
+        p = self.r["pass"][0]
+        self.assertEqual((p["gren"], p["pass"], p["datum"], p["tid"]),
+                         ("100 m", "Försök", "2026-07-24", "18:20"))
+
+    def test_klassen_kommer_ur_rubriken(self):
+        klasser = {(p["gren"], p["klass"]) for p in self.r["pass"]}
+        self.assertIn(("100 m", "dam"), klasser)
+        self.assertIn(("Tiokamp", "herr"), klasser)
+
+    def test_pass_over_flera_dagar(self):
+        hojd = [p for p in self.r["pass"] if p["gren"] == "Höjd"]
+        self.assertEqual([(p["pass"], p["datum"]) for p in hojd],
+                         [("Kval", "2026-07-24"), ("Final", "2026-07-25")])
+
+    def test_mangkampens_delgrenar_blir_pass(self):
+        """Tiokamp har en passrad per delgren — de ÄR grenens pass."""
+        tio = [p for p in self.r["pass"] if p["gren"] == "Tiokamp"]
+        self.assertEqual([p["pass"] for p in tio],
+                         ["100 m", "Längd", "Kula", "110 m häck", "1500 m"])
+        self.assertEqual(tio[3]["datum"], "2026-07-25")   # lördag
+
+    def test_deltagare_knyts_till_sin_gren(self):
+        d = self.r["deltagare"]
+        self.assertEqual((d[0]["namn"], d[0]["klubb"], d[0]["gren"], d[0]["klass"]),
+                         ("Esther Sahlqvist", "Hammarby IF", "100 m", "dam"))
+        self.assertEqual({x["gren"] for x in d}, {"100 m", "Höjd", "Tiokamp"})
+
+    def test_fodelsear_ar_inte_klubben(self):
+        """Kolumnordningen är nr, namn, år, klubb — inte nr, namn, klubb."""
+        self.assertNotIn("06", {d["klubb"] for d in self.r["deltagare"]})
+
+    def test_deltagare_utan_resultat_kommer_med(self):
+        namn = {d["namn"] for d in self.r["deltagare"]}
+        self.assertIn("Erik Wallnäs", namn)      # tomma SB/PB-kolumner
+        self.assertIn("Evelina Olsson", namn)    # tom SB
+
+    def test_deltagare_utan_startnummer_tappas_inte(self):
+        """SM 2026: Oscar Holmin står utan startnummer i två grenar. Ett krav
+        på siffror i första fältet hade tappat båda tyst (hittat mot sidan)."""
+        self.assertIn("Oscar Holmin", {d["namn"] for d in self.r["deltagare"]})
+
+    def test_antal_deltagare_raden_ar_inte_en_deltagare(self):
+        self.assertNotIn("Antal deltagare: 3",
+                         {d["namn"] for d in self.r["deltagare"]})
+
+    def test_utan_period_flaggas_passen_i_stallet_for_att_slangas(self):
+        r = PI.tolka_startlista_med_tider(self.RA)
+        self.assertTrue(all(not p["datum"] for p in r["pass"]))
+        self.assertIn("period", r["pass"][0]["varning"])
+        self.assertEqual(len(r["deltagare"]), 8)   # deltagarna påverkas inte
+
+    def test_tom_text(self):
+        r = PI.tolka_startlista_med_tider("", fran="2026-07-24")
+        self.assertEqual((r["pass"], r["deltagare"]), ([], []))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -738,6 +738,14 @@ class Api:
         fran = e.get("fran") or ""
         ar = int(fran[:4]) if fran[:4].isdigit() else None
         csv_rader = program_import.las_csv(text)
+        if sort == "startlista_tider":
+            # Arrangörens startlistesida bär BÅDA delarna. Returnera passen som
+            # huvudlista och deltagarna vid sidan om, så granskningen kan visa
+            # båda och importen köra dem i rätt ordning (grenar/pass först).
+            r = program_import.tolka_startlista_med_tider(
+                text, fran=e.get("fran"), till=e.get("till"))
+            return {"ok": True, "sort": sort, "kalla": "text",
+                    "rader": r["pass"], "deltagare": r["deltagare"]}
         if sort == "startlista":
             kanda = [g["namn"] for g in
                      store.lista_discipliner(self.conn, event_id)]
@@ -789,9 +797,22 @@ class Api:
         return {"ok": True, "sort": "tidsprogram", "rader": rader,
                 "kalla": "pdf", "fil": os.path.basename(path)}
 
-    def importera_program(self, event_id, rader, sort="tidsprogram"):
+    def importera_program(self, event_id, rader, sort="tidsprogram",
+                          deltagare=None):
         """Steg 2: spara de granskade raderna. Omimport uppdaterar befintliga
         pass i stället för att dubblera dem."""
+        if sort == "startlista_tider":
+            # Ordningen är viktig: passen skapar grenarna MED klass, så
+            # deltagarna hittar rätt gren i stället för att bli tvetydiga.
+            e = store.hamta_event(self.conn, event_id) or {}
+            sam = store.importera_program(self.conn, event_id, rader)
+            sam2 = store.importera_startlista(self.conn, event_id,
+                                              deltagare or [],
+                                              sport=e.get("sport"))
+            sam["grenar_skapade"] = (sam.get("grenar_skapade", [])
+                                     + sam2.get("grenar_skapade", []))
+            sam.update({k: v for k, v in sam2.items() if k != "grenar_skapade"})
+            return {"ok": True, **sam}
         if sort == "startlista":
             e = store.hamta_event(self.conn, event_id) or {}
             sam = store.importera_startlista(self.conn, event_id, rader,

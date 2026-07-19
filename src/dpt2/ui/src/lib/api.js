@@ -520,9 +520,9 @@ export async function tolkaProgramPdf(eventId, path = null) {
   return wait({ ok: false, fel: 'PDF-läsning kräver appen (inte webbläsarläget)' })
 }
 
-export async function importeraProgram(eventId, rader, sort = 'tidsprogram') {
+export async function importeraProgram(eventId, rader, sort = 'tidsprogram', deltagare = null) {
   const api = brygga()
-  if (api) return api.importera_program(eventId, rader, sort)
+  if (api) return api.importera_program(eventId, rader, sort, deltagare)
   return wait({ ok: true, grenar_skapade: [], pass_nya: 0, pass_uppdaterade: 0 })
 }
 
