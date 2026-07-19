@@ -16,6 +16,10 @@
   import Trana from './panels/Trana.svelte'
   import Logg from './panels/Logg.svelte'
   import Installningar from './panels/Installningar.svelte'
+  import SynkMarke from './lib/SynkMarke.svelte'
+  import Kommandopalett from './lib/Kommandopalett.svelte'
+  import { oppnaMal } from './lib/oppna.js'
+  import { synka as livesynkaNu } from './lib/livesynk.js'
   import { erMock, aktivMatch, aktivtUrval, listaMaterial, stangAktivMatch, synkDelta } from './lib/api.js'
   import { testMode } from './lib/testlage.js'
 
@@ -35,6 +39,19 @@
   let aktivU = null            // globalt aktivt urval (topp-widget)
   let harDelvis = false        // minst ett material är "Delvis publicerad" (nav-punkt)
 
+  // D11b §4: ⌘K global sökning — öppnas var som helst, djuplänkar via oppnaMal.
+  let palettOppen = false
+  function globalTangent(e) {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault(); palettOppen = !palettOppen
+    }
+  }
+  function valjSok(e) {
+    aktiv = e.detail.mal
+    oppnaMal.set(e.detail)
+    palettOppen = false
+  }
+
   onMount(async () => {
     // Följ OS-temat live (tills man växlat manuellt).
     if (typeof window !== 'undefined' && window.matchMedia) {
@@ -44,6 +61,8 @@
     }
     ;[aktivM, aktivU] = await Promise.all([aktivMatch(), aktivtUrval()])
     await uppdateraDelvis()
+    // D11b §4: pusha vid start så synk-märket speglar verkligt läge direkt.
+    livesynkaNu()
     // SYNK-DPT2 (tvåvägs-blixten): appglobal delta-poll — mobilens ändringar
     // (resultat, trupp, original) når skrivbordet utan öppen Publicera-panel.
     // Billig fråga (bara ändrade paket kommer tillbaka); paneler lyssnar på
@@ -79,6 +98,11 @@
   function aktiveraFranMatcherTill(m, dest) { aktivMatchData = m; aktivM = m; aktiv = dest }
 </script>
 
+<svelte:window on:keydown={globalTangent} />
+{#if palettOppen}
+  <Kommandopalett on:valj={valjSok} on:stang={() => (palettOppen = false)} />
+{/if}
+
 <div class="app">
   <Rail {aktiv} delvis={harDelvis} on:valj={(e) => (aktiv = e.detail)} />
 
@@ -111,6 +135,7 @@
           {/if}
         </span>
       </button>
+      <SynkMarke />
       {#if ARMOCK}<span class="mock">mock</span>{/if}
       <button class="testswitch" class:on={$testMode} on:click={() => ($testMode = !$testMode)}
         title="Testläge — inget sparas eller postas på riktigt">

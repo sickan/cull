@@ -9,8 +9,10 @@
     kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle,
     sparaDisciplin, raderaDisciplin, sparaTavling, sportprofiler,
     hamtaProgram, sparaPass, raderaPass,
-    tolkaProgramPdf, importeraProgram, synkaLivePaket,
+    tolkaProgramPdf, importeraProgram,
     lasIn as lasInApi, forhandsgranskaImport } from '../lib/api.js'
+  import { markeraAndring } from '../lib/livesynk.js'
+  import { oppnaMal } from '../lib/oppna.js'
   import { kopieraText } from '../lib/kopiera.js'
 
   const dispatch = createEventDispatcher()
@@ -94,6 +96,19 @@
   async function tillbaka() {
     vald = null; detalj = null
     await ladda()
+  }
+  // D11b §4: ⌘K-djuplänk. Event → detaljvyn; liga (saknar detalj) → editorn.
+  $: if ($oppnaMal && $oppnaMal.mal === 'eventsektion' && $oppnaMal.id) {
+    djupoppna($oppnaMal.id)
+    oppnaMal.set(null)
+  }
+  async function djupoppna(id) {
+    if (!eventer.length) await ladda()
+    await oppna(id)
+    if (!detalj) {
+      const rad = eventer.find((e) => e.id === id)
+      if (rad) { vald = null; redigeraRad(rad) } else vald = null
+    }
   }
 
   async function sattLage(lage) {
@@ -254,26 +269,16 @@
     passOppen = false; pas = null
     await laddaProgram()
     detalj = await hamtaEventDetalj(vald)
+    markeraAndring()
   }
-  // Synken körs annars bara vid appstart och På gång-publicering. Efter en
-  // import behöver programmet kunna skickas direkt — annars ligger det kvar
-  // lokalt tills DPT2 startas om nästa gång.
-  let synkar = false
-  let synkkvitto = ''
-  async function synka() {
-    synkar = true; synkkvitto = ''
-    const r = await synkaLivePaket().catch(() => null)
-    synkar = false
-    synkkvitto = r?.ok
-      ? `Skickat — ${r.antal} paket i molnet${r.borttagna ? `, ${r.borttagna} borttagna` : ''}.`
-      : `Kunde inte skicka: ${r?.fel || 'okänt fel'}`
-    setTimeout(() => (synkkvitto = ''), 6000)
-  }
+  // D11b §4: "Skicka till telefonen" är borta. En ändring markeras och pushas
+  // automatiskt (synk-märket i titelraden visar läget). Se lib/livesynk.js.
 
   async function taBortPass(id) {
     await raderaPass(id)
     passOppen = false; pas = null
     await laddaProgram()
+    markeraAndring()
   }
 
   // ── Läs in (C8–C10): en väg in ───────────────────────────────────────────
@@ -368,6 +373,7 @@
     granskning = null; inlasText = ''; forhands = null
     await laddaProgram()
     detalj = await hamtaEventDetalj(vald)
+    markeraAndring()   // D11b §4: pushas automatiskt, synk-märket visar läget
   }
 
   // ── Event-editorn (V5-C skiva 2) ─────────────────────────────────────────
@@ -523,12 +529,6 @@
         <span class="caps">Program</span>
         <span class="khint">härleds ur pass och tidsatta matcher — inget eget register</span>
         <span class="spacer"></span>
-        {#if program.length}
-          <!-- Synken går annars bara vid appstart och På gång-publicering: ett
-               nyss inläst program hade legat kvar lokalt till nästa omstart. -->
-          <button class="plus" on:click={synka} disabled={synkar}>
-            {synkar ? 'Skickar…' : 'Skicka till telefonen'}</button>
-        {/if}
         <button class="plus" on:click={oppnaInlas}>Läs in…</button>
         {#if detalj.grenar.length}
           <button class="plus" on:click={nyttPass}>+ Pass</button>
@@ -647,7 +647,6 @@
       {/if}
 
       {#if inlasKvitto}<div class="kvitto">{inlasKvitto}</div>{/if}
-      {#if synkkvitto}<div class="kvitto">{synkkvitto}</div>{/if}
 
       {#if passOppen}
         <div class="nyrad passrad">

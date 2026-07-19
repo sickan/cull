@@ -2117,3 +2117,34 @@ class TestUtovareStarter(unittest.TestCase):
     def test_okopplad_utovare_har_inga_starter(self):
         ovrig = store.upsert_lag(self.c, "Bea Berg", kind="individ")
         self.assertEqual(store.utovare_starter(self.c, ovrig), [])
+
+
+class TestSokGlobalt(unittest.TestCase):
+    """D11b §4 — ⌘K-index över utövare · tävling · fotojobb · gren."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.ev = store.upsert_tavling(self.c, "Friidrotts-SM 2026",
+                                       sport="friidrott", typ="masterskap")
+        store.upsert_disciplin(self.c, self.ev, "100 meter", gren="dam")
+        store.upsert_lag(self.c, "Armand Duplantis", kind="individ",
+                         sport="friidrott")
+        store.skapa_fotojobb_utkast(self.c, tavling_id=self.ev,
+                                    title="SM friidrott lördag",
+                                    start_at="2026-07-25", end_at="2026-07-25")
+
+    def test_hittar_over_flera_typer(self):
+        typer = {t["typ"] for t in store.sok_globalt(self.c, "SM")}
+        self.assertIn("tavling", typer)     # 'Friidrotts-SM 2026'
+        self.assertIn("fotojobb", typer)    # 'SM friidrott lördag'
+
+    def test_utovare_matchas(self):
+        self.assertTrue(any(t["typ"] == "utovare"
+                            for t in store.sok_globalt(self.c, "duplantis")))
+
+    def test_gren_traff_oppnar_sin_tavling(self):
+        g = [t for t in store.sok_globalt(self.c, "100 met") if t["typ"] == "gren"]
+        self.assertEqual(g[0]["id"], self.ev)
+
+    def test_for_kort_query_ger_inget(self):
+        self.assertEqual(store.sok_globalt(self.c, "s"), [])

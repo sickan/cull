@@ -345,6 +345,16 @@ export async function sattUtovareHandle(id, handle) {
   return wait({ ok: !!u })
 }
 
+// D11b §4: global ⌘K-sökning över utövare · tävling · fotojobb · gren.
+export async function sokGlobalt(q) {
+  const api = brygga()
+  if (api) return api.sok_globalt(q)
+  const t = (q || '').toLowerCase()
+  return wait(t.length < 2 ? [] : MOCK_INDIVIDER
+    .filter((x) => x.namn.toLowerCase().includes(t))
+    .map((x) => ({ typ: 'utovare', mal: 'utovare', id: x.id, namn: x.namn, sub: x.klubb || 'Utövare' })))
+}
+
 export async function sparaIndivid(d) {
   const api = brygga()
   if (api) return api.spara_individ(d)

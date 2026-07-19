@@ -988,6 +988,10 @@ class Api:
     def satt_utovare_handle(self, utovare_id, handle):
         return {"ok": store.satt_deltagare_handle(self.conn, utovare_id, handle)}
 
+    # ── Global sökning ⌘K (D11b §4) ──────────────────────────────────────────
+    def sok_globalt(self, q):
+        return store.sok_globalt(self.conn, q)
+
     def koppla_event_deltagare(self, event_id, individ_id, grenar=None):
         store.satt_event_deltagare(self.conn, event_id, individ_id, grenar)
         return {"ok": True}

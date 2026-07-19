@@ -4,6 +4,7 @@
   // tävlingarnas grenar/pass — aldrig lagrade på utövaren.
   import { onMount } from 'svelte'
   import { listaUtovare, hamtaUtovare, sattUtovareHandle } from '../lib/api.js'
+  import { oppnaMal } from '../lib/oppna.js'
 
   // Låst gren-palett (invariant): färgkant, aldrig textetikett, ingen kant om okänd.
   const KLASSFARG = { dam: '#8E5A86', herr: '#3E7C87', mixed: '#6E8757' }
@@ -17,6 +18,12 @@
 
   onMount(ladda)
   async function ladda() { lista = await listaUtovare() }
+
+  // D11b §4: ⌘K-djuplänk — öppna utövaren direkt när paletten pekar hit.
+  $: if ($oppnaMal && $oppnaMal.mal === 'utovare' && $oppnaMal.id) {
+    oppna($oppnaMal.id)
+    oppnaMal.set(null)
+  }
 
   $: filtrerade = lista.filter((x) =>
     !sok.trim() || (x.namn + ' ' + (x.klubb || '')).toLowerCase().includes(sok.toLowerCase()))

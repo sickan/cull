@@ -1671,6 +1671,43 @@ def individ_historik(conn, utovare_id):
     return ut
 
 
+def sok_globalt(conn, q, grans=8):
+    """D11b §4: ⌘K-index över utövare · tävling · fotojobb · gren. Substräng-
+    matchning (skiftlägesokänslig), grupperat per typ. Varje träff bär `mal`
+    (panelen den hör hemma i) + id, så UI:t kan djuplänka raka vägen dit."""
+    q = (q or "").strip().lower()
+    if len(q) < 2:
+        return []
+    like = f"%{q}%"
+    ut = []
+    for r in conn.execute(
+            "SELECT id, namn, klubb FROM lag WHERE kind='individ' AND arkiverad=0 "
+            "AND lower(namn) LIKE ? ORDER BY namn LIMIT ?", (like, grans)):
+        ut.append({"typ": "utovare", "mal": "utovare", "id": r["id"],
+                   "namn": r["namn"], "sub": r["klubb"] or "Utövare"})
+    for r in conn.execute(
+            "SELECT id, namn, typ, sport FROM tavling WHERE lower(namn) LIKE ? "
+            "ORDER BY namn LIMIT ?", (like, grans)):
+        etikett = "Liga" if r["typ"] == "liga" else (r["typ"] or "Tävling").capitalize()
+        ut.append({"typ": "tavling", "mal": "eventsektion", "id": r["id"],
+                   "namn": r["namn"], "sub": " · ".join(
+                       x for x in (etikett, r["sport"]) if x)})
+    for r in conn.execute(
+            "SELECT id, title FROM fotojobb_utkast WHERE lower(title) LIKE ? "
+            "ORDER BY start_at DESC LIMIT ?", (like, grans)):
+        ut.append({"typ": "fotojobb", "mal": "fotojobb", "id": r["id"],
+                   "namn": r["title"], "sub": "Fotojobb"})
+    for r in conn.execute(
+            "SELECT d.namn, d.tavling_id, t.namn AS tavling FROM disciplin d "
+            "LEFT JOIN tavling t ON t.id=d.tavling_id "
+            "WHERE lower(d.namn) LIKE ? ORDER BY d.namn LIMIT ?", (like, grans)):
+        # En gren-träff öppnar sin tävling (grenen bor i tävlingens detaljvy).
+        ut.append({"typ": "gren", "mal": "eventsektion", "id": r["tavling_id"],
+                   "namn": r["namn"], "sub": " · ".join(
+                       x for x in ("Gren", r["tavling"]) if x)})
+    return ut
+
+
 def utovare_starter(conn, utovare_id):
     """Utövarens starter — HÄRLEDDA pass i alla grenar hen är kopplad till (via
     disciplin_deltagare eller event_deltagare.grenar), med tävlingskontext.
