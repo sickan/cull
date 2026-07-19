@@ -8,9 +8,9 @@
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
     kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle,
     sparaDisciplin, raderaDisciplin, sattDisciplinFavorit, sparaTavling, sportprofiler,
-    hamtaProgram, sparaPass, raderaPass,
-    tolkaProgramPdf, importeraProgram,
-    lasIn as lasInApi, forhandsgranskaImport } from '../lib/api.js'
+    hamtaMasterskapGrenar, hamtaGrenDetalj,
+    hamtaProgram, sparaPass, raderaPass } from '../lib/api.js'
+  import LasInTavling from '../lib/LasInTavling.svelte'
   import { markeraAndring } from '../lib/livesynk.js'
   import { oppnaMal } from '../lib/oppna.js'
   import { kopieraText } from '../lib/kopiera.js'
@@ -91,10 +91,14 @@
     vald = id
     detalj = await hamtaEventDetalj(id).catch(() => null)
     dagIx = 0
+    // M-3: arbetsytan börjar om per tävling (läge, gruppering, sök, val).
+    laget = 'grenar'; gruppera = 'klass'; grenSok = ''; baraFavoriter = false
+    valdGren = null; grenDetalj = null; allaDeltagare = false
     await laddaProgram()
   }
   async function tillbaka() {
-    vald = null; detalj = null
+    vald = null; detalj = null; mast = null
+    valdGren = null; grenDetalj = null
     await ladda()
   }
   // D11b §4: ⌘K-djuplänk. Event → detaljvyn; liga (saknar detalj) → editorn.
@@ -152,6 +156,61 @@
   $: synligaGrenar = (detalj?.grenar || []).filter(
     (g) => !baraFavoriter || g.favorit)
   $: antalFavoriter = (detalj?.grenar || []).filter((g) => g.favorit).length
+
+  // ── Mästerskaps-arbetsytan (C12/M-3) ─────────────────────────────────────
+  // En tävling renderas efter SKALA, inte typ (D12 "adaptiv detaljvy"): liten
+  // cup → kort-stapeln nedan (rör den inte), stort mästerskap → arbetsytan
+  // med gren-navigator + gren-detalj. Tröskeln är EN konstant i backend
+  // (motorer/masterskap.py:ARBETSYTA_MIN_GRENAR) — se M-5-noteringen där.
+  // Grupperingar, kat-chips, dagnummer och @-status HÄRLEDS i backend; den
+  // här komponenten ritar bara.
+  let mast = null                 // navigator-svaret (grupper + arbetsyta-flagga)
+  let laget = 'grenar'            // grenar | program (M-4 hakar på här)
+  let gruppera = 'klass'          // klass (default) | typ | dag
+  let grenSok = ''
+  let valdGren = null
+  let grenDetalj = null
+  let allaDeltagare = false
+
+  // Filterinput skickas som ARGUMENT — `$:` spårar inte closure-variabler
+  // som läses inuti en anropad funktion (lärdomen från lag-panelen).
+  async function laddaNavigator(id, efter, sok, favs) {
+    if (!id) { mast = null; return }
+    mast = await hamtaMasterskapGrenar(id, efter, sok, favs).catch(() => null)
+    if (!mast?.arbetsyta) return
+    const finns = (mast.grupper || []).some(
+      (g) => g.grenar.some((x) => x.id === valdGren))
+    if (!finns && !valdGren) await valjGren(mast.grupper?.[0]?.grenar?.[0]?.id)
+  }
+  $: laddaNavigator(vald, gruppera, grenSok, baraFavoriter)
+
+  async function valjGren(id, alla = false) {
+    if (!id) { valdGren = null; grenDetalj = null; return }
+    valdGren = id
+    allaDeltagare = alla
+    grenDetalj = await hamtaGrenDetalj(id, alla).catch(() => null)
+  }
+  async function vaxlaFavoritArbetsyta(id, pa) {
+    await sattDisciplinFavorit(id, pa)
+    await laddaNavigator(vald, gruppera, grenSok, baraFavoriter)
+    if (valdGren === id) await valjGren(id, allaDeltagare)
+  }
+  // "24–26 jul" — metaradens period, kort som i mockupen.
+  function periodKort(e) {
+    if (!e?.fran) return ''
+    const dat = (s) => new Date(s + 'T00:00:00')
+    const man = (d) => d.toLocaleDateString('sv-SE', { month: 'short' }).replace('.', '')
+    const f = dat(e.fran)
+    if (!e.till || e.till === e.fran) return `${f.getDate()} ${man(f)}`
+    const t = dat(e.till)
+    return man(f) === man(t)
+      ? `${f.getDate()}–${t.getDate()} ${man(t)}`
+      : `${f.getDate()} ${man(f)} – ${t.getDate()} ${man(t)}`
+  }
+  $: mastMeta = detalj ? [periodKort(detalj.event), detalj.event.ort,
+    mast?.antal_grenar ? `${mast.antal_grenar} grenar` : '',
+    mast?.antal_starter ? `${mast.antal_starter} starter` : '']
+    .filter(Boolean).join(' · ') : ''
 
   // ── Deltagare (skiva 1.5): individ ⟂ gren ────────────────────────────────
   // Väljaren söker utövar-lagen (B-001:s befintliga deltagare) ∪ individ-
@@ -293,98 +352,15 @@
     markeraAndring()
   }
 
-  // ── Läs in (C8–C10): en väg in ───────────────────────────────────────────
-  // Parsern GISSAR dokumenttyp (C8) — Stig väljer bara om vid osäkerhet.
-  // Granskningen visar som standard BARA avvikelser (C9) — 800 rena rader ska
-  // inte kräva ögon. En omimport visar sin diff innan något sparas (C10).
+  // ── Läs in (C8–C10) ─────────────────────────────────────────────────────
+  // Hela inläsningen bor i lib/LasInTavling.svelte — EN implementation som
+  // både kort-stapeln och M-3:s arbetsyta öppnar.
   let inlasOppen = false
-  let inlasText = ''
-  let granskning = null              // { sort, sakerhet, skal, rader, deltagare, sammanfattning }
-  let baraAvvik = true
-  let forhands = null                // C10-diff efter "Granska ändringar"
-  let inlasFel = ''
-  let inlasKvitto = ''
-
-  const SORTNAMN = { tidsprogram: 'Tidsprogram', startlista_tider: 'Startlista med tider', startlista: 'Bara deltagare' }
-  const AVVIKNAMN = { tidskrock: 'Tidskrockar', dubblett: 'Dubbletter (samma gren, olika stavning)', okand_klass: 'Okänd klass', flaggad: 'Behöver din blick' }
-  const AVVIKORDNING = ['tidskrock', 'dubblett', 'okand_klass', 'flaggad']
-  const BYTBARA = ['tidsprogram', 'startlista_tider', 'startlista']
-
-  function oppnaInlas() {
-    inlasOppen = true; inlasText = ''; granskning = null
-    forhands = null; inlasKvitto = ''; inlasFel = ''
-  }
-  async function lasIn(sort = 'auto') {
-    if (!inlasText.trim()) return
-    inlasFel = ''; forhands = null
-    granskning = await lasInApi(vald, inlasText, sort).catch(() => null)
-    if (granskning) baraAvvik = (granskning.sammanfattning?.avvikande || 0) > 0
-  }
-  // PDF: arrangörens fil läses direkt, med kolumnlayouten. Klassen (dam/herr)
-  // följer med ur kolumnen och blir grenmarkörens färg.
-  async function lasPdf() {
-    inlasFel = ''; forhands = null
-    const r = await tolkaProgramPdf(vald).catch(() => null)
-    if (!r?.ok) { inlasFel = r?.fel || 'Kunde inte läsa PDF:en'; return }
-    granskning = r
-    baraAvvik = (granskning.sammanfattning?.avvikande || 0) > 0
-  }
-
-  // Programrad duger med gren+datum; deltagarrad med namn+gren. (Pass utan
-  // fas-ord ÄR sitt eget pass — grenen ensam räcker då.)
-  const radOk = (r, grund) => grund === 'deltagare' ? (r.namn && r.gren) : (r.datum && r.gren)
-  $: grund = granskning?.sort === 'startlista' ? 'deltagare' : 'program'
-  $: passRader = granskning && grund === 'program' ? granskning.rader : []
-  $: deltRader = granskning ? (granskning.deltagare?.length ? granskning.deltagare
-                  : grund === 'deltagare' ? granskning.rader : []) : []
-  $: granskadePass = passRader.filter((r) => radOk(r, 'program'))
-  $: granskadeDelt = deltRader.filter((r) => radOk(r, 'deltagare'))
-  $: sparaAntal = granskadePass.length + granskadeDelt.length
-  // Vad granskningen visar just nu: filtrerat på avvikelser, eller allt.
-  const synligt = (lista) => baraAvvik ? lista.filter((r) => r.avvik) : lista
-
-  // Ta bort en rad ur inläsningen innan den sparas. Raden ligger antingen bland
-  // pass eller deltagare — filtrera båda, så identiteten avgör.
-  function taBortRad(r) {
-    if (!granskning) return
-    forhands = null
-    granskning = { ...granskning,
-      rader: (granskning.rader || []).filter((x) => x !== r),
-      deltagare: (granskning.deltagare || []).filter((x) => x !== r) }
-  }
-
-  // Argument till import/förhandsgranskning i rätt form per sort. startlista →
-  // deltagarna ÄR raderna; startlista_tider → pass som rader, deltagare vid sidan.
-  function importArgs() {
-    const s = granskning.sort
-    if (s === 'startlista') return [granskadeDelt, s, null]
-    if (s === 'startlista_tider') return [granskadePass, s, granskadeDelt]
-    return [granskadePass, s, null]
-  }
-  async function granskaAndringar() {
-    const [rader, sort, delt] = importArgs()
-    forhands = await forhandsgranskaImport(vald, rader, sort, delt).catch(() => null)
-  }
-  async function sparaInlas() {
-    const [rader, sort, delt] = importArgs()
-    if (!rader.length && !(delt && delt.length)) return
-    const sam = await importeraProgram(vald, rader, sort, delt)
-    inlasKvitto = sort === 'startlista'
-      ? `${sam.deltagare_nya || 0} nya deltagare, ${sam.deltagare_befintliga || 0} fanns redan`
-      : `${sam.pass_nya || 0} nya pass, ${sam.pass_uppdaterade || 0} uppdaterade`
-        + (sort === 'startlista_tider'
-           ? ` · ${sam.deltagare_nya || 0} nya deltagare` : '')
-    if (sam.grenar_skapade?.length)
-      inlasKvitto += ` · nya grenar: ${sam.grenar_skapade.join(', ')}`
-    if (sam.hopslagna?.length)
-      inlasKvitto += ` · ${sam.hopslagna.length} dubblerade grenar slogs ihop`
-    if (sam.klass_satt)
-      inlasKvitto += ` · klass satt på ${sam.klass_satt} deltagare`
-    if (sam.oklara?.length)
-      inlasKvitto += ` · ${sam.oklara.length} hoppades över, välj klass: ${sam.oklara.join(', ')}`
-    granskning = null; inlasText = ''; forhands = null
+  function oppnaInlas() { inlasOppen = true }
+  async function inlasKlar() {
     await laddaProgram()
     detalj = await hamtaEventDetalj(vald)
+    await laddaNavigator(vald, gruppera, grenSok, baraFavoriter)
     markeraAndring()   // D11b §4: pushas automatiskt, synk-märket visar läget
   }
 
@@ -429,7 +405,7 @@
   }
 </script>
 
-<div class="panel">
+<div class="panel" class:arbetsyta={vald && mast?.arbetsyta}>
   {#if !vald}
     <div class="topp">
       <div>
@@ -494,6 +470,175 @@
     {@const e = detalj.event}
     {@const t = TYP[e.typ] || TYP.ovrigt}
     {@const s = status(e)}
+    {#if mast?.arbetsyta}
+      <!-- ═══ M-3: mästerskaps-arbetsytan ═══════════════════════════════════
+           Adaptivt: den här ytan ritas bara för STORA tävlingar. Små behåller
+           kort-stapeln i {:else}-grenen nedan, orörd. -->
+      <div class="atopp">
+        <button class="tillbaka" on:click={tillbaka}>‹ Alla tävlingar</button>
+        <div class="arubrik">
+          <h1 class="scd">{e.namn}</h1>
+          <!-- Eventtyp = etikett UTAN egen färg (invariant): accent-outline. -->
+          <span class="atypbadge">{t.namn}</span>
+          <span class="pill" class:amber={s.id === 'pagaende'}>{s.namn}</span>
+          <span class="ameta">{mastMeta}</span>
+          <span class="spacer"></span>
+          <button class="alasin" on:click={oppnaInlas}>↓ Läs in / uppdatera</button>
+        </div>
+        <div class="lagen">
+          <button class="lagflik" class:pa={laget === 'grenar'}
+            on:click={() => (laget = 'grenar')}>Grenar &amp; deltagare</button>
+          <!-- M-4 bygger läget Program (dagflikar + tidsaxel) bakom den här
+               fliken; växeln finns redan så det bara är att haka på. -->
+          <button class="lagflik" class:pa={laget === 'program'}
+            on:click={() => (laget = 'program')}>Program</button>
+        </div>
+      </div>
+
+      <LasInTavling bind:oppen={inlasOppen} eventId={vald} on:klar={inlasKlar} />
+
+      {#if laget === 'grenar'}
+        <div class="ayta">
+          <!-- vänster: grenar-navigator -->
+          <div class="navigator">
+            <div class="navtopp">
+              <input class="navsok" bind:value={grenSok} placeholder="Sök gren…" />
+              <div class="navfilter">
+                <span class="caps mini">Gruppera</span>
+                <div class="segment">
+                  {#each [['klass', 'Klass'], ['typ', 'Typ'], ['dag', 'Dag']] as [id, namn]}
+                    <button class="segknapp" class:pa={gruppera === id}
+                      on:click={() => (gruppera = id)}>{namn}</button>
+                  {/each}
+                </div>
+                <span class="spacer"></span>
+                <button class="favfilter" class:pa={baraFavoriter}
+                  title="Bara favoritgrenar"
+                  on:click={() => (baraFavoriter = !baraFavoriter)}>★ {mast.antal_favoriter}</button>
+              </div>
+            </div>
+            <div class="navlista">
+              {#each mast.grupper as grp (grp.nyckel)}
+                <div class="navgrupp">
+                  <div class="grupprubrik">
+                    <!-- Färgmarkör bara i klass-grupperingen — paletten är
+                         låst till kön, och okänd klass får ingen kant alls. -->
+                    {#if grp.kant}<span class="kant" style="background:{grp.kant}"></span>{/if}
+                    <span class="caps mini">{grp.etikett}</span>
+                    <span class="gruppantal">{grp.antal_text}</span>
+                  </div>
+                  {#each grp.grenar as g (g.id)}
+                    <div class="grenrad" class:vald={g.id === valdGren}
+                      role="button" tabindex="0"
+                      on:click={() => valjGren(g.id)}
+                      on:keydown={(k) => k.key === 'Enter' && valjGren(g.id)}>
+                      {#if g.farg}<span class="grenkant" style="background:{g.farg}"></span>
+                      {:else}<span class="grenkant tom"></span>{/if}
+                      <span class="grenmitt">
+                        <span class="grennamn">{g.namn}{#if g.kat}<span class="kat">{g.kat}</span>{/if}</span>
+                        <span class="grensub">{g.sub}</span>
+                      </span>
+                      <span class="grenantal">{g.antal_deltagare}</span>
+                      <button class="stjarna" class:pa={g.favorit}
+                        title={g.favorit ? 'Favoritgren' : 'Stjärnmärk grenen'}
+                        on:click|stopPropagation={() => vaxlaFavoritArbetsyta(g.id, !g.favorit)}>★</button>
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                <p class="tomkort">{baraFavoriter ? 'Inga stjärnmärkta grenar.' : 'Ingen gren matchar sökningen.'}</p>
+              {/each}
+            </div>
+          </div>
+
+          <!-- höger: gren-detalj -->
+          <div class="grendetalj">
+            {#if grenDetalj}
+              <div class="drubrik2">
+                {#if grenDetalj.farg}<span class="stapel" style="background:{grenDetalj.farg}"></span>{/if}
+                <div class="dmitt">
+                  <div class="dtitel">
+                    <h2 class="scd">{grenDetalj.namn}</h2>
+                    {#if grenDetalj.kat}<span class="kat">{grenDetalj.kat}</span>{/if}
+                    <span class="klasstext">{grenDetalj.klasstext}</span>
+                  </div>
+                  <p class="dmeta2">{grenDetalj.antal_deltagare} deltagare · {grenDetalj.pass_text}{grenDetalj.tavling_namn ? ` · Del av ${grenDetalj.tavling_namn}` : ''}</p>
+                </div>
+                <button class="favknapp" class:pa={grenDetalj.favorit}
+                  on:click={() => vaxlaFavoritArbetsyta(grenDetalj.id, !grenDetalj.favorit)}>
+                  ★ {grenDetalj.favorit ? 'Favorit' : 'Markera'}</button>
+              </div>
+
+              <div class="kort">
+                <span class="caps">Pass (tidsatta deltillfällen)</span>
+                <div class="passbrickor">
+                  {#each grenDetalj.pass as p (p.id)}
+                    <div class="passbricka">
+                      <span class="passtyp">{p.typ}</span>
+                      <span class="passnar scd">{p.nar || '—'}</span>
+                      <span class="passantal">{p.antal}</span>
+                    </div>
+                  {/each}
+                  <button class="passny" on:click={nyttPass}>+ Pass</button>
+                </div>
+              </div>
+
+              <div class="kort">
+                <div class="krubrik">
+                  <span class="caps">Deltagare i {grenDetalj.namn}</span>
+                  <span class="khint">{grenDetalj.handletext}</span>
+                </div>
+                <!-- D12 fråga 1: kopplingen bor på GRENEN, inte på personen. -->
+                <p class="khint">Importen fyllde de flesta — koppla eller rätta här. Kopplingen bor på grenen, inte på personen.</p>
+                <div class="laggtill">
+                  <input placeholder="Lägg till utövare — sök namn ur registret…"
+                    bind:value={sok} on:focus={() => (valjareOppen || oppnaValjare())} />
+                </div>
+                {#if valjareOppen && traffar.length}
+                  <div class="valjare">
+                    {#each traffar.slice(0, 6) as i (i.id)}
+                      <button class="ival" on:click={async () => {
+                        await kopplaEventIndividGren(vald, i.id, valdGren, true)
+                        await valjGren(valdGren, allaDeltagare)
+                        await laddaNavigator(vald, gruppera, grenSok, baraFavoriter)
+                      }}>
+                        <span class="bricka">{initialer(i.namn)}</span>{i.namn}
+                        {#if i.klubb}<span class="nar">{i.klubb}</span>{/if}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+                <div class="deltlista">
+                  {#each grenDetalj.deltagare as p (p.id)}
+                    <div class="deltrad">
+                      {#if p.nr}<span class="deltnr">{p.nr}</span>{/if}
+                      <span class="bricka">{p.initialer}</span>
+                      <span class="deltmitt">
+                        <span class="deltnamn">{p.namn}</span>
+                        <span class="deltklubb">{p.klubb}</span>
+                      </span>
+                      {#if p.har_handle}<span class="harhandle">{p.handle}</span>
+                      {:else}<span class="saknarhandle">saknar @</span>{/if}
+                    </div>
+                  {:else}
+                    <p class="tomkort">Inga deltagare kopplade till grenen än.</p>
+                  {/each}
+                </div>
+                {#if grenDetalj.mer_deltagare}
+                  <button class="visaalla" on:click={() => valjGren(valdGren, true)}>Visa alla {grenDetalj.antal_deltagare} deltagare ›</button>
+                {/if}
+              </div>
+            {:else}
+              <p class="tomkort">Välj en gren till vänster.</p>
+            {/if}
+          </div>
+        </div>
+      {:else}
+        <div class="programtom">
+          <p class="tomkort">Läget <b>Program</b> (dagflikar + tidsaxel) byggs i M-4. Tills dess ligger dagsprogrammet kvar i <b>Grenar &amp; deltagare</b> → passen per gren.</p>
+        </div>
+      {/if}
+    {:else}
     <button class="tillbaka" on:click={tillbaka}>‹ Alla tävlingar</button>
     <div class="drubrik">
       <h1 class="scd">{e.namn}</h1>
@@ -547,118 +692,8 @@
         {/if}
       </div>
 
-      {#if inlasOppen}
-        <div class="inlas">
-          <div class="seg liten">
-            <span class="caps">Läs in program eller startlista</span>
-            <span class="spacer"></span>
-            <button class="bort" title="Stäng" on:click={() => (inlasOppen = false)}>✕</button>
-          </div>
-          {#if !granskning}
-            <textarea rows="7" bind:value={inlasText} placeholder={'Släpp en fil eller klistra in — tidsprogram, startlista med tider eller bara deltagare. Typen känns igen automatiskt.\n\nKvinnor 100 m\nFörsök Fredag, 18:20\nFinal Fredag, 20:25\n80\tEsther Sahlqvist\t06\tHammarby IF'}></textarea>
-            <div class="inlasfot">
-              <button class="avbryt liten" on:click={lasPdf}>Läs PDF…</button>
-              <span class="khint">Inget sparas förrän du granskat.</span>
-              <span class="spacer"></span>
-              <button class="prim liten" on:click={() => lasIn('auto')} disabled={!inlasText.trim()}>Läs in ›</button>
-            </div>
-            {#if inlasFel}<div class="kvitto fel">{inlasFel}</div>{/if}
-          {:else}
-            <!-- C8: sammanfattning i klartext + typen som gissades. -->
-            {@const s = granskning.sammanfattning || {}}
-            <div class="granskrubrik">
-              <span class="caps">{SORTNAMN[granskning.sort] || granskning.sort}</span>
-              <span class="summa">{s.dagar ? `${s.dagar} dagar · ` : ''}{s.grenar || 0} grenar{s.pass ? ` · ${s.pass} pass` : ''}{s.starter ? ` · ${s.starter} starter` : ''}</span>
-              {#if s.behover_blick}<span class="varn">· {s.behover_blick} behöver din blick</span>{/if}
-            </div>
-            {#if granskning.kalla !== 'pdf'}
-              <div class="bytsort {granskning.sakerhet === 'osaker' ? 'osaker' : ''}">
-                {granskning.sakerhet === 'osaker' ? 'Osäker på typen — stämmer detta? Byt:' : 'Tolkad som ovan. Byt vid behov:'}
-                {#each BYTBARA as bs}
-                  <button class="minichip" class:pa={granskning.sort === bs}
-                    on:click={() => lasIn(bs)}>{SORTNAMN[bs]}</button>
-                {/each}
-              </div>
-            {/if}
+      <LasInTavling bind:oppen={inlasOppen} eventId={vald} on:klar={inlasKlar} />
 
-            <!-- C9: som standard bara avvikelserna; toggla för alla rader. -->
-            <div class="avviktoggle">
-              <button class="minichip" class:pa={baraAvvik} on:click={() => (baraAvvik = true)}>Bara avvikelser ({s.avvikande || 0})</button>
-              <button class="minichip" class:pa={!baraAvvik} on:click={() => (baraAvvik = false)}>Alla ({s.totalt || 0})</button>
-              {#if baraAvvik && s.rena}<span class="khint">· {s.rena} rena rader visas inte</span>{/if}
-            </div>
-
-            <div class="gransktabell">
-              {#if baraAvvik && !(s.avvikande)}
-                <p class="tomkort liten">Inga avvikelser — allt gick rent. Spara direkt.</p>
-              {/if}
-              {#each AVVIKORDNING as kat}
-                {@const passK = (baraAvvik ? passRader.filter((r) => r.avvik === kat) : (kat === AVVIKORDNING[0] ? passRader : []))}
-                {#if passK.length}
-                  {#if baraAvvik}<div class="avvikrubrik caps">{AVVIKNAMN[kat]} · {passK.length}</div>{/if}
-                  {#each passK as r}
-                    <div class="gr" class:ofullstandig={!radOk(r, 'program')}>
-                      <input class="gf smal" bind:value={r.datum} placeholder="Datum" />
-                      <input class="gf mini" bind:value={r.tid} placeholder="Tid" />
-                      <input class="gf" bind:value={r.gren} placeholder="Gren" />
-                      <input class="gf" bind:value={r.pass} placeholder="Pass (valfritt)" />
-                      <select class="gf mini" bind:value={r.klass} title="Klass — styr grenmarkörens färg">
-                        <option value="">–</option><option value="dam">Dam</option>
-                        <option value="herr">Herr</option><option value="mixed">Mixed</option>
-                      </select>
-                      <input class="gf smal" bind:value={r.plats} placeholder="Plats" />
-                      {#if r.varning}<span class="varn" title={r.varning}>⚠</span>{/if}
-                      <button class="bort synlig" title="Ta bort raden" on:click={() => taBortRad(r)}>✕</button>
-                    </div>
-                  {/each}
-                {/if}
-              {/each}
-              {#if deltRader.length}
-                {#each AVVIKORDNING as kat}
-                  {@const deltK = (baraAvvik ? deltRader.filter((r) => r.avvik === kat) : (kat === AVVIKORDNING[0] ? deltRader : []))}
-                  {#if deltK.length}
-                    {#if baraAvvik}<div class="avvikrubrik caps">{AVVIKNAMN[kat]} · deltagare · {deltK.length}</div>{/if}
-                    {#each deltK as r}
-                      <div class="gr" class:ofullstandig={!radOk(r, 'deltagare')}>
-                        <input class="gf" bind:value={r.gren} placeholder="Gren" />
-                        <select class="gf mini" bind:value={r.klass} title="Klass — krävs när grenen finns i flera">
-                          <option value="">–</option><option value="dam">Dam</option>
-                          <option value="herr">Herr</option><option value="mixed">Mixed</option>
-                        </select>
-                        <input class="gf" bind:value={r.namn} placeholder="Namn" />
-                        <input class="gf" bind:value={r.klubb} placeholder="Klubb" />
-                        <input class="gf smal" bind:value={r.handle} placeholder="@handle" />
-                        {#if r.varning}<span class="varn" title={r.varning}>⚠</span>{/if}
-                        <button class="bort synlig" title="Ta bort raden" on:click={() => taBortRad(r)}>✕</button>
-                      </div>
-                    {/each}
-                  {/if}
-                {/each}
-              {/if}
-            </div>
-
-            <!-- C10: omimport är idempotent men inte tyst — visa diffen. -->
-            {#if forhands}
-              <div class="diff">
-                <div class="caps">Vad ändras</div>
-                <div class="diffrad">{forhands.pass_nya || 0} nya pass · {forhands.pass_uppdaterade || 0} flyttade · {forhands.pass_oforandrade || 0} oförändrade{forhands.deltagare_nya != null ? ` · ${forhands.deltagare_nya} nya deltagare (${forhands.deltagare_befintliga} fanns)` : ''}</div>
-                {#if forhands.grenar_nya?.length}<div class="diffrad">Nya grenar: {forhands.grenar_nya.join(', ')}</div>{/if}
-                {#each (forhands.flyttningar || []) as f}<div class="diffrad flytt">{f}</div>{/each}
-              </div>
-            {/if}
-
-            <div class="inlasfot">
-              <button class="avbryt liten" on:click={() => { granskning = null; forhands = null }}>‹ Tillbaka</button>
-              <span class="spacer"></span>
-              <button class="avbryt liten" on:click={granskaAndringar} disabled={!sparaAntal}>Granska ändringar</button>
-              <button class="prim liten" on:click={sparaInlas} disabled={!sparaAntal}>
-                Spara {sparaAntal} rader</button>
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      {#if inlasKvitto}<div class="kvitto">{inlasKvitto}</div>{/if}
 
       {#if passOppen}
         <div class="nyrad passrad">
@@ -847,6 +882,7 @@
       </div>
       {/if}
     </div>
+    {/if}
   {:else}
     <p class="tom">Laddar…</p>
   {/if}
@@ -948,52 +984,14 @@
   .prad .bort { opacity: 0; }
   .prad:hover .bort { opacity: 1; }
 
-  .inlas { border: 1px solid var(--div); border-radius: 10px; padding: 12px;
-    margin-bottom: 12px; background: var(--panel); }
-  .seg.liten { margin-bottom: 10px; display: flex; width: 100%; border: 0; }
-  .seg.liten .segval { border: 1px solid var(--div); border-radius: 8px; margin-right: 6px; }
-  .inlas textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--div);
-    border-radius: 8px; padding: 9px 11px; background: var(--kort); color: var(--t-head);
-    font-family: inherit; font-size: 12.5px; line-height: 1.6; resize: vertical; }
-  .inlasfot { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-  .granskrubrik { margin-bottom: 8px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .granskrubrik .summa { font-size: 12.5px; color: var(--t-help); }
-  .varn { color: var(--acc); font-weight: 700; }
-  .bytsort { font-size: 11.5px; color: var(--t-help); margin-bottom: 8px;
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .bytsort.osaker { color: var(--acc); font-weight: 600; }
-  .minichip { border: 1px solid var(--div); border-radius: 999px; background: var(--kort);
-    color: var(--t-head); padding: 3px 11px; font-size: 11.5px; font-family: inherit;
-    font-weight: 600; cursor: pointer; }
-  .minichip.pa { background: var(--acc); color: #fff; border-color: var(--acc); }
-  .avviktoggle { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
-  .avvikrubrik { margin: 8px 0 2px; font-size: 11px; color: var(--acc); }
-  .tomkort.liten { padding: 8px 0; font-size: 12.5px; }
-  .diff { margin-top: 10px; border: 1px solid var(--div); border-radius: 8px;
-    padding: 9px 11px; background: var(--panel); }
-  .diff .caps { display: block; margin-bottom: 4px; }
-  .diffrad { font-size: 12px; color: var(--t-help); line-height: 1.6; }
-  .diffrad.flytt { color: var(--acc); }
-  .gransktabell { max-height: 260px; overflow-y: auto; display: flex;
-    flex-direction: column; gap: 4px; }
-  .gr { display: flex; align-items: center; gap: 5px; }
-  .gr.ofullstandig { opacity: 0.55; }
-  .gf { flex: 1; min-width: 0; border: 1px solid var(--div); border-radius: 7px;
-    padding: 5px 8px; background: var(--kort); color: var(--t-head);
-    font-family: inherit; font-size: 12px; }
-  .gf.smal { flex: 0 0 108px; }
-  .gf.mini { flex: 0 0 62px; }
-  .kvitto { font-size: 12px; color: var(--t-help); background: var(--panel);
-    border: 1px solid var(--div); border-radius: 8px; padding: 7px 11px; margin-bottom: 10px; }
-  .kvitto.fel { color: var(--krock, #b03838); border-color: var(--krock, #b03838); margin-top: 10px; }
-  .gransktabell select.gf { padding: 5px 4px; }
-  .bort.synlig { opacity: 0.65; }
-  .bort.synlig:hover { opacity: 1; }
+  /* SoMe-kontot på deltagarraden (kort-stapeln) */
   .handlefalt { flex: 0 0 132px; border: 1px solid var(--div); border-radius: 7px;
     padding: 4px 8px; background: var(--kort); color: var(--t-head);
     font-family: inherit; font-size: 11.5px; }
   .handlefalt.tom { border-style: dashed; color: var(--t-mut); }
   .handlefalt:focus { border-color: var(--acc); border-style: solid; outline: none; }
+
+  /* Pass-editorn (delas av kort-stapeln och arbetsytan) */
   .passrad select, .passrad input { border: 1px solid var(--div); border-radius: 7px;
     padding: 6px 9px; background: var(--kort); color: var(--t-head);
     font-family: inherit; font-size: 12.5px; }
@@ -1050,6 +1048,118 @@
   .edknappar { display: flex; gap: 8px; margin-top: 12px; }
   .avbryt { border: 1px solid var(--div); background: var(--kort); border-radius: 8px;
     padding: 7px 12px; font-size: 12.5px; font-weight: 600; color: var(--t-mut); cursor: pointer; }
+
+  /* ── Mästerskaps-arbetsytan (C12/M-3) ─────────────────────────────────
+     Tvåpanelsyta: gren-navigator (322 px) → gren-detalj. Klass-paletten är
+     den ENDA färgen som får bära betydelse här; kat är alltid neutral. */
+  .panel.arbetsyta { max-width: none; padding: 0; display: flex;
+    flex-direction: column; height: 100%; min-height: 0; }
+  .atopp { flex: none; padding: 16px 22px 0; border-bottom: 1px solid var(--div2, var(--div)); }
+  .atopp .tillbaka { padding-bottom: 6px; }
+  .arubrik { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; }
+  .arubrik h1 { margin: 0; font-size: 23px; }
+  /* Eventtyp = etikett utan egen färg (invariant) — accent-outline, aldrig
+     en egen hex som konkurrerar med klass-paletten. */
+  .atypbadge { flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--acc); border: 1px solid var(--acc);
+    border-radius: 5px; padding: 2px 7px; }
+  .ameta { font-size: 11.5px; color: var(--t-mut); }
+  .alasin { border: 1px solid var(--div); background: none; color: var(--t-body, var(--t-head));
+    border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit; }
+  .alasin:hover { border-color: var(--acc); color: var(--acc); }
+  .lagen { display: flex; gap: 2px; margin-top: 12px; }
+  .lagflik { border: 0; border-bottom: 2px solid transparent; background: none;
+    padding: 7px 15px; font-family: inherit; font-size: 13px; font-weight: 600;
+    color: var(--t-mut); cursor: pointer; }
+  .lagflik.pa { border-bottom-color: var(--acc); color: var(--t-head); font-weight: 700; }
+
+  .ayta { flex: 1; display: flex; min-height: 0; }
+  .navigator { width: 322px; flex: none; display: flex; flex-direction: column;
+    min-height: 0; border-right: 1px solid var(--div2, var(--div)); }
+  .navtopp { flex: none; padding: 12px 14px 10px; border-bottom: 1px solid var(--div3, var(--div)); }
+  .navsok { width: 100%; box-sizing: border-box; border: 1px solid var(--div);
+    border-radius: 8px; padding: 7px 10px; background: var(--kort);
+    color: var(--t-head); font-family: inherit; font-size: 12.5px; }
+  .navsok:focus { border-color: var(--acc); outline: none; }
+  .navfilter { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+  .caps.mini { font-size: 9.5px; letter-spacing: 0.1em; }
+  .segment { display: inline-flex; background: var(--panel); border: 1px solid var(--div);
+    border-radius: 7px; padding: 2px; }
+  .segknapp { border: 0; background: none; border-radius: 5px; padding: 3px 10px;
+    font-family: inherit; font-size: 11px; font-weight: 600; color: var(--t-mut); cursor: pointer; }
+  .segknapp.pa { background: var(--kort); color: var(--t-head);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+  .navlista { flex: 1; overflow-y: auto; padding: 6px 10px 14px; }
+  .navgrupp { margin-top: 8px; }
+  .grupprubrik { display: flex; align-items: center; gap: 8px; padding: 5px 6px 4px; }
+  .kant { width: 4px; height: 13px; border-radius: 2px; flex: none; }
+  .gruppantal { font-size: 10px; color: var(--t-help); }
+  .grenrad { display: flex; align-items: center; gap: 9px; padding: 6px; border-radius: 8px;
+    border: 1px solid transparent; cursor: pointer; }
+  .grenrad:hover { background: color-mix(in srgb, var(--t-mut) 8%, transparent); }
+  .grenrad.vald { background: color-mix(in srgb, var(--acc) 14%, transparent);
+    border-color: color-mix(in srgb, var(--acc) 42%, transparent); }
+  /* Klassens färgkant — aldrig en textetikett, och ingen kant vid okänd klass. */
+  .grenkant { width: 4px; height: 26px; border-radius: 2px; flex: none; }
+  .grenkant.tom { background: none; }
+  .grenmitt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .grennamn { font-size: 12.5px; font-weight: 600; color: var(--t-head);
+    display: flex; align-items: center; gap: 6px; }
+  .grensub { font-size: 10px; color: var(--t-mut); }
+  .grenantal { font-size: 11px; font-weight: 700; color: var(--t-mut);
+    font-variant-numeric: tabular-nums; }
+  /* Kat (I-20, R, S-klass, para) = NEUTRAL grå textchip. Aldrig färg —
+     paletten är låst till kön, och det är så dam/herr-varianten av samma
+     grennamn slutar läsas som dubbletter. */
+  .kat { font-size: 8.5px; font-weight: 700; letter-spacing: 0.04em;
+    color: var(--t-mut); background: color-mix(in srgb, var(--t-mut) 15%, transparent);
+    border-radius: 4px; padding: 1px 5px; }
+
+  .grendetalj { flex: 1; min-width: 0; overflow-y: auto; padding: 18px 22px 40px; }
+  .drubrik2 { display: flex; align-items: stretch; gap: 12px; }
+  .stapel { width: 5px; border-radius: 3px; flex: none; }
+  .dmitt { flex: 1; min-width: 0; }
+  .dtitel { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .dtitel h2 { margin: 0; font-size: 26px; font-weight: 700; color: var(--t-head); line-height: 1; }
+  .klasstext { font-size: 11.5px; color: var(--t-mut); }
+  .dmeta2 { margin: 4px 0 0; font-size: 12px; color: var(--t-mut); }
+  .favknapp { flex: none; align-self: flex-start; border: 1px solid var(--div);
+    background: none; color: var(--t-mut); border-radius: 8px; padding: 6px 12px;
+    font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .favknapp.pa { border-color: color-mix(in srgb, var(--acc) 42%, transparent);
+    background: color-mix(in srgb, var(--acc) 14%, transparent); color: var(--acc); }
+  .grendetalj .kort { margin-top: 14px; }
+  .passbrickor { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
+  .passbricka { background: var(--panel); border: 1px solid var(--div);
+    border-radius: 9px; padding: 8px 12px; min-width: 120px;
+    display: flex; flex-direction: column; }
+  .passtyp { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--t-mut); }
+  .passnar { font-size: 16px; font-weight: 700; color: var(--t-head);
+    font-variant-numeric: tabular-nums; }
+  .passantal { font-size: 10px; color: var(--t-help); }
+  .passny { background: none; border: 1px dashed var(--div); border-radius: 9px;
+    padding: 8px 14px; font-family: inherit; font-size: 12px; font-weight: 600;
+    color: var(--acc); cursor: pointer; }
+  .laggtill { display: flex; margin: 10px 0; }
+  .laggtill input { flex: 1; border: 1px solid color-mix(in srgb, var(--acc) 42%, transparent);
+    border-radius: 8px; padding: 7px 11px; background: var(--panel);
+    color: var(--t-head); font-family: inherit; font-size: 12.5px; }
+  .laggtill input:focus { border-color: var(--acc); outline: none; }
+  .deltlista { display: flex; flex-direction: column; max-height: 250px; overflow-y: auto; }
+  .deltrad { display: flex; align-items: center; gap: 10px; padding: 6px 4px;
+    border-bottom: 1px solid var(--div3, var(--div)); }
+  .deltnr { font-size: 11px; font-weight: 700; color: var(--t-mut); min-width: 30px;
+    text-align: center; font-variant-numeric: tabular-nums; }
+  .deltmitt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .deltnamn { font-size: 12.5px; font-weight: 600; color: var(--t-head); line-height: 1.1; }
+  .deltklubb { font-size: 10.5px; color: var(--t-mut); }
+  .harhandle { flex: none; font-size: 11px; font-weight: 600; color: var(--acc); }
+  .saknarhandle { flex: none; font-size: 9.5px; font-weight: 700; color: var(--t-help);
+    border: 1px dashed var(--div); border-radius: 5px; padding: 1px 6px; }
+  .visaalla { margin-top: 9px; border: 0; background: none; font-family: inherit;
+    font-size: 12px; font-weight: 600; color: var(--acc); cursor: pointer; padding: 0; }
+  .programtom { padding: 22px; }
 
   /* Deltagarrad m gren-chips (skiva 1.5) */
   .drad { border: 1px solid var(--div3, var(--div)); border-radius: 9px; padding: 8px 10px;

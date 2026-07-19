@@ -980,6 +980,31 @@ def favoritgrenar(conn, tavling_id):
         "ORDER BY ordning, namn", (tavling_id,))]
 
 
+def hamta_disciplin(conn, disciplin_id):
+    """En gren med sitt deltagarantal (M-3:s gren-detalj). None om okänd."""
+    r = conn.execute("SELECT * FROM disciplin WHERE id=?",
+                     (disciplin_id,)).fetchone()
+    if not r:
+        return None
+    d = dict(r)
+    d["favorit"] = bool(d.get("favorit"))
+    d["antal_deltagare"] = conn.execute(
+        "SELECT COUNT(*) FROM disciplin_deltagare WHERE disciplin_id=?",
+        (disciplin_id,)).fetchone()[0]
+    return d
+
+
+def disciplin_deltagare(conn, disciplin_id):
+    """Grenens deltagare — kopplingen bor på GRENEN, inte på personen (D12)."""
+    ut = [dict(r) for r in conn.execute(
+        "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram FROM lag l "
+        "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
+        "WHERE dd.disciplin_id=? ORDER BY l.namn", (disciplin_id,))]
+    for p in ut:
+        p["handle"] = _handle(p.pop("instagram"))
+    return ut
+
+
 def radera_disciplin(conn, disciplin_id):
     conn.execute("DELETE FROM disciplin WHERE id=?", (disciplin_id,))
     conn.commit()

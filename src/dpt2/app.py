@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from dpt2.data import db, store, sportprofil
 from dpt2.motorer import story_overlay          # hitta_logga (gamla filkonventionen)
 from dpt2.motorer import program_import         # V5 §8: tidsprogram/startlista
+from dpt2.motorer import masterskap             # C12/M-3: arbetsytans härledningar
 from dpt2.tjanster import (matchhamtning, leverera, bildsvep, korning,
                            publicera_korning, publicera_some, meta_api,
                            bildhosting, story_korning, testlage)
@@ -716,6 +717,77 @@ class Api:
     def radera_disciplin(self, id):
         store.radera_disciplin(self.conn, id)
         return {"ok": True}
+
+    # ── Mästerskaps-arbetsytan (C12/M-3) ─────────────────────────────────────
+    # Läge "Grenar & deltagare": vänster navigator (grupperad, sökbar,
+    # ★-filtrerad) → höger gren-detalj. Allt HÄRLEDS ur disciplin/pass/
+    # disciplin_deltagare — inget nytt lagras, ingen modelländring.
+
+    def _tavlingspass(self, tavling_id):
+        """Tävlingens alla pass (för dagnumren). Programmet lagras aldrig."""
+        return [dict(r) for r in self.conn.execute(
+            "SELECT p.* FROM pass p JOIN disciplin d ON d.id=p.disciplin_id "
+            "WHERE d.tavling_id=? ORDER BY p.datum, p.tid", (tavling_id,))]
+
+    def hamta_masterskap_grenar(self, tavling_id, efter="klass", sok="",
+                                bara_favoriter=False):
+        """Gren-navigatorn: grupper + rader, samt om tävlingen alls ska ritas
+        som arbetsyta (M-5-provisorium, se motorer/masterskap.py)."""
+        grenar = store.lista_discipliner(self.conn, tavling_id)
+        for g in grenar:
+            g["antal_deltagare"] = len(g.get("deltagare") or [])
+        alla_pass = self._tavlingspass(tavling_id)
+        dagar = masterskap.tavlingsdagar(alla_pass)
+        per_gren = {}
+        for p in alla_pass:
+            per_gren.setdefault(p["disciplin_id"], []).append(p)
+        rader = [masterskap.gren_rad(g, dagar, per_gren.get(g["id"], []))
+                 for g in grenar]
+        return {
+            "arbetsyta": masterskap.ar_arbetsyta(len(grenar)),
+            "antal_grenar": len(grenar),
+            "antal_starter": sum(r["antal_deltagare"] for r in rader),
+            "antal_favoriter": sum(1 for r in rader if r["favorit"]),
+            "dagar": dagar,
+            "grupper": masterskap.navigator(
+                rader, efter=efter, sok=sok,
+                bara_favoriter=bool(bara_favoriter)),
+        }
+
+    def hamta_gren_detalj(self, disciplin_id, alla=False):
+        """Höger panel: rubrikblock + PASS + DELTAGARE I {gren}."""
+        g = store.hamta_disciplin(self.conn, disciplin_id)
+        if not g:
+            return None
+        tav = store.hamta_event(self.conn, g["tavling_id"]) \
+            or store.hamta_tavling(self.conn, g["tavling_id"]) or {}
+        alla_pass = self._tavlingspass(g["tavling_id"])
+        dagar = masterskap.tavlingsdagar(alla_pass)
+        mina = store.lista_pass(self.conn, disciplin_id)
+        rad = masterskap.gren_rad(g, dagar, mina)
+        pass_ut = []
+        for p in mina:
+            dagnr = masterskap.dagnummer(p.get("datum"), dagar)
+            # Pass på annan dag än grenens första prefixas "dag N" — annars
+            # läses en final kl 11:00 som samma dag som försöken.
+            prefix = f"dag {dagnr} " if dagnr and dagnr != rad["dag"] else ""
+            pass_ut.append({"id": p["id"], "typ": p["namn"],
+                            "nar": prefix + (p.get("tid") or p.get("datum") or ""),
+                            "antal": p.get("plats") or ""})
+        delt = [masterskap.deltagarrad(p) for p in
+                store.disciplin_deltagare(self.conn, disciplin_id)]
+        gransen = len(delt) if alla else masterskap.DELTAGARGRANS
+        return {
+            **rad,
+            "klasstext": masterskap.klasstext(g.get("gren")),
+            "pass": pass_ut,
+            "pass_text": f"{len(pass_ut)} pass",
+            "tavling_namn": tav.get("namn") or "",
+            "deltagare": delt[:gransen],
+            "handletext": masterskap.handletext(delt[:gransen]),
+            "mer_deltagare": len(delt) > gransen,
+            "antal_deltagare": len(delt),
+        }
 
     def koppla_disciplin_deltagare(self, disciplin_id, lag_id, pa=True):
         store.koppla_disciplin_deltagare(self.conn, disciplin_id, lag_id, pa)

@@ -4,6 +4,7 @@ import unittest
 
 from dpt2.app import Api, _gallring_av_config, _hitta_site_rot, _spara_export_bild
 from dpt2.data import db, store
+from dpt2.motorer import masterskap
 
 
 class TestApi(unittest.TestCase):
@@ -3196,6 +3197,212 @@ class TestFavoritgrenar(unittest.TestCase):
         self.assertFalse(self.api.satt_disciplin_favorit("", True)["favorit"])
         self.assertFalse(
             self.api.satt_disciplin_favorit("finns-inte", True)["favorit"])
+
+
+class TestMasterskapsArbetsytan(unittest.TestCase):
+    """C12/M-3 — mästerskaps-arbetsytan, läge *Grenar & deltagare*.
+
+    Friidrotts-SM 2026 är 79 grenar · 845 starter: den platta detaljvyn
+    kollapsar. Navigatorn grupperar (Klass/Typ/Dag), söker och ★-filtrerar;
+    gren-detaljen bär pass + deltagarna med @-status. Allt HÄRLEDS — schemat
+    står kvar på v42.
+    """
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.ev = store.upsert_tavling(
+            self.api.conn, "Friidrotts-SM 2026", sport="friidrott",
+            typ="masterskap", fran="2026-07-24", till="2026-07-26")
+
+    def _gren(self, namn, klass=None, typ=None, dagar=()):
+        gid = self.api.spara_disciplin(
+            {"tavling_id": self.ev, "namn": namn, "gren": klass,
+             "typ": typ or "hoppkast"})["id"]
+        for i, (datum, tid) in enumerate(dagar):
+            self.api.spara_pass({"disciplin_id": gid, "namn": f"Pass {i + 1}",
+                                 "datum": datum, "tid": tid})
+        return gid
+
+    def _deltagare(self, gid, namn, handle=None, klubb=""):
+        lid = store.upsert_lag(self.api.conn, namn, sport="friidrott",
+                               kind="individ", klubb=klubb,
+                               instagram=handle)
+        store.koppla_disciplin_deltagare(self.api.conn, gid, lid)
+        return lid
+
+    def _namn(self, grupp):
+        return [g["namn"] for g in grupp["grenar"]]
+
+    # ── M-5-provisoriet: EN tröskel, ett ställe ─────────────────────────────
+    def test_liten_tavling_far_ingen_arbetsyta(self):
+        for i in range(masterskap.ARBETSYTA_MIN_GRENAR - 1):
+            self._gren(f"Gren {i}", "dam")
+        self.assertFalse(
+            self.api.hamta_masterskap_grenar(self.ev)["arbetsyta"])
+
+    def test_stor_tavling_far_arbetsyta(self):
+        for i in range(masterskap.ARBETSYTA_MIN_GRENAR):
+            self._gren(f"Gren {i}", "dam")
+        svar = self.api.hamta_masterskap_grenar(self.ev)
+        self.assertTrue(svar["arbetsyta"])
+        self.assertEqual(svar["antal_grenar"],
+                         masterskap.ARBETSYTA_MIN_GRENAR)
+
+    # ── Grupperingarna ─────────────────────────────────────────────────────
+    def test_klassgruppering_skiljer_dam_fran_herr(self):
+        """Kärnan i D12: två "Diskus" ska aldrig läsas som dubbletter."""
+        self._gren("Diskus", "dam")
+        self._gren("Diskus", "herr")
+        grupper = self.api.hamta_masterskap_grenar(self.ev)["grupper"]
+        self.assertEqual([g["etikett"] for g in grupper], ["Dam", "Herr"])
+        self.assertEqual(self._namn(grupper[0]), ["Diskus"])
+        self.assertEqual(self._namn(grupper[1]), ["Diskus"])
+        # …och i övriga grupperingar skiljer FÄRGKANTEN dem åt.
+        typgrupper = self.api.hamta_masterskap_grenar(
+            self.ev, efter="typ")["grupper"]
+        farger = [g["farg"] for g in typgrupper[0]["grenar"]]
+        self.assertEqual(sorted(farger),
+                         sorted([masterskap.KLASSFARG["dam"],
+                                 masterskap.KLASSFARG["herr"]]))
+
+    def test_tomma_grupper_faller_bort(self):
+        self._gren("Höjd", "dam")
+        grupper = self.api.hamta_masterskap_grenar(self.ev)["grupper"]
+        self.assertEqual([g["etikett"] for g in grupper], ["Dam"])
+        self.assertEqual(grupper[0]["antal_text"], "1 gren")
+
+    def test_okand_klass_far_ingen_farg_och_egen_grupp(self):
+        """Invariant: ingen kant vid okänd klass."""
+        self._gren("Stafett 4×100 m", None)
+        grupper = self.api.hamta_masterskap_grenar(self.ev)["grupper"]
+        self.assertEqual([g["etikett"] for g in grupper], ["Utan klass"])
+        self.assertIsNone(grupper[0]["kant"])
+        self.assertIsNone(grupper[0]["grenar"][0]["farg"])
+
+    def test_typgruppering(self):
+        self._gren("100 m", "dam", typ="sprint")
+        self._gren("Längd", "herr")
+        self._gren("Kula", "dam")
+        self._gren("Tiokamp", "herr", typ="mangkamp")
+        self._gren("110 m häck", "herr")
+        grupper = self.api.hamta_masterskap_grenar(self.ev, efter="typ")["grupper"]
+        self.assertEqual([g["etikett"] for g in grupper],
+                         ["Löpning", "Hopp", "Kast", "Mångkamp"])
+        self.assertEqual(sorted(self._namn(grupper[0])), ["100 m", "110 m häck"])
+        # Typgrupperna bär ALDRIG färg — bara klass-grupperingen gör det.
+        self.assertTrue(all(g["kant"] is None for g in grupper))
+
+    def test_daggruppering_ur_passens_datum(self):
+        self._gren("100 m", "dam", dagar=[("2026-07-24", "18:40")])
+        self._gren("Kula", "dam", dagar=[("2026-07-26", "14:00")])
+        self._gren("Odaterad", "dam")
+        grupper = self.api.hamta_masterskap_grenar(self.ev, efter="dag")["grupper"]
+        self.assertEqual([g["etikett"] for g in grupper],
+                         ["Dag 1", "Dag 2", "Utan dag"])
+        self.assertEqual(self._namn(grupper[0]), ["100 m"])
+        # Undertexten på raden: "Typ · dag N"
+        self.assertEqual(grupper[0]["grenar"][0]["sub"], "Löpning · dag 1")
+        self.assertEqual(grupper[2]["grenar"][0]["sub"], "Övrigt")
+
+    def test_fri_sok_ovanpa_grupperingen(self):
+        self._gren("100 m", "dam")
+        self._gren("Kula", "dam")
+        grupper = self.api.hamta_masterskap_grenar(self.ev, sok="kul")["grupper"]
+        self.assertEqual(self._namn(grupper[0]), ["Kula"])
+
+    # ── ★-filtret (vilar på M-7:s persistens) ──────────────────────────────
+    def test_favoritfiltret_anvander_m7_flaggan(self):
+        a = self._gren("100 m", "dam")
+        self._gren("Kula", "dam")
+        self.api.satt_disciplin_favorit(a, True)
+        svar = self.api.hamta_masterskap_grenar(self.ev, bara_favoriter=True)
+        self.assertEqual(svar["antal_favoriter"], 1)
+        self.assertEqual(self._namn(svar["grupper"][0]), ["100 m"])
+        # Räknaren räknar hela tävlingen, inte det filtrerade urvalet.
+        self.assertEqual(
+            self.api.hamta_masterskap_grenar(self.ev)["antal_favoriter"], 1)
+
+    def test_favoritfiltret_skiljer_dam_fran_herr(self):
+        dam = self._gren("Diskus", "dam")
+        self._gren("Diskus", "herr")
+        self.api.satt_disciplin_favorit(dam, True)
+        grupper = self.api.hamta_masterskap_grenar(
+            self.ev, bara_favoriter=True)["grupper"]
+        self.assertEqual([g["etikett"] for g in grupper], ["Dam"])
+
+    # ── Kat = neutral textchip, ALDRIG färg ────────────────────────────────
+    def test_kat_lyfts_ur_namnet_och_far_aldrig_farg(self):
+        gid = self._gren("100 m I-20", "dam")
+        rad = self.api.hamta_masterskap_grenar(self.ev)["grupper"][0]["grenar"][0]
+        self.assertEqual(rad["namn"], "100 m")
+        self.assertEqual(rad["kat"], "I-20")
+        # Paletten är låst till KÖN: raden bär dam-lila, kat bär ingen färg.
+        self.assertEqual(rad["farg"], masterskap.KLASSFARG["dam"])
+        self.assertNotIn(rad["kat"], masterskap.KLASSFARG.values())
+        self.assertEqual(self.api.hamta_gren_detalj(gid)["kat"], "I-20")
+
+    def test_kat_gor_inte_grenar_till_dubbletter(self):
+        self._gren("100 m", "dam")
+        self._gren("100 m I-20", "dam")
+        rader = self.api.hamta_masterskap_grenar(self.ev)["grupper"][0]["grenar"]
+        self.assertEqual([r["namn"] for r in rader], ["100 m", "100 m"])
+        self.assertEqual(sorted(r["kat"] for r in rader), ["", "I-20"])
+
+    def test_grennamn_som_bara_ser_ut_som_kat_lamnas_ifred(self):
+        for namn in ("Diskus", "Kula", "Stav", "Tresteg"):
+            self.assertEqual(masterskap.dela_kat(namn), (namn, ""))
+
+    def test_sok_traffar_kat(self):
+        self._gren("100 m I-20", "dam")
+        self._gren("Kula", "dam")
+        grupper = self.api.hamta_masterskap_grenar(self.ev, sok="i-20")["grupper"]
+        self.assertEqual(len(grupper[0]["grenar"]), 1)
+
+    # ── Gren-detaljen ──────────────────────────────────────────────────────
+    def test_gren_detaljen_bar_pass_klasstext_och_tavling(self):
+        gid = self._gren("100 m", "dam",
+                         dagar=[("2026-07-24", "18:40"), ("2026-07-25", "20:25")])
+        d = self.api.hamta_gren_detalj(gid)
+        self.assertEqual(d["klasstext"], "damklass")
+        self.assertEqual(d["farg"], masterskap.KLASSFARG["dam"])
+        self.assertEqual(d["tavling_namn"], "Friidrotts-SM 2026")
+        self.assertEqual(d["pass_text"], "2 pass")
+        self.assertEqual(d["pass"][0]["nar"], "18:40")
+        # Pass på annan dag än grenens första prefixas "dag N".
+        self.assertEqual(d["pass"][1]["nar"], "dag 2 20:25")
+
+    def test_deltagarnas_handlestatus(self):
+        gid = self._gren("100 m", "dam")
+        self._deltagare(gid, "Nora Holm", handle="@noraholm", klubb="Malmö AI")
+        self._deltagare(gid, "Wilma Ek", klubb="Turebergs FK")
+        d = self.api.hamta_gren_detalj(gid)
+        self.assertEqual(d["handletext"], "1 av 2 visade har @")
+        med = [p for p in d["deltagare"] if p["har_handle"]]
+        self.assertEqual([p["namn"] for p in med], ["Nora Holm"])
+        self.assertEqual(med[0]["handle"], "@noraholm")
+        self.assertEqual(med[0]["initialer"], "NH")
+        self.assertFalse(d["mer_deltagare"])
+
+    def test_lang_deltagarlista_trunkeras_men_raknas_helt(self):
+        """100 m har 47 deltagare — listan visar ett fönster, aldrig allt."""
+        gid = self._gren("100 m", "dam")
+        for i in range(masterskap.DELTAGARGRANS + 5):
+            self._deltagare(gid, f"Löpare {i:02d}")
+        d = self.api.hamta_gren_detalj(gid)
+        self.assertEqual(len(d["deltagare"]), masterskap.DELTAGARGRANS)
+        self.assertEqual(d["antal_deltagare"], masterskap.DELTAGARGRANS + 5)
+        self.assertTrue(d["mer_deltagare"])
+        alla = self.api.hamta_gren_detalj(gid, alla=True)
+        self.assertEqual(len(alla["deltagare"]), masterskap.DELTAGARGRANS + 5)
+        self.assertFalse(alla["mer_deltagare"])
+
+    def test_tom_gren_sager_importeras(self):
+        gid = self._gren("100 m", "dam")
+        self.assertEqual(self.api.hamta_gren_detalj(gid)["handletext"],
+                         "importeras")
+
+    def test_okand_gren_ger_none(self):
+        self.assertIsNone(self.api.hamta_gren_detalj("finns-inte"))
 
 
 class TestProgramTillTelefonen(unittest.TestCase):

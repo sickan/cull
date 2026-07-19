@@ -439,6 +439,18 @@ let MOCK_DISCIPLINER = [
     deltagare: [{ id: 'siri-snabb', namn: 'Siri Snabb', klubb: 'IF Göta', gren: 'dam',
       instagram: '@siri_snabb' },
       { id: 'nora-nord', namn: 'Nora Nord', klubb: 'Upsala IF', gren: 'dam' }] },
+  // C12/M-3: mockläget behöver komma över arbetsytans tröskel för att den
+  // adaptiva växlingen alls ska gå att se i webbläsaren. Urvalet speglar
+  // mockupen (dam/herr-par av samma grennamn + en kat-gren).
+  { id: 'disc_100m_h', tavling_id: 'friidrotts-sm', namn: '100 m', typ: 'sprint', ordning: 3, gren: 'herr', deltagare: [] },
+  { id: 'disc_100m_i20', tavling_id: 'friidrotts-sm', namn: '100 m I-20', typ: 'sprint', ordning: 4, gren: 'dam', deltagare: [] },
+  { id: 'disc_200m_d', tavling_id: 'friidrotts-sm', namn: '200 m', typ: 'sprint', ordning: 5, gren: 'dam', deltagare: [] },
+  { id: 'disc_110h_h', tavling_id: 'friidrotts-sm', namn: '110 m häck', typ: 'sprint', ordning: 6, gren: 'herr', deltagare: [] },
+  { id: 'disc_hojd_d', tavling_id: 'friidrotts-sm', namn: 'Höjd', typ: 'hoppkast', ordning: 7, gren: 'dam', deltagare: [] },
+  { id: 'disc_stav_h', tavling_id: 'friidrotts-sm', namn: 'Stav', typ: 'hoppkast', ordning: 8, gren: 'herr', deltagare: [] },
+  { id: 'disc_diskus_d', tavling_id: 'friidrotts-sm', namn: 'Diskus', typ: 'hoppkast', ordning: 9, gren: 'dam', deltagare: [] },
+  { id: 'disc_diskus_h', tavling_id: 'friidrotts-sm', namn: 'Diskus', typ: 'hoppkast', ordning: 10, gren: 'herr', deltagare: [] },
+  { id: 'disc_tiokamp', tavling_id: 'friidrotts-sm', namn: 'Tiokamp', typ: 'mangkamp', ordning: 11, gren: 'herr', deltagare: [] },
 ]
 
 export async function listaDiscipliner(tavlingId) {
@@ -466,6 +478,85 @@ export async function sattDisciplinFavorit(disciplinId, pa = true) {
   const d = MOCK_DISCIPLINER.find((x) => x.id === disciplinId)
   if (d) d.favorit = !!pa
   return wait({ ok: true, favorit: !!pa })
+}
+
+// ── Mästerskaps-arbetsytan (C12/M-3) ───────────────────────────────────────
+// Härledningarna är kanoniska i dpt2/motorer/masterskap.py (grupperingarna,
+// kat-chippen, dagnumren, @-statusen) — UI:t räknar inte ut något själv.
+// Nedan finns en FÖRENKLAD spegel som bara används i webbläsarens mockläge,
+// precis som övriga MOCK_-fallbacks i den här filen.
+const MOCK_KLASSFARG = { dam: '#8E5A86', herr: '#3E7C87', mixed: '#6E8757' }
+const MOCK_TYPETIKETT = { lopning: 'Löpning', hopp: 'Hopp', kast: 'Kast',
+  mangkamp: 'Mångkamp', ovrigt: 'Övrigt' }
+function mockRad(d) {
+  const m = /(?:\s+|\s*\()(I-?\d{2}|U-?\d{2}|[PF]\d{2}|S-klass|S|R|para)\)?\s*$/i.exec(d.namn || '')
+  const namn = m ? (d.namn.slice(0, m.index).trim() || d.namn) : (d.namn || '')
+  const n = (d.namn || '').toLowerCase()
+  const tg = n.includes('kamp') || d.typ === 'mangkamp' ? 'mangkamp'
+    : /kula|diskus|slägga|spjut/.test(n) ? 'kast'
+      : /längd|höjd|stav|tresteg|hopp/.test(n) ? 'hopp'
+        : /\d\s*(m|km)\b|häck|stafett/.test(n) || d.typ === 'sprint' || d.typ === 'medel' ? 'lopning'
+          : 'ovrigt'
+  const forsta = MOCK_PASS.filter((p) => p.disciplin_id === d.id)
+    .map((p) => p.datum).sort()[0]
+  const dagar = [...new Set(MOCK_PASS.filter((p) => MOCK_DISCIPLINER
+    .some((x) => x.id === p.disciplin_id && x.tavling_id === d.tavling_id))
+    .map((p) => p.datum))].sort()
+  const dag = forsta ? dagar.indexOf(forsta) + 1 : null
+  return { id: d.id, namn, fullnamn: d.namn || '', kat: m ? m[1].toUpperCase() : '',
+    klass: d.gren || '', farg: MOCK_KLASSFARG[d.gren] || null, typgrupp: tg, dag,
+    sub: MOCK_TYPETIKETT[tg] + (dag ? ` · dag ${dag}` : ''),
+    antal_deltagare: (d.deltagare || []).length, favorit: !!d.favorit }
+}
+export async function hamtaMasterskapGrenar(tavlingId, efter = 'klass', sok = '',
+                                            baraFavoriter = false) {
+  const api = brygga()
+  if (api) return api.hamta_masterskap_grenar(tavlingId, efter, sok, baraFavoriter)
+  // Mockdatan bär tävlingen under två id:n (event- resp. tävlingsspegeln).
+  const tid = tavlingId === 'friidrotts-sm-2026' ? 'friidrotts-sm' : tavlingId
+  const alla = MOCK_DISCIPLINER.filter((d) => d.tavling_id === tid).map(mockRad)
+  const q = (sok || '').trim().toLowerCase()
+  const pool = alla.filter((r) => (!q || r.fullnamn.toLowerCase().includes(q)
+    || r.kat.toLowerCase().includes(q)) && (!baraFavoriter || r.favorit))
+  const ordning = efter === 'typ'
+    ? Object.entries(MOCK_TYPETIKETT).map(([k, e]) => [k, e, null, 'typgrupp'])
+    : efter === 'dag'
+      ? [...new Set(pool.map((r) => r.dag).filter(Boolean))].sort()
+        .map((d) => [d, `Dag ${d}`, null, 'dag'])
+        .concat([[null, 'Utan dag', null, 'dag']])
+      : [['dam', 'Dam', MOCK_KLASSFARG.dam, 'klass'], ['herr', 'Herr', MOCK_KLASSFARG.herr, 'klass'],
+        ['mixed', 'Mixed', MOCK_KLASSFARG.mixed, 'klass'], ['', 'Utan klass', null, 'klass']]
+  const grupper = ordning.map(([k, etikett, kant, nyckel]) => {
+    const traff = pool.filter((r) => r[nyckel] === k)
+    return traff.length ? { nyckel: String(k ?? ''), etikett, kant, antal: traff.length,
+      antal_text: `${traff.length} ${traff.length === 1 ? 'gren' : 'grenar'}`, grenar: traff } : null
+  }).filter(Boolean)
+  return wait(structuredClone({ arbetsyta: alla.length >= 9, antal_grenar: alla.length,
+    antal_starter: alla.reduce((a, r) => a + r.antal_deltagare, 0),
+    antal_favoriter: alla.filter((r) => r.favorit).length, grupper }))
+}
+
+export async function hamtaGrenDetalj(disciplinId, alla = false) {
+  const api = brygga()
+  if (api) return api.hamta_gren_detalj(disciplinId, alla)
+  const d = MOCK_DISCIPLINER.find((x) => x.id === disciplinId)
+  if (!d) return wait(null)
+  const rad = mockRad(d)
+  const delt = (d.deltagare || []).map((p) => ({ id: p.id, namn: p.namn,
+    klubb: p.klubb || '', nr: '',
+    initialer: (p.namn || '').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase(),
+    handle: p.handle || p.instagram || '', har_handle: !!(p.handle || p.instagram) }))
+  const visade = alla ? delt : delt.slice(0, 12)
+  const pass = MOCK_PASS.filter((p) => p.disciplin_id === d.id)
+    .map((p) => ({ id: p.id, typ: p.namn, nar: p.tid || p.datum, antal: p.plats || '' }))
+  return wait(structuredClone({ ...rad,
+    klasstext: { dam: 'damklass', herr: 'herrklass', mixed: 'mixed' }[d.gren] || '',
+    pass, pass_text: `${pass.length} pass`, tavling_namn: 'Friidrotts-SM 2026',
+    deltagare: visade, antal_deltagare: delt.length,
+    mer_deltagare: delt.length > visade.length,
+    handletext: visade.length
+      ? `${visade.filter((p) => p.har_handle).length} av ${visade.length} visade har @`
+      : 'importeras' }))
 }
 
 export async function raderaDisciplin(id) {
