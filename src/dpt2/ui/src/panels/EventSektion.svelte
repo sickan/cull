@@ -7,7 +7,7 @@
   import { listaEventer, listaTavlingar, hamtaEventDetalj, sattEventPagangLage,
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
     kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle,
-    sparaDisciplin, raderaDisciplin, sparaTavling, sportprofiler,
+    sparaDisciplin, raderaDisciplin, sattDisciplinFavorit, sparaTavling, sportprofiler,
     hamtaProgram, sparaPass, raderaPass,
     tolkaProgramPdf, importeraProgram,
     lasIn as lasInApi, forhandsgranskaImport } from '../lib/api.js'
@@ -140,6 +140,18 @@
     await raderaDisciplin(id)
     detalj = await hamtaEventDetalj(vald)
   }
+  // M-7: stjärnmärkningen är persistent och bor på grenen (tävling + namn +
+  // klass) — dam- och herr-varianten av samma gren markeras var för sig.
+  // Bär M-3:s navigator och M-4:s "★ Bara favoritgrenar" när de byggs.
+  let baraFavoriter = false
+  async function vaxlaFavorit(g) {
+    const svar = await sattDisciplinFavorit(g.id, !g.favorit)
+    g.favorit = svar?.favorit ?? !g.favorit
+    detalj = detalj                       // rör listan så Svelte ritar om
+  }
+  $: synligaGrenar = (detalj?.grenar || []).filter(
+    (g) => !baraFavoriter || g.favorit)
+  $: antalFavoriter = (detalj?.grenar || []).filter((g) => g.favorit).length
 
   // ── Deltagare (skiva 1.5): individ ⟂ gren ────────────────────────────────
   // Väljaren söker utövar-lagen (B-001:s befintliga deltagare) ∪ individ-
@@ -743,6 +755,11 @@
       <div class="hoger">
         <div class="kort">
           <div class="krubrik"><span class="caps">Grenar</span>
+            {#if antalFavoriter}
+              <button class="favfilter" class:pa={baraFavoriter}
+                title="Visa bara stjärnmärkta grenar"
+                on:click={() => (baraFavoriter = !baraFavoriter)}>★ {antalFavoriter}</button>
+            {/if}
             {#if detalj.kan_grenar}<button class="plus" on:click={() => (nyGrenOppen = !nyGrenOppen)}>+ Ny gren</button>{/if}
           </div>
           {#if nyGrenOppen}
@@ -753,13 +770,19 @@
             </div>
           {/if}
           {#if detalj.grenar.length}
-            {#each detalj.grenar as g (g.id)}
+            {#each synligaGrenar as g (g.id)}
               <div class="mrad">
+                <button class="stjarna" class:pa={g.favorit}
+                  title={g.favorit ? 'Favoritgren — klicka för att ta bort' : 'Stjärnmärk grenen'}
+                  on:click={() => vaxlaFavorit(g)}>★</button>
                 <span class="fixture">{g.namn}</span>
                 <span class="nar">{g.antal_deltagare ? `${g.antal_deltagare} deltagare` : ''}</span>
                 <button class="bort" title="Ta bort gren" on:click={() => taBortGren(g.id)}>✕</button>
               </div>
             {/each}
+            {#if baraFavoriter && !synligaGrenar.length}
+              <p class="tomkort">Inga stjärnmärkta grenar.</p>
+            {/if}
           {:else}
             <p class="tomkort">Inga grenar — behövs inte för {t.namn.toLowerCase()}.</p>
           {/if}
@@ -875,6 +898,14 @@
   .krubrik { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
   .khint { font-size: 11.5px; color: var(--t-help); }
   .plus { border: 0; background: none; color: var(--acc); font-weight: 600; font-size: 12.5px; cursor: pointer; }
+  /* M-7: stjärnmärkning per gren + filtret. Accent, ingen ny färg. */
+  .stjarna { border: 0; background: none; cursor: pointer; font-size: 13px; padding: 0 4px 0 0;
+    color: var(--t-mut); opacity: 0.45; flex: none; line-height: 1; }
+  .stjarna:hover { opacity: 0.9; }
+  .stjarna.pa { color: var(--acc); opacity: 1; }
+  .favfilter { border: 1px solid var(--linje, rgba(128,128,128,.3)); background: none; color: var(--t-mut);
+    border-radius: 8px; padding: 2px 8px; font-size: 11.5px; cursor: pointer; margin-left: auto; }
+  .favfilter.pa { border-color: var(--acc); color: var(--acc); }
 
   .pagang { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .seg { display: inline-flex; border: 1px solid var(--div); border-radius: 9px; overflow: hidden; }

@@ -970,6 +970,25 @@ class TestMigrering(unittest.TestCase):
         self.assertEqual(r["mal_typ"], "match")
         self.assertIsNone(r["tavling_id"])
 
+    def test_migrera_v41_till_v42_favoritgren(self):
+        # M-7: additiv favorit-kolumn på disciplin. Befintliga grenar blir
+        # omarkerade, och migreringen ska tåla att köras om.
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA user_version=41")
+        c.execute("CREATE TABLE disciplin(id TEXT PRIMARY KEY, tavling_id TEXT, "
+                  "namn TEXT, typ TEXT, gren TEXT, ordning INTEGER)")
+        c.execute("INSERT INTO disciplin VALUES('d1','sm','Diskus','hoppkast',"
+                  "'dam',0)")
+        db._migrera(c, 41)
+        self.assertIn("favorit",
+                      [r[1] for r in c.execute("PRAGMA table_info(disciplin)")])
+        r = c.execute("SELECT * FROM disciplin WHERE id='d1'").fetchone()
+        self.assertEqual(r["namn"], "Diskus")
+        self.assertEqual(r["favorit"], 0)
+        db._migrera(c, 41)     # idempotent
+
     def test_turnering_material_round_trip(self):
         # Turnerings-SoMe: material utan match_id, med tavling_id + mal_typ.
         c = db.oppna(":memory:")

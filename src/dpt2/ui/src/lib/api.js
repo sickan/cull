@@ -457,6 +457,17 @@ export async function sparaDisciplin(d) {
   return wait({ ok: true, id: d.id || MOCK_DISCIPLINER[MOCK_DISCIPLINER.length - 1].id })
 }
 
+// M-7: favoritmarkering per gren — persistent, scopad per tävling. Nyckeln är
+// disciplin-raden (tävling + namn + klass), så "Diskus dam" och "Diskus herr"
+// stjärnmärks var för sig.
+export async function sattDisciplinFavorit(disciplinId, pa = true) {
+  const api = brygga()
+  if (api) return api.satt_disciplin_favorit(disciplinId, pa)
+  const d = MOCK_DISCIPLINER.find((x) => x.id === disciplinId)
+  if (d) d.favorit = !!pa
+  return wait({ ok: true, favorit: !!pa })
+}
+
 export async function raderaDisciplin(id) {
   const api = brygga()
   if (api) return api.radera_disciplin(id)

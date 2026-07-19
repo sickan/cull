@@ -3119,6 +3119,85 @@ class TestProgramBryggan(unittest.TestCase):
         self.assertEqual(self.api.lista_pass(gid), [])
 
 
+class TestFavoritgrenar(unittest.TestCase):
+    """C12/M-7 — favoritmarkering per gren måste överleva omladdning, vara
+    scopad per tävling och SKILJA dam från herr (mobilens lärdom, ios
+    `e6cbcf1`: 'Diskus dam' och 'Diskus herr' delar namn men är skilda grenar).
+    """
+
+    def setUp(self):
+        self.api = Api(db_path=":memory:")
+        self.ev = store.upsert_tavling(
+            self.api.conn, "Friidrotts-SM 2026", sport="friidrott",
+            typ="masterskap", fran="2026-07-24", till="2026-07-26")
+        self.ev2 = store.upsert_tavling(
+            self.api.conn, "Finnkampen 2026", sport="friidrott",
+            typ="masterskap", fran="2026-09-05", till="2026-09-06")
+
+    def _gren(self, event_id, namn, klass):
+        return self.api.spara_disciplin(
+            {"tavling_id": event_id, "namn": namn, "gren": klass})["id"]
+
+    def test_grenar_saknar_favorit_fran_borjan(self):
+        self._gren(self.ev, "Höjd", "dam")
+        self.assertEqual([g["favorit"]
+                          for g in self.api.lista_discipliner(self.ev)], [False])
+
+    def test_markeringen_overlever_omladdning(self):
+        gid = self._gren(self.ev, "Höjd", "dam")
+        self.assertTrue(
+            self.api.satt_disciplin_favorit(gid, True)["favorit"])
+        # Ny läsning ur databasen — inget klient-state kvar.
+        g = [x for x in self.api.lista_discipliner(self.ev) if x["id"] == gid][0]
+        self.assertTrue(g["favorit"])
+        self.assertEqual(self.api.lista_favoritgrenar(self.ev), [gid])
+        self.assertFalse(
+            self.api.satt_disciplin_favorit(gid, False)["favorit"])
+        self.assertEqual(self.api.lista_favoritgrenar(self.ev), [])
+
+    def test_dam_och_herr_stjarnmarks_var_for_sig(self):
+        dam = self._gren(self.ev, "Diskus", "dam")
+        herr = self._gren(self.ev, "Diskus", "herr")
+        self.assertNotEqual(dam, herr)
+        self.api.satt_disciplin_favorit(dam, True)
+        favoriter = {g["id"]: g["favorit"]
+                     for g in self.api.lista_discipliner(self.ev)}
+        self.assertTrue(favoriter[dam])
+        self.assertFalse(favoriter[herr])
+        self.assertEqual(self.api.lista_favoritgrenar(self.ev), [dam])
+
+    def test_markeringen_ar_scopad_per_tavling(self):
+        sm = self._gren(self.ev, "Höjd", "dam")
+        fk = self._gren(self.ev2, "Höjd", "dam")
+        self.api.satt_disciplin_favorit(sm, True)
+        self.assertEqual(self.api.lista_favoritgrenar(self.ev), [sm])
+        self.assertEqual(self.api.lista_favoritgrenar(self.ev2), [])
+        self.assertFalse([g for g in self.api.lista_discipliner(self.ev2)
+                          if g["id"] == fk][0]["favorit"])
+
+    def test_redigering_av_grenen_slacker_inte_stjarnan(self):
+        gid = self._gren(self.ev, "100m", "dam")
+        self.api.satt_disciplin_favorit(gid, True)
+        # Importen rättar stavningen → upsert på samma id får inte nolla
+        # flaggan.
+        self.api.spara_disciplin({"id": gid, "tavling_id": self.ev,
+                                  "namn": "100 m", "gren": "dam"})
+        g = [x for x in self.api.lista_discipliner(self.ev) if x["id"] == gid][0]
+        self.assertEqual(g["namn"], "100 m")
+        self.assertTrue(g["favorit"])
+
+    def test_event_detaljen_bar_flaggan(self):
+        gid = self._gren(self.ev, "Stav", "herr")
+        self.api.satt_disciplin_favorit(gid, True)
+        detalj = self.api.hamta_event_detalj(self.ev)
+        self.assertEqual([g["favorit"] for g in detalj["grenar"]], [True])
+
+    def test_okant_gren_id_skriver_ingenting(self):
+        self.assertFalse(self.api.satt_disciplin_favorit("", True)["favorit"])
+        self.assertFalse(
+            self.api.satt_disciplin_favorit("finns-inte", True)["favorit"])
+
+
 class TestProgramTillTelefonen(unittest.TestCase):
     """V5 §8 S4 — programmet med VEM och handle ut i paketen. Utan detta
     stannar nyttan på Macen; det är på arenan taggningen ska göras."""

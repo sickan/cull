@@ -913,6 +913,8 @@ def lista_discipliner(conn, tavling_id):
         "SELECT * FROM disciplin WHERE tavling_id=? ORDER BY ordning, namn",
         (tavling_id,))]
     for d in rader:
+        # M-7: favoritflaggan som bool ut ur lagret (kolumnen är INTEGER).
+        d["favorit"] = bool(d.get("favorit"))
         # gren (dam/herr) följer med — overlayens kantfärg ska följa INDIVIDEN,
         # inte mästerskapet (SM är mixed men man tävlar i dam-/herrklass).
         d["deltagare"] = [dict(r) for r in conn.execute(
@@ -954,6 +956,28 @@ def upsert_disciplin(conn, tavling_id, namn, *, typ="hoppkast", id=None,
                          (ordning, did))
     conn.commit()
     return did
+
+
+def satt_disciplin_favorit(conn, disciplin_id, pa=True):
+    """M-7: stjärnmärker en gren. Flaggan bor på disciplin-raden, som redan är
+    unik per tävling + grennamn + klass — därför är markeringen scopad per
+    tävling, och dam- respektive herr-varianten av samma gren stjärnmärks var
+    för sig (samma lärdom som mobilen, ios `e6cbcf1`). Returnerar nya läget."""
+    if not disciplin_id:
+        return False
+    conn.execute("UPDATE disciplin SET favorit=? WHERE id=?",
+                 (1 if pa else 0, disciplin_id))
+    conn.commit()
+    rad = conn.execute("SELECT favorit FROM disciplin WHERE id=?",
+                       (disciplin_id,)).fetchone()
+    return bool(rad and rad["favorit"])
+
+
+def favoritgrenar(conn, tavling_id):
+    """Tävlingens stjärnmärkta gren-id:n (M-3/M-4:s ★-filter)."""
+    return [r["id"] for r in conn.execute(
+        "SELECT id FROM disciplin WHERE tavling_id=? AND favorit=1 "
+        "ORDER BY ordning, namn", (tavling_id,))]
 
 
 def radera_disciplin(conn, disciplin_id):

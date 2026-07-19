@@ -703,6 +703,16 @@ class Api:
             gren=d.get("gren"), ordning=d.get("ordning"))
         return {"ok": bool(did), "id": did}
 
+    def satt_disciplin_favorit(self, disciplin_id, pa=True):
+        """M-7: stjärnmärk gren. Persistent per tävling; dam/herr skiljs åt av
+        att de redan är skilda disciplin-rader."""
+        return {"ok": True,
+                "favorit": store.satt_disciplin_favorit(
+                    self.conn, disciplin_id, pa)}
+
+    def lista_favoritgrenar(self, tavling_id):
+        return store.favoritgrenar(self.conn, tavling_id)
+
     def radera_disciplin(self, id):
         store.radera_disciplin(self.conn, id)
         return {"ok": True}

@@ -191,6 +191,10 @@ CREATE TABLE disciplin (
   -- tävlingar, inte en gren med olika deltagare. Bär grenmarkörens färg utan
   -- att någon deltagare behöver vara inlagd (fylls av PDF-importens kolumn).
   gren       TEXT CHECK (gren IN ('dam','herr','mixed')),
+  -- v42 (M-7): stjärnmärkt gren. Raden är redan unik per tävling + namn +
+  -- klass, så markeringen blir scopad per tävling och skiljer dam från herr
+  -- utan extra nyckel (mobilens lärdom, ios `e6cbcf1`).
+  favorit    INTEGER NOT NULL DEFAULT 0,
   ordning    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_disciplin_tavling ON disciplin(tavling_id);

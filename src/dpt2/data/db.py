@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 41
+SCHEMA_VERSION = 42
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -955,6 +955,16 @@ def _migrera(conn, fran_version):
         # ett Anteckning-fält. Additiv nullable kolumn, ingen modelländring.
         if _har_tabell(conn, "lag") and not _har_kolumn(conn, "lag", "anteckning"):
             conn.execute("ALTER TABLE lag ADD COLUMN anteckning TEXT")
+    if fran_version < 42:
+        # v42 (C12/M-7): favoritmarkering per gren. Flaggan bor på DISCIPLIN-
+        # raden — den är redan nycklad på tävling + namn + klass (v39), så
+        # "Diskus dam" och "Diskus herr" är skilda rader och får skilda
+        # stjärnor av sig själva (mobilens lärdom, ios `e6cbcf1`). Additiv
+        # kolumn med default 0; befintliga grenar blir omarkerade.
+        if _har_tabell(conn, "disciplin") and not _har_kolumn(conn, "disciplin",
+                                                             "favorit"):
+            conn.execute("ALTER TABLE disciplin ADD COLUMN favorit "
+                         "INTEGER NOT NULL DEFAULT 0")
 
 
 def _har_kolumn(conn, tabell, kolumn):
