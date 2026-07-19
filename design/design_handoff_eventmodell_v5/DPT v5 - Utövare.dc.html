@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ddd4c2; }
+  a { color: #C9871F; } a:hover { color: #B5781A; }
+  .dpt .scd { font-family: 'Saira Condensed', sans-serif; }
+  .dpt { --accent:#C9871F; --accent-hover:#B5781A; --accent-soft:rgba(201,135,31,.14); --accent-softborder:rgba(201,135,31,.42); --ink:#100c05;
+    --win:#F4EEE2; --title:#EFE7D6; --bottom:#EBE2D0; --rail:#ECE3D2; --seg:#E2D7C1;
+    --card:#FBF8F1; --card-border:rgba(35,32,26,.14); --field:#FCF9F2; --field-border:rgba(35,32,26,.18);
+    --t-head:#23201a; --t-body:rgba(35,32,26,.78); --t-label:rgba(35,32,26,.62); --t-mut:rgba(35,32,26,.5); --t-help:rgba(35,32,26,.4); --t-caps:rgba(35,32,26,.5);
+    --div:rgba(35,32,26,.13); --div2:rgba(35,32,26,.1); --div3:rgba(35,32,26,.07);
+    --shadow:0 1px 2px rgba(60,50,30,.05),0 12px 30px rgba(60,50,30,.10); --ok:#4E8A3E; }
+  .dpt[data-theme="dark"] { --accent:#F0B45A; --accent-hover:#F4C277; --accent-soft:rgba(240,180,90,.15); --accent-softborder:rgba(240,180,90,.42); --ink:#100c05;
+    --win:#0a0d11; --title:#11141a; --bottom:#06080b; --rail:#0d1015; --seg:#1b2028;
+    --card:#12151b; --card-border:rgba(255,255,255,.09); --field:#0e1217; --field-border:rgba(255,255,255,.14);
+    --t-head:#f3f5f7; --t-body:rgba(243,245,247,.84); --t-label:rgba(243,245,247,.66); --t-mut:rgba(243,245,247,.62); --t-help:rgba(243,245,247,.52); --t-caps:rgba(243,245,247,.55);
+    --div:rgba(255,255,255,.09); --div2:rgba(255,255,255,.07); --div3:rgba(255,255,255,.05);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 16px 40px rgba(0,0,0,.55); --ok:#6FB35A; }
+  .dpt ::-webkit-scrollbar { width:9px; height:9px; }
+  .dpt ::-webkit-scrollbar-thumb { background:rgba(140,130,110,.4); border-radius:6px; border:2px solid transparent; background-clip:content-box; }
+  .dpt input::placeholder { color:var(--t-help); }
+  .dpt input { font-family:inherit; }
+</style>
+</helmet>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#8E5A86"/><circle cx="50" cy="40" r="14" fill="#FBF8F1"/><path d="M24 78c0-14 12-22 26-22s26 8 26 22z" fill="#FBF8F1"/></svg></template>
+
+<div class="dpt" data-theme="{{ theme }}" style="padding:28px;display:flex;justify-content:center;font-family:'Saira',sans-serif;">
+  <div style="width:1240px;height:900px;flex:none;background:var(--win);border-radius:13px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;border:1px solid var(--card-border);">
+
+    <!-- titlebar -->
+    <div style="height:38px;flex:none;display:flex;align-items:center;padding:0 14px;background:var(--title);border-bottom:1px solid var(--div3);position:relative;">
+      <div style="display:flex;gap:8px;z-index:1;">
+        <span style="width:12px;height:12px;border-radius:50%;background:#FF5F57;"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#FEBC2E;"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#28C840;"></span>
+      </div>
+      <div style="position:absolute;left:0;right:0;text-align:center;font-size:13px;font-weight:600;color:var(--t-body);">Dalecarlia Photo Tools</div>
+    </div>
+
+    <!-- header -->
+    <div style="height:58px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--title);border-bottom:1px solid var(--div2);">
+      <img src="uploads/logo-sol.png" alt="Dalecarlia" style="height:36px;width:auto;object-fit:contain;flex:none;">
+      <div style="display:flex;flex-direction:column;line-height:1;">
+        <span class="scd" style="font-size:19px;font-weight:700;color:var(--t-head);letter-spacing:.03em;">DALECARLIA PHOTO</span>
+        <span style="font-size:9px;font-weight:600;letter-spacing:.3em;color:var(--accent);margin-top:4px;">PHOTO TOOLS · v5.0 · Planera › Utövare</span>
+      </div>
+      <div style="flex:1;"></div>
+      <div style="display:flex;align-items:center;gap:6px;background:var(--field);border:1px solid var(--field-border);border-radius:8px;padding:6px 11px;width:230px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t-mut)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input value="Wilma Ek" style="border:none;background:none;outline:none;font-size:12.5px;color:var(--t-head);width:100%;padding:0;">
+        <span style="font-size:10px;color:var(--t-help);border:1px solid var(--field-border);border-radius:4px;padding:0 4px;">⌘K</span>
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;min-height:0;">
+      <!-- nav -->
+      <nav style="width:178px;flex:none;background:var(--rail);border-right:1px solid var(--div2);padding:14px 12px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;" data-screen-label="Sidopanel">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:2px 10px 6px;">Planera</div>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/><path d="M12 12.5v2.4l1.7 1.1"/></svg><span>Fotojobb</span></button>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg><span>Matcher</span></button>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><path d="M12 3.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 9.2l5.4-.8z"/></svg><span>Tävlingar</span></button>
+        <button style="{{ nsOn }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6M17 14c2.5.4 4 2.4 4 5"/></svg><span>Utövare</span></button>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><path d="M12 3l7 2.5v5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9v-5z"/></svg><span>Lag &amp; ligor</span></button>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:14px 10px 6px;">Efter match</div>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/></svg><span>Snabbplock</span></button>
+        <button style="{{ nsOff }}"><span style="{{ ncNum }}">1</span><span>Gallra</span></button>
+        <button style="{{ nsOff }}"><span style="{{ ncNum }}">2</span><span>Leverera</span></button>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:14px 10px 6px;">System</div>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5"/></svg><span>Inställningar</span></button>
+      </nav>
+
+      <!-- main -->
+      <main style="flex:1;min-width:0;overflow-y:auto;" data-screen-label="Utövare — detalj">
+        <div style="padding:22px 24px 40px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t-mut);">
+            <button style="background:none;border:none;padding:0;font-family:inherit;font-size:12px;color:var(--accent);cursor:pointer;font-weight:600;">‹ Deltagare</button>
+            <span style="color:var(--t-help);">från Friidrotts-SM · 100 m</span>
+          </div>
+
+          <!-- PROFIL-HEADER -->
+          <div style="display:flex;align-items:stretch;gap:0;margin-top:12px;background:var(--card);border:1px solid var(--card-border);border-left:4px solid #8E5A86;border-radius:12px;overflow:hidden;box-shadow:var(--shadow);">
+            <div style="width:104px;flex:none;background:linear-gradient(150deg,#2a2230,#171319);display:flex;align-items:flex-end;justify-content:center;position:relative;">
+              <svg width="60" height="60" viewBox="0 0 24 24" fill="rgba(211,169,205,.5)" style="margin-bottom:-2px;"><circle cx="12" cy="8" r="4.2"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>
+            </div>
+            <div style="flex:1;min-width:0;padding:16px 20px;">
+              <div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;">
+                <h1 class="scd" style="margin:0;font-size:27px;font-weight:700;color:var(--t-head);line-height:1;">Wilma Ek</h1>
+                <span style="font-size:12.5px;color:var(--t-mut);">Turebergs FK · f. 2003</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;margin-top:11px;flex-wrap:wrap;">
+                <!-- @-handle inline (sätts i lugn och ro här) -->
+                <div style="display:flex;align-items:center;gap:5px;background:var(--field);border:1px solid {{ atBorder }};border-radius:8px;padding:5px 10px;">
+                  <span style="font-size:13px;color:var(--t-help);">@</span>
+                  <input value="{{ handle }}" onInput="{{ setHandle }}" placeholder="lägg till Instagram" style="border:none;background:none;outline:none;font-size:13px;color:var(--t-head);width:150px;padding:0;">
+                  <span style="{{ handleOkStyle }}">✓ bär till fältet</span>
+                </div>
+                <span style="font-size:11px;color:var(--t-help);">Sätts en gång — fältflödet taggar automatiskt sen.</span>
+              </div>
+              <div style="display:flex;gap:22px;margin-top:15px;">
+                <div><div class="scd" style="font-size:22px;font-weight:700;color:var(--t-head);line-height:1;">14</div><div style="font-size:10.5px;color:var(--t-mut);margin-top:2px;">starter</div></div>
+                <div style="width:1px;background:var(--div2);"></div>
+                <div><div class="scd" style="font-size:22px;font-weight:700;color:var(--t-head);line-height:1;">6</div><div style="font-size:10.5px;color:var(--t-mut);margin-top:2px;">tävlingar</div></div>
+                <div style="width:1px;background:var(--div2);"></div>
+                <div><div class="scd" style="font-size:22px;font-weight:700;color:var(--t-head);line-height:1;">148</div><div style="font-size:10.5px;color:var(--t-mut);margin-top:2px;">bilder</div></div>
+                <div style="width:1px;background:var(--div2);"></div>
+                <div><div class="scd" style="font-size:22px;font-weight:700;color:var(--accent);line-height:1;">11.48</div><div style="font-size:10.5px;color:var(--t-mut);margin-top:2px;">pers. 100 m</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- härledd-notis -->
+          <div style="display:flex;align-items:center;gap:8px;margin:12px 0 16px;font-size:11.5px;color:var(--t-mut);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" style="flex:none;"><path d="M12 3v4M12 21v-4M3 12h4M21 12h-4M5.6 5.6l2.8 2.8M18.4 18.4l-2.8-2.8M5.6 18.4l2.8-2.8M18.4 5.6l-2.8 2.8"/></svg>
+            <span>Allt nedan <b style="color:var(--t-body);">härleds</b> — Wilma finns i ett register, historiken byggs ur tävlingarnas grenar. Aldrig dubbellagrad.</span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:14px;align-items:start;">
+
+            <!-- vänster: kommande + historik -->
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:14px 16px;">
+                <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);">Kommande starter</span>
+                <div style="display:flex;flex-direction:column;gap:7px;margin-top:11px;">
+                  <sc-for list="{{ kommande }}" as="k" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:11px;background:var(--field);border:1px solid var(--field-border);border-left:3px solid #8E5A86;border-radius:9px;padding:9px 12px;">
+                      <span class="scd" style="font-size:14px;font-weight:700;color:var(--t-head);min-width:74px;font-variant-numeric:tabular-nums;">{{ k.nar }}</span>
+                      <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--t-head);">{{ k.gren }}</div><div style="font-size:10.5px;color:var(--accent);">Del av {{ k.tavling }}</div></div>
+                      <span style="font-size:11px;color:var(--t-mut);">{{ k.pass }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:14px 16px;">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;">
+                  <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);">Historik</span>
+                  <span style="font-size:11px;color:var(--t-help);">härledd ur tävlingarna</span>
+                </div>
+                <div style="margin-top:12px;">
+                  <sc-for list="{{ historik }}" as="h" hint-placeholder-count="4">
+                    <div style="display:flex;gap:12px;">
+                      <div style="display:flex;flex-direction:column;align-items:center;width:12px;flex:none;">
+                        <span style="width:9px;height:9px;border-radius:50%;background:{{ h.dot }};margin-top:4px;flex:none;"></span>
+                        <span style="width:2px;flex:1;background:var(--div2);{{ h.lineHide }}"></span>
+                      </div>
+                      <div style="flex:1;padding-bottom:14px;min-width:0;">
+                        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+                          <span style="font-size:13px;font-weight:600;color:var(--t-head);">{{ h.gren }}</span>
+                          <span style="{{ h.resStyle }}">{{ h.res }}</span>
+                          <span style="flex:1;"></span>
+                          <span style="font-size:11px;color:var(--t-mut);">{{ h.datum }}</span>
+                        </div>
+                        <div style="font-size:11.5px;color:var(--t-mut);margin-top:1px;">{{ h.tavling }} · {{ h.ort }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+
+            <!-- höger: bilder/jobb + nås från -->
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:14px 16px;">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;">
+                  <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);">Bilder &amp; jobb</span>
+                  <span style="font-size:11px;color:var(--accent);font-weight:600;cursor:pointer;">Alla 148 ›</span>
+                </div>
+                <div style="font-size:11px;color:var(--t-help);margin:6px 0 11px;">Där Wilma är taggad — klicka en bild för att öppna jobbet.</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+                  <sc-for list="{{ bilder }}" as="b" hint-placeholder-count="6">
+                    <div style="aspect-ratio:3/4;border-radius:8px;background:{{ b.bg }};border:1px solid var(--div2);position:relative;overflow:hidden;cursor:pointer;">
+                      <span style="position:absolute;left:5px;bottom:5px;font-size:8.5px;font-weight:700;letter-spacing:.06em;color:rgba(255,255,255,.85);background:rgba(0,0,0,.35);border-radius:4px;padding:1px 5px;">{{ b.tag }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:14px 16px;">
+                <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);">Nås ifrån</span>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
+                  <sc-for list="{{ nasFran }}" as="n" hint-placeholder-count="4">
+                    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--field);border:1px solid var(--field-border);border-radius:999px;padding:5px 11px;font-size:11.5px;color:var(--t-body);">{{ n }}</span>
+                  </sc-for>
+                </div>
+                <div style="font-size:11px;color:var(--t-help);margin-top:11px;line-height:1.5;">Samma kort öppnas oavsett väg — programrad, deltagarlista, ⌘K-sökning eller en taggad bild.</div>
+              </div>
+
+              <div style="background:var(--accent-soft);border:1px solid var(--accent-softborder);border-radius:11px;padding:12px 15px;">
+                <div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--accent);margin-bottom:5px;">SAMMA KORT PÅ WEBBEN?</div>
+                <div style="font-size:11.5px;color:var(--t-body);line-height:1.5;">Utövarsidan kan speglas till en publik profil under Sport — om Stig vill. Härledd historik funkar lika bra där. Öppen fråga för nästa runda.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Utseende&quot;}}">
+class Component extends DCLogic {
+  state = { handle:'' };
+  KOMMANDE = [
+    { nar:'fre 20:25', gren:'100 m — final', tavling:'Friidrotts-SM 2026', pass:'8 startande' },
+    { nar:'lör 12:10', gren:'4×100 m — försök', tavling:'Friidrotts-SM 2026', pass:'lag Tureberg' },
+  ];
+  HIST = [
+    { gren:'100 m', res:'11.48', medalj:true, tavling:'Götalandsmästerskapen', ort:'Göteborg', datum:'jun 2026' },
+    { gren:'200 m', res:'23.71', medalj:false, tavling:'Stockholm Games', ort:'Stockholm', datum:'maj 2026' },
+    { gren:'100 m', res:'11.62', medalj:true, tavling:'Inne-SM', ort:'Växjö', datum:'feb 2026' },
+    { gren:'60 m', res:'7.34', medalj:false, tavling:'Vinterkastet', ort:'Sollentuna', datum:'jan 2026' },
+  ];
+  BILDER = [
+    { tag:'SM 26', c:'#2c3038' }, { tag:'GM', c:'#3a2c34' }, { tag:'SG', c:'#2c3a38' },
+    { tag:'Inne-SM', c:'#382f26' }, { tag:'SM 25', c:'#26323a' }, { tag:'GM 25', c:'#332a30' },
+  ];
+  renderVals() {
+    const theme = this.props.theme ?? 'light';
+    const navBase = { display:'flex', alignItems:'center', gap:'9px', width:'100%', padding:'8px 10px', border:'none', borderRadius:'8px', fontFamily:'inherit', fontSize:'13px', fontWeight:600, cursor:'pointer', textAlign:'left' };
+    const nsOff = { ...navBase, background:'transparent', color:'var(--t-mut)' };
+    const nsOn = { ...navBase, background:'var(--accent-soft)', color:'var(--accent)' };
+    const ncNum = { width:'17px', height:'17px', borderRadius:'50%', border:'1.5px solid currentColor', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:'10px', flex:'none' };
+    const h = this.state.handle;
+    return {
+      theme, nsOff, nsOn, ncNum,
+      handle:h,
+      setHandle:(e)=>this.setState({ handle:e.target.value }),
+      atBorder: h ? 'var(--accent-softborder)' : 'var(--field-border)',
+      handleOkStyle: h ? 'font-size:10px;font-weight:700;color:var(--ok);white-space:nowrap;' : 'display:none;',
+      kommande:this.KOMMANDE,
+      historik:this.HIST.map((x,i)=>({
+        gren:x.gren, res:x.res, tavling:x.tavling, ort:x.ort, datum:x.datum,
+        dot: x.medalj ? 'var(--accent)' : 'var(--t-help)',
+        lineHide: i===this.HIST.length-1 ? 'background:transparent;' : '',
+        resStyle: 'font-family:\'Saira Condensed\';font-size:14px;font-weight:700;color:'+(x.medalj?'var(--accent)':'var(--t-body)')+';font-variant-numeric:tabular-nums;',
+      })),
+      bilder:this.BILDER.map(b=>({ tag:b.tag, bg:'linear-gradient(150deg,'+b.c+','+b.c+'cc)' })),
+      nasFran:['Programrad','Deltagarlista','⌘K-sökning','Taggad bild'],
+    };
+  }
+}
+</script>
+</body>
+</html>

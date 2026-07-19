@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700;800&family=Saira+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;background:#0b0e12;font-family:'Saira',system-ui,sans-serif;color:#f3f5f7;}
+  a{color:#F0B45A;} a:hover{color:#F4C277;}
+</style>
+</helmet>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#0a0d11"/><circle cx="50" cy="42" r="24" fill="none" stroke="#F0B45A" stroke-width="4"/><path d="M50 30v12l8 5" stroke="#F0B45A" stroke-width="4" fill="none" stroke-linecap="round"/><rect x="30" y="74" width="40" height="7" rx="3.5" fill="#8E5A86"/></svg></template>
+
+<div style="min-height:100vh;padding:46px 52px 90px;background:#0b0e12;background-image:radial-gradient(circle at 28% -5%,#12171d,#0b0e12 62%);">
+
+  <!-- HERO -->
+  <div style="position:relative;overflow:hidden;border-radius:30px;border:1px solid rgba(255,255,255,.07);background:radial-gradient(90% 130% at 16% 24%,rgba(142,90,134,.16),transparent 52%),linear-gradient(120deg,#10161d,#080b0e 74%);box-shadow:0 30px 70px rgba(0,0,0,.45);max-width:1180px;margin-bottom:52px;">
+    <img src="assets/logo-hast-orange.png" alt="" style="position:absolute;right:44px;top:50%;transform:translateY(-50%);width:210px;height:200px;object-fit:contain;opacity:.08;pointer-events:none;">
+    <div style="position:relative;padding:48px 52px;">
+      <div style="display:flex;align-items:center;gap:13px;">
+        <img src="assets/logo-hast-orange.png" alt="" style="width:36px;height:34px;object-fit:contain;filter:drop-shadow(0 2px 10px rgba(240,180,90,.35));">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.4em;color:rgba(240,180,90,.85);">DALECARLIA&nbsp;PHOTO&nbsp;TOOLS · iOS v2 · D11</div>
+      </div>
+      <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:60px;line-height:.96;margin-top:18px;">Fältflödet</div>
+      <div style="width:60px;height:3px;border-radius:2px;background:linear-gradient(90deg,#8E5A86,rgba(142,90,134,.2));margin:20px 0 16px;"></div>
+      <div style="font-size:15px;color:rgba(243,245,247,.72);max-width:640px;line-height:1.6;">Fredag 24 juli, 20:25. <b style="color:#f3f5f7;">100 m dam, final.</b> Loppet tar 11 sekunder. Stig ska markera vinnaren, skriva 11.48 och få ut en story med rätt namn och klubb — <b style="color:#f3f5f7;">en hand, solljus, bråttom</b>. Fyra steg: deltillfälle → vinnare → resultat → SoMe.</div>
+    </div>
+  </div>
+
+  <!-- SECTION -->
+  <div style="display:flex;align-items:center;gap:14px;margin:0 0 26px;max-width:1180px;">
+    <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:15px;color:rgba(240,180,90,.55);">05</span>
+    <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.24em;color:#f3f5f7;">FÄLTFLÖDET&nbsp;·&nbsp;LEVANDE</span>
+    <span style="flex:1;height:1px;background:linear-gradient(90deg,rgba(240,180,90,.4),rgba(255,255,255,.06));"></span>
+  </div>
+
+  <div style="position:relative;border-radius:30px;overflow:hidden;padding:46px 40px;background:radial-gradient(90% 120% at 50% 0%,#141a21,#0a0d11 70%);border:1px solid rgba(255,255,255,.05);">
+  <div style="position:absolute;inset:0;background:radial-gradient(55% 55% at 40% 36%,rgba(142,90,134,.10),transparent 70%);"></div>
+  <div style="position:relative;display:flex;gap:52px;flex-wrap:wrap;align-items:flex-start;justify-content:center;">
+
+  <!-- DEVICE -->
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="392px,850px">
+  <div data-screen-label="Fältflöde" style="position:relative;height:100%;background:#0a0d11;color:#f3f5f7;font-family:'Saira',-apple-system,system-ui,sans-serif;overflow:hidden;display:flex;flex-direction:column;">
+    <div style="position:absolute;inset:0 0 auto;height:220px;background:radial-gradient(120% 90% at 22% 0%,rgba(142,90,134,.26),transparent 62%);pointer-events:none;"></div>
+
+    <!-- top nav + stepper -->
+    <div style="position:relative;flex:none;padding:52px 16px 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div onClick="{{ back }}" style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="10" height="17" viewBox="0 0 12 20" fill="none"><path d="M10 2 2 10l8 8" stroke="rgba(243,245,247,.85)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.5);">{{ passKort }}</span>
+        <div style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;"><svg width="18" height="5" viewBox="0 0 22 6"><circle cx="3" cy="3" r="2.4" fill="rgba(243,245,247,.7)"/><circle cx="11" cy="3" r="2.4" fill="rgba(243,245,247,.7)"/><circle cx="19" cy="3" r="2.4" fill="rgba(243,245,247,.7)"/></svg></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;margin-top:14px;">
+        <sc-for list="{{ stepper }}" as="st" hint-placeholder-count="4">
+          <span style="{{ st.dot }}"></span>
+          <span style="{{ st.lbl }}">{{ st.name }}</span>
+          <span style="{{ st.gap }}"></span>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- ============ STEG 1 · PASS ============ -->
+    <sc-if value="{{ isPass }}" hint-placeholder-val="{{ true }}">
+    <div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column;">
+      <div style="flex:none;padding:14px 18px 10px;">
+        <div style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#B98BB2;border:1px solid rgba(142,90,134,.42);background:rgba(142,90,134,.14);border-radius:8px;padding:4px 10px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#B98BB2" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+          Del av Friidrotts-SM 2026 <span style="opacity:.6;">›</span>
+        </div>
+        <div style="display:flex;align-items:stretch;gap:12px;margin-top:12px;">
+          <span style="width:5px;border-radius:3px;background:#8E5A86;flex:none;"></span>
+          <div style="min-width:0;flex:1;">
+            <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:30px;line-height:1;">{{ grenNamn }}</div>
+            <div style="font-size:12.5px;color:rgba(243,245,247,.62);margin-top:4px;">{{ passSub }}</div>
+          </div>
+          <div style="text-align:right;flex:none;">
+            <div style="display:inline-flex;align-items:center;gap:5px;background:rgba(224,106,90,.16);border:1px solid rgba(224,106,90,.4);border-radius:999px;padding:3px 9px;"><span style="width:6px;height:6px;border-radius:50%;background:#E06A5A;"></span><span style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#EC917F;">PÅGÅR</span></div>
+            <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:24px;margin-top:6px;font-variant-numeric:tabular-nums;">20:25</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:none;margin:2px 18px 8px;display:flex;align-items:center;gap:8px;background:rgba(240,180,90,.08);border:1px solid rgba(240,180,90,.24);border-radius:10px;padding:8px 11px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="#F0B45A"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 17.6 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z"/></svg>
+        <span style="font-size:11.5px;color:rgba(243,245,247,.72);line-height:1.35;">Stjärnmärk favoriter <b style="color:#f3f5f7;">före loppet</b> — de hamnar överst när du väljer vinnare.</span>
+      </div>
+
+      <div style="flex:1;min-height:0;overflow-y:auto;padding:0 14px 92px;">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.16em;color:rgba(243,245,247,.42);padding:2px 4px 8px;">{{ startCount }} STARTANDE</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <sc-for list="{{ startlista }}" as="p" hint-placeholder-count="6">
+            <div style="{{ p.row }}">
+              <span style="{{ p.nrChip }}">{{ p.nr }}</span>
+              <div style="min-width:0;flex:1;">
+                <div style="font-size:14px;font-weight:600;line-height:1.15;">{{ p.namn }}</div>
+                <div style="display:flex;align-items:center;gap:7px;margin-top:2px;">
+                  <span style="font-size:10.5px;color:rgba(243,245,247,.5);">{{ p.klubb }}</span>
+                  <span style="{{ p.handleStyle }}">{{ p.handleTxt }}</span>
+                </div>
+              </div>
+              <div onClick="{{ p.star }}" style="width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;cursor:pointer;">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="{{ p.starFill }}" stroke="{{ p.starStroke }}" stroke-width="1.7"><path d="M12 2.5l2.85 6.2 6.75.7-5.05 4.5 1.45 6.65L12 17.4 5.95 20.55l1.45-6.65L2.35 9.4l6.75-.7z"/></svg>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 16px 26px;background:linear-gradient(to top,#0a0d11 62%,transparent);">
+        <div onClick="{{ toPick }}" style="border-radius:14px;padding:15px;text-align:center;font-size:15px;font-weight:700;color:#0b0e12;background:linear-gradient(180deg,#F0B45A,#E39C3E);box-shadow:0 10px 24px rgba(240,180,90,.28);cursor:pointer;">Loppet är kört — välj vinnare</div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ============ STEG 2 · VINNARE ============ -->
+    <sc-if value="{{ isPick }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative;flex:1;min-height:0;overflow-y:auto;padding:16px 18px 30px;">
+      <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:26px;line-height:1;">Vem vann?</div>
+      <div style="font-size:12px;color:rgba(243,245,247,.55);margin-top:4px;">{{ grenNamn }} · final · tryck en favorit eller slå startnumret.</div>
+
+      <div style="font-size:9.5px;font-weight:700;letter-spacing:.16em;color:rgba(243,245,247,.42);margin:18px 2px 8px;">DINA FAVORITER</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <sc-for list="{{ favvar }}" as="f" hint-placeholder-count="3">
+          <div onClick="{{ f.pick }}" style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px 14px;cursor:pointer;">
+            <span style="width:42px;height:42px;border-radius:11px;background:rgba(142,90,134,.2);border:1px solid rgba(142,90,134,.5);display:flex;align-items:center;justify-content:center;font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:17px;color:#D3A9CD;flex:none;font-variant-numeric:tabular-nums;">{{ f.nr }}</span>
+            <div style="min-width:0;flex:1;"><div style="font-size:15px;font-weight:700;">{{ f.namn }}</div><div style="font-size:11px;color:rgba(243,245,247,.5);">{{ f.klubb }}</div></div>
+            <span style="font-size:11px;font-weight:700;color:#F0B45A;">Vann ›</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin:20px 0 12px;"><span style="flex:1;height:1px;background:rgba(255,255,255,.09);"></span><span style="font-size:10px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.4);">ELLER STARTNUMMER</span><span style="flex:1;height:1px;background:rgba(255,255,255,.09);"></span></div>
+
+      <div style="text-align:center;font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:40px;line-height:1;letter-spacing:.04em;font-variant-numeric:tabular-nums;color:{{ nrColor }};min-height:42px;">{{ nrDisplay }}</div>
+      <div style="text-align:center;font-size:11px;min-height:15px;color:{{ nrHitColor }};margin-top:5px;">{{ nrHit }}</div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;">
+        <sc-for list="{{ nrKeys }}" as="k" hint-placeholder-count="12">
+          <div onClick="{{ k.tap }}" style="{{ k.style }}">{{ k.label }}</div>
+        </sc-for>
+      </div>
+      <div onClick="{{ confirmNr }}" style="{{ confirmNrStyle }}">Välj nr {{ nrRaw }} som vinnare</div>
+    </div>
+    </sc-if>
+
+    <!-- ============ STEG 3 · RESULTAT ============ -->
+    <sc-if value="{{ isResult }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative;flex:1;min-height:0;overflow-y:auto;padding:16px 18px 30px;">
+      <div style="display:flex;align-items:center;gap:11px;background:rgba(142,90,134,.12);border:1px solid rgba(142,90,134,.34);border-left:4px solid #8E5A86;border-radius:14px;padding:12px 14px;">
+        <span style="width:26px;height:26px;border-radius:50%;background:#F0B45A;color:#0b0e12;font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex:none;">1</span>
+        <div style="min-width:0;flex:1;">
+          <div style="font-size:15px;font-weight:700;line-height:1.1;">{{ winNamn }}</div>
+          <div style="font-size:11px;color:rgba(243,245,247,.55);">Nr {{ winNr }} · {{ winKlubb }}</div>
+        </div>
+        <span style="{{ winHandleStyle }}">{{ winHandleTxt }}</span>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:center;gap:7px;margin:18px 0 4px;">
+        <span style="font-size:9.5px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.42);">{{ padCaps }}</span>
+      </div>
+      <div style="text-align:center;font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:52px;line-height:1;font-variant-numeric:tabular-nums;color:{{ resColor }};">{{ resDisplay }}</div>
+      <div style="text-align:center;font-size:11px;color:rgba(243,245,247,.4);margin-top:4px;">{{ padHint }}</div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;">
+        <sc-for list="{{ resKeys }}" as="k" hint-placeholder-count="12">
+          <div onClick="{{ k.tap }}" style="{{ k.style }}">{{ k.label }}</div>
+        </sc-for>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <div onClick="{{ togMer }}" style="flex:1;text-align:center;border:1px solid rgba(255,255,255,.14);border-radius:11px;padding:10px;font-size:12px;font-weight:600;color:rgba(243,245,247,.8);cursor:pointer;">{{ merLabel }}</div>
+      </div>
+
+      <sc-if value="{{ merOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:13px;padding:12px 13px;">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.14em;color:rgba(243,245,247,.42);margin-bottom:9px;">FLER PLACERINGAR (VALFRITT)</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <sc-for list="{{ merRader }}" as="r" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:8px 11px;">
+              <span style="{{ r.plStyle }}">{{ r.pl }}</span>
+              <span style="font-size:12.5px;color:rgba(243,245,247,.8);flex:1;">{{ r.txt }}</span>
+              <span style="font-size:11px;font-weight:600;color:#F0B45A;">{{ r.action }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:10.5px;color:rgba(243,245,247,.4);margin-top:9px;line-height:1.4;">Även en sämre placering går att lyfta — lokalfavoriten på plats 5 kan vara storyn.</div>
+      </div>
+      </sc-if>
+
+      <div onClick="{{ toStory }}" style="{{ toStoryStyle }}">Skapa story ›</div>
+    </div>
+    </sc-if>
+
+    <!-- ============ STEG 4 · SOME ============ -->
+    <sc-if value="{{ isStory }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative;flex:1;min-height:0;overflow-y:auto;padding:14px 18px 26px;">
+      <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:22px;line-height:1;">Story — klar att dela</div>
+      <div style="font-size:11.5px;color:rgba(243,245,247,.55);margin-top:3px;">Förhandsvisning · 9:16</div>
+
+      <!-- story preview -->
+      <div style="position:relative;margin:14px auto 0;width:214px;aspect-ratio:9/16;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,#1a2530,#0c1116 70%);box-shadow:0 18px 40px rgba(0,0,0,.5);">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(125deg,rgba(255,255,255,.03) 0 2px,transparent 2px 22px);"></div>
+        <div style="position:absolute;left:12px;right:12px;top:12px;display:flex;align-items:center;gap:7px;">
+          <img src="assets/logo-hast-orange.png" alt="" style="width:20px;height:19px;object-fit:contain;">
+          <span style="font-size:8px;font-weight:700;letter-spacing:.2em;color:rgba(255,255,255,.7);">DALECARLIA&nbsp;PHOTO</span>
+        </div>
+        <div style="position:absolute;left:0;right:0;top:44%;transform:translateY(-50%);text-align:center;color:rgba(255,255,255,.28);font-size:10px;">▨ foto från loppet</div>
+        <span style="position:absolute;left:0;top:64%;width:5px;height:88px;background:#8E5A86;"></span>
+        <div style="position:absolute;left:14px;right:14px;bottom:16px;">
+          <div style="display:inline-block;font-size:8px;font-weight:700;letter-spacing:.14em;color:#0b0e12;background:#F0B45A;border-radius:4px;padding:2px 7px;">{{ grenNamn }} · FINAL</div>
+          <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:26px;line-height:.98;color:#fff;margin-top:8px;">{{ winNamn }}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.72);margin-top:2px;">{{ winKlubb }}</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px;">
+            <span style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:30px;color:#F0B45A;font-variant-numeric:tabular-nums;">{{ resDisplay }}</span>
+            <span style="{{ storyHandleStyle }}">{{ storyHandleTxt }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- handle line -->
+      <sc-if value="{{ winHasHandle }}" hint-placeholder-val="{{ true }}">
+      <div style="margin-top:14px;display:flex;align-items:center;gap:9px;background:rgba(111,179,90,.1);border:1px solid rgba(111,179,90,.3);border-radius:11px;padding:10px 12px;">
+        <span style="width:7px;height:7px;border-radius:50%;background:#6FB35A;flex:none;"></span>
+        <span style="font-size:11.5px;color:rgba(243,245,247,.75);">Taggar <b style="color:#8FCE7B;">{{ winHandleTxt }}</b> automatiskt.</span>
+      </div>
+      </sc-if>
+      <sc-if value="{{ winNoHandle }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top:14px;background:rgba(224,163,65,.09);border:1px solid rgba(224,163,65,.3);border-radius:11px;padding:11px 12px;">
+        <div style="display:flex;align-items:center;gap:9px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#E0A341;flex:none;"></span>
+          <span style="font-size:11.5px;color:rgba(243,245,247,.78);flex:1;">Ingen @-tagg på {{ winFornamn }} än.</span>
+        </div>
+        <div style="font-size:11px;color:rgba(243,245,247,.5);margin-top:6px;line-height:1.45;">Publiceras <b style="color:#f3f5f7;">utan tagg</b> nu — lägg till handeln i lugn och ro i DPT2 sen. Delningen väntar aldrig på det.</div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ notShared }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <div onClick="{{ doShare }}" style="flex:1.4;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:13px;padding:14px;font-size:14px;font-weight:700;color:#fff;background:linear-gradient(120deg,#7A3FA0,#C13584 55%,#E8783C);cursor:pointer;box-shadow:0 10px 22px rgba(193,53,132,.3);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.3" fill="#fff" stroke="none"/></svg>
+          Instagram
+        </div>
+        <div onClick="{{ doShare }}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:13px;padding:14px;font-size:14px;font-weight:700;color:#fff;background:#1877F2;cursor:pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M22 12a10 10 0 1 0-11.5 9.9v-7H8v-2.9h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6v1.9h2.8l-.5 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg>
+          FB
+        </div>
+      </div>
+      <div style="text-align:center;font-size:10.5px;color:rgba(243,245,247,.42);margin-top:11px;line-height:1.45;">Ren SoMe — resultatet lever i storyn, sparas <b style="color:rgba(243,245,247,.6);">inte</b> tillbaka i DPT2.</div>
+      </sc-if>
+
+      <sc-if value="{{ shared }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top:16px;text-align:center;padding:22px 16px;background:rgba(111,179,90,.08);border:1px solid rgba(111,179,90,.3);border-radius:16px;">
+        <div style="width:52px;height:52px;border-radius:50%;background:rgba(111,179,90,.16);border:1px solid rgba(111,179,90,.45);display:flex;align-items:center;justify-content:center;margin:0 auto;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8FCE7B" stroke-width="2.4"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:20px;margin-top:12px;">Delad</div>
+        <div style="font-size:12px;color:rgba(243,245,247,.6);margin-top:4px;line-height:1.45;">{{ winFornamn }} · {{ resDisplay }} är ute. Tillbaka till passet — nästa lopp?</div>
+        <div onClick="{{ restart }}" style="margin-top:14px;border:1px solid rgba(255,255,255,.16);border-radius:11px;padding:11px;font-size:13px;font-weight:600;color:rgba(243,245,247,.85);cursor:pointer;">‹ Åter till passet</div>
+      </div>
+      </sc-if>
+    </div>
+    </sc-if>
+
+  </div>
+  </x-import>
+
+  <!-- NOTES -->
+  <div style="width:330px;flex:none;padding-top:8px;">
+    <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:22px;margin-bottom:6px;">Designbeslut</div>
+    <div style="font-size:12.5px;color:rgba(243,245,247,.55);line-height:1.5;margin-bottom:20px;">Hela vägen deltillfälle → resultat → SoMe för individsport. Klicka igenom mockupen — den är levande.</div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:13px 15px;"><div style="font-size:12.5px;font-weight:700;color:#f3f5f7;margin-bottom:4px;">Ingång ur Jobbdetalj</div><div style="font-size:12px;color:rgba(243,245,247,.68);line-height:1.5;">Tryck ett pass i <b style="color:#f3f5f7;">Dagens deltillfällen</b> → passet i fokus. Ingen ny flik, samma jobb.</div></div>
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:13px 15px;"><div style="font-size:12.5px;font-weight:700;color:#f3f5f7;margin-bottom:4px;">Favorit + startnummer</div><div style="font-size:12px;color:rgba(243,245,247,.68);line-height:1.5;">Stjärnmärk innan loppet → favoriterna ligger överst. Kände du inte till vinnaren? Slå <b style="color:#f3f5f7;">startnumret</b>. Ingen scroll bland 22.</div></div>
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:13px 15px;"><div style="font-size:12.5px;font-weight:700;color:#f3f5f7;margin-bottom:4px;">Tangentbordet formar sig</div><div style="font-size:12px;color:rgba(243,245,247,.68);line-height:1.5;">Sprint → <b style="color:#f3f5f7;">tid</b> (11.48), hopp/kast → <b style="color:#f3f5f7;">längd</b> (6.29 m), mångkamp → <b style="color:#f3f5f7;">poäng</b>. Byt gren i panelen till höger.</div></div>
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:13px 15px;"><div style="font-size:12.5px;font-weight:700;color:#f3f5f7;margin-bottom:4px;">Handeln får saknas</div><div style="font-size:12px;color:rgba(243,245,247,.68);line-height:1.5;">Vid 20:25 har få av 22 en @-tagg. Storyn publiceras <b style="color:#f3f5f7;">utan tagg</b> — handeln läggs till i lugn och ro i DPT2. Delningen väntar aldrig.</div></div>
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:13px 15px;"><div style="font-size:12.5px;font-weight:700;color:#f3f5f7;margin-bottom:4px;">Ren SoMe</div><div style="font-size:12px;color:rgba(243,245,247,.68);line-height:1.5;">Resultatet lever i storyn — det skrivs <b style="color:#f3f5f7;">inte</b> tillbaka till DPT2 eller eventsidan. En handling, inget dataspår att städa.</div></div>
+      <div style="background:rgba(142,90,134,.08);border:1px solid rgba(142,90,134,.3);border-radius:14px;padding:13px 15px;"><div style="font-size:12.5px;font-weight:700;color:#D3A9CD;margin-bottom:4px;">Klass som färgkant</div><div style="font-size:12px;color:rgba(243,245,247,.68);line-height:1.5;">Dam = lila kant (#8E5A86), aldrig textetikett. Gren = disciplinen (100 m). Samma regel som färgsystemet.</div></div>
+    </div>
+    <div style="font-size:11px;color:rgba(243,245,247,.4);margin-top:16px;line-height:1.5;">Panelen till höger (kugghjulet) byter <b style="color:rgba(243,245,247,.6);">gren</b> och <b style="color:rgba(243,245,247,.6);">om vinnaren har handle</b> — så du ser båda vägarna.</div>
+  </div>
+
+  </div>
+  </div>
+
+  <!-- BRAND SIGN-OFF -->
+  <div style="max-width:1180px;margin-top:56px;padding-top:32px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:22px;flex-wrap:wrap;">
+    <div style="position:relative;width:66px;height:66px;flex:none;">
+      <svg width="66" height="66" viewBox="0 0 66 66"><circle cx="33" cy="33" r="30" fill="none" stroke="rgba(240,180,90,.3)" stroke-width="1.5"/><circle cx="33" cy="33" r="24" fill="none" stroke="rgba(240,180,90,.18)" stroke-width="1"/></svg>
+      <img src="assets/logo-hast-orange.png" alt="" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-52%);width:34px;height:32px;object-fit:contain;">
+    </div>
+    <div style="flex:1;min-width:200px;">
+      <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:22px;line-height:1;">Dalecarlia Photo Tools</div>
+      <div style="font-size:12px;color:rgba(243,245,247,.5);margin-top:5px;">Fältflödet · iOS v2 · D11 · deltillfälle → vinnare → resultat → SoMe</div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:rgba(243,245,247,.4);line-height:1.7;"><div style="color:rgba(240,180,90,.75);font-weight:700;letter-spacing:.14em;">FÖRE SM 24–26 JULI</div><div>Det enda som inte går att jobba runt</div></div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;grenTyp&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;sprint&quot;,&quot;hopp&quot;,&quot;mangkamp&quot;],&quot;default&quot;:&quot;sprint&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Scenario&quot;},&quot;vinnareHarHandle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;true&quot;,&quot;false&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Scenario&quot;}}">
+class Component extends DCLogic {
+  state = {
+    step:'pass',
+    starred:{ 3:true, 7:true, 5:true },
+    winnerId:null,
+    nrRaw:'',
+    resRaw:'',
+    merOpen:false,
+    shared:false,
+  };
+  GRENAR = {
+    sprint:{ namn:'100 m', sub:'Final · löpning · 22 startande', pad:'time', caps:'TID', hint:'sekunder,hundradelar · t.ex. 11.48', mask:'time' },
+    hopp:{ namn:'Längdhopp', sub:'Final · hoppgrop · 12 i final', pad:'len', caps:'LÄNGD', hint:'meter · t.ex. 6.29 m', mask:'len' },
+    mangkamp:{ namn:'Sjukamp', sub:'Slutställning · 16 startande', pad:'pts', caps:'POÄNG', hint:'totalpoäng · t.ex. 6421 p', mask:'pts' },
+  };
+  P = [
+    { id:3, nr:'204', namn:'Wilma Ek', klubb:'Turebergs FK', handle:null },
+    { id:7, nr:'187', namn:'Nora Holm', klubb:'Malmö AI', handle:'@noraholm' },
+    { id:5, nr:'212', namn:'Ida Sandström', klubb:'Ullevi FK', handle:null },
+    { id:1, nr:'176', namn:'Ellen Vik', klubb:'Hälle IF', handle:'@ellen.vik' },
+    { id:9, nr:'233', namn:'Saga Berg', klubb:'Örgryte IS', handle:null },
+    { id:2, nr:'198', namn:'Moa Lund', klubb:'Spårvägens FK', handle:'@moa_lund' },
+    { id:8, nr:'221', namn:'Tuva Ahl', klubb:'IK Franke', handle:null },
+    { id:4, nr:'169', namn:'Alva Rex', klubb:'Heleneholms IF', handle:null },
+  ];
+  gren() {
+    const t = this.props.grenTyp ?? 'sprint';
+    return this.GRENAR[t] || this.GRENAR.sprint;
+  }
+  win() { return this.P.find(p => p.id===this.state.winnerId) || null; }
+  fmt(raw) {
+    const g = this.gren();
+    if (!raw) return g.mask==='pts' ? '––––' : '–.––';
+    if (g.mask==='pts') return raw;
+    const d = raw.padStart(3,'0');
+    return d.slice(0,-2).replace(/^0+(?=\d)/,'') + '.' + d.slice(-2);
+  }
+  renderVals() {
+    const g = this.gren();
+    const forcedHandle = this.props.vinnareHarHandle;
+    const step = this.state.step;
+    const steps = [['pass','Pass'],['pick','Vinnare'],['result','Resultat'],['story','SoMe']];
+    const curIx = steps.findIndex(s => s[0]===step);
+    const stepper = steps.flatMap(([k,name],i) => {
+      const done = i<curIx, cur = i===curIx;
+      return [{
+        name,
+        dot:{ width:'8px', height:'8px', borderRadius:'50%', flex:'none',
+          background: cur?'#F0B45A':(done?'rgba(240,180,90,.55)':'rgba(255,255,255,.18)') },
+        lbl:'font-size:10px;font-weight:'+(cur?700:600)+';letter-spacing:.04em;color:'+(cur?'#F0B45A':(done?'rgba(243,245,247,.6)':'rgba(243,245,247,.32)'))+';',
+        gap: i<steps.length-1 ? 'flex:1;height:1px;background:rgba(255,255,255,.1);margin:0 3px;' : 'display:none;',
+      }];
+    });
+
+    const handleChip = (h, on) => on
+      ? 'font-size:10px;font-weight:700;color:#8FCE7B;'
+      : 'font-size:9.5px;font-weight:700;letter-spacing:.04em;color:rgba(224,163,65,.9);border:1px dashed rgba(224,163,65,.45);border-radius:5px;padding:1px 6px;';
+
+    // ---- STEG 1: startlista ----
+    const startlista = this.P.map(p => {
+      const on = !!this.state.starred[p.id];
+      return {
+        nr:p.nr, namn:p.namn, klubb:p.klubb,
+        row:{ display:'flex', alignItems:'center', gap:'11px', background: on?'rgba(240,180,90,.07)':'rgba(255,255,255,.035)', border:'1px solid '+(on?'rgba(240,180,90,.28)':'rgba(255,255,255,.08)'), borderRadius:'12px', padding:'9px 8px 9px 11px' },
+        nrChip:{ minWidth:'30px', textAlign:'center', fontFamily:"'Saira Condensed',sans-serif", fontWeight:700, fontSize:'14px', color:'rgba(243,245,247,.55)', fontVariantNumeric:'tabular-nums', flex:'none' },
+        handleTxt: p.handle || 'saknar @',
+        handleStyle: handleChip(p.handle, !!p.handle),
+        star:()=>this.setState(s=>({ starred:{ ...s.starred, [p.id]: !s.starred[p.id] } })),
+        starFill: on?'#F0B45A':'none',
+        starStroke: on?'#F0B45A':'rgba(243,245,247,.35)',
+      };
+    });
+
+    // ---- STEG 2: favoriter + nr-pad ----
+    const favvar = this.P.filter(p => this.state.starred[p.id]).map(p => ({
+      nr:p.nr, namn:p.namn, klubb:p.klubb,
+      pick:()=>this.setState({ winnerId:p.id, step:'result' }),
+    }));
+    const nrRaw = this.state.nrRaw;
+    const nrHitP = this.P.find(p => p.nr===nrRaw);
+    const nrKeys = ['1','2','3','4','5','6','7','8','9','C','0','⌫'].map(label => ({
+      label,
+      style:{ padding:'15px 0', textAlign:'center', fontFamily:"'Saira Condensed',sans-serif", fontWeight:700, fontSize:'23px', borderRadius:'12px', cursor:'pointer', color:'#f3f5f7', background: label==='C'||label==='⌫'?'rgba(255,255,255,.04)':'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.09)', fontVariantNumeric:'tabular-nums' },
+      tap:()=>this.setState(s=>{
+        if (label==='⌫') return { nrRaw:s.nrRaw.slice(0,-1) };
+        if (label==='C') return { nrRaw:'' };
+        return { nrRaw:(s.nrRaw+label).slice(0,3) };
+      }),
+    }));
+
+    // ---- STEG 3: resultat-pad ----
+    const resRaw = this.state.resRaw;
+    const resKeys = ['1','2','3','4','5','6','7','8','9','C','0','⌫'].map(label => ({
+      label,
+      style:{ padding:'15px 0', textAlign:'center', fontFamily:"'Saira Condensed',sans-serif", fontWeight:700, fontSize:'23px', borderRadius:'12px', cursor:'pointer', color:'#f3f5f7', background: label==='C'||label==='⌫'?'rgba(255,255,255,.04)':'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.09)', fontVariantNumeric:'tabular-nums' },
+      tap:()=>this.setState(s=>{
+        if (label==='⌫') return { resRaw:s.resRaw.slice(0,-1) };
+        if (label==='C') return { resRaw:'' };
+        return { resRaw:(s.resRaw+label).slice(0,5) };
+      }),
+    }));
+    const w = this.win();
+    let wHasHandle = w ? !!w.handle : false;
+    if (forcedHandle==='true') wHasHandle = true;
+    if (forcedHandle==='false') wHasHandle = false;
+    const wHandleTxt = w && w.handle ? w.handle : '@lägg till sen';
+    const merRader = [
+      { pl:'2', txt:'Nora Holm · 11.62', action:'lägg till' },
+      { pl:'3', txt:'Ellen Vik · 11.71', action:'lägg till' },
+      { pl:'5', txt:'Saga Berg (lokal) · 11.94', action:'lyft ›' },
+    ].map(r => ({ ...r, plStyle:{ width:'22px', height:'22px', borderRadius:'50%', background:'rgba(255,255,255,.08)', color:'rgba(243,245,247,.7)', fontFamily:"'Saira Condensed',sans-serif", fontWeight:700, fontSize:'12px', display:'flex', alignItems:'center', justifyContent:'center', flex:'none' } }));
+
+    const resReady = resRaw.length>=2;
+    const passKort = step==='pass' ? 'PASS' : (step==='pick' ? 'VÄLJ VINNARE' : (step==='result' ? 'RESULTAT' : 'SOME'));
+
+    return {
+      // shared
+      grenNamn:g.namn, passSub:g.sub, startCount:'22', passKort, stepper,
+      isPass: step==='pass', isPick: step==='pick', isResult: step==='result', isStory: step==='story',
+      back:()=>this.setState(s=>{
+        const order=['pass','pick','result','story'];
+        const i=order.indexOf(s.step);
+        return { step: i>0 ? order[i-1] : 'pass' };
+      }),
+      // step1
+      startlista,
+      toPick:()=>this.setState({ step:'pick' }),
+      // step2
+      favvar,
+      nrRaw, nrDisplay: nrRaw || '– – –',
+      nrColor: nrRaw ? '#f3f5f7' : 'rgba(243,245,247,.28)',
+      nrHit: nrHitP ? nrHitP.namn+' · '+nrHitP.klubb : (nrRaw.length>=3?'Inget startnr '+nrRaw:' '),
+      nrHitColor: nrHitP ? '#8FCE7B' : 'rgba(224,163,65,.9)',
+      nrKeys,
+      confirmNr: ()=> nrHitP && this.setState({ winnerId:nrHitP.id, step:'result' }),
+      confirmNrStyle: nrHitP
+        ? { marginTop:'12px', borderRadius:'13px', padding:'14px', textAlign:'center', fontSize:'14px', fontWeight:700, color:'#0b0e12', background:'linear-gradient(180deg,#F0B45A,#E39C3E)', cursor:'pointer' }
+        : { marginTop:'12px', borderRadius:'13px', padding:'14px', textAlign:'center', fontSize:'14px', fontWeight:700, color:'rgba(243,245,247,.3)', background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.08)' },
+      // step3
+      winNamn: w?w.namn:'—', winNr: w?w.nr:'', winKlubb: w?w.klubb:'',
+      winFornamn: w?w.namn.split(' ')[0]:'',
+      winHandleTxt: w && w.handle ? w.handle : 'saknar @',
+      winHandleStyle: handleChip(w&&w.handle, !!(w&&w.handle)),
+      padCaps:g.caps, padHint:g.hint,
+      resRaw, resDisplay:this.fmt(resRaw),
+      resColor: resRaw ? '#F0B45A' : 'rgba(240,180,90,.3)',
+      resKeys,
+      merOpen:this.state.merOpen, merLabel:this.state.merOpen?'Dölj fler placeringar':'+ 2:a, 3:a eller annan placering',
+      togMer:()=>this.setState(s=>({ merOpen:!s.merOpen })),
+      merRader,
+      toStory: ()=> resReady && this.setState({ step:'story' }),
+      toStoryStyle: resReady
+        ? { marginTop:'16px', borderRadius:'14px', padding:'15px', textAlign:'center', fontSize:'15px', fontWeight:700, color:'#0b0e12', background:'linear-gradient(180deg,#F0B45A,#E39C3E)', boxShadow:'0 10px 24px rgba(240,180,90,.28)', cursor:'pointer' }
+        : { marginTop:'16px', borderRadius:'14px', padding:'15px', textAlign:'center', fontSize:'15px', fontWeight:700, color:'rgba(243,245,247,.3)', background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.08)' },
+      // step4
+      winHasHandle: wHasHandle, winNoHandle: !wHasHandle,
+      storyHandleTxt: wHasHandle ? wHandleTxt : 'utan @-tagg',
+      storyHandleStyle: wHasHandle
+        ? 'font-size:11px;font-weight:700;color:#fff;background:rgba(255,255,255,.16);border-radius:5px;padding:2px 7px;'
+        : 'font-size:10px;font-weight:600;color:rgba(255,255,255,.55);border:1px dashed rgba(255,255,255,.35);border-radius:5px;padding:2px 6px;',
+      notShared: !this.state.shared, shared: this.state.shared,
+      doShare:()=>this.setState({ shared:true }),
+      restart:()=>this.setState({ step:'pass', winnerId:null, resRaw:'', nrRaw:'', shared:false, merOpen:false }),
+    };
+  }
+}
+</script>
+</body>
+</html>

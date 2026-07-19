@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ddd4c2; }
+  a { color: #C9871F; } a:hover { color: #B5781A; }
+  .dpt .scd { font-family: 'Saira Condensed', sans-serif; }
+  .dpt { --accent:#C9871F; --accent-hover:#B5781A; --accent-soft:rgba(201,135,31,.14); --accent-softborder:rgba(201,135,31,.42); --ink:#100c05;
+    --win:#F4EEE2; --title:#EFE7D6; --bottom:#EBE2D0; --rail:#ECE3D2; --seg:#E2D7C1;
+    --card:#FBF8F1; --card-border:rgba(35,32,26,.14); --field:#FCF9F2; --field-border:rgba(35,32,26,.18);
+    --t-head:#23201a; --t-body:rgba(35,32,26,.78); --t-label:rgba(35,32,26,.62); --t-mut:rgba(35,32,26,.5); --t-help:rgba(35,32,26,.4); --t-caps:rgba(35,32,26,.5);
+    --div:rgba(35,32,26,.13); --div2:rgba(35,32,26,.1); --div3:rgba(35,32,26,.07);
+    --shadow:0 1px 2px rgba(60,50,30,.05),0 12px 30px rgba(60,50,30,.10); --ok:#4E8A3E; }
+  .dpt[data-theme="dark"] { --accent:#F0B45A; --accent-hover:#F4C277; --accent-soft:rgba(240,180,90,.15); --accent-softborder:rgba(240,180,90,.42); --ink:#100c05;
+    --win:#0a0d11; --title:#11141a; --bottom:#06080b; --rail:#0d1015; --seg:#1b2028;
+    --card:#12151b; --card-border:rgba(255,255,255,.09); --field:#0e1217; --field-border:rgba(255,255,255,.14);
+    --t-head:#f3f5f7; --t-body:rgba(243,245,247,.84); --t-label:rgba(243,245,247,.66); --t-mut:rgba(243,245,247,.62); --t-help:rgba(243,245,247,.52); --t-caps:rgba(243,245,247,.55);
+    --div:rgba(255,255,255,.09); --div2:rgba(255,255,255,.07); --div3:rgba(255,255,255,.05);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 16px 40px rgba(0,0,0,.55); --ok:#6FB35A; }
+  .dpt ::-webkit-scrollbar { width:9px; height:9px; }
+  .dpt ::-webkit-scrollbar-thumb { background:rgba(140,130,110,.4); border-radius:6px; border:2px solid transparent; background-clip:content-box; }
+  .dpt input::placeholder { color:var(--t-help); }
+  .dpt input { font-family:inherit; }
+</style>
+</helmet>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#C9871F"/><g fill="none" stroke="#FBF8F1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M50 24v34M38 44l12 14 12-14"/><path d="M30 70h40"/></g></svg></template>
+
+<div class="dpt" data-theme="{{ theme }}" style="padding:28px;display:flex;justify-content:center;font-family:'Saira',sans-serif;">
+  <div style="width:1240px;height:900px;flex:none;background:var(--win);border-radius:13px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;border:1px solid var(--card-border);position:relative;">
+
+    <!-- titlebar -->
+    <div style="height:38px;flex:none;display:flex;align-items:center;padding:0 14px;background:var(--title);border-bottom:1px solid var(--div3);position:relative;">
+      <div style="display:flex;gap:8px;z-index:1;">
+        <span style="width:12px;height:12px;border-radius:50%;background:#FF5F57;"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#FEBC2E;"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#28C840;"></span>
+      </div>
+      <div style="position:absolute;left:0;right:0;text-align:center;font-size:13px;font-weight:600;color:var(--t-body);">Dalecarlia Photo Tools</div>
+    </div>
+
+    <!-- header -->
+    <div style="height:58px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--title);border-bottom:1px solid var(--div2);">
+      <img src="uploads/logo-sol.png" alt="Dalecarlia" style="height:36px;width:auto;object-fit:contain;flex:none;">
+      <div style="display:flex;flex-direction:column;line-height:1;">
+        <span class="scd" style="font-size:19px;font-weight:700;color:var(--t-head);letter-spacing:.03em;">DALECARLIA PHOTO</span>
+        <span style="font-size:9px;font-weight:600;letter-spacing:.3em;color:var(--accent);margin-top:4px;">PHOTO TOOLS · v5.0 · Planera › Event</span>
+      </div>
+      <div style="flex:1;"></div>
+      <!-- SYNK-MÄRKET (D11 · ett tillstånd) -->
+      <div onClick="{{ togSynk }}" style="{{ synkStyle }}"><span style="{{ synkDot }}"></span>{{ synkText }}</div>
+    </div>
+
+    <div style="flex:1;display:flex;min-height:0;">
+      <!-- nav -->
+      <nav style="width:178px;flex:none;background:var(--rail);border-right:1px solid var(--div2);padding:14px 12px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;" data-screen-label="Sidopanel">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:2px 10px 6px;">Planera</div>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/><path d="M12 12.5v2.4l1.7 1.1"/></svg><span>Fotojobb</span></button>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg><span>Matcher</span></button>
+        <button style="{{ nsOn }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><path d="M12 3.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 9.2l5.4-.8z"/></svg><span>Tävlingar</span></button>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6M17 14c2.5.4 4 2.4 4 5"/></svg><span>Utövare</span></button>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><path d="M12 3l7 2.5v5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9v-5z"/></svg><span>Lag &amp; ligor</span></button>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:14px 10px 6px;">Efter match</div>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/></svg><span>Snabbplock</span></button>
+        <button style="{{ nsOff }}"><span style="{{ ncNum }}">1</span><span>Gallra</span></button>
+        <button style="{{ nsOff }}"><span style="{{ ncNum }}">2</span><span>Leverera</span></button>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:14px 10px 6px;">System</div>
+        <button style="{{ nsOff }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5"/></svg><span>Inställningar</span></button>
+      </nav>
+
+      <!-- main -->
+      <main style="flex:1;min-width:0;overflow-y:auto;" data-screen-label="Tävling — detalj">
+        <div style="padding:22px 24px 40px;">
+          <button style="background:none;border:none;padding:0;font-family:inherit;font-size:12px;color:var(--accent);cursor:pointer;font-weight:600;">‹ Alla tävlingar</button>
+          <div style="display:flex;align-items:center;gap:11px;margin-top:9px;flex-wrap:wrap;">
+            <h1 class="scd" style="margin:0;font-size:25px;font-weight:700;color:var(--t-head);">Friidrotts-SM 2026</h1>
+            <span style="font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:5px;padding:2px 7px;">Mästerskap</span>
+            <span style="font-size:10.5px;font-weight:600;border-radius:999px;padding:2px 10px;background:var(--accent-soft);color:var(--accent);">pågående</span>
+          </div>
+          <p style="margin:5px 0 16px;font-size:12.5px;color:var(--t-mut);">24–26 jul 2026 · Uddevalla · Rimnersvallen · 3 dagar · 79 grenar · 845 starter · 121 pass</p>
+
+          <!-- LÄS IN-raden -->
+          <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:13px 16px;display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap;box-shadow:var(--shadow);">
+            <div style="width:34px;height:34px;border-radius:9px;background:var(--accent-soft);border:1px solid var(--accent-softborder);display:flex;align-items:center;justify-content:center;flex:none;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.9"><path d="M12 3v12M8 11l4 4 4-4M4 20h16"/></svg>
+            </div>
+            <div style="min-width:0;flex:1;">
+              <div style="font-size:13.5px;font-weight:600;color:var(--t-head);">Startlistan är inläst — <span style="color:var(--accent);">easyrecord.se</span></div>
+              <div style="font-size:11.5px;color:var(--t-mut);">Senast 19 jul 08:14 · programmet härleds automatiskt. Arrangören ändrar tider löpande.</div>
+            </div>
+            <button onClick="{{ openImport }}" style="background:var(--accent);color:var(--ink);border:none;border-radius:8px;padding:9px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;flex:none;">Läs in / uppdatera…</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:14px;align-items:start;">
+
+            <!-- PROGRAM & GRENAR -->
+            <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:14px 16px;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+                <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);">Grenar &amp; pass</span>
+                <span style="font-size:11px;color:var(--t-help);">klass = färgkant · disciplin = namn</span>
+              </div>
+              <div style="font-size:11.5px;color:var(--t-mut);margin-bottom:11px;">79 grenar · tider härledda till dagsprogram. <b style="color:var(--t-body);">3 behöver din blick.</b></div>
+              <div style="display:flex;flex-direction:column;gap:7px;">
+                <sc-for list="{{ grenar }}" as="g" hint-placeholder-count="6">
+                  <div style="border:1px solid var(--field-border);border-left:{{ g.edge }};border-radius:9px;overflow:hidden;">
+                    <div onClick="{{ g.toggle }}" style="display:flex;align-items:center;gap:10px;background:var(--field);padding:9px 12px;cursor:pointer;">
+                      <span style="font-size:13px;font-weight:600;color:var(--t-head);">{{ g.namn }}</span>
+                      <span style="font-size:11px;color:var(--t-mut);">{{ g.sub }}</span>
+                      <span style="flex:1;"></span>
+                      <span style="{{ g.avvBadge }}">{{ g.avvText }}</span>
+                      <span style="{{ g.caret }}">▾</span>
+                    </div>
+                    <sc-if value="{{ g.open }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:4px 12px 10px;border-top:1px solid var(--div3);">
+                      <sc-for list="{{ g.pass }}" as="p" hint-placeholder-count="2">
+                        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--div3);">
+                          <span class="scd" style="font-size:14px;font-weight:700;color:var(--t-head);min-width:82px;font-variant-numeric:tabular-nums;">{{ p.nar }}</span>
+                          <span style="font-size:12px;color:var(--t-body);flex:1;">{{ p.namn }}</span>
+                          <span style="font-size:11px;color:var(--t-mut);">{{ p.antal }}</span>
+                        </div>
+                      </sc-for>
+                      <div style="font-size:11px;color:var(--t-help);margin-top:7px;">Deltagarna härleds via grenen — visas till höger.</div>
+                    </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <!-- DELTAGARE & HANDLES -->
+            <div style="background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:14px 16px;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+                <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);">Deltagare &amp; @-konton</span>
+                <span style="font-size:11px;color:var(--accent);font-weight:600;">{{ handleCount }}</span>
+              </div>
+              <div style="font-size:11.5px;color:var(--t-mut);margin-bottom:11px;">Handles finns i ingen källa — de sätts <b style="color:var(--t-body);">här</b>, en gång. Sen bär fältflödet dem ute på plats.</div>
+              <div style="display:flex;gap:6px;margin-bottom:10px;">
+                <input placeholder="Sök utövare…" style="flex:1;background:var(--field);border:1px solid var(--field-border);border-radius:8px;padding:7px 11px;font-size:12.5px;color:var(--t-head);outline:none;">
+                <button onClick="{{ togUtan }}" style="{{ utanStyle }}">Utan @ ({{ utanCount }})</button>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;max-height:360px;overflow-y:auto;">
+                <sc-for list="{{ deltagare }}" as="d" hint-placeholder-count="6">
+                  <div style="display:flex;align-items:center;gap:9px;padding:6px 4px;border-bottom:1px solid var(--div3);">
+                    <span style="{{ d.initStyle }}">{{ d.init }}</span>
+                    <div style="min-width:0;flex:1;"><div style="font-size:12.5px;font-weight:600;color:var(--t-head);line-height:1.1;">{{ d.namn }}</div><div style="font-size:10.5px;color:var(--t-mut);">{{ d.meta }}</div></div>
+                    <div style="display:flex;align-items:center;gap:5px;background:var(--field);border:1px solid {{ d.atBorder }};border-radius:7px;padding:3px 8px;flex:none;width:132px;">
+                      <span style="font-size:12px;color:var(--t-help);">@</span>
+                      <input value="{{ d.handle }}" onInput="{{ d.setHandle }}" placeholder="konto" style="border:none;background:none;outline:none;font-size:12px;color:var(--t-head);width:100%;padding:0;">
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--div3);font-size:11px;color:var(--t-help);">Individens historik härleds — allt den ställt upp i syns på utövarkortet.</div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- ============ IMPORT-OVERLAY ============ -->
+    <sc-if value="{{ importOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeImport }}" style="position:absolute;inset:0;background:rgba(10,8,4,.5);z-index:20;"></div>
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:21;width:560px;max-height:80%;overflow-y:auto;background:var(--win);border:1px solid var(--card-border);border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.5);">
+      <div style="display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--div2);">
+        <span class="scd" style="font-size:19px;font-weight:700;color:var(--t-head);flex:1;">Läs in</span>
+        <span style="font-size:11.5px;color:var(--t-mut);">{{ impSteg }}</span>
+        <button onClick="{{ closeImport }}" style="background:none;border:none;font-size:18px;color:var(--t-mut);cursor:pointer;line-height:1;">×</button>
+      </div>
+
+      <!-- STEG A: en väg in -->
+      <sc-if value="{{ impDrop }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:20px;">
+        <div style="font-size:12.5px;color:var(--t-body);line-height:1.5;margin-bottom:14px;">En väg in. Släpp en fil eller klistra in text — jag känner igen om det är ett tidsprogram, en startlista eller bara deltagare. <b style="color:var(--t-head);">Du behöver inte veta vilket.</b></div>
+        <div onClick="{{ doRecognize }}" style="border:2px dashed var(--accent-softborder);background:var(--accent-soft);border-radius:12px;padding:30px 20px;text-align:center;cursor:pointer;">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" style="margin:0 auto 10px;display:block;"><path d="M12 3v12M8 11l4 4 4-4M4 20h16"/></svg>
+          <div style="font-size:14px;font-weight:600;color:var(--t-head);">Släpp PDF, startlista, CSV eller text</div>
+          <div style="font-size:12px;color:var(--t-mut);margin-top:4px;">eller klistra in med ⌘V · eller <span style="color:var(--accent);font-weight:600;">klistra in länk</span></div>
+        </div>
+        <div style="font-size:11px;color:var(--t-help);margin-top:12px;line-height:1.5;">Ersätter de fem gamla vägarna (Tidsprogram / Startlista / Bara deltagare / Läs PDF / +Pass) med en. Parsern gissar och frågar bara när den är osäker.</div>
+      </div>
+      </sc-if>
+
+      <!-- STEG B: igenkänt -->
+      <sc-if value="{{ impReco }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:20px;">
+        <div style="display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--card-border);border-radius:10px;padding:11px 14px;margin-bottom:14px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none;"></span>
+          <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--t-head);">Startlista med tider · easyrecord.se</div><div style="font-size:11px;color:var(--t-mut);">program + deltagare + klass — allt i en fil</div></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+          <sc-for list="{{ recoChips }}" as="c" hint-placeholder-count="4">
+            <span style="background:var(--seg);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--t-body);"><b class="scd" style="font-size:15px;color:var(--t-head);">{{ c.n }}</b> {{ c.label }}</span>
+          </sc-for>
+        </div>
+        <div style="background:var(--accent-soft);border:1px solid var(--accent-softborder);border-radius:10px;padding:11px 14px;display:flex;align-items:center;gap:11px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" style="flex:none;"><path d="M12 8v5M12 16.5v.5M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+          <div style="flex:1;min-width:0;font-size:12.5px;color:var(--t-body);"><b style="color:var(--t-head);">12 rader behöver din blick</b> — dubbletter, okänd klass, en flyttad tid.</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button onClick="{{ doReview }}" style="background:var(--accent);color:var(--ink);border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Granska 12 ›</button>
+          <button onClick="{{ doDone }}" style="background:none;border:1px solid var(--field-border);color:var(--t-body);border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Läs in allt ändå</button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- STEG C: granskning som skalar -->
+      <sc-if value="{{ impReview }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:16px 20px 20px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <span style="font-size:11.5px;color:var(--t-body);">845 rader — visar bara det som avviker.</span>
+          <span style="flex:1;"></span>
+          <span style="display:inline-flex;background:var(--seg);border-radius:7px;padding:3px;">
+            <span style="{{ segAvvik }}">Bara avvikelser</span>
+            <span style="{{ segAlla }}">Alla</span>
+          </span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <sc-for list="{{ avvikelser }}" as="a" hint-placeholder-count="4">
+            <div style="border:1px solid {{ a.border }};background:{{ a.bg }};border-radius:10px;padding:11px 13px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                <span style="{{ a.tagStyle }}">{{ a.tag }}</span>
+                <span style="font-size:12.5px;font-weight:600;color:var(--t-head);">{{ a.titel }}</span>
+              </div>
+              <div style="font-size:11.5px;color:var(--t-body);line-height:1.45;margin-bottom:9px;">{{ a.txt }}</div>
+              <div style="display:flex;gap:7px;">
+                <button onClick="{{ a.fix }}" style="{{ a.primaryStyle }}">{{ a.primary }}</button>
+                <button onClick="{{ a.fix }}" style="background:none;border:1px solid var(--field-border);color:var(--t-mut);border-radius:7px;padding:5px 11px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;">{{ a.secondary }}</button>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ allClear }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align:center;padding:24px 16px;color:var(--t-mut);"><div style="font-size:13px;font-weight:600;color:var(--ok);">Allt granskat ✓</div><div style="font-size:11.5px;margin-top:3px;">De 833 övriga raderna gick rent.</div></div>
+          </sc-if>
+        </div>
+        <button onClick="{{ doDone }}" style="width:100%;margin-top:14px;background:var(--accent);color:var(--ink);border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Klar — läs in {{ kvarKnapp }}</button>
+      </div>
+      </sc-if>
+    </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Utseende&quot;}}">
+class Component extends DCLogic {
+  state = {
+    importStep:'closed', onlyAvvik:true, openGren:'100m', utanOnly:false,
+    handles:{}, synkOpen:false, resolved:{},
+  };
+  GRENAR = [
+    { id:'100m', namn:'100 m', klass:'dam', sub:'final i dag 20:25', avv:'dubblett',
+      pass:[{nar:'fre 18:40', namn:'Försök', antal:'22 startande'},{nar:'fre 20:25', namn:'Final', antal:'8 startande'}] },
+    { id:'100mh', namn:'100 m häck', klass:'dam', sub:'kval + final', avv:null,
+      pass:[{nar:'lör 12:10', namn:'Försök', antal:'18 startande'},{nar:'lör 17:30', namn:'Final', antal:'8 startande'}] },
+    { id:'stav', namn:'Stavhopp', klass:'herr', sub:'lör 16:00', avv:'krock',
+      pass:[{nar:'lör 16:00', namn:'Final', antal:'12 startande'}] },
+    { id:'kula', namn:'Kula', klass:'dam', sub:'sön 14:00', avv:null,
+      pass:[{nar:'sön 14:00', namn:'Final', antal:'14 startande'}] },
+    { id:'4x100', namn:'4×100 m', klass:null, sub:'okänd klass', avv:'klass',
+      pass:[{nar:'sön 16:20', namn:'Final', antal:'8 lag'}] },
+    { id:'langd', namn:'Längdhopp', klass:'herr', sub:'fre 17:00', avv:null,
+      pass:[{nar:'fre 17:00', namn:'Final', antal:'12 startande'}] },
+  ];
+  KLASSCOL = { dam:'#8E5A86', herr:'#3E7C87', mixed:'#6E8757' };
+  DELT = [
+    { id:1, namn:'Wilma Ek', meta:'Turebergs FK · 100 m', h:'' },
+    { id:2, namn:'Nora Holm', meta:'Malmö AI · 100 m', h:'noraholm' },
+    { id:3, namn:'Ida Sandström', meta:'Ullevi FK · 100 m', h:'' },
+    { id:4, namn:'Ellen Vik', meta:'Hälle IF · 100 m häck', h:'ellen.vik' },
+    { id:5, namn:'Saga Berg', meta:'Örgryte IS · 100 m', h:'' },
+    { id:6, namn:'Moa Lund', meta:'Spårvägens FK · Stav', h:'moa_lund' },
+    { id:7, namn:'Tuva Ahl', meta:'IK Franke · Kula', h:'' },
+    { id:8, namn:'Alva Rex', meta:'Heleneholms IF · Längd', h:'' },
+  ];
+  AVV = [
+    { id:'dub', tag:'DUBBLETT', tone:'accent', titel:'”100 m” och ”100 m ”', txt:'Två grenar med samma disciplin — den ena har ett efterföljande mellanslag. Kom in genom två dörrar.', primary:'Slå ihop', secondary:'Behåll båda' },
+    { id:'kla', tag:'OKÄND KLASS', tone:'accent', titel:'4×100 m — rad 44', txt:'Ingen klass i källan. Utan klass får grenen ingen färgkant. Dam, herr eller mixed?', primary:'Sätt klass…', secondary:'Lämna okänd' },
+    { id:'kro', tag:'TIDSKROCK', tone:'warn', titel:'Stavhopp & Höjdhopp 16:00', txt:'Två pass samma tid, samma arena — du kan inte fota båda. Programmet visar varningen, du väljer.', primary:'Öppna i program', secondary:'Ignorera' },
+    { id:'dif', tag:'ÄNDRAD SEDAN 19/7', tone:'diff', titel:'100 m final — ny tid', txt:'Arrangören flyttade tiden. 20:25 → 20:35. Restiden i iOS räknas om automatiskt.', primary:'Godkänn ändring', secondary:'Behåll gammal' },
+  ];
+  renderVals() {
+    const theme = this.props.theme ?? 'light';
+    const navBase = { display:'flex', alignItems:'center', gap:'9px', width:'100%', padding:'8px 10px', border:'none', borderRadius:'8px', fontFamily:'inherit', fontSize:'13px', fontWeight:600, cursor:'pointer', textAlign:'left' };
+    const nsOff = { ...navBase, background:'transparent', color:'var(--t-mut)' };
+    const nsOn = { ...navBase, background:'var(--accent-soft)', color:'var(--accent)' };
+    const ncNum = { width:'17px', height:'17px', borderRadius:'50%', border:'1.5px solid currentColor', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:'10px', flex:'none' };
+
+    // synk-märke
+    const synkOn = this.state.synkOpen;
+    const synkStyle = 'display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.04em;border-radius:999px;padding:4px 11px;cursor:pointer;'
+      + (synkOn ? 'background:rgba(224,163,65,.14);border:1px solid rgba(224,163,65,.4);color:#B5781A;' : 'background:rgba(78,138,62,.13);border:1px solid rgba(78,138,62,.34);color:var(--ok);');
+    const synkDot = 'width:6px;height:6px;border-radius:50%;flex:none;background:' + (synkOn ? '#E0A341' : 'var(--ok)');
+    const synkText = synkOn ? '3 VÄNTAR' : 'ALLT UPPE';
+
+    // grenar
+    const avvBadgeStyle = (tone) => {
+      const c = tone==='warn' ? '#C08a2a' : 'var(--accent)';
+      return `font-size:9px;font-weight:700;letter-spacing:.06em;color:${c};border:1px solid ${c};border-radius:5px;padding:1px 6px;flex:none;`;
+    };
+    const grenar = this.GRENAR.map(g => {
+      const col = this.KLASSCOL[g.klass];
+      const open = this.state.openGren===g.id;
+      const solved = this.state.resolved[g.avv];
+      const showAvv = g.avv && !solved;
+      return {
+        namn:g.namn, sub:g.sub,
+        edge: col ? '3px solid '+col : '1px solid var(--field-border)',
+        open, toggle:()=>this.setState(s=>({ openGren: s.openGren===g.id?null:g.id })),
+        caret: 'font-size:10px;color:var(--t-help);transition:transform .15s;transform:rotate('+(open?'180deg':'0')+');',
+        avvText: showAvv ? (g.avv==='dubblett'?'dubblett':g.avv==='klass'?'okänd klass':'krock') : '',
+        avvBadge: showAvv ? avvBadgeStyle(g.avv==='krock'?'warn':'accent') : 'display:none;',
+        pass:g.pass,
+      };
+    });
+
+    // deltagare
+    const hVal = (d) => this.state.handles[d.id] !== undefined ? this.state.handles[d.id] : d.h;
+    const withHandle = this.DELT.filter(d => hVal(d));
+    const utanCount = this.DELT.length - withHandle.length;
+    const shown = this.state.utanOnly ? this.DELT.filter(d=>!hVal(d)) : this.DELT;
+    const deltagare = shown.map(d => {
+      const h = hVal(d);
+      return {
+        namn:d.namn, meta:d.meta, handle:h,
+        init:d.namn.split(' ').map(w=>w[0]).join('').slice(0,2),
+        initStyle:{ width:'26px', height:'26px', borderRadius:'50%', background:'var(--seg)', color:'var(--t-body)', fontSize:'10px', fontWeight:700, display:'inline-flex', alignItems:'center', justifyContent:'center', flex:'none' },
+        atBorder: h ? 'var(--accent-softborder)' : 'var(--field-border)',
+        setHandle:(e)=>{ const v=e.target.value; this.setState(s=>({ handles:{ ...s.handles, [d.id]:v } })); },
+      };
+    });
+
+    // import
+    const step = this.state.importStep;
+    const impStegLabel = { drop:'1 av 3', recognized:'2 av 3', review:'3 av 3' }[step] || '';
+    const recoChips = [ {n:'3',label:'dagar'}, {n:'79',label:'grenar'}, {n:'845',label:'starter'}, {n:'121',label:'pass'} ];
+    const avvOpen = this.AVV.filter(a => !this.state.resolved[a.id]);
+    const toneMap = {
+      accent:{ border:'var(--accent-softborder)', bg:'var(--accent-soft)', tagBg:'var(--accent)', tagFg:'var(--ink)' },
+      warn:{ border:'rgba(224,163,65,.4)', bg:'rgba(224,163,65,.1)', tagBg:'#C08a2a', tagFg:'#fff' },
+      diff:{ border:'rgba(78,138,62,.4)', bg:'rgba(78,138,62,.1)', tagBg:'var(--ok)', tagFg:'#fff' },
+    };
+    const avvikelser = avvOpen.map(a => {
+      const t = toneMap[a.tone];
+      return { titel:a.titel, txt:a.txt, tag:a.tag, primary:a.primary, secondary:a.secondary,
+        border:t.border, bg:t.bg,
+        tagStyle:`font-size:9px;font-weight:700;letter-spacing:.06em;color:${t.tagFg};background:${t.tagBg};border-radius:4px;padding:2px 7px;`,
+        primaryStyle:`background:${t.tagBg};color:${t.tagFg};border:none;border-radius:7px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;`,
+        fix:()=>this.setState(s=>({ resolved:{ ...s.resolved, [a.id]:true } })),
+      };
+    });
+
+    const seg = (on) => on
+      ? 'font-size:11px;font-weight:600;color:var(--t-head);background:var(--card);border-radius:5px;padding:3px 10px;box-shadow:0 1px 2px rgba(0,0,0,.1);cursor:pointer;'
+      : 'font-size:11px;font-weight:500;color:var(--t-mut);padding:3px 10px;cursor:pointer;';
+
+    return {
+      theme, nsOff, nsOn, ncNum,
+      synkStyle, synkDot, synkText, togSynk:()=>this.setState(s=>({ synkOpen:!s.synkOpen })),
+      grenar,
+      handleCount: withHandle.length + ' av ' + this.DELT.length + ' har @',
+      utanCount, deltagare,
+      utanStyle: (this.state.utanOnly
+        ? 'background:var(--accent-soft);border:1px solid var(--accent-softborder);color:var(--accent);'
+        : 'background:var(--field);border:1px solid var(--field-border);color:var(--t-mut);')
+        + 'border-radius:8px;padding:7px 11px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;flex:none;',
+      togUtan:()=>this.setState(s=>({ utanOnly:!s.utanOnly })),
+      // import
+      importOpen: step!=='closed',
+      impDrop: step==='drop', impReco: step==='recognized', impReview: step==='review',
+      impSteg: impStegLabel,
+      openImport:()=>this.setState({ importStep:'drop' }),
+      closeImport:()=>this.setState({ importStep:'closed' }),
+      doRecognize:()=>this.setState({ importStep:'recognized' }),
+      doReview:()=>this.setState({ importStep:'review' }),
+      doDone:()=>this.setState({ importStep:'closed', synkOpen:true }),
+      recoChips,
+      avvikelser, allClear: avvOpen.length===0,
+      segAvvik: seg(this.state.onlyAvvik), segAlla: seg(!this.state.onlyAvvik),
+      kvarKnapp: avvOpen.length>0 ? ('('+avvOpen.length+' kvar löses tyst)') : 'allt',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -102,20 +102,19 @@
 
     <!-- SCHEMA / DELTILLFÄLLEN -->
     <div style="position:relative;margin:14px 18px 0;">
-      <div style="font-size:10px;font-weight:700;letter-spacing:.18em;color:rgba(243,245,247,.5);margin-bottom:10px;">DAGENS DELTILLFÄLLEN</div>
-      <div style="display:flex;flex-direction:column;gap:0;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.18em;color:rgba(243,245,247,.5);margin-bottom:3px;">DAGENS DELTILLFÄLLEN</div>
+      <div style="font-size:10.5px;color:rgba(243,245,247,.44);margin-bottom:11px;">Tryck en gren för att öppna den och skapa SoMe.</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
         <sc-for list="{{ schema }}" as="s" hint-placeholder-count="4">
-          <div style="{{ s.style }}">
-            <div style="display:flex;flex-direction:column;align-items:center;width:20px;flex:none;">
-              <span style="{{ s.dot }}"></span>
-              <span style="{{ s.line }}"></span>
-            </div>
-            <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:16px;width:52px;flex:none;font-variant-numeric:tabular-nums;{{ s.timeColor }}">{{ s.tid }}</div>
+          <div onClick="{{ s.open }}" style="{{ s.style }}">
+            <span style="{{ s.edge }}"></span>
+            <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:16px;width:46px;flex:none;font-variant-numeric:tabular-nums;{{ s.timeColor }}">{{ s.tid }}</div>
             <div style="flex:1;min-width:0;">
-              <div style="font-size:13.5px;font-weight:600;">{{ s.namn }}</div>
-              <div style="font-size:10.5px;color:rgba(243,245,247,.5);">{{ s.sub }}</div>
+              <div style="display:flex;align-items:center;gap:7px;"><span style="font-size:13.5px;font-weight:600;">{{ s.namn }}</span><span style="{{ s.badge }}">{{ s.badgeText }}</span></div>
+              <div style="{{ s.subStyle }}">{{ s.sub }}</div>
             </div>
-            <span style="{{ s.badge }}">{{ s.badgeText }}</span>
+            <span onClick="{{ s.star }}" style="{{ s.starStyle }}">★</span>
+            <span style="{{ s.chev }}"><svg width="7" height="12" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="#F0B45A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           </div>
         </sc-for>
       </div>
@@ -186,6 +185,33 @@
       </div>
     </div>
     </sc-if>
+
+    <!-- GREN-SHEET: skapa SoMe från valfri gren -->
+    <sc-if value="{{ grenOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeGren }}" style="position:absolute;inset:0;background:rgba(0,0,0,.5);z-index:5;"></div>
+    <div style="position:absolute;left:0;right:0;bottom:0;z-index:6;background:#12151b;border-radius:22px 22px 0 0;border-top:1px solid rgba(255,255,255,.12);padding:14px 18px 30px;">
+      <div style="width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:0 auto 14px;"></div>
+      <div style="display:flex;align-items:stretch;gap:11px;">
+        <span style="width:5px;border-radius:3px;background:{{ grenCol }};flex:none;"></span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:22px;line-height:1;">{{ grenNamn }}</div>
+          <div style="font-size:11.5px;color:rgba(243,245,247,.55);margin-top:3px;">{{ grenSub }} · Del av Friidrotts-SM 2026</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
+        <div style="display:flex;align-items:center;gap:12px;border-radius:14px;padding:14px;background:linear-gradient(180deg,#F0B45A,#E39C3E);cursor:pointer;box-shadow:0 10px 24px rgba(240,180,90,.24);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0b0e12" stroke-width="2" style="flex:none;"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.3" fill="#0b0e12" stroke="none"/></svg>
+          <div style="flex:1;min-width:0;"><div style="font-size:14.5px;font-weight:700;color:#0b0e12;">Skapa SoMe</div><div style="font-size:11px;color:rgba(11,14,18,.72);">välj vinnare · resultat · story</div></div>
+          <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="#0b0e12" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:13px 14px;cursor:pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(243,245,247,.8)" stroke-width="1.9" style="flex:none;"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          <div style="flex:1;min-width:0;"><div style="font-size:13.5px;font-weight:600;">Öppna passet</div><div style="font-size:11px;color:rgba(243,245,247,.5);">deltagare, tider, startlista</div></div>
+          <svg width="7" height="12" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="rgba(243,245,247,.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+    </sc-if>
   </div>
   </x-import>
 
@@ -224,38 +250,56 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script>
 class Component extends DCLogic {
-  state = { sheetOpen:false, platsOpen:false, tidIx:0 };
+  state = { sheetOpen:false, platsOpen:false, tidIx:0, grenSheet:false, grenSel:0,
+    fav:{ 0:true, 1:true, 3:true } };
+  KLASSCOL = { dam:'#8E5A86', herr:'#3E7C87', mixed:'#6E8757' };
   TIDER = [
     { namn:'Avgång (auto)', sub:'åk senast för 09:00-passet', tid:'08:03' },
     { namn:'Gyllene timmen', sub:'sikta på ljuset istället', tid:'04:10' },
     { namn:'Medaljceremonin', sub:'senare deltillfälle', tid:'16:40' },
   ];
   SCHEMA = [
-    { tid:'09:00', namn:'Försök 100 m', sub:'arena · löpning', state:'next' },
-    { tid:'11:30', namn:'Höjdhopp', sub:'infält', state:'idle' },
-    { tid:'14:00', namn:'Stafett 4×100', sub:'arena', state:'idle' },
-    { tid:'16:40', namn:'Medaljceremoni', sub:'prispall', state:'last' },
+    { tid:'12:30', namn:'Längd · Kval', sub:'', klass:'herr', state:'next' },
+    { tid:'13:30', namn:'Stav · Kval', sub:'', klass:'dam', state:'idle' },
+    { tid:'13:50', namn:'Diskus · Kval', sub:'Daniel Ståhl', klass:'herr', state:'idle' },
+    { tid:'14:00', namn:'100 m · Försök', sub:'47 deltagare', klass:'herr', state:'idle' },
+    { tid:'15:00', namn:'Höjd · Kval', sub:'', klass:'dam', state:'idle' },
+    { tid:'15:20', namn:'Diskus · Kval', sub:'Vanessa Kamga', klass:'dam', state:'idle' },
+    { tid:'16:30', namn:'Invigning', sub:'', klass:null, hall:true, state:'idle' },
+    { tid:'16:40', namn:'400 m · Försök', sub:'', klass:'dam', state:'idle' },
   ];
   renderVals() {
-    const mkRow = (s, i, last) => {
+    const mkRow = (s, i) => {
       const isNext = s.state==='next';
+      const on = !!this.state.fav[i];
+      const col = this.KLASSCOL[s.klass];
       return { tid:s.tid, namn:s.namn, sub:s.sub,
-        style:{ display:'flex', alignItems:'center', gap:'12px', padding:'9px 0', minHeight:'46px' },
-        dot:{ width:'11px', height:'11px', borderRadius:'50%', flex:'none',
-          background:isNext?'#F0B45A':'rgba(255,255,255,.28)',
-          boxShadow:isNext?'0 0 0 4px rgba(240,180,90,.18)':'none' },
-        line:{ width:'2px', flex:'1', minHeight:'14px', background:last?'transparent':'rgba(255,255,255,.12)', marginTop:'3px' },
+        subStyle: s.sub ? 'font-size:10.5px;color:rgba(243,245,247,.5);margin-top:1px;' : 'display:none;',
+        style:{ display:'flex', alignItems:'center', gap:'11px', padding:'9px 11px 9px 9px', borderRadius:'12px',
+          cursor: s.hall?'default':'pointer',
+          background: isNext?'rgba(240,180,90,.08)':'rgba(255,255,255,.035)',
+          border:'1px solid '+(isNext?'rgba(240,180,90,.26)':'rgba(255,255,255,.07)') },
+        edge: 'width:4px;align-self:stretch;min-height:30px;border-radius:2px;flex:none;background:'+(col||'rgba(255,255,255,.16)')+';',
         timeColor: isNext?'color:#F0B45A;':'color:#f3f5f7;',
         badge: isNext
-          ? 'font-size:9px;font-weight:700;letter-spacing:.1em;color:#0b0e12;background:#F0B45A;border-radius:6px;padding:3px 7px;flex:none;'
+          ? 'font-size:9px;font-weight:700;letter-spacing:.1em;color:#0b0e12;background:#F0B45A;border-radius:6px;padding:2px 7px;flex:none;'
           : 'display:none;',
-        badgeText: isNext?'NÄST':'' };
+        badgeText: isNext?'NÄST':'',
+        starStyle: 'font-size:17px;flex:none;cursor:pointer;color:'+(on?'#F0B45A':'rgba(243,245,247,.28)')+';',
+        chev: s.hall ? 'display:none;' : 'display:flex;align-items:center;flex:none;',
+        star:(e)=>{ e.stopPropagation(); this.setState(st=>({ fav:{ ...st.fav, [i]:!st.fav[i] } })); },
+        open: s.hall ? (()=>{}) : (()=>this.setState({ grenSheet:true, grenSel:i })) };
     };
+    const gs = this.SCHEMA[this.state.grenSel] || this.SCHEMA[0];
     return {
       sheetOpen:this.state.sheetOpen,
       togSheet:()=>this.setState(s=>({sheetOpen:!s.sheetOpen})),
       togPlats:()=>this.setState(s=>({platsOpen:!s.platsOpen})),
-      schema:this.SCHEMA.map((s,i)=>mkRow(s,i,i===this.SCHEMA.length-1)),
+      grenOpen:this.state.grenSheet,
+      closeGren:()=>this.setState({ grenSheet:false }),
+      grenNamn:gs.namn, grenSub:gs.sub || 'grenpass',
+      grenCol:this.KLASSCOL[gs.klass] || 'rgba(255,255,255,.2)',
+      schema:this.SCHEMA.map((s,i)=>mkRow(s,i)),
       tider:this.TIDER.map((t,i)=>({ namn:t.namn, sub:t.sub, tid:t.tid,
         pick:()=>this.setState({tidIx:i, sheetOpen:false}),
         style:{ display:'flex', alignItems:'center', gap:'10px', borderRadius:'12px', padding:'11px 13px', cursor:'pointer',

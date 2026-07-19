@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ddd4c2; }
+  a { color: #C9871F; } a:hover { color: #B5781A; }
+  .dpt .scd { font-family: 'Saira Condensed', sans-serif; }
+  .dpt { --accent:#C9871F; --accent-hover:#B5781A; --accent-soft:rgba(201,135,31,.14); --accent-softborder:rgba(201,135,31,.42); --ink:#100c05;
+    --win:#F4EEE2; --title:#EFE7D6; --bottom:#EBE2D0; --rail:#ECE3D2; --seg:#E2D7C1;
+    --card:#FBF8F1; --card-border:rgba(35,32,26,.14); --field:#FCF9F2; --field-border:rgba(35,32,26,.18);
+    --t-head:#23201a; --t-body:rgba(35,32,26,.78); --t-label:rgba(35,32,26,.62); --t-mut:rgba(35,32,26,.5); --t-help:rgba(35,32,26,.4); --t-caps:rgba(35,32,26,.5);
+    --div:rgba(35,32,26,.13); --div2:rgba(35,32,26,.1); --div3:rgba(35,32,26,.07);
+    --shadow:0 1px 2px rgba(60,50,30,.05),0 12px 30px rgba(60,50,30,.10); --ok:#4E8A3E; }
+  .dpt[data-theme="dark"] { --accent:#F0B45A; --accent-hover:#F4C277; --accent-soft:rgba(240,180,90,.15); --accent-softborder:rgba(240,180,90,.42); --ink:#100c05;
+    --win:#0a0d11; --title:#11141a; --bottom:#06080b; --rail:#0d1015; --seg:#1b2028;
+    --card:#12151b; --card-border:rgba(255,255,255,.09); --field:#0e1217; --field-border:rgba(255,255,255,.14);
+    --t-head:#f3f5f7; --t-body:rgba(243,245,247,.84); --t-label:rgba(243,245,247,.66); --t-mut:rgba(243,245,247,.62); --t-help:rgba(243,245,247,.52); --t-caps:rgba(243,245,247,.55);
+    --div:rgba(255,255,255,.09); --div2:rgba(255,255,255,.07); --div3:rgba(255,255,255,.05);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 16px 40px rgba(0,0,0,.55); --ok:#6FB35A; }
+  .dpt ::-webkit-scrollbar { width:9px; height:9px; }
+  .dpt ::-webkit-scrollbar-thumb { background:rgba(140,130,110,.4); border-radius:6px; border:2px solid transparent; background-clip:content-box; }
+  .dpt input::placeholder { color:var(--t-help); }
+  .dpt input { font-family:inherit; }
+</style>
+</helmet>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#C9871F"/><g fill="#FBF8F1"><rect x="24" y="26" width="20" height="10" rx="2"/><rect x="24" y="45" width="20" height="10" rx="2"/><rect x="24" y="64" width="20" height="10" rx="2"/><rect x="52" y="26" width="24" height="48" rx="3" opacity=".7"/></g></svg></template>
+
+<div class="dpt" data-theme="{{ theme }}" style="padding:28px;display:flex;justify-content:center;font-family:'Saira',sans-serif;">
+  <div style="width:1240px;height:900px;flex:none;background:var(--win);border-radius:13px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;border:1px solid var(--card-border);">
+
+    <!-- titlebar -->
+    <div style="height:38px;flex:none;display:flex;align-items:center;padding:0 14px;background:var(--title);border-bottom:1px solid var(--div3);position:relative;">
+      <div style="display:flex;gap:8px;z-index:1;"><span style="width:12px;height:12px;border-radius:50%;background:#FF5F57;"></span><span style="width:12px;height:12px;border-radius:50%;background:#FEBC2E;"></span><span style="width:12px;height:12px;border-radius:50%;background:#28C840;"></span></div>
+      <div style="position:absolute;left:0;right:0;text-align:center;font-size:13px;font-weight:600;color:var(--t-body);">Dalecarlia Photo Tools</div>
+    </div>
+
+    <!-- header -->
+    <div style="height:58px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--title);border-bottom:1px solid var(--div2);">
+      <img src="uploads/logo-sol.png" alt="Dalecarlia" style="height:36px;width:auto;object-fit:contain;flex:none;">
+      <div style="display:flex;flex-direction:column;line-height:1;">
+        <span class="scd" style="font-size:19px;font-weight:700;color:var(--t-head);letter-spacing:.03em;">DALECARLIA PHOTO</span>
+        <span style="font-size:9px;font-weight:600;letter-spacing:.3em;color:var(--accent);margin-top:4px;">PHOTO TOOLS · v5.0 · Tävlingar › Mästerskap</span>
+      </div>
+      <div style="flex:1;"></div>
+      <span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.04em;border-radius:999px;padding:4px 11px;background:rgba(78,138,62,.13);border:1px solid rgba(78,138,62,.34);color:var(--ok);"><span style="width:6px;height:6px;border-radius:50%;background:var(--ok);"></span>ALLT UPPE</span>
+    </div>
+
+    <div style="flex:1;display:flex;min-height:0;">
+      <!-- nav -->
+      <nav style="width:170px;flex:none;background:var(--rail);border-right:1px solid var(--div2);padding:14px 12px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;" data-screen-label="Sidopanel">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:2px 10px 6px;">Planera</div>
+        <button style="{{ nsOff }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/></svg><span>Fotojobb</span></button>
+        <button style="{{ nsOff }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17"/></svg><span>Matcher</span></button>
+        <button style="{{ nsOn }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 9.2l5.4-.8z"/></svg><span>Tävlingar</span></button>
+        <button style="{{ nsOff }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6M17 14c2.5.4 4 2.4 4 5"/></svg><span>Lag &amp; Utövare</span></button>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:14px 10px 6px;">Efter match</div>
+        <button style="{{ nsOff }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/></svg><span>Snabbplock</span></button>
+        <button style="{{ nsOff }}"><span style="{{ ncNum }}">1</span><span>Gallra</span></button>
+        <button style="{{ nsOff }}"><span style="{{ ncNum }}">2</span><span>Leverera</span></button>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);padding:14px 10px 6px;">System</div>
+        <button style="{{ nsOff }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8"/></svg><span>Inställningar</span></button>
+      </nav>
+
+      <!-- main -->
+      <main style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;" data-screen-label="Mästerskap — arbetsyta">
+        <!-- tävlings-topp -->
+        <div style="flex:none;padding:16px 22px 0;border-bottom:1px solid var(--div2);">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t-mut);">
+            <button style="background:none;border:none;padding:0;font-family:inherit;font-size:12px;color:var(--accent);cursor:pointer;font-weight:600;">‹ Alla tävlingar</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:11px;margin-top:7px;flex-wrap:wrap;">
+            <h1 class="scd" style="margin:0;font-size:23px;font-weight:700;color:var(--t-head);">Friidrotts-SM 2026</h1>
+            <span style="font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:5px;padding:2px 7px;">Mästerskap</span>
+            <span style="font-size:10.5px;font-weight:600;border-radius:999px;padding:2px 10px;background:var(--accent-soft);color:var(--accent);">pågående</span>
+            <span style="font-size:11.5px;color:var(--t-mut);">24–26 jul · Uddevalla · 79 grenar · 845 starter</span>
+            <div style="flex:1;"></div>
+            <button style="background:none;border:1px solid var(--field-border);color:var(--t-body);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v12M8 11l4 4 4-4M4 20h16"/></svg>Läs in / uppdatera</button>
+          </div>
+          <!-- lägesväxel -->
+          <div style="display:flex;gap:2px;margin-top:12px;">
+            <sc-for list="{{ modes }}" as="m" hint-placeholder-count="2">
+              <button onClick="{{ m.set }}" style="{{ m.style }}">{{ m.label }}</button>
+            </sc-for>
+            <div style="flex:1;"></div>
+            <span style="align-self:center;font-size:10.5px;color:var(--t-help);">Adaptiv: liten cup visas som kort-stapel · mästerskap som arbetsyta</span>
+          </div>
+        </div>
+
+        <!-- ===== GRENAR-LÄGET ===== -->
+        <sc-if value="{{ isGrenar }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;display:flex;min-height:0;">
+          <!-- vänster: grenar-navigator -->
+          <div style="width:322px;flex:none;border-right:1px solid var(--div2);display:flex;flex-direction:column;min-height:0;background:var(--bottom);">
+            <div style="flex:none;padding:12px 14px 10px;border-bottom:1px solid var(--div3);">
+              <div style="display:flex;align-items:center;gap:6px;background:var(--field);border:1px solid var(--field-border);border-radius:8px;padding:7px 10px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t-mut)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input value="{{ search }}" onInput="{{ setSearch }}" placeholder="Sök gren…" style="border:none;background:none;outline:none;font-size:12.5px;color:var(--t-head);width:100%;padding:0;">
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:9px;">
+                <span style="font-size:9.5px;font-weight:700;letter-spacing:.1em;color:var(--t-caps);">GRUPPERA</span>
+                <div style="display:inline-flex;background:var(--seg);border-radius:7px;padding:2px;">
+                  <sc-for list="{{ groupTabs }}" as="g" hint-placeholder-count="3">
+                    <button onClick="{{ g.set }}" style="{{ g.style }}">{{ g.label }}</button>
+                  </sc-for>
+                </div>
+                <div style="flex:1;"></div>
+                <button onClick="{{ togFav }}" style="{{ favFilterStyle }}" title="Bara favoriter">★ {{ favCount }}</button>
+              </div>
+            </div>
+            <div style="flex:1;overflow-y:auto;padding:6px 10px 14px;">
+              <sc-for list="{{ groups }}" as="grp" hint-placeholder-count="3">
+                <div style="margin-top:8px;">
+                  <div style="display:flex;align-items:center;gap:8px;padding:5px 6px 4px;">
+                    <span style="{{ grp.edge }}"></span>
+                    <span style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--t-label);">{{ grp.label }}</span>
+                    <span style="font-size:10px;color:var(--t-help);">{{ grp.count }}</span>
+                  </div>
+                  <sc-for list="{{ grp.grenar }}" as="g" hint-placeholder-count="4">
+                    <div onClick="{{ g.open }}" style="{{ g.row }}">
+                      <span style="width:4px;height:26px;border-radius:2px;background:{{ g.col }};flex:none;"></span>
+                      <div style="min-width:0;flex:1;">
+                        <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:12.5px;font-weight:600;color:var(--t-head);">{{ g.namn }}</span><span style="{{ g.katStyle }}">{{ g.kat }}</span></div>
+                        <div style="font-size:10px;color:var(--t-mut);">{{ g.sub }}</div>
+                      </div>
+                      <span style="font-size:11px;font-weight:700;color:var(--t-mut);font-variant-numeric:tabular-nums;">{{ g.n }}</span>
+                      <span onClick="{{ g.star }}" style="{{ g.starStyle }}">★</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- höger: gren-detalj -->
+          <div style="flex:1;min-width:0;overflow-y:auto;">
+            <div style="padding:18px 22px 40px;">
+              <div style="display:flex;align-items:stretch;gap:12px;">
+                <span style="width:5px;border-radius:3px;background:{{ d.col }};flex:none;"></span>
+                <div style="flex:1;min-width:0;">
+                  <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+                    <h2 class="scd" style="margin:0;font-size:26px;font-weight:700;color:var(--t-head);line-height:1;">{{ d.namn }}</h2>
+                    <span style="{{ d.katStyle }}">{{ d.kat }}</span>
+                    <span style="font-size:11.5px;color:var(--t-mut);">{{ d.klassText }}</span>
+                  </div>
+                  <div style="font-size:12px;color:var(--t-mut);margin-top:4px;">{{ d.n }} deltagare · {{ d.passText }} · Del av Friidrotts-SM 2026</div>
+                </div>
+                <button onClick="{{ d.star }}" style="{{ d.starBtn }}">★ {{ d.starLabel }}</button>
+              </div>
+
+              <!-- pass -->
+              <div style="margin-top:16px;background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:13px 15px;">
+                <div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);margin-bottom:9px;">Pass (tidsatta deltillfällen)</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <sc-for list="{{ d.pass }}" as="p" hint-placeholder-count="2">
+                    <div style="background:var(--field);border:1px solid var(--field-border);border-radius:9px;padding:8px 12px;min-width:120px;">
+                      <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--t-mut);">{{ p.typ }}</div>
+                      <div class="scd" style="font-size:16px;font-weight:700;color:var(--t-head);font-variant-numeric:tabular-nums;">{{ p.nar }}</div>
+                      <div style="font-size:10px;color:var(--t-help);">{{ p.antal }}</div>
+                    </div>
+                  </sc-for>
+                  <button style="background:none;border:1px dashed var(--field-border);border-radius:9px;padding:8px 14px;font-size:12px;font-weight:600;color:var(--accent);cursor:pointer;font-family:inherit;">+ Pass</button>
+                </div>
+              </div>
+
+              <!-- deltagare i grenen (gren-först koppling) -->
+              <div style="margin-top:14px;background:var(--card);border:1px solid var(--card-border);border-radius:11px;padding:13px 15px;">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+                  <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t-caps);">Deltagare i {{ d.namn }}</span>
+                  <span style="font-size:11px;color:var(--t-mut);">{{ d.handleText }}</span>
+                </div>
+                <div style="font-size:11px;color:var(--t-help);margin-bottom:10px;">Importen fyllde de flesta — koppla eller rätta här. Kopplingen bor på grenen, inte på personen.</div>
+                <div style="display:flex;align-items:center;gap:6px;background:var(--field);border:1px solid var(--accent-softborder);border-radius:8px;padding:7px 11px;margin-bottom:10px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                  <input placeholder="Lägg till utövare — sök namn ur registret…" style="border:none;background:none;outline:none;font-size:12.5px;color:var(--t-head);width:100%;padding:0;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px;max-height:250px;overflow-y:auto;">
+                  <sc-for list="{{ d.deltagare }}" as="p" hint-placeholder-count="5">
+                    <div style="display:flex;align-items:center;gap:10px;padding:6px 4px;border-bottom:1px solid var(--div3);">
+                      <span style="font-size:11px;font-weight:700;color:var(--t-mut);min-width:30px;text-align:center;font-variant-numeric:tabular-nums;">{{ p.nr }}</span>
+                      <span style="{{ p.initStyle }}">{{ p.init }}</span>
+                      <div style="min-width:0;flex:1;"><div style="font-size:12.5px;font-weight:600;color:var(--t-head);line-height:1.1;">{{ p.namn }}</div><div style="font-size:10.5px;color:var(--t-mut);">{{ p.klubb }}</div></div>
+                      <span style="{{ p.hStyle }}">{{ p.h }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ d.merDeltagare }}" hint-placeholder-val="{{ false }}">
+                <button style="margin-top:9px;background:none;border:none;font-family:inherit;font-size:12px;color:var(--accent);font-weight:600;cursor:pointer;padding:0;">Visa alla {{ d.n }} deltagare ›</button>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== PROGRAM-LÄGET ===== -->
+        <sc-if value="{{ isProgram }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+          <div style="flex:none;display:flex;align-items:center;gap:12px;padding:12px 22px;border-bottom:1px solid var(--div2);">
+            <div style="display:inline-flex;background:var(--seg);border-radius:8px;padding:3px;">
+              <sc-for list="{{ dayTabs }}" as="d" hint-placeholder-count="3">
+                <button onClick="{{ d.set }}" style="{{ d.style }}">{{ d.label }}</button>
+              </sc-for>
+            </div>
+            <div style="flex:1;"></div>
+            <button onClick="{{ togFav }}" style="{{ favFilterStyle }}">★ Bara favoritgrenar ({{ favCount }})</button>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:16px 22px 40px;">
+            <div style="font-size:11.5px;color:var(--t-mut);margin-bottom:14px;">{{ progLead }}</div>
+            <div style="position:relative;">
+              <sc-for list="{{ program }}" as="p" hint-placeholder-count="6">
+                <div style="display:flex;gap:14px;align-items:stretch;">
+                  <div style="width:56px;flex:none;text-align:right;padding-top:11px;"><span class="scd" style="font-size:15px;font-weight:700;color:var(--t-head);font-variant-numeric:tabular-nums;">{{ p.tid }}</span></div>
+                  <div style="display:flex;flex-direction:column;align-items:center;width:14px;flex:none;">
+                    <span style="width:11px;height:11px;border-radius:50%;background:{{ p.col }};border:2px solid var(--win);margin-top:11px;flex:none;box-shadow:0 0 0 1px var(--div2);"></span>
+                    <span style="width:2px;flex:1;background:var(--div2);{{ p.lineHide }}"></span>
+                  </div>
+                  <div style="flex:1;min-width:0;padding-bottom:11px;">
+                    <div style="background:var(--card);border:1px solid var(--card-border);border-left:3px solid {{ p.col }};border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:10px;">
+                      <div style="min-width:0;flex:1;">
+                        <div style="display:flex;align-items:center;gap:7px;"><span style="font-size:13.5px;font-weight:600;color:var(--t-head);">{{ p.gren }}</span><span style="{{ p.katStyle }}">{{ p.kat }}</span><span style="font-size:11px;color:var(--t-mut);">{{ p.typ }}</span></div>
+                        <div style="font-size:10.5px;color:var(--t-help);margin-top:1px;">{{ p.antal }} · {{ p.arena }}</div>
+                      </div>
+                      <span style="{{ p.favMark }}">★</span>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Utseende&quot;}}">
+class Component extends DCLogic {
+  state = { mode:'grenar', groupBy:'klass', selGren:'100m-d', search:'', onlyFav:false, day:1,
+    fav:{ '100m-d':true, 'langd-h':true, 'stav-h':true } };
+  KLASSCOL = { dam:'#8E5A86', herr:'#3E7C87', mixed:'#6E8757' };
+  G = [
+    { id:'100m-d', namn:'100 m', klass:'dam', kat:'', typ:'löp', dag:1, arena:'Bana', n:47,
+      pass:[{dag:1,typ:'Försök',nar:'18:40',antal:'6 heat'},{dag:1,typ:'Final',nar:'20:25',antal:'8 startande'}] },
+    { id:'100m-h', namn:'100 m', klass:'herr', kat:'', typ:'löp', dag:1, arena:'Bana', n:42,
+      pass:[{dag:1,typ:'Försök',nar:'18:55',antal:'6 heat'},{dag:1,typ:'Final',nar:'20:40',antal:'8 startande'}] },
+    { id:'100m-i20', namn:'100 m', klass:'dam', kat:'I-20', typ:'löp', dag:1, arena:'Bana', n:20,
+      pass:[{dag:1,typ:'Final',nar:'17:20',antal:'8 startande'}] },
+    { id:'200m-d', namn:'200 m', klass:'dam', kat:'', typ:'löp', dag:2, arena:'Bana', n:24,
+      pass:[{dag:2,typ:'Försök',nar:'12:30',antal:'3 heat'},{dag:2,typ:'Final',nar:'18:10',antal:'8 startande'}] },
+    { id:'400m-h', namn:'400 m', klass:'herr', kat:'', typ:'löp', dag:2, arena:'Bana', n:18,
+      pass:[{dag:2,typ:'Final',nar:'18:35',antal:'8 startande'}] },
+    { id:'110h-h', namn:'110 m häck', klass:'herr', kat:'', typ:'löp', dag:2, arena:'Bana', n:14,
+      pass:[{dag:2,typ:'Final',nar:'17:45',antal:'8 startande'}] },
+    { id:'800m-d', namn:'800 m', klass:'dam', kat:'', typ:'löp', dag:3, arena:'Bana', n:16,
+      pass:[{dag:3,typ:'Final',nar:'15:20',antal:'10 startande'}] },
+    { id:'langd-h', namn:'Längd', klass:'herr', kat:'', typ:'hopp', dag:1, arena:'Grop A', n:12,
+      pass:[{dag:1,typ:'Final',nar:'17:00',antal:'12 startande'}] },
+    { id:'hojd-d', namn:'Höjd', klass:'dam', kat:'', typ:'hopp', dag:2, arena:'Matta', n:15,
+      pass:[{dag:2,typ:'Final',nar:'16:00',antal:'15 startande'}] },
+    { id:'stav-h', namn:'Stav', klass:'herr', kat:'', typ:'hopp', dag:2, arena:'Stav', n:11,
+      pass:[{dag:2,typ:'Final',nar:'16:00',antal:'11 startande'}] },
+    { id:'tre-d', namn:'Tresteg', klass:'dam', kat:'', typ:'hopp', dag:3, arena:'Grop B', n:10,
+      pass:[{dag:3,typ:'Final',nar:'14:30',antal:'10 startande'}] },
+    { id:'kula-d', namn:'Kula', klass:'dam', kat:'', typ:'kast', dag:3, arena:'Ring', n:14,
+      pass:[{dag:3,typ:'Final',nar:'14:00',antal:'14 startande'}] },
+    { id:'disk-d', namn:'Diskus', klass:'dam', kat:'', typ:'kast', dag:1, arena:'Bur', n:9,
+      pass:[{dag:1,typ:'Final',nar:'15:30',antal:'9 startande'}] },
+    { id:'disk-h', namn:'Diskus', klass:'herr', kat:'', typ:'kast', dag:1, arena:'Bur', n:11,
+      pass:[{dag:1,typ:'Final',nar:'16:10',antal:'11 startande'}] },
+    { id:'spjut-h', namn:'Spjut', klass:'herr', kat:'', typ:'kast', dag:2, arena:'Inner', n:13,
+      pass:[{dag:2,typ:'Final',nar:'19:00',antal:'13 startande'}] },
+    { id:'tio-h', namn:'Tiokamp', klass:'herr', kat:'', typ:'mångkamp', dag:1, arena:'Flera', n:16,
+      pass:[{dag:1,typ:'Grenar 1–5',nar:'10:00',antal:'16 startande'},{dag:2,typ:'Grenar 6–10',nar:'10:00',antal:'16 startande'}] },
+    { id:'sju-d', namn:'Sjukamp', klass:'dam', kat:'', typ:'mångkamp', dag:2, arena:'Flera', n:12,
+      pass:[{dag:2,typ:'Grenar 1–4',nar:'11:00',antal:'12 startande'},{dag:3,typ:'Grenar 5–7',nar:'11:00',antal:'12 startande'}] },
+  ];
+  DELT = {
+    '100m-d':[
+      { nr:'204', namn:'Wilma Ek', klubb:'Turebergs FK', h:'' },
+      { nr:'187', namn:'Nora Holm', klubb:'Malmö AI', h:'@noraholm' },
+      { nr:'212', namn:'Ida Sandström', klubb:'Ullevi FK', h:'' },
+      { nr:'176', namn:'Ellen Vik', klubb:'Hälle IF', h:'@ellen.vik' },
+      { nr:'233', namn:'Saga Berg', klubb:'Örgryte IS', h:'' },
+      { nr:'198', namn:'Moa Lund', klubb:'Spårvägens FK', h:'@moa_lund' },
+    ],
+    'langd-h':[
+      { nr:'A12', namn:'Albin Edin', klubb:'IFK Göteborg', h:'@albinedin' },
+      { nr:'A08', namn:'Hugo Palm', klubb:'Malmö AI', h:'' },
+      { nr:'A21', namn:'Melker Sjö', klubb:'Turebergs FK', h:'' },
+    ],
+  };
+  TYPLABEL = { löp:'Löpning', hopp:'Hopp', kast:'Kast', mångkamp:'Mångkamp' };
+  col(g){ return this.KLASSCOL[g.klass]; }
+  renderVals() {
+    const theme = this.props.theme ?? 'light';
+    const navBase = { display:'flex', alignItems:'center', gap:'9px', width:'100%', padding:'8px 10px', border:'none', borderRadius:'8px', fontFamily:'inherit', fontSize:'12.5px', fontWeight:600, cursor:'pointer', textAlign:'left' };
+    const nsOff = { ...navBase, background:'transparent', color:'var(--t-mut)' };
+    const nsOn = { ...navBase, background:'var(--accent-soft)', color:'var(--accent)' };
+    const ncNum = { width:'16px', height:'16px', borderRadius:'50%', border:'1.5px solid currentColor', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:'10px', flex:'none' };
+
+    const modeBtn = (on) => on
+      ? { padding:'7px 15px', border:'none', borderBottom:'2px solid var(--accent)', background:'none', fontFamily:'inherit', fontSize:'13px', fontWeight:700, color:'var(--t-head)', cursor:'pointer' }
+      : { padding:'7px 15px', border:'none', borderBottom:'2px solid transparent', background:'none', fontFamily:'inherit', fontSize:'13px', fontWeight:600, color:'var(--t-mut)', cursor:'pointer' };
+    const modes = [['grenar','Grenar & deltagare'],['program','Program']].map(([k,label])=>({
+      label, set:()=>this.setState({ mode:k }), style: modeBtn(this.state.mode===k) }));
+
+    const seg = (on) => on
+      ? { fontSize:'11px', fontWeight:600, color:'var(--t-head)', background:'var(--card)', borderRadius:'5px', padding:'4px 10px', boxShadow:'0 1px 2px rgba(0,0,0,.1)', border:'none', cursor:'pointer', fontFamily:'inherit' }
+      : { fontSize:'11px', fontWeight:500, color:'var(--t-mut)', background:'none', border:'none', borderRadius:'5px', padding:'4px 10px', cursor:'pointer', fontFamily:'inherit' };
+    const groupTabs = [['klass','Klass'],['typ','Typ'],['dag','Dag']].map(([k,label])=>({
+      label, set:()=>this.setState({ groupBy:k }), style: seg(this.state.groupBy===k) }));
+
+    const q = this.state.search.trim().toLowerCase();
+    const favN = Object.keys(this.state.fav).filter(k=>this.state.fav[k]).length;
+    let pool = this.G.filter(g => !q || g.namn.toLowerCase().includes(q));
+    if (this.state.onlyFav) pool = pool.filter(g => this.state.fav[g.id]);
+
+    const katChip = (kat) => kat
+      ? 'font-size:8.5px;font-weight:700;letter-spacing:.04em;color:var(--t-mut);background:var(--seg);border-radius:4px;padding:1px 5px;'
+      : 'display:none;';
+
+    const mkGrenRow = (g) => {
+      const sel = this.state.selGren===g.id;
+      const on = !!this.state.fav[g.id];
+      return { namn:g.namn, n:g.n, kat:g.kat, katStyle:katChip(g.kat), col:this.col(g),
+        sub: this.TYPLABEL[g.typ] + ' · dag ' + g.dag,
+        open:()=>this.setState({ selGren:g.id }),
+        row:{ display:'flex', alignItems:'center', gap:'9px', padding:'6px 6px', borderRadius:'8px', cursor:'pointer',
+          background: sel?'var(--accent-soft)':'transparent', border:'1px solid '+(sel?'var(--accent-softborder)':'transparent') },
+        star:(e)=>{ e.stopPropagation(); this.setState(s=>({ fav:{ ...s.fav, [g.id]:!s.fav[g.id] } })); },
+        starStyle:'font-size:14px;flex:none;cursor:pointer;color:'+(on?'var(--accent)':'var(--t-help)')+';opacity:'+(on?1:.45)+';',
+      };
+    };
+
+    let groups = [];
+    if (this.state.groupBy==='klass') {
+      groups = [['dam','Dam'],['herr','Herr'],['mixed','Mixed']].map(([k,label])=>{
+        const arr = pool.filter(g=>g.klass===k);
+        return arr.length?{ label, count:arr.length+' grenar', edge:'width:4px;height:13px;border-radius:2px;background:'+this.KLASSCOL[k]+';flex:none;', grenar:arr.map(mkGrenRow) }:null;
+      }).filter(Boolean);
+    } else if (this.state.groupBy==='typ') {
+      groups = [['löp','Löpning'],['hopp','Hopp'],['kast','Kast'],['mångkamp','Mångkamp']].map(([k,label])=>{
+        const arr = pool.filter(g=>g.typ===k);
+        return arr.length?{ label, count:arr.length+' grenar', edge:'display:none;', grenar:arr.map(mkGrenRow) }:null;
+      }).filter(Boolean);
+    } else {
+      groups = [1,2,3].map(d=>{
+        const arr = pool.filter(g=>g.dag===d);
+        return arr.length?{ label:'Dag '+d, count:arr.length+' grenar', edge:'display:none;', grenar:arr.map(mkGrenRow) }:null;
+      }).filter(Boolean);
+    }
+
+    // gren-detalj
+    const G = this.G.find(g=>g.id===this.state.selGren) || this.G[0];
+    const dl = this.DELT[G.id] || [];
+    const withH = dl.filter(p=>p.h).length;
+    const d = {
+      namn:G.namn, kat:G.kat, katStyle:katChip(G.kat), col:this.col(G), n:G.n,
+      klassText: G.klass==='dam'?'damklass':(G.klass==='herr'?'herrklass':'mixed'),
+      passText: G.pass.length+' pass',
+      pass:G.pass.map(p=>({ typ:p.typ, nar:(p.dag!==G.dag?('dag '+p.dag+' '):'')+p.nar, antal:p.antal })),
+      handleText: dl.length? (withH+' av '+dl.length+' visade har @') : 'importeras',
+      deltagare: dl.map(p=>({ nr:p.nr, namn:p.namn, klubb:p.klubb, h:p.h||'saknar @',
+        init:p.namn.split(' ').map(w=>w[0]).join('').slice(0,2),
+        initStyle:{ width:'24px', height:'24px', borderRadius:'50%', background:'var(--seg)', color:'var(--t-body)', fontSize:'10px', fontWeight:700, display:'inline-flex', alignItems:'center', justifyContent:'center', flex:'none' },
+        hStyle: p.h ? 'font-size:11px;font-weight:600;color:var(--accent);flex:none;' : 'font-size:9.5px;font-weight:700;color:var(--t-help);border:1px dashed var(--field-border);border-radius:5px;padding:1px 6px;flex:none;' })),
+      merDeltagare: G.n > dl.length,
+      star:()=>this.setState(s=>({ fav:{ ...s.fav, [G.id]:!s.fav[G.id] } })),
+      starBtn: (this.state.fav[G.id]
+        ? 'background:var(--accent-soft);border:1px solid var(--accent-softborder);color:var(--accent);'
+        : 'background:none;border:1px solid var(--field-border);color:var(--t-mut);')
+        + 'border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;flex:none;align-self:flex-start;',
+      starLabel: this.state.fav[G.id]?'Favorit':'Markera',
+    };
+
+    // program
+    const dayTabs = [1,2,3].map(dn=>({ label:'Dag '+dn, set:()=>this.setState({ day:dn }),
+      style: seg(this.state.day===dn) }));
+    let prog = [];
+    this.G.forEach(g => g.pass.forEach(p => { if (p.dag===this.state.day) prog.push({
+      tid:p.nar, gren:g.namn, kat:g.kat, typ:p.typ, antal:p.antal, arena:g.arena, col:this.col(g), fav:!!this.state.fav[g.id] }); }));
+    if (this.state.onlyFav) prog = prog.filter(p=>p.fav);
+    prog.sort((a,b)=>a.tid.localeCompare(b.tid));
+    const program = prog.map((p,i)=>({ tid:p.tid, gren:p.gren, kat:p.kat, katStyle:katChip(p.kat), typ:p.typ, antal:p.antal, arena:p.arena, col:p.col,
+      lineHide: i===prog.length-1?'background:transparent;':'',
+      favMark: p.fav?'font-size:13px;color:var(--accent);flex:none;':'display:none;' }));
+
+    return {
+      theme, nsOff, nsOn, ncNum, modes,
+      isGrenar:this.state.mode==='grenar', isProgram:this.state.mode==='program',
+      search:this.state.search, setSearch:(e)=>this.setState({ search:e.target.value }),
+      groupTabs, groups,
+      favCount:favN, togFav:()=>this.setState(s=>({ onlyFav:!s.onlyFav })),
+      favFilterStyle: (this.state.onlyFav
+        ? 'background:var(--accent-soft);border:1px solid var(--accent-softborder);color:var(--accent);'
+        : 'background:var(--field);border:1px solid var(--field-border);color:var(--t-mut);')
+        + 'border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;',
+      d,
+      dayTabs, program,
+      progLead: (this.state.onlyFav? favN+' favoritgrenar' : prog.length+' deltillfällen') + ' · dag '+this.state.day+' · tidsaxel',
+    };
+  }
+}
+</script>
+</body>
+</html>

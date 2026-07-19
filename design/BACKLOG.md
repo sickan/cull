@@ -18,6 +18,12 @@ uppdaterad till v4.*
 
 **KVÄLLENS SLUT 19/7 00:5x — allt committat+pushat i alla tre repon.** Utöver ovan: §10 skiva 3 (v36) · kategorifacit Sport/Landskap/Människor/Film + underkategorier (v37) · BUG-DEPLOY-01 (byggfelet var CF:s byggkö, sajten omkörd och live) · kopiera-knappar för Claude-texterna i Publicera. **Stigs kö:** DPT2-omstart (plockar v37) · verifiera ⌘C-vägen i kopiera-knapparna (bara fallbacken är bevisad) · B-012 skiva 3 (Z8-receptet) · M18-8 (vilken yta har gradienten?).
 
+**VECKOPRIO (Stig 19/7 kväll — NY): ① Mästerskap · ② Lag & Utövare · ③ iOS v2 (ny startskärm + ny widget).** Underlaget är Designs
+19/7-leverans (`Dalecarlia Photo Tools version 5 iOS version 2.zip`, insynkad i
+`design_handoff_eventmodell_v5/`). Se **sektion C12** (D12-svaret: Mästerskap +
+Lag & Utövare) och **sektion C-iOS** (widget/låsskärm, signatur, färgsystem,
+jobbdetalj). Allt annat i C/V5 fortsätter som löpande merge.
+
 **Stigs prio-signaler (16 jul):** ① buggar generellt först — särskilt att
 Innehåll inte känns robust (= dubbletterna/publiceringskedjan) · ② iOS
 trupp/startelvor inför FOTBOLLSHELGEN · ③ tennis under veckan · ④ B-003
@@ -65,7 +71,7 @@ röst→action är LÅG prio.
 | IPTC | Leverera fas 3: IPTC-bildtexter | Sparad sedan tidigare |
 | C-försl | Beslut om C-förslagen (design/C-FORSLAG.md) | Stig-beslut |
 | FEAT-14 | **EPIC: Ackrediteringssvar → DPT2** (svarsmail blir förslag Beviljad/Nekad + notering i appen) | Handoff §8 senare-fas; skivor nedan |
-| V2-01 | Versionsvisning i ALLA appar (bokstaverat namn "två punkt ett" synligt + tekniskt byggnr under Om/Inställningar) | v2 §1 · litet, tre kodbaser |
+| V2-01 | Versionsvisning i ALLA appar (bokstaverat namn synligt + tekniskt byggnr under Om/Inställningar) | ✅ **KLAR 19/7** (dpt `537d69d` DPT5 · ios `d0be161` v2 — "plisten som aldrig lyssnade"). Sajten kvar |
 | V2-02 | Väderväxling "där jag är" ↔ "dit jag ska" | ✅ **KLAR 18/7** (ios `d5d6ac0`, INSTALLERAD): tap på väderremsan växlar GPS ↔ arenan (nästa match/deltillfälle), samma tidsspann; "DIT JAG SKA"-etikett + växlingspil. Destinationsväder vid deltillfälle (V5 §4) fanns redan i cirkeln (arena + deltillfälletid) |
 | V2-10 | Leveranskrav per uppdragsgivare sparas + visas i publiceringsflödet (ex CEV: 30 JPG, 2500×1500, ≤7 MB, efter set 1) | v2 §10 |
 | V2-12 | Utrustningspackning: packmallar per eventtyp → packlista vid planering | v2 §12 · matas av V2-06-noteringar |
@@ -142,6 +148,143 @@ visar riktiga server-renderade Horisont-bilden.*
 | V5-E | Steg E — hemsidans eventsida | **SKIVA 1 KLAR 18/7 natt** (sajt `73d6cb6` → Pages-deploy + dpt `d54a9d4`): sporteventsidan uppgraderad — PROGRAM per dag (spelade ur matchartiklar m resultat+"Se bilderna →", kommande ur pagang m tid+Kommande-chip, gren-stapel i låsta paletten), statusrad "Pågår · dag X av Y" ur pagang-perioden, "Del av {event}" på På gång-korten är nu LÄNK till eventsidan (del_av_slug). Byggd+verifierad (EL: fredag 12 juni · Litauen–Sverige · 0-3). **REST ✅ KLAR 18/7** (sajt `1f62fc9` + dpt `26e7863`): gren-filterchips (visas vid blandade grenar, DOM-filter m dagdöljning) · "Del av {event} →"-badge + rond i hero på matchARTIKELSIDAN (`_berika_matchkontext`: del_av/del_av_slug/rond ur matchraden) · fas-etikett per dag ur matchernas rond + "i dag"-markering. OBS: länken förutsätter att sporteventets titel = eventets namn (slug-join) | §7 |
 | V5-UX | **Etapp 2–4 UX-lyftet**: **§10 SKIVA 1+2+3 KLARA 18/7** (kö `204aa6a` + momentkort kväll): momentkortet i Publicera (✓ ur some_material, nästa i accent, sportprofilens ord; Landskap/Människor/Film-mallar definierade) · **SKIVA 3 (`1c90ce8`, schema v36):** mallarna KOPPLADE — `moment_status(match_id, jobb_id, kategori)` ger jobbmall ur kategorin, some_material/publicera_material fick `jobb_id` (✓-status för icke-matchjobb), momentremsan syns i Fotojobb-kortet, Människors "Leverans klar" bara vid `some:true`-flagga. **KATEGORIFACIT (Stig 18/7 kväll, `520ddb5` schema v37):** kategorierna är **Sport · Landskap · Människor · Film** — Event/Övrigt var fel och går inte längre att välja (färgerna kvar för historiska jobb). **Människor har underkategorier** (Porträtt, Student, Bröllop m.fl.) i eget fält, lokal tabell `fotojobb_underkategori`, datalist-förslag + fritext som växer med Stigs ord; underkategorin delar momentmall. **Blogg** är en innehållstyp i Innehåll-panelen, inte ett fotojobb · kön — v35 `publiceras`-fält, schemafält vid Spara utkast, kön sorterar schemalagda överst m "Dags att publicera"-puls när tiden passerat (manuell påminnelse per handoffen; momentmallar per kategori = nästa skiva, kräver jobbkontext i panelen) · **§8 ✅ KLAR 18/7** (`8692312` main): "Aktivt jobb"-chip+remsa, "Efter jobb", "Publicera", Träna ur nav · **§9 RAM KLAR 18/7** (samma commit): stegindikator Mål→Kör→Granska, profilkort (4 profiler m signal-chips, förval ur jobbet, `profil` följer med cull-config åt CULL-02), Träna→Inställningar-rad (inbäddad panel). **§9-rest:** tyst träning kräver per-bild Behåll/Släng-UI i granskningen (finns ej ännu — egen skiva, hänger ihop m Leverera-urvalsvyn) · §10 momentmallar per kategori (Landskap: Ny serie/Platsen/Bakom kulisserna/Blogg-puff; Människor: Tjuvkik/Leverans klar ENDAST vid jobb-flagga `some:true`; Film: Ny film/Stillbilder/Bakom kameran) + publiceringskö m schemaläggning (`publiceras:`) · §11 Innehåll: "Att granska"-remsa + Film-typ i typ-naven · §13 ★ iOS-bakgrund flaggas i Leverera · §14 iOS Hem per jobbtyp (landskaps-/människojobb: blå/gyllene timmen, schema ur jobbet) | varje § separat mergebar; §10 ↔ V2-13 statistik · §10 some-flaggan ↔ V2-KUND · kategorifärger topp: Sport `#2F7CB0` · Landskap `#C9871F` · Människor `#C9657F` · Film `#8A6FB0` |
 
+## C19 · Levererat 19/7 (v5 §8 + D11/D11b) — grunden C12 vilar på
+
+*Skrevs in 19/7 kväll. Detta ÄR byggt och SM-testat — behandla som facit när
+D12/iOS v2 byggs ovanpå.*
+
+| ID | Vad | Commit |
+|----|-----|--------|
+| V5-§8 | **Pass på gren + härlett dagsprogram** (schema **v38**) — gren bär `pass[{namn,datum,tid,plats}]`, programmet härleds (pass + tidsatta matcher + hållpunkter), aldrig lagrat | dpt `b8dd96b` |
+| V5-§8-S2/S3 | Läs in tidsprogram + startlista via inklistring · Program-kortet i Event (tidslinje per dag, vem + handle) | `55c6ef0` · `fc87c87` |
+| V5-§8-S4/PDF | Arrangörens PDF med kolumnlayout + klass på grenen (schema **v39**) · programmet med vem+handle ut i paketen | `bdd9eb1` · `a2c1b0a` |
+| V5-§8-S5 | **iOS läser programmet** — Dagens deltillfällen med vem + handle | ios `46edbbd` (+ fix `9386fb2` programmet läckte till ALLA jobb) |
+| C8–C10 | **Import-unifiering "Läs in…"** + **Utövare-registret** (schema **v40**) — en väg in, dokumenttypsgissning, avvikelsegranskning | dpt `c2fc84d` |
+| D11b §1 | "Event" ur alla UI-strängar → **Tävlingar** · EN tävlings-editor (Tävlingar äger ligor, *Lag & ligor* → **Lag**) | `e3eefd3` · `6fde86c` |
+| D11b §2 | **Utövare-sida** + nav-post | `4398b0b` |
+| D11b §4 | **Synk-märket** ("Skicka till telefonen" borta) + **⌘K global sökning** | `9ffe62a` |
+| D11 E13–E18 | **Fältflödet i iOS** — pass → vinnare → resultat → SoMe ur Jobbdetalj; CTA formas efter grentyp | ios `8041974`, `7ff73ac`, build 8→9 `a29944b` |
+| iOS-fav | **Favoritgrenar på mobilen** — fokuserar Dagens deltillfällen per sport, nycklat på gren+klass | ios `3c01157`, `e6cbcf1` |
+| M18-8 | Lagbrickan åt upp märket — roten var **masken**, inte gradienten | `3aec9c8` |
+| V2-01 | Versionsvisning DPT5 (en sanning, bokstaverad) + iOS v2 | `537d69d` · ios `d0be161` |
+| Fixar | "100m"≠"100 m" → en gren · startlistan satte ingen klass · färskare källa rättar stavning · dam-deltagare på herr-gren flyttas · ligamatcher bar hela seriesäsongen som dagsprogram · PDF-läsningen säger vad som är fel | `a9f4959` `55042a1` `9c4c8b6` `3f5bf8c` `5b0a91c` |
+
+## C12 · PRIO ① + ② — Mästerskap · Lag & Utövare (Design-svar D12, 19/7)
+
+*Källa: `design_handoff_eventmodell_v5/HANDOFF-D12-SVAR-tavlingar-storskala.md`
++ mockups `DPT v5 - Mästerskap.dc.html`, `DPT v5 - Lag & Utövare.dc.html`,
+`DPT v5 - Utövare.dc.html`. **Design är tydlig: ingen datamodell-ändring krävs
+— ren presentation/UX.** Bakgrund: Friidrotts-SM 2026 = 79 grenar · 845 starter
+· 37 deltillfällen/dag · 100 m har 47 deltagare → dagens detaljvy kollapsar.*
+
+**Grundgreppet:** en tävling renderas efter **skala, inte typ**. Liten (≤ ~8
+grenar) → befintlig kort-stapel, rör den inte. Stort mästerskap/flergrens →
+**arbetsyta** (grenar som navigator → gren-detalj). Skidåkning faller in i
+samma form. Tröskeln är en gräns i koden, inget val Stig gör.
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| M-1 | **Registersammanslagning + delad editor** (`DPT v5 - Lag & Utövare`) — ETT register, *Slag*-växel Utövare\|Lag som byter formulär. **Utövare:** Porträtt · Namn · Klubb · Klass (personens egen) · @-konto · Anteckning. **Lag:** Lagnamn · Förening · Ställfärger · Trupp · Arkivera (matchspråket hör hemma HÄR). **BORT från utövaren** (mockupen visar dem överstrukna): profilfärg · ställfärger · "Arkiverat — matcher påverkas inte" · flat tävling-chip | **Blockerar M-2 och M-6.** Registerlistan: filterchips Alla/Utövare/Lag, utövar-avatar m klass-färgkant, lag-avatar m 50/50 ställfärgs-gradient |
+| M-2 | **Gren-först deltagarkoppling** — `disciplin_deltagare` blir ENDA kopplingen person↔tävling. Sektionen *"Tävlar i"* på utövaren är **härledd** (gren m egen färgkant + "Del av {tävling}") och driver Kommande starter. Den flata tävling-chippen tas bort | Löser klass-krocken (fråga 8): **personens** klass bor på personen, **tävlingens/grenens** klass bor på grenen |
+| M-3 | **Mästerskaps-arbetsytan, läge *Grenar & deltagare*** — vänster navigator (322 px) m fri sök + växlingsbar **GRUPPERA: Klass (default) · Typ (löp/hopp/kast/mångkamp) · Dag** + **★-filter**. Gren-rad: klass-färgkant · namn · kat-chip · `Typ · dag N` · deltagarantal · ★. Höger gren-detalj: rubrik m klasstext + "Del av {tävling}", **PASS-kort** (passtyp · tid · antal, `+ Pass`), **DELTAGARE I {gren}** m sök "Lägg till utövare ur registret", startnummer, @-status per rad (`@handle` i accent / dashed "saknar @"), `N av M har @`, "Visa alla N" | **Kat (I-20, R, S-klass, para) = neutral grå TEXTCHIP, aldrig färg** — paletten är låst till kön. Det är så dam/herr-"Diskus" slutar se ut som dubbletter |
+| M-4 | **Mästerskaps-arbetsytan, läge *Program*** — dagflikar (Dag 1/2/3) + **tidsaxel** (tid i 56 px vänsterkolumn, prick i klassfärg, kort m 3 px klass-vänsterkant) i stället för platt 37-radslista + toggle **★ Bara favoritgrenar** | Samma favoritfokus som mobilen (byggd, `3c01157`) — överblick + fokus i en vy |
+| M-5 | **Adaptiv växling liten↔stor** — tröskellogik i koden | ⛔ **Kräver Stigs svar:** var går gränsen (grenantal? deltagarantal?) eller alltid arbetsyta för typ Mästerskap? |
+| M-6 | **Utövarsidan omtänkt** (`DPT v5 - Utövare`) — profil m klass-färgkant + **inline @-fält** ("sätts en gång — fältflödet taggar automatiskt sen", ✓ *bär till fältet*), fyra nyckeltal (starter · tävlingar · bilder · persrekord i accent), **Kommande starter** (härledda pass), **Historik** (härledd tidslinje, **medalj = accent-prick + accent-resultat**), **Bilder & jobb** (3-kolumnsgrid, klick → jobbet), "Nås ifrån"-pills | Sidan FINNS (`4398b0b`) men byggdes före D12 → omtag ihop m M-1/M-2. **Datakrav:** `disciplin_deltagare` måste bära **resultat per start** + medaljflagga, `tavling.ort/datum`; persrekord härleds; bildtaggning person→bild→jobb krävs för Bilder & jobb |
+| M-7 | **Favoritmarkering per gren behöver persistens** (per tävling) — bara klient-state i mockupen, men M-3 och M-4 vilar båda på den | Litet, men gör det före M-3/M-4 |
+| M-8 | Nav-varianten: mockuparna spretar — `Lag & Utövare` som EN post (D12-filerna) vs `Utövare` + `Lag & ligor` (Utövare-filen). ⌘K + synk-märke ska samexistera i headern | ⛔ Stig-beslut, litet |
+| M-9 | Läs in-granskningen i samma skal-tänk (gruppera avvikelser per gren/klass, inte 845 rader) | Design: "utanför denna leverans, noteras". ⛔ Stig: nu eller vid nästa stora inläsning? |
+| M-11 | **`fotojobb.tavling_id` — D11b §3, "den viktigaste"** (ENDA obyggda punkten i D11b). Idag kopplas fotojobb↔tävling av en **tyst namnjämförelse** → tappas så fort Stig byter namn på kalenderposten. Lägg nullable-fältet, sätt **automatiskt på datum + namn-match** vid jobbskapande, men **synligt och rättbart** ("Del av {tävling}" m byt-knapp). Aldrig implicit-only. När fältet finns slutar iOS gissa via titeln | Ligger utanför D12 men blockerar "Del av"-kedjan i iOS |
+| M-10 | **iOS-delta ur D12** (byggt i `DPT iOS v2 - Jobbdetalj`): bort med **"@ N"-chippet** i Dagens deltillfällen · **varje gren tappbar → sheet m "Skapa SoMe"** (→ fältflödet) + "Öppna passet", även utan startlista/handle · klass som färgkant per rad · hållpunkter har ingen SoMe-väg | Liten iOS-skiva, hänger ihop m C-iOS nedan |
+
+**Låsta invarianter bekräftade:** klass-färgkant utan textetikett (Dam `#8E5A86`
+· Herr `#3E7C87` · Mixed `#6E8757`) · "Del av {tävling}" aldrig lösryckt ·
+programmet härlett aldrig lagrat · eventtyp = etikett utan egen färg · max två
+mättade färger per kort · DPT2:s look & feel i övrigt orörd.
+
+## C-iOS · PRIO ③ — iOS v2: ny startskärm + ny widget (Design-svar 19/7)
+
+*Källa: `HANDOFF-widget-lasskarm.md` (svar på B-009) + `HANDOFF-00-Helhet.md`
++ mockups `DPT iOS v2 - Widget & Låsskärm` · `- Event` (startskärmen) ·
+`- Jobbdetalj` · `- Signatur` · `- Färgsystem` · `- Fältflöde`.*
+
+**Design säger rakt ut: ytan Code byggde (B-009) är RÄTT.** Sex familjer, en
+snapshot, statiskt — allt behålls. Nedan är beslut på de sex öppna frågorna +
+två saker Code inte frågade om. **Fältflödet (F-skivorna i Designs förslag) är
+redan BYGGT 19/7** (ios `8041974`, `7ff73ac`, build 9) — bocka av det.
+
+**Två trådar binder ihop allt:** (1) **signatur-sigillet** — hästmärket i
+graverad ring där nedräkningen till avgång ritas som orange båge; samma märke på
+splash, hemskärm, låsskärm, widget, jobbdetalj och som "levererad"-stämpel.
+(2) **färgsystemet** — varje färg får en roll, en zon, en form.
+
+### C-iOS-W · Widgeten (B-009 fortsättning)
+
+| ID | Vad | Beroende |
+|----|-----|----------|
+| W-1 | **Q1: `accessoryCircular` → nedräkningsgauge med sigillet.** `Gauge`/`ProgressView(timerInterval:)`, ringen töms mot *åk senast*, `ÅK OM 1:02` i mitten. **Vädret UT ur cirkeln** (slutar dubbleras) | ingen ny data |
+| W-2 | **Q2: jobbnära väder** `−1h / START / +2h` ersätter fasta 08–20 på widgeten. **Dygnsrutnätet 08–20 STANNAR på Hem-vyn** i appen | väderserie i snapshot (`vaderSerie` finns, ska omtolkas jobbnära) |
+| W-3 | **Q5 tomläge + okänd arena + färskhetsstämpel.** Tomt = dagens soltider + senaste leverans ("EuroVolley levererad 22/7"), stigande detalj small→large — aldrig bara "Inget bokat". Okänd arena: raderna får INTE försvinna tyst → "Plats ej satt — lägg till i DPT för restid & väder" + dämpad platshållare. Färskhet: dimningen till 55–60 % räcker inte, lägg **`IDAG 07:01`** i dagsraden (blekt kort utan tid läses som "fel", inte "gammalt") | 2 nya snapshotfält: `senasteLeverans`, `platsOkand` |
+| W-4 | **Q4: large omflödad till 3 DÄREFTER-rader** — väder + sol komprimeras till EN rad (`☀ 04:02 · 21:50`). Ingen separat väder/sol-widget behövs | följer W-2 |
+| W-5 | **Q6: ljus/mörk som VAL** — `AppIntentConfiguration` enum "Utseende: Ljust / DPT-mörk", **standard = Ljust (A)**, två renderingsgrenar delad layout. Behåll SF Pro, ingen egen font | intent-ändring. ⚠️ Se öppen punkt (b) nedan |
+| W-6 | **Q3: LA-medvetenhet** — när Live Activityns FÖRE-kort är aktivt för jobbet ska `accessoryRectangular` **hoppa fram till nästa jobb** ("NÄSTA"). En yta = ett budskap. Ingen extension-till-extension-kommunikation | nytt fält `liveActivityAktivFor: <jobbId?>` i App Group-snapshoten |
+| W-7 | **StandBy-yta** (liggande, laddar): hästen som vattenmärke, `ÅK SENAST OM 1:02` i orange, avgång+restid, dag/ort/titel/arena/temp/soluppgång | följer W-1 |
+| W-8 | **Kategorifärg → delad App Group-resurs** (plist eller genererad Swift ur samma källa som `Theme.swift`) — de duplicerade Hav/Sol/Rosé/Film-värdena driftar isär när paletten ändras | ⚠️ klargör hex-konflikten först (punkt a) |
+
+*Oförändrat/bekräftat: sex familjer · en snapshot · statiskt · klickmålstabellen
+(large/medium multi-target, small + låsskärm single → Jobb) · "dagen först" ·
+"heldag = bara dagen" · låsskärm monokrom utan kategorifärg · hemskärm ljus.*
+
+### C-iOS-H · Ny startskärm (hemskärmen/hjälten)
+
+| ID | Vad | Beroende |
+|----|-----|----------|
+| H-1 | **Startskärmens nya uppbyggnad** (`DPT iOS v2 - Event`): sidhuvud m ordmärke + version + **synkstatus med tid** ("synkad 14:02") + litet sigill-märke · **eventbanner** (`EUROVOLLEY 2026 · DAG 3 AV 7`, arena, `Mästerskap · volleyboll · 21–27 aug`) · **HÄR I DAG**-väderremsa (fast 08/11/14/17/20 + gyllene timmen) · **NÄSTA DELTILLFÄLLE** (namn, "Del av {event} · kl X · väder vid arenan", `ÅK SENAST` + restid) · **Sikta på annan tid**-sheet | Sikta-sheeten FINNS (V5-D skiva 2, ios `465640e`) — återanvänd |
+| H-2 | **Dynamisk bakgrund ur ★-potten** — bakgrunden väljs automatiskt efter dagens kategori/sport. Kedja: **★-bild för kategorin → egen bild → standard** | ⛔ kräver **★-flagga i DPT2 Leverera/Publicera** + bildkanal till appen (delar loggor→R2-vägen). Detta är V5-D:s kvarvarande "★-bakgrundspott" |
+| H-3 | **Jobbtypsvarianter** — hemskärmen byter INNEHÅLLSBLOCK efter jobbtyp, inte layout. Landskapsvariant: `LANDSKAP · LÖRDAG`, plats, "VID SJÖN I MORGON", vind, **ljusblock** (blå timmen/gyllene/soluppgång), "1 h 22 m bilväg + 25 min vandring", `ÅK SENAST 02:08` | H-1. = V5-UX §14 |
+
+### C-iOS-J · JobbDetaljView (den Code tvingades bygga odesignad — nu ritad)
+
+| ID | Vad | Beroende |
+|----|-----|----------|
+| J-1 | **Hero + sigill.** Grundton **mörk Skagen Hav**, inte ljus systemvy; toppen tonas av kategorifärgen. Kategoribadge (prick + `SPORT · MÄSTERSKAP`), titel i Saira Condensed, undertitel (`Dag 1 av 3 · fotouppdrag`), **`Del av {event} ›` som klickbar rad — visas ALLTID när koppling finns**. Under: sigillet m orange nedräkningsring (`ÅK OM 1:02`, ringtext `· DALECARLIA PHOTO · SEDAN 2003 ·`) + tre tal **Åk senast · Restid · Start**. En vy, två dörrar (widget/låsskärm + jobblistan) | C-iOS-S1 |
+| J-2 | **Dagens deltillfällen** — tidslinje (prick + tid + namn + not), nästa = orange prick + `NÄST`-badge, ★ kvar. **Varje gren tappbar → sheet: "Skapa SoMe" (→ fältflödet) + "Öppna passet"**. **"@ N"-chippet BORT** (= M-10) | fältflödet byggt; schemapunkter byggda (`46edbbd`) |
+| J-3 | **Karta + Vid arenan + Ljuset idag** — kartkort mot arenan m pin + avstånd/restid + **Navigera** (Google Maps) + **Sätt/ändra plats**; jobbnära väder −1h/start/+2h/+4h; blå timmen · gyllene timmen · upp · ned. Okänd arena: ingen karta/restid/väder, "Sätt plats"-uppmaningen bär tomrummet | MapKit; W-2 |
+
+*Handlingar denna runda: Sätt/ändra plats + Sikta på annan tid. **Senare runda:**
+ring kontakt, öppna gallring/leverera.*
+
+### C-iOS-S · Signatursystemet + färgsystemet
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| S-1 | **Sigillkomponent** — en komponent, fyra roller: **splash** (full prakt, **ringen roterar ett varv medan jobben synkar**) · **nedräkning** (hem/jobbdetalj/widget/låsskärm; på låsskärmen stort, centrerat, **mono utan kategorifärg**) · **sidhuvudsmärke** (litet, tyst, alltid uppe till höger) · appikonen = samma märke | Bär W-1, H-1, J-1 |
+| S-2 | **Våttstämpel "LEVERERAD"** — samma sigill m ringtexten `· LEVERERAD · 22 JULI 2026 ·`, lätt lutad. Sätts när sista bilden gått till kund; syns på leverera-kvittot, jobbkortet i listan och som overlay på omslagsbilden | S-1 + leverera-flödet sätter flaggan |
+| S-3 | **Färgsystemet: fem roller, var sin zon och form.** ① **Brand** orange — enda färgen som får *agera* (knapp/ring/siffra) ② **Kategori** — prick eller tunn vänsterkant, **aldrig fyllda ytor** ③ **Gren** — kant/markör, **endast i sport**, ingen textetikett ④ **Status** — fyra fasta betydelser (synk blågrå · klar grön · väntar gul · fel röd), liten prick/pill, vinner blicken bara vid handling ⑤ **Lagfärger** — **karantän inuti lagbrickan**. Regel: **max två mättade färger per kort.** **Eventtyp tappar sin egen färg** (den återanvände grenens hex — cup delade Herr-teal, turnering delade Mixed-olive) → bara etikett, ärver kategorin | **iOS-lyftet är INTE:** DPT desktop rörs, nya hex, ny navigation. Genomförs ihop m W-8 (delad plist) |
+
+### ⚠️ Två punkter att stämma av INNAN bygge
+
+**(a) Hex-konflikt.** Färgsystem-canvasen anger kategorierna som Sport/Hav
+`#4E93C4` · Landskap/Sol `#D19A3E` · Människor/Rosé `#D07E93` · Film `#A188C4`,
+medan widget-handoffen och branch-CLAUDE anger kanonvärdena
+Sport `#2F7CB0` · Landskap `#C9871F` · Människor `#C9657F` · Film `#8A6FB0`.
+Design skriver "inga nya hex, vi justerar bara ljushet för mörkt läge" — men det
+måste bekräftas **innan den delade plisten (W-8) byggs**, annars gjuts fel
+värden i den enda källan.
+
+**(b) Q6-standardvalet.** Widgetens standard = **ljust**, medan appen i övrigt
+är mörk Skagen Hav. Det är en medveten designskillnad (hemskärm = alltid ljus),
+men värd Stigs bekräftelse.
+
+### Snapshot-delta (App Group) — samlat
+
+Nya/utökade fält som C-iOS kräver: `liveActivityAktivFor` (W-6) ·
+`senasteLeverans` (W-3) · `platsOkand` (W-3) · jobbnära väderserie i stället för
+dygnsrutnät (W-2) · soltider inkl. blå/gyllene timmen (W-3, J-3) ·
+snapshot-tidsstämpeln ska **visas** (`IDAG 07:01`), inte bara styra dimning
+(W-3) · 3 DÄREFTER-poster m titel/plats/datum/kategori (W-4) · delad färgresurs
+(W-8). *Nuläge i `Delat/JobbSnapshot.swift`: `vaderSerie`, `soluppgang`,
+`solnedgang`, `kommande[]` och `skrivenVid` finns redan — resten är nytt.*
+
 ## D · iOS
 
 | ID | Vad | Anteckning |
@@ -163,9 +306,9 @@ visar riktiga server-renderade Horisont-bilden.*
 | FEAT-iOS-04 | Systemstyrt mörkt tema | Litet (samma princip som DPT2 #25) |
 | B-012 | Kamerabrygga FTP: Z8 → telefon utan kortdrag (ersätter SPIKE-iOS-01) | **SKIVA 1+2 KLARA 18/7 kväll** (ios `df4e472`+`ec32b91`, INSTALLERAD på telefonen): FTP-motor på Network.framework (ren parser/tillståndsmaskin, atomisk STOR→importerade-hyllan, EPSV/PASV) + Kameran-segmentet i Bilder (PÅ/AV, adress stort, puls, remsa, Story av vald + Redigera i Lightroom, keep-awake) + FTP-lösen i Inställningar + **dpt://kamera**-deep-link (genväg/NFC → mottagaren PÅ). 16 nya tester; simulatorverifierad end-to-end m curl (byte-identisk fil, rätt grupp). **KVAR skiva 3:** skarpkörning m Z8 (recept §8 i planen: FTP-profil 172.20.10.1:2121, användare dpt, passivt läge PÅ, JPEG-sändning) + Vintage-preset-valideringen §6b |
 | SPIKE-iOS-02 | Översyn "Matchdata klar" | Liten, ihop med notis-flödet |
-| B-003 | Röst → transkribering → action | **LÅG prio (Stig 16 jul)** |
+| B-003 | Röst → transkribering → action | → **ABSORBERAD av K-3** (assistenten Dala, sektion K). Var LÅG prio 16 jul; lever nu vidare som Dalas kärna |
 | B-008 | iPad-spike + D3-implementation | Stigs prio 4-spår |
-| B-009 | Widgets (hem + låsskärm) | |
+| B-009 | Widgets (hem + låsskärm) | ✅ **BYGGD 19/7** (ios `8b88f79`, PUSHAD + installerad) — **Designöversynen är nu inne** (`HANDOFF-widget-lasskarm.md`): ytan är RÄTT, sex familjer/en snapshot/statiskt behålls. Fortsättningen = **C-iOS-W (W-1…W-8)** ovan |
 | B-010 | Låsskärm som startsida (Live Activity) | **SKIVA 1 ✅ KLAR 18/7** (ios `ea9cb88`, INSTALLERAD): widget-extension NEFBryggaWidgets — kompakt Island (LIVE-puls + lagkoder + ställning, klocka accent/tabular via timerInterval), expanderad + låsskärmskort (från avspark-läget per D6); LIVE-läget startar/uppdaterar, slutsignal → SLUT + 30 min kvar. **D6-REST ✅ KLAR 18/7** (ios `5d85363`, INSTALLERAD): FÖRE-läget (MATCHDAG-kort: avsparkstid, "Åk senast · N min restid" i accent, arenaväder, tidsprogress Nu→Åk→Avspark; kompakta Island räknar ner till åk senast), auto-start på matchdagen (nu ≥ åk−60min, ur Hem-restidsberäkningen), deep-link `dpt://match/<id>` → matchhubben. **Kvar:** icke-match-jobb (bröllop/porträtt-läget) + B-009-widgets (small/medium/rektangulär) |
 | B-011 | Realtid utan batteridränering (spike) | Läs-features utbrutna till iOS-läs ovan |
 
@@ -246,8 +389,87 @@ Stigs numrering. 2+4+5 är ETT klockmodul-paket.*
 | M18-4 | Tilläggstid + räkning per halvlek | ✅ **KLAR 18/7 kväll** (samma commit): Matchklocka-modellen (ren, 4 testfall) — 0–45→45+X, 2:a halvlek startar ALLTID 45:00→90→90+X, "Starta 2:a halvlek"-knapp under klockan, målminut loggas 45+2; persistad per match (appomstart-säker) |
 | M18-5 | Automatisk halvleksdetektering | ✅ **KLAR 18/7 kväll** (samma commit): `Matchklocka.auto(avspark:)` — <60 min = första, därefter andra (bas avspark+60); manuell synk vinner alltid |
 | M18-3 | Snabbredigering av mål | ✅ **KLAR 18/7 kväll** (samma commit): alla mål som tappbara chips i målflödet — tap väljer händelsen, samma minut/tillägg/straff-reglage korrigerar den (synka+spara, inget ta bort+lägg om). Målminuten förifylls dessutom ur matchklockan |
-| M18-8 | Gradienten över loggorna för kraftig — MFF-märket äts upp | Tona ner opacitet eller korta räckvidden (var? overlay-rendern eller appens brickor — verifiera vilken yta han såg) |
+| M18-8 | Gradienten över loggorna för kraftig — MFF-märket äts upp | ✅ **LÖST 19/7** (`3aec9c8`): roten var **cirkelmasken**, inte gradienten — transparent logga drogs in, saknad alfa gav ljus platta. Bröndby-filen är trasig i källan |
 | M18-9 | Automatisk HEMRESA efter match | ✅ **KLAR 18/7 em** (ios `209939b`, INSTALLERAD): "Hem: X min · Kajgatan 2B"-rad i glasarket när en match avslutats senaste ~3h och GPS ≠ hemma (>1 km); destinationen = fritt adressfält i Inställningar → Hemresa (geokodas), överstyrbar till hotell/nästa uppdrag |
+
+## K · Kalendern & assistenten "Dala" (NYTT SPÅR — källa: `~/Downloads/backlog_kalender.md`, 19/7)
+
+*Två epiker + fem features. Spåret hänger ihop: den utökade kalendern är
+underlaget, Dala är gränssnittet mot den, och Event-som-nav är vad det används
+till. **Absorberar B-003** (röst → transkribering → action) — den posten är
+Dalas kärna, inte ett eget spår längre.*
+
+### ⚠️ Arkitekturbeslut som måste tas FÖRE K-1 (den enda riktiga blockeraren)
+
+Kalendern har i dag **två medvetet åtskilda vägar**:
+
+| Väg | Scope | Ägarskap |
+|-----|-------|----------|
+| `tjanster/kalender.py` → deployad Calendar Sync-Worker | `calendar.events` (**läs+skriv**) | äger **jobbkalendern** |
+| `tjanster/privat_kalender.py` → direkt från Macen | `calendar.readonly` (**skrivskyddat**) | läser **privata kalendrar**, lagrar INGET (token i `~/.config/dpt/`, allt annat i RAM), skriver aldrig till DB eller worker |
+
+Modulens egen dokumentation säger rakt ut: *"de privata kalendrarna rörs ALDRIG
+av en skrivning"* — och att fruns delade kalender läses lokalt just för att
+inte skickas via Cloudflare. **K-1, K-4 och K-6 bryter alla mot det.** Att lägga
+aktiviteter i privat-/KH-kalendern kräver skrivscope på en yta som avsiktligt är
+skrivskyddad, och inbjudningar kräver dessutom deltagarhantering.
+
+**Vägval att besluta:** (a) utöka den **lokala** vägen till `calendar.events`
+och behålla principen "privat data lämnar aldrig Macen" — mer kod, men bevarar
+designen; (b) låta workern äga även privatkalendern — enklare, men fruns
+kalenderdata börjar passera Cloudflare. **Rekommendation: (a).** Beslutet styr
+allt annat i sektionen, så ta det först.
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| K-1 | **EPIK: Utökad kalender — hela livet, inte bara fotoföretaget.** Befintlig kalender hanterar hela vardagen, inte enbart fotojobb; skiljer på och kategoriserar aktivitetstyper (fotojobb vs privat/övrigt); kopplar mot den Google-spegling som redan finns i fotojobb-flödet | ⛔ **Blockerad av arkitekturbeslutet ovan.** Bygger på FEAT-iOS-03 (kalendervyn) + `privat_kalender.py` |
+| K-2 | **Assistenten "Dala" som genomgående persona** (hon). Arbetsnamnet är valt för **robust taligenkänning vid snabbt/otydligt tal** — två stavelser, öppna vokaler, inga närliggande svenska ord. Grund för röststyrning, kalenderdialog och framtida "companion på axeln" | Konceptbärare för K-3…K-7. Namnvalet är motiverat och bör inte ändras utan att skälet vägs in |
+| K-3 | **Röststyrt aktivitetsskapande.** Fritt tal → färdig aktivitet. Exempel: *"Dala, skapa upp ett fotojobb, fotografera Lugi handboll, klockan 18 i Sparbanken Skåne Arena på torsdag."* → titel **Lugi handboll** · kategori **Sport** (härledd) · start **torsdag 18:00** (relativt datum → faktiskt) · plats **Sparbanken Skåne Arena**. Ställer följdfrågor vid ofullständig info (sluttid, motståndare, koppla till match). **Bekräftelse före sparning** så det går att justera | **Absorberar B-003.** Samma godkänn-steg-princip som Generera-prompten och FEAT-14 skiva 3 — Claude föreslår, Stig godkänner. Kategorihärledningen ska använda kategorifacit (Sport·Landskap·Människor·Film) |
+| K-4 | **Dala väljer rätt kalender automatiskt** — jobb-kalendern · KH-kalendern · privata. Härleds ur sammanhanget (fotojobb → jobb, handbollsaktivitet → KH, övrigt → privat), **med möjlighet att korrigera** | ⛔ Arkitekturbeslutet. ⛔ Stig: **vad står "KH" för?** (handboll/Lugi — sonens lag?) Benämningen måste verifieras innan den kodas in |
+| K-5 | **Smart mötesförslag** — Dala föreslår datum/tider ur luckorna i **hela** kalendern (fotojobb + privat), undviker krockar, ger flera alternativ som lätt förmedlas vidare. Tar hänsyn till arbetstid, restid och buffertar | Krockdetekteringen FINNS redan (privata kalendrar, byggd + live) — här vänds den till att hitta luckor i stället för konflikter. **Restidsdelen kan återanvända iOS restidsmotorn.** Kräver bara läsning → **minst blockerad, bra första skiva** |
+| K-6 | **Skicka kalenderinbjudningar** till angivna personer — namn → mailadress via kontakter, läggs till som deltagare på aktiviteten | ⛔ Arkitekturbeslutet + deltagarhantering (`attendees` + `sendUpdates`). Workern har redan `calendar.events` + `gmail.send`. **Utskick till riktiga personer = samma försiktighet som ackrediteringsmailen — alltid godkänn-steg** |
+| K-7 | **EPIK: Event som nav — koppla innehåll + smart uppföljning.** Bilder, röstnoteringar och annat material kopplas till eventet; Dala levererar **sammanfattning** · **förslag på fler aktiviteter** · **noteringar** · **uppföljning/påminnelser** (efterbearbetning, leverans, ackreditering nästa gång). Eventet blir navet för innehåll, kontext och nästa steg | Bygger på K-1 + V5-eventmodellen. Överlappar **V2-06** (noteringar tvåvägs iOS↔DPT2), **V2-13** (publiceringsstatistik) och **V2-17** (matchlathunden) — samordna, bygg inte tre gånger |
+
+**Beslut redan fattat (röstnoteringar):** ljudfilen lagras **enbart för
+träningsändamål**; allt tal **transkriberas till text**, och det är
+transkriptionen som används för sammanfattning, uppföljning och event-koppling.
+
+**Föreslagen ordning:** arkitekturbeslutet → **K-5** (bara läsning, fristående
+värde, bevisar luck-logiken) → K-2/K-3 (Dala + röst→aktivitet, bekräftelsesteg)
+→ K-1 (den stora kalenderomläggningen) → K-4/K-6 → K-7.
+
+## R · Rörligt material (NYTT SPÅR — designsvar D10 inne 19/7, inget byggt)
+
+*Källa: `HANDOFF-D10-rorligt.md` + mockup `DPT v5 - Rörligt.dc.html`. Låg prio
+mot C12/C-iOS, men spåret finns nu ritat i sin helhet. **Namn:** domänen heter
+**Rörligt**, enheten **klipp** — "Film" är och förblir analog film.*
+
+**Bärande principer:** klipp beter sig som NEF:er (hittas → granskas →
+paketeras → publiceras → levereras, i samma ytor). **Allt UI visar proxyn;
+mastern stannar på Macen.** Statusspråket är D9:s (🔵🟡🟢🔴) rakt av.
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| R-1 | **Ingest + ingest-tillstånd** — EN färgprick per klipp, aldrig teknisk text: ⚪ oproxat · 🔵 proxas… (tunn progress) · 🟢 redo · 🔴 master saknas · 🟣 Resolve-export. Källglyf 📱 iPhone · 🎥 Pocket · 🎬 Resolve-mapp | Skiva 1 — allt annat vilar på den |
+| R-2 | **Snabbplock för klipp** (`#1b`) = HEMMET: rutnät av poster-JPEG:ar, hover = klippet spelar tyst, klick = väljer. Samma gest/muskelminne som stillbildens Snabbplock | Bygg FÖRE R-3 (Designs rekommendation) |
+| R-3 | **Granskningsbord** (`#1a`) = detaljen bakom dubbelklick: stor spelare, scrub, filmstrip, enkel in/ut för snabbklipp, **waveform + mute** (originalljud "O-ton · orig"). Djuptrim är alltid Resolves jobb | |
+| R-4 | **Blandade paket + async reel i plan-listan** — fotografen väljer per paket (8 bilder + 2 klipp OK). Reel-radens pågår-tillstånd **överlever panelbyte** (bor i publiceringskön, inte panelens minne); fel kan komma EFTER stängd panel → kön visar felet + "gör om". `Post n/tot` ersätts av per-rads-status | |
+| R-5 | **Grafik ovanpå rörligt** — ingen ny grafik: samma moment/tema/format-chips och samma Pillow-PNG som stillbildsstoryn. Förhandsvisning **frusen som standard**, ▶ spelar proxyn med överlägget levande. **Överläggets placering väljbar per klipp:** Hela klippet / Första 3 s / Endcard | |
+| R-6 | **Kundleverans** — R2 + signerad länk m utgångsdatum; status i `dpt.db` ("levererat 14:20, öppnat 2 ggr, utgår om 12 d"). Fotografens leveranskort (Kopiera/Förläng/Återkalla) + **kundens mörka sida m sigillet** (`<video poster>` mot R2, "Ladda ner 4K"). Ingen HLS | Delar S-1-sigillet |
+| R-7 | **Spåret där bild redan bor** — smalt spår i Leverera OCH Publicera (före plan-listan): "Rörligt · N klipp" m poster-chips + ingest-prick + "Öppna Rörligt →". Ren närvaro + genväg. **INTE en till flik i Publicera** | |
+| R-8 | **iOS: granska & godkänn på plats** — snabbklipp tas på mobilen, Stig grindar direkt efter en gren. Player + Godkänn/Förkasta + kö; proxyn laddas upp via samma background-URLSession som NEF. **Ingen trim, ingen grafik i appen.** "Duger-för" vägs mot kanalgränsen ("Reel ✓") | |
+| R-9 | **Kanalgränser — gula, informerande, ALDRIG blockerande**: IG Reel > 1:30 → "2:14 → för långt · trimma eller lägg som story" · IG Story-video > 60 s → "1:45 → 2 story-segment" · FB Reel → caption strippas på `#`/`@` | Samma anda som dagens FB-kap |
+
+**Beslut att koda in:** *Förkasta på plats = GÖM, inte radera* (mastern behålls,
+ångerbart) · *ett klipp = ett reel i MVP* (ingen söm i DPT2 — flerdelat går via
+Resolve) · *master-gapet visas diskret* ("master väntar på import", ingen röd
+larmfärg; proxy får publiceras, men **kundleverans av 4K kräver stängt gap**) ·
+*klipp kopplas till **pass om det finns**, annars jobbet/matchen* — samma regel
+som stillbild, så klippen blir sökbara per pass.
+
+**Utanför scope (bekräftat):** TikTok · animerad grafik · video på publika
+sajten (`film.astro` orörd) · HLS. Publik rörligt-sida = egen handoff senare,
+**när ingesten (R-1) står**.
 
 ## G · Spikes DPT2
 
@@ -279,6 +501,11 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 | D8 | iOS Fotojobb-kalendervy | ✅ **IMPLEMENTERAD skiva 1 17/7** (ios `99973cd`); skiva 2 = deadline/krock-datat genom bron |
 | D9 | Publiceringsstatus-språket | ✅ **SVAR INNE** (komplett spec: StatusChip, hörnbåge i statusfärg, filterchips ersätter flikarna, fel-expansion m per-kanal + Försök igen, puls vid bygge, autospar ersätter utkastknappen, färgtokens ljust/mörkt) — **publiceringskedjan v2 helt oblockerad** |
 | D10 | **Eventmodell-epiken + UX-lyftet (DPT v5 / iOS v2)** | ✅ **SVAR INNE 17/7** — komplett handoff + datamodell + 5 mockups i `design_handoff_eventmodell_v5/` → sektion C ovan; väntar implementation (egen branch, löpande merge) |
+| D10r | **Rörligt material** (video/klipp) | ✅ **SVAR INNE 19/7** (`HANDOFF-D10-rorligt.md` + mockup `DPT v5 - Rörligt.dc.html`) → **sektion R** nedan. Inget byggt |
+| D11 | Event, individer & fältflödet | ✅ **SVAR INNE + IMPLEMENTERAT 19/7** — fältflödet E13–E18 i iOS, importen C8–C10, Utövare-registret (se C19) |
+| D11b | Begrepp & navigation | ✅ **SVAR INNE + §1/§2/§4 IMPLEMENTERADE 19/7** (se C19). Kvar: `fotojobb.tavling_id` (§3) — se **M-11** |
+| D12 | **Tävlingar i stor skala + Lag & Utövare** | ✅ **SVAR INNE 19/7** (`HANDOFF-D12-SVAR-tavlingar-storskala.md` + 3 mockups) → **sektion C12** ovan. **PRIO ①+②**, väntar implementation |
+| D-widget | Widget & låsskärm (svar på B-009) + JobbDetaljView-designrunda | ✅ **SVAR INNE 19/7** → **sektion C-iOS** ovan. **PRIO ③** |
 
 ## Stig — användarsteg (inget kodande)
 
@@ -293,6 +520,23 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 - [x] ~~**V2-06:** bekräfta noterings-synk~~ — beslut 17/7: TVÅVÄGS iOS ↔ DPT2
 - [ ] **V2-08:** finslipa presskortsformuleringen (copy) när sidfoten byggs
 - [ ] Skarptesta IG Stories-delningen (V2-16) mot riktiga Instagram — appen ominstallerad, oskarpkört
+
+### Beslut som blockerar 19/7-designen (svara innan bygge)
+
+- [ ] **M-5:** var går tröskeln liten↔stor tävling — grenantal, deltagarantal, eller *alltid* arbetsyta för typ Mästerskap?
+- [ ] **M-8:** nav-varianten — `Lag & Utövare` som EN post, eller `Utövare` + `Lag & ligor` var för sig? (mockuparna spretar)
+- [ ] **M-9:** ska Läs in-granskningen byggas om i samma skala nu, eller räcker den till nästa stora inläsning?
+- [ ] **Ordvalet:** *Utövare* vs *Personer* — Design lutar åt Utövare, koden säger Utövare i dag
+- [ ] **Utövarsidan på webben** — spegla publikt under Sport i denna etapp, eller senare?
+- [ ] **C-iOS (a):** hex-konflikten — gäller kanonvärdena (`#2F7CB0` m.fl.) och färgsystem-canvasens värden är bara mörkt-läge-justering? **Måste bekräftas innan den delade färg-plisten byggs.**
+- [ ] **C-iOS (b):** widgetens standardutseende = **ljust**, fast appen i övrigt är mörk Skagen Hav — OK?
+- [ ] **M-3/fältflödet:** ska 2:a och 3:e plats alltid efterfrågas, eller bara på ditt initiativ? (mockupen: valfritt)
+
+### Beslut som blockerar kalender-/Dala-spåret (sektion K)
+
+- [ ] **Arkitekturvalet (blockerar K-1/K-4/K-6):** ska den LOKALA vägen få skrivscope (privat data lämnar aldrig Macen — min rekommendation), eller ska workern äga även privatkalendern (enklare, men fruns kalender passerar Cloudflare)?
+- [ ] **K-4:** vad står **"KH-kalendern"** för — handboll/Lugi (sonens lag) eller annat? Behöver verifieras innan det kodas in.
+- [ ] **K-2:** är arbetsnamnet **Dala** det som gäller, eller bara arbetsnamn? (valt för taligenkänning — byte har en kostnad)
 
 ## ✅ Levererat nyligen (rörligt — flyttas hit när klart)
 
