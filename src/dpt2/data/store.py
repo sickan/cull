@@ -970,6 +970,159 @@ def koppla_disciplin_deltagare(conn, disciplin_id, lag_id, pa=True):
     conn.commit()
 
 
+# ── V5 §8: pass & det härledda dagsprogrammet ────────────────────────────────
+
+def lista_pass(conn, disciplin_id):
+    """Grenens pass i tidsordning. Otidsatta pass läggs sist."""
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM pass WHERE disciplin_id=? "
+        "ORDER BY datum, COALESCE(tid,'99:99'), ordning, namn",
+        (disciplin_id,))]
+
+
+def upsert_pass(conn, disciplin_id, namn, datum, *, tid=None, plats=None,
+                id=None, ordning=None):
+    """Skapar/uppdaterar ett pass. Returnerar id (None om namn/datum saknas).
+
+    `tid` är valfri — arrangörens program listar ibland bara dagen."""
+    if not (namn or "").strip() or not (datum or "").strip() or not disciplin_id:
+        return None
+    pid = (id or "").strip() or ny_id()
+    fin = conn.execute("SELECT 1 FROM pass WHERE id=?", (pid,)).fetchone()
+    if fin is None:
+        if ordning is None:
+            ordning = conn.execute(
+                "SELECT COALESCE(MAX(ordning), -1) + 1 FROM pass "
+                "WHERE disciplin_id=?", (disciplin_id,)).fetchone()[0]
+        conn.execute(
+            "INSERT INTO pass(id,disciplin_id,namn,datum,tid,plats,ordning) "
+            "VALUES(?,?,?,?,?,?,?)",
+            (pid, disciplin_id, namn.strip(), datum.strip(),
+             (tid or "").strip() or None, (plats or "").strip() or None,
+             ordning))
+    else:
+        conn.execute(
+            "UPDATE pass SET disciplin_id=?, namn=?, datum=?, tid=?, plats=? "
+            "WHERE id=?",
+            (disciplin_id, namn.strip(), datum.strip(),
+             (tid or "").strip() or None, (plats or "").strip() or None, pid))
+        if ordning is not None:
+            conn.execute("UPDATE pass SET ordning=? WHERE id=?", (ordning, pid))
+    conn.commit()
+    return pid
+
+
+def radera_pass(conn, pass_id):
+    conn.execute("DELETE FROM pass WHERE id=?", (pass_id,))
+    conn.commit()
+
+
+def _handle(varde):
+    """Normaliserar en SoMe-handle till '@namn'. Tomt → None. Hämtarens
+    osäkerhetsmarkör '?' (spelare.handle) behålls — den betyder 'kontrollera'."""
+    h = (varde or "").strip()
+    if not h:
+        return None
+    return h if h.startswith(("@", "?")) else "@" + h
+
+
+def _pass_deltagare(conn, disciplin_id):
+    """Vilka som är med i en gren, med handle — UNIONEN av gren-kopplade
+    utövar-lag (disciplin_deltagare, dagens sanning) och individregistret.
+    Samma union som Deltagare-kortet (V5-C s1.5); här bär den även handle
+    så dagen går att tagga direkt ur programmet."""
+    ut = {}
+    for r in conn.execute(
+            "SELECT l.id, l.namn, l.klubb, l.instagram FROM lag l "
+            "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
+            "WHERE dd.disciplin_id=?", (disciplin_id,)):
+        ut[r["id"]] = {"id": r["id"], "namn": r["namn"],
+                       "klubb": r["klubb"] or "",
+                       "handle": _handle(r["instagram"])}
+    # Individregistret: grenar[] är en json-lista med disciplin-id:n.
+    rad = conn.execute("SELECT tavling_id FROM disciplin WHERE id=?",
+                       (disciplin_id,)).fetchone()
+    if rad:
+        for r in conn.execute(
+                "SELECT i.id, i.namn, i.klubb, i.instagram, ed.grenar "
+                "FROM event_deltagare ed JOIN individ i ON i.id=ed.individ_id "
+                "WHERE ed.event_id=?", (rad[0],)):
+            if disciplin_id not in json.loads(r["grenar"] or "[]"):
+                continue
+            ut.setdefault(r["id"], {"id": r["id"], "namn": r["namn"],
+                                    "klubb": r["klubb"] or "",
+                                    "handle": _handle(r["instagram"])})
+    return sorted(ut.values(), key=lambda p: p["namn"])
+
+
+def _match_deltagare(conn, match):
+    """Matchens två lag med handle (lagsportens motsvarighet till grenens
+    deltagare). Utan motståndare (heldagsevent-matchen) blir det ett lag."""
+    ut = []
+    for nyckel in ("lag_hemma_id", "lag_borta_id"):
+        if not match[nyckel]:
+            continue
+        r = conn.execute("SELECT id, namn, klubb, instagram FROM lag WHERE id=?",
+                         (match[nyckel],)).fetchone()
+        if r:
+            ut.append({"id": r["id"], "namn": r["namn"], "klubb": r["klubb"] or "",
+                       "handle": _handle(r["instagram"])})
+    return ut
+
+
+def program(conn, event_id, datum=None):
+    """Eventets dagsprogram — HÄRLETT, aldrig lagrat (V5 §8).
+
+    Slår ihop grenarnas pass och eventets tidsatta matcher, sorterar på
+    datum+tid och grupperar per dag. Ändra passets tid och programmet följer
+    med; ingen dubbellagring. Fungerar oavsett eventtyp (mästerskap med
+    grenar, cup med matcher, gala med båda) — typen är bara en etikett.
+
+    Varje rad bär `deltagare` med handle så dagens taggning finns till hands
+    där programmet läses. `datum` filtrerar till en enskild dag.
+
+    Returnerar [{datum, rader: [...]}] i datumordning.
+    """
+    rader = []
+    for r in conn.execute(
+            "SELECT p.*, d.namn AS gren, d.id AS gren_id "
+            "FROM pass p JOIN disciplin d ON d.id=p.disciplin_id "
+            "WHERE d.tavling_id=?", (event_id,)):
+        rader.append({
+            "slag": "pass", "id": r["id"], "datum": r["datum"], "tid": r["tid"],
+            "namn": r["namn"], "plats": r["plats"] or "",
+            "gren": r["gren"], "gren_id": r["gren_id"],
+            "ordning": r["ordning"],
+            "deltagare": _pass_deltagare(conn, r["gren_id"]),
+        })
+    # Matcher: eventspegeln delar id med tävlingen, därför båda nycklarna.
+    for r in conn.execute(
+            "SELECT * FROM matchen WHERE (event_id=? OR tavling_id=?) "
+            "AND datum IS NOT NULL AND datum<>''", (event_id, event_id)):
+        hemma = conn.execute("SELECT namn FROM lag WHERE id=?",
+                             (r["lag_hemma_id"],)).fetchone() if r["lag_hemma_id"] else None
+        borta = conn.execute("SELECT namn FROM lag WHERE id=?",
+                             (r["lag_borta_id"],)).fetchone() if r["lag_borta_id"] else None
+        namn = " – ".join([n["namn"] for n in (hemma, borta) if n]) or "Match"
+        rader.append({
+            "slag": "match", "id": r["id"], "datum": r["datum"], "tid": r["tid"],
+            "namn": namn, "plats": r["arena"] or "",
+            "gren": r["rond"] or "", "gren_id": None, "ordning": 0,
+            "resultat": r["resultat"] or "", "status": r["status"],
+            "deltagare": _match_deltagare(conn, r),
+        })
+    rader.sort(key=lambda x: (x["datum"], x["tid"] or "99:99", x["ordning"],
+                              x["namn"]))
+    dagar = []
+    for rad in rader:
+        if datum and rad["datum"] != datum:
+            continue
+        if not dagar or dagar[-1]["datum"] != rad["datum"]:
+            dagar.append({"datum": rad["datum"], "rader": []})
+        dagar[-1]["rader"].append(rad)
+    return dagar
+
+
 def radera_lag(conn, lag_id):
     conn.execute("DELETE FROM lag WHERE id=?", (lag_id,))
     conn.commit()

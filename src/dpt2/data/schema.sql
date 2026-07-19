@@ -194,6 +194,23 @@ CREATE TABLE disciplin_deltagare (
   PRIMARY KEY (disciplin_id, lag_id)
 );
 
+-- V5 §8: PASS — grenens tidsatta deltillfällen. Varje pass bär EGET datum+tid
+-- (kval dag 1 morgon, final dag 2 kväll), därför tid på passet och inte på
+-- grenen. Pass är valfria: en gren utan pass fungerar som förut.
+-- Eventets dagsprogram LAGRAS ALDRIG — det härleds (store.program) ur pass +
+-- tidsatta matcher. Ändra passets tid och programmet följer med.
+CREATE TABLE pass (
+  id           TEXT PRIMARY KEY,
+  disciplin_id TEXT NOT NULL REFERENCES disciplin(id) ON DELETE CASCADE,
+  namn         TEXT NOT NULL,              -- Försök · Semi · Final
+  datum        TEXT NOT NULL,              -- YYYY-MM-DD
+  tid          TEXT,                       -- HH:MM (valfri — otidsatt sist på dagen)
+  plats        TEXT,                       -- valfri (A-planen, kastburen)
+  ordning      INTEGER NOT NULL DEFAULT 0  -- tiebreak när tid saknas/krockar
+);
+CREATE INDEX idx_pass_disciplin ON pass(disciplin_id);
+CREATE INDEX idx_pass_datum ON pass(datum);
+
 CREATE TABLE spelare (
   id        TEXT PRIMARY KEY,
   lag_id    TEXT NOT NULL REFERENCES lag(id) ON DELETE CASCADE,

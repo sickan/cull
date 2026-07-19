@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 37
+SCHEMA_VERSION = 38
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -918,6 +918,22 @@ def _migrera(conn, fran_version):
         # känner bara `category` och får inte kunna radera nyansen vid synk.
         conn.execute("CREATE TABLE IF NOT EXISTS fotojobb_underkategori ("
                      "fotojobb_id TEXT PRIMARY KEY, underkategori TEXT NOT NULL)")
+    if fran_version < 38:
+        # v38 (V5 §8): pass = grenens tidsatta deltillfällen. Additivt — inga
+        # befintliga grenar rörs, pass är valfria. Dagsprogrammet härleds ur
+        # dessa + tidsatta matcher (store.program); ingen dubbellagring.
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS pass (
+          id           TEXT PRIMARY KEY,
+          disciplin_id TEXT NOT NULL REFERENCES disciplin(id) ON DELETE CASCADE,
+          namn         TEXT NOT NULL,
+          datum        TEXT NOT NULL,
+          tid          TEXT,
+          plats        TEXT,
+          ordning      INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_pass_disciplin ON pass(disciplin_id);
+        CREATE INDEX IF NOT EXISTS idx_pass_datum ON pass(datum);""")
 
 
 def _har_kolumn(conn, tabell, kolumn):

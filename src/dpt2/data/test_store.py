@@ -1149,6 +1149,116 @@ class TestMigrering(unittest.TestCase):
         self.assertEqual(c.execute("PRAGMA foreign_key_check").fetchall(), [])
 
 
+class TestPassOchProgram(unittest.TestCase):
+    """V5 §8 — pass på gren + det härledda dagsprogrammet."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.ev = store.upsert_tavling(
+            self.c, "Friidrotts-SM 2026", sport="friidrott", typ="masterskap",
+            fran="2026-07-24", till="2026-07-26", ort="Uppsala")
+        self.gren = store.upsert_disciplin(self.c, self.ev, "100 m dam",
+                                           typ="sprint")
+
+    def test_pass_sorteras_pa_tid_otidsatta_sist(self):
+        store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:10")
+        store.upsert_pass(self.c, self.gren, "Uppvärmning", "2026-07-24")
+        store.upsert_pass(self.c, self.gren, "Försök", "2026-07-24", tid="09:00")
+        namn = [p["namn"] for p in store.lista_pass(self.c, self.gren)]
+        self.assertEqual(namn, ["Försök", "Uppvärmning", "Final"])
+
+    def test_upsert_pass_kraver_namn_och_datum(self):
+        self.assertIsNone(store.upsert_pass(self.c, self.gren, "", "2026-07-24"))
+        self.assertIsNone(store.upsert_pass(self.c, self.gren, "Final", ""))
+
+    def test_upsert_pass_uppdaterar_befintligt(self):
+        pid = store.upsert_pass(self.c, self.gren, "Final", "2026-07-25",
+                                tid="19:10")
+        store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:40",
+                          id=pid)
+        pas = store.lista_pass(self.c, self.gren)
+        self.assertEqual(len(pas), 1)
+        self.assertEqual(pas[0]["tid"], "19:40")
+
+    def test_program_grupperar_per_dag_i_tidsordning(self):
+        store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:10")
+        store.upsert_pass(self.c, self.gren, "Semi", "2026-07-24", tid="14:00")
+        store.upsert_pass(self.c, self.gren, "Försök", "2026-07-24", tid="09:00")
+        dagar = store.program(self.c, self.ev)
+        self.assertEqual([d["datum"] for d in dagar],
+                         ["2026-07-24", "2026-07-25"])
+        self.assertEqual([r["namn"] for r in dagar[0]["rader"]],
+                         ["Försök", "Semi"])
+
+    def test_program_filtrerar_pa_dag(self):
+        store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:10")
+        store.upsert_pass(self.c, self.gren, "Försök", "2026-07-24", tid="09:00")
+        dagar = store.program(self.c, self.ev, datum="2026-07-25")
+        self.assertEqual(len(dagar), 1)
+        self.assertEqual(dagar[0]["rader"][0]["namn"], "Final")
+
+    def test_program_vaver_in_matcher_i_samma_tidslinje(self):
+        """Cup/mästerskap med matcher ska ligga i SAMMA program som grenpassen
+        — eventtypen är etikett, inte beteende."""
+        store.upsert_pass(self.c, self.gren, "Försök", "2026-07-24", tid="09:00")
+        store.spara_match(self.c, {
+            "lag_hemma": "Sverige", "lag_borta": "Norge", "sport": "friidrott",
+            "datum": "2026-07-24", "tid": "11:30", "tavling_id": self.ev})
+        rader = store.program(self.c, self.ev)[0]["rader"]
+        self.assertEqual([(r["slag"], r["namn"]) for r in rader],
+                         [("pass", "Försök"), ("match", "Sverige – Norge")])
+
+    def test_program_baraf_tidsatta_dagar_ingen_dubbellagring(self):
+        """Ändrad passtid slår igenom i programmet utan att något skrivs om."""
+        pid = store.upsert_pass(self.c, self.gren, "Final", "2026-07-25",
+                                tid="19:10")
+        store.upsert_pass(self.c, self.gren, "Final", "2026-07-26", tid="17:00",
+                          id=pid)
+        dagar = store.program(self.c, self.ev)
+        self.assertEqual([d["datum"] for d in dagar], ["2026-07-26"])
+
+    def test_program_bar_deltagare_med_handle(self):
+        """Vem + handle ska finnas där programmet läses — dagens taggning."""
+        lid = store.upsert_lag(self.c, "Armand Duplantis", kind="individ",
+                               sport="friidrott", instagram="mondo_duplantis")
+        store.koppla_disciplin_deltagare(self.c, self.gren, lid)
+        store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:10")
+        rad = store.program(self.c, self.ev)[0]["rader"][0]
+        self.assertEqual([(d["namn"], d["handle"]) for d in rad["deltagare"]],
+                         [("Armand Duplantis", "@mondo_duplantis")])
+
+    def test_deltagare_ar_unionen_lag_och_individregister(self):
+        lid = store.upsert_lag(self.c, "Utövarlag", kind="individ",
+                               sport="friidrott", instagram="@ur_lag")
+        store.koppla_disciplin_deltagare(self.c, self.gren, lid)
+        store.upsert_individ(self.c, "Ur registret", sport="friidrott",
+                             instagram="@ur_reg", id="i-reg")
+        store.satt_event_deltagare(self.c, self.ev, "i-reg", [self.gren])
+        store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:10")
+        rad = store.program(self.c, self.ev)[0]["rader"][0]
+        self.assertEqual(sorted(d["handle"] for d in rad["deltagare"]),
+                         ["@ur_lag", "@ur_reg"])
+
+    def test_individ_i_annan_gren_kommer_inte_med(self):
+        annan = store.upsert_disciplin(self.c, self.ev, "Höjdhopp")
+        store.upsert_individ(self.c, "Fel gren", sport="friidrott", id="i-fel")
+        store.satt_event_deltagare(self.c, self.ev, "i-fel", [annan])
+        store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:10")
+        rad = store.program(self.c, self.ev)[0]["rader"][0]
+        self.assertEqual(rad["deltagare"], [])
+
+    def test_handle_normaliseras_utan_att_ata_osakerhetsmarkoren(self):
+        self.assertEqual(store._handle("mondo"), "@mondo")
+        self.assertEqual(store._handle("@mondo"), "@mondo")
+        self.assertEqual(store._handle("?mondo"), "?mondo")
+        self.assertIsNone(store._handle("  "))
+
+    def test_pass_foljer_med_nar_grenen_raderas(self):
+        store.upsert_pass(self.c, self.gren, "Final", "2026-07-25", tid="19:10")
+        store.radera_disciplin(self.c, self.gren)
+        self.assertEqual(store.program(self.c, self.ev), [])
+
+
 class TestPubliceraMaterial(unittest.TestCase):
     def setUp(self):
         self.c = db.oppna(":memory:")
