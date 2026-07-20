@@ -2207,11 +2207,18 @@ def match_prio(hemma, borta, liga, prio=None):
 
 
 def hitta_krockar(matcher, prio=None):
-    """Krockar = flera BEVAKADE matcher (match_prio < 'bevakas ej') samma datum
-    — du kan inte vara på två ställen. matcher: dicts m lag_hemma/lag_borta (el.
-    hemma/borta/home_team…), datum (el. date), liga (el. tavling/league), tid.
-    Returnerar per krock-datum {datum, vald (högst prio), krockar (resten,
-    sorterade på prio→tid)}. Bara datum med ≥2 bevakade matcher."""
+    """Krockar = BEVAKADE matcher (match_prio < 'bevakas ej') på OLIKA ARENOR
+    samma datum — du kan inte vara på två ställen. Matcher i SAMMA hall (samma
+    hemmalag) samma dag är en DUBBELMATCH du fotar båda, inte en krock (Stig:
+    Lunds VK dam+herr efter varandra i samma hall).
+
+    matcher: dicts m lag_hemma/lag_borta (el. hemma/borta/home_team…), datum
+    (el. date), liga (el. tavling/league), tid.
+
+    Returnerar per krock-datum {datum, alternativ: [ {arena (=hemmalaget), prio
+    (bästa i bunten), matcher[]}, … sorterade på prio ], forslag: alternativ[0]}.
+    Bara datum med ≥2 ARENOR (bundtar). `forslag` = prio-listans förslag, men
+    valet är Stigs (den ena / andra / båda / importera inte)."""
     prio = BEVAKNINGSPRIO if prio is None else prio
     def falt(m, *nycklar):
         for n in nycklar:
@@ -2231,10 +2238,20 @@ def hitta_krockar(matcher, prio=None):
             {**m, "prio": rank, "hemma": hemma, "borta": borta, "liga": liga})
     ut = []
     for datum, ms in sorted(per_dag.items()):
-        if len(ms) < 2:
-            continue
-        ms.sort(key=lambda x: (x["prio"], falt(x, "tid", "kickoff") or "99:99"))
-        ut.append({"datum": datum, "vald": ms[0], "krockar": ms[1:]})
+        # Gruppera per ARENA = hemmalaget. Samma hall → en bunt (dubbelmatch).
+        per_arena = {}
+        for m in ms:
+            per_arena.setdefault(m["hemma"], []).append(m)
+        if len(per_arena) < 2:
+            continue                       # bara EN hall → ingen krock
+        alternativ = []
+        for arena, bunt in per_arena.items():
+            bunt.sort(key=lambda x: (x["prio"], falt(x, "tid", "kickoff") or "99:99"))
+            alternativ.append({"arena": arena, "prio": bunt[0]["prio"],
+                               "matcher": bunt})
+        alternativ.sort(key=lambda a: a["prio"])
+        ut.append({"datum": datum, "alternativ": alternativ,
+                   "forslag": alternativ[0]})
     return ut
 
 

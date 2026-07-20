@@ -2526,8 +2526,23 @@ class TestBevakningKrockar(unittest.TestCase):
         ]
         k = store.hitta_krockar(matcher)
         self.assertEqual(len(k), 1)
-        self.assertEqual(k[0]["vald"]["liga"], "Elitserien Damer")        # prio 1
-        self.assertEqual([m["prio"] for m in k[0]["krockar"]], [2, 3])    # H65, herr
+        # Två arenor: Lund (Lunds VK dam+herr, EN bunt) + Höör (H65).
+        self.assertEqual(len(k[0]["alternativ"]), 2)
+        forslag = k[0]["forslag"]
+        self.assertEqual(forslag["arena"], "Lunds VK")                    # prio 1
+        self.assertEqual(len(forslag["matcher"]), 2)                      # dam + herr = båda
+        self.assertEqual(k[0]["alternativ"][1]["arena"], "H65 Höör")
+
+    def test_samma_hall_dam_och_herr_ingen_krock(self):
+        # Stig: Lunds VK dam + herr i SAMMA hall efter varandra = dubbelmatch,
+        # inte en krock (samma hemmalag → samma arena).
+        matcher = [
+            {"lag_hemma": "Lunds VK", "lag_borta": "Sollentuna VK",
+             "datum": "2026-12-19", "liga": "Elitserien Damer", "tid": "16:00"},
+            {"lag_hemma": "Lunds VK", "lag_borta": "RIG Falköping",
+             "datum": "2026-12-19", "liga": "Elitserien", "tid": "18:00"},
+        ]
+        self.assertEqual(store.hitta_krockar(matcher), [])
 
     def test_krock_hk_malmo_vinner_over_ov(self):
         matcher = [
@@ -2537,7 +2552,7 @@ class TestBevakningKrockar(unittest.TestCase):
              "datum": "2026-10-09", "liga": "Handbollsligan Dam", "tid": "19:00"},
         ]
         k = store.hitta_krockar(matcher)
-        self.assertEqual(k[0]["vald"]["hemma"], "HK Malmö")               # prio 0
+        self.assertEqual(k[0]["forslag"]["arena"], "HK Malmö")            # prio 0
 
     def test_obevakad_match_ar_ingen_krock(self):
         matcher = [
