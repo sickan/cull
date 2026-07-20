@@ -2432,3 +2432,45 @@ class TestUtovareResultat(unittest.TestCase):
     def test_medalj_check_avvisar_ogiltig(self):
         with self.assertRaises(Exception):
             store.satt_disciplin_resultat(self.c, self.langd_sm, self.a, medalj="trä")
+
+
+class TestImporteraSpelschema(unittest.TestCase):
+    """F18-3: importera spelschema-JSON → liga + lag + matcher via spara_match."""
+
+    FIXTURES = [
+        {"league": "Handbollsligan", "home_team": "HK Malmö", "away_team": "LUGI HF",
+         "date": "2026-10-22", "kickoff": "19:00"},
+        {"league": "Handbollsligan", "home_team": "HK Malmö", "away_team": "Amo HK",
+         "date": "2027-02-07", "kickoff": None},              # null kickoff
+        {"league": "Handbollsligan", "home_team": "LUGI HF", "away_team": "HK Malmö",
+         "date": "2026-12-26", "kickoff": "15:00"},           # omvänd match
+        {"league": "Handbollsligan", "home_team": "", "away_team": "X",
+         "date": "2026-10-22", "kickoff": None},              # ofullständig → hoppas
+    ]
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+
+    def _lag(self):
+        return {r["namn"] for r in self.c.execute("SELECT namn FROM lag")}
+
+    def test_import_skapar_liga_lag_matcher(self):
+        r = store.importera_spelschema(self.c, self.FIXTURES, sport="handboll")
+        self.assertEqual(r, {"skapade": 3, "uppdaterade": 0, "hoppade": 1})
+        ligor = [t for t in store.lista_tavlingar(self.c) if t["namn"] == "Handbollsligan"]
+        self.assertEqual(len(ligor), 1)                       # liga inte dubblerad
+        self.assertEqual((ligor[0]["typ"], ligor[0]["sport"]), ("liga", "handboll"))
+        self.assertTrue({"HK Malmö", "LUGI HF", "Amo HK"} <= self._lag())
+
+    def test_null_kickoff_ger_tom_tid_och_handboll(self):
+        store.importera_spelschema(self.c, self.FIXTURES, sport="handboll")
+        m = self.c.execute(
+            "SELECT tid, sport FROM matchen WHERE datum='2027-02-07'").fetchone()
+        self.assertEqual((m["tid"], m["sport"]), (None, "handboll"))  # tom tid → NULL
+
+    def test_omimport_ar_idempotent(self):
+        store.importera_spelschema(self.c, self.FIXTURES, sport="handboll")
+        r2 = store.importera_spelschema(self.c, self.FIXTURES, sport="handboll")
+        self.assertEqual(r2, {"skapade": 0, "uppdaterade": 3, "hoppade": 1})
+        n = self.c.execute("SELECT COUNT(*) FROM matchen").fetchone()[0]
+        self.assertEqual(n, 3)                                # inga dubbletter

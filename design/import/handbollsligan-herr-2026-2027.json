@@ -1,0 +1,17 @@
+[
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "OV Helsingborg", "date": "2026-09-26", "kickoff": "16:00"},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "HF Karlskrona", "date": "2026-10-09", "kickoff": "19:00"},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "LUGI HF", "date": "2026-10-22", "kickoff": "19:00"},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "IFK Skövde", "date": "2026-11-01", "kickoff": "16:15"},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "Önnereds HK", "date": "2026-11-15", "kickoff": "16:15"},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "IFK Kristianstad", "date": "2026-11-29", "kickoff": "16:15"},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "Hallby HK", "date": "2026-12-20", "kickoff": "16:15"},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "Amo HK", "date": "2027-02-07", "kickoff": null},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "Alingsås HK", "date": "2027-02-19", "kickoff": null},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "Skånela IF", "date": "2027-03-02", "kickoff": null},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "HK Malmö", "away_team": "Ystads IF HF", "date": "2027-03-17", "kickoff": null},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "LUGI HF", "away_team": "HK Malmö", "date": "2026-12-26", "kickoff": "15:00"},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "LUGI HF", "away_team": "Ystads IF HF", "date": "2026-10-31", "kickoff": "16:00"},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "LUGI HF", "away_team": "OV Helsingborg", "date": "2026-11-14", "kickoff": "16:00"},
+  {"league": "Handbollsligan", "season": "2026/2027", "home_team": "LUGI HF", "away_team": "IFK Kristianstad", "date": "2027-02-12", "kickoff": null}
+]

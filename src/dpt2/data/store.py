@@ -2103,6 +2103,43 @@ def hamta_installning(conn, nyckel, default=None):
 
 
 # ── Match (normalisering ↔ rekonstruktion av inline-spelare) ─────────────────
+def importera_spelschema(conn, fixtures, *, sport):
+    """F18-3: importera ett spelschema (lista fixtures) → skapar liga + lag +
+    matcher via spara_match (som normaliserar namn→id, så lag och liga aldrig
+    dubbleras). Fält per fixture: home_team, away_team, date (ISO), kickoff
+    ('HH:MM' el. None), league.
+
+    IDEMPOTENT: en match med samma liga+hemma+borta+datum UPPDATERAS i stället
+    för att dubbleras — omimport är säker. Returnerar {skapade, uppdaterade,
+    hoppade}."""
+    skapade = uppdaterade = hoppade = 0
+    for f in fixtures:
+        hemma = (f.get("home_team") or "").strip()
+        borta = (f.get("away_team") or "").strip()
+        datum = (f.get("date") or "").strip()
+        if not (hemma and borta and datum):
+            hoppade += 1
+            continue
+        liga = (f.get("league") or "").strip()
+        befintlig = conn.execute(
+            "SELECT m.id FROM matchen m "
+            "JOIN lag h ON h.id=m.lag_hemma_id "
+            "JOIN lag b ON b.id=m.lag_borta_id "
+            "LEFT JOIN tavling t ON t.id=m.tavling_id "
+            "WHERE h.namn=? AND b.namn=? AND m.datum=? "
+            "AND (t.namn=? OR (t.namn IS NULL AND ?=''))",
+            (hemma, borta, datum, liga, liga)).fetchone()
+        match = {"lag_hemma": hemma, "lag_borta": borta, "datum": datum,
+                 "tid": (f.get("kickoff") or ""), "liga": liga, "sport": sport}
+        if befintlig:
+            match["id"] = befintlig["id"]
+            uppdaterade += 1
+        else:
+            skapade += 1
+        spara_match(conn, match)
+    return {"skapade": skapade, "uppdaterade": uppdaterade, "hoppade": hoppade}
+
+
 def spara_match(conn, match):
     """Skapar/uppdaterar en match ur ett UI-dict (inline-spelare). Normaliserar
     liga→tävling, lagnamn→lag, spelare→match_trupp. Returnerar match-id.

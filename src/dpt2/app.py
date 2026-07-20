@@ -91,6 +91,13 @@ class Api:
             self._synka_ackr_paminnelse(jid)
         return {"ok": True, "id": mid}
 
+    def importera_spelschema(self, fixtures, sport="handboll"):
+        """F18-3: bulk-importera ett spelschema (lista fixtures m home_team/
+        away_team/date/kickoff/league) → liga + lag + matcher via spara_match.
+        Idempotent (omimport uppdaterar, dubblerar aldrig). Returnerar counts."""
+        r = store.importera_spelschema(self.conn, fixtures or [], sport=sport)
+        return {"ok": True, **r}
+
     def satt_resultat(self, match_id, resultat, mellan, malskyttar):
         """Resultat-remsan (Publicera/Innehåll) — kontinuerlig, fältvis
         redigering. Se store.satt_resultat för varför den inte återanvänder
