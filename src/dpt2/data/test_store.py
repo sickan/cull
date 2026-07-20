@@ -2379,3 +2379,56 @@ class TestPlatsRegister(unittest.TestCase):
         self.assertIsNone(store.koordinat_for_plats(self.c, "Finns ej"))
         self.assertIsNone(store.koordinat_for_plats(self.c, ""))
         self.assertIsNone(store.koordinat_for_plats(self.c, None))
+
+
+class TestUtovareResultat(unittest.TestCase):
+    """M-6: resultat/placering/medalj per deltagare + härledd historik/persrekord."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.sm = store.upsert_tavling(self.c, "Friidrotts-SM 2026", sport="friidrott",
+                                       typ="masterskap", fran="2026-07-24",
+                                       till="2026-07-26", ort="Uppsala")
+        self.gm = store.upsert_tavling(self.c, "GM 2025", sport="friidrott",
+                                       typ="masterskap", fran="2025-08-01",
+                                       till="2025-08-02", ort="Malmö")
+        self.langd_sm = store.upsert_disciplin(self.c, self.sm, "Längd", typ="hoppkast")
+        self.langd_gm = store.upsert_disciplin(self.c, self.gm, "Längd", typ="hoppkast")
+        self.a = store.upsert_lag(self.c, "Khaddi Sagnia", kind="individ", gren="dam")
+        self.b = store.upsert_lag(self.c, "Tilde X", kind="individ", gren="dam")
+
+    def test_satt_och_las_resultat(self):
+        store.satt_disciplin_resultat(self.c, self.langd_sm, self.a,
+                                      resultat="6.72", placering=1, medalj="guld")
+        d = store.disciplin_deltagare(self.c, self.langd_sm)
+        self.assertEqual((d[0]["namn"], d[0]["resultat"], d[0]["placering"],
+                          d[0]["medalj"]), ("Khaddi Sagnia", "6.72", 1, "guld"))
+
+    def test_listan_rankas_pa_placering_nulls_sist(self):
+        store.koppla_disciplin_deltagare(self.c, self.langd_sm, self.a)   # oplacerad
+        store.satt_disciplin_resultat(self.c, self.langd_sm, self.b,
+                                      resultat="6.90", placering=1)
+        namn = [p["namn"] for p in store.disciplin_deltagare(self.c, self.langd_sm)]
+        self.assertEqual(namn, ["Tilde X", "Khaddi Sagnia"])   # placering 1 först
+
+    def test_historik_bar_tavlingskontext_nyast_forst(self):
+        store.satt_disciplin_resultat(self.c, self.langd_sm, self.a,
+                                      resultat="6.72", placering=1, medalj="guld")
+        store.satt_disciplin_resultat(self.c, self.langd_gm, self.a,
+                                      resultat="6.55", placering=3, medalj="brons")
+        h = store.utovare_historik(self.c, self.a)
+        self.assertEqual([x["tavling"] for x in h], ["Friidrotts-SM 2026", "GM 2025"])
+        self.assertEqual((h[0]["ort"], h[0]["medalj"]), ("Uppsala", "guld"))
+
+    def test_persrekord_valjer_basta_placering_per_gren(self):
+        store.satt_disciplin_resultat(self.c, self.langd_sm, self.a,
+                                      resultat="6.72", placering=1)
+        store.satt_disciplin_resultat(self.c, self.langd_gm, self.a,
+                                      resultat="6.55", placering=3)
+        pr = store.utovare_persrekord(self.c, self.a)
+        self.assertEqual(len(pr), 1)                 # en rad per grennamn
+        self.assertEqual((pr[0]["placering"], pr[0]["resultat"]), (1, "6.72"))
+
+    def test_medalj_check_avvisar_ogiltig(self):
+        with self.assertRaises(Exception):
+            store.satt_disciplin_resultat(self.c, self.langd_sm, self.a, medalj="trä")

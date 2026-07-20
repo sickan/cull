@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 44
+SCHEMA_VERSION = 45
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -985,6 +985,17 @@ def _migrera(conn, fran_version):
                 "  lat  REAL NOT NULL,"
                 "  lon  REAL NOT NULL"
                 ")")
+    if fran_version < 45:
+        # v45 (M-6): resultat per start på disciplin_deltagare — driver
+        # utövarsidans historik/persrekord + F20-5:s kval/final-scoring.
+        # Additiva nullable kolumner (CHECK på medalj kan inte läggas via ALTER
+        # i SQLite, så den regeln bor bara i schema.sql för nya databaser).
+        if _har_tabell(conn, "disciplin_deltagare"):
+            for kol, typ in (("resultat", "TEXT"), ("placering", "INTEGER"),
+                             ("medalj", "TEXT")):
+                if not _har_kolumn(conn, "disciplin_deltagare", kol):
+                    conn.execute(
+                        f"ALTER TABLE disciplin_deltagare ADD COLUMN {kol} {typ}")
 
 
 def _har_kolumn(conn, tabell, kolumn):

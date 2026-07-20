@@ -214,6 +214,12 @@ CREATE INDEX idx_disciplin_tavling ON disciplin(tavling_id);
 CREATE TABLE disciplin_deltagare (
   disciplin_id TEXT NOT NULL REFERENCES disciplin(id) ON DELETE CASCADE,
   lag_id       TEXT NOT NULL REFERENCES lag(id) ON DELETE CASCADE,
+  -- M-6: resultat per start. resultat = tid/längd som TEXT ("10.85", "2:03.4",
+  -- "6.72"); placering = rank (1,2,3…); medalj = 'guld'|'silver'|'brons'|NULL.
+  -- Driver utövarsidans historik/persrekord OCH F20-5:s kval/final-scoring.
+  resultat     TEXT,
+  placering    INTEGER,
+  medalj       TEXT CHECK (medalj IN ('guld','silver','brons')),
   PRIMARY KEY (disciplin_id, lag_id)
 );
 

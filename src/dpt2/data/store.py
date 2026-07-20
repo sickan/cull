@@ -1089,14 +1089,35 @@ def hamta_disciplin(conn, disciplin_id):
 
 
 def disciplin_deltagare(conn, disciplin_id):
-    """Grenens deltagare — kopplingen bor på GRENEN, inte på personen (D12)."""
+    """Grenens deltagare — kopplingen bor på GRENEN, inte på personen (D12).
+    M-6: bär resultat/placering/medalj per deltagare; sorterat på PLACERING
+    (rankade först, nulls sist) → F20-5-scoringen får listan färdigordnad."""
     ut = [dict(r) for r in conn.execute(
-        "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram FROM lag l "
+        "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, "
+        "dd.resultat, dd.placering, dd.medalj FROM lag l "
         "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
-        "WHERE dd.disciplin_id=? ORDER BY l.namn", (disciplin_id,))]
+        "WHERE dd.disciplin_id=? "
+        "ORDER BY dd.placering IS NULL, dd.placering, l.namn", (disciplin_id,))]
     for p in ut:
         p["handle"] = _handle(p.pop("instagram"))
     return ut
+
+
+def satt_disciplin_resultat(conn, disciplin_id, lag_id, *, resultat=None,
+                            placering=None, medalj=None):
+    """M-6: sätt en deltagares resultat/placering/medalj för en gren. Kräver att
+    kopplingen finns (INSERT OR IGNORE så en osparad koppling ändå tar emot
+    resultatet). medalj = 'guld'|'silver'|'brons'|None."""
+    if not (disciplin_id and lag_id):
+        return
+    conn.execute(
+        "INSERT OR IGNORE INTO disciplin_deltagare(disciplin_id,lag_id) VALUES(?,?)",
+        (disciplin_id, lag_id))
+    conn.execute(
+        "UPDATE disciplin_deltagare SET resultat=?, placering=?, medalj=? "
+        "WHERE disciplin_id=? AND lag_id=?",
+        (resultat, placering, medalj, disciplin_id, lag_id))
+    conn.commit()
 
 
 def radera_disciplin(conn, disciplin_id):
@@ -1978,6 +1999,36 @@ def utovare_starter(conn, utovare_id):
         "LEFT JOIN event e ON e.id=d.tavling_id "
         f"WHERE p.disciplin_id IN ({qm}) "
         "ORDER BY p.datum, COALESCE(p.tid,'99:99'), p.namn", tuple(disc))]
+
+
+def utovare_historik(conn, utovare_id):
+    """M-6: utövarens historik — varje start (gren + tävling) med resultat,
+    placering och medalj + tävlingskontext (ort/datum). HÄRLEDD ur
+    disciplin_deltagare + disciplin + tavling, aldrig lagrad på utövaren.
+    Sorterad nyast tävling först. Driver utövarsidans Historik-tidslinje."""
+    return [dict(r) for r in conn.execute(
+        "SELECT d.namn AS gren, d.gren AS klass, dd.resultat, dd.placering, "
+        "dd.medalj, t.namn AS tavling, t.ort, t.fran, t.till "
+        "FROM disciplin_deltagare dd "
+        "JOIN disciplin d ON d.id=dd.disciplin_id "
+        "LEFT JOIN tavling t ON t.id=d.tavling_id "
+        "WHERE dd.lag_id=? "
+        "ORDER BY COALESCE(t.fran,'') DESC, d.namn", (utovare_id,))]
+
+
+def utovare_persrekord(conn, utovare_id):
+    """M-6: personbästa per gren — HÄRLETT ur historiken. Bästa = lägsta
+    placering (1:a först); vid lika placering den senaste tävlingen. En rad per
+    grennamn. Resultatsträngen (tid/längd) är sport-specifik och jämförs INTE
+    numeriskt här — UI:t visar resultatet, placeringen rankar."""
+    bast = {}
+    for h in utovare_historik(conn, utovare_id):
+        if h["placering"] is None:
+            continue
+        nuvarande = bast.get(h["gren"])
+        if nuvarande is None or h["placering"] < nuvarande["placering"]:
+            bast[h["gren"]] = h
+    return sorted(bast.values(), key=lambda h: h["gren"])
 
 
 KATEGORI_TOPP = ("sport", "landskap", "manniskor", "film")
