@@ -50,7 +50,7 @@ röst→action är LÅG prio.
 | BUG-07 | Dubbletter under "Utkast" — version vs bugg? Gruppera eller rensa | ✅ **LÖST 17/7** (`8ee7e37`): bugg, inte versioner — nytt utkast per redigeringssession; nu deterministiskt utkast-id per post + sanering vid inläsning + publicering städar postens alla utkast |
 | BUG-08 | Dubbletter under Människor vid ompublicering | ✅ **LÖST 17/7** (`1c0abe7`): samma rot som BUG-10 (id-trådning) |
 | BUG-10 | Slug-byte vid ompublicering lämnar föräldralösa rader i live-D1 | ✅ **LÖST 17/7** (`1c0abe7`): editorn trådar innehallId för ALLA typer + reconciling publish + radering propagerar; live-D1 engångsstädad (1:1-spegel verifierad) |
-| HDA-a | Heldagsaktivitet-väljaren: synkade tävlingsjobb saknar tavling_id → inget gren·sport-suffix | Kräver ny länktabell (schema v29) för måttligt visningsvärde → föreslagen P2 |
+| HDA-a | Heldagsaktivitet-väljaren: synkade tävlingsjobb saknar gren·sport-suffix | 🔻 **P3 efter SM** (Stig 20/7). Oblockerad av **M-11** (`fotojobb.tavling_id` finns nu) → suffixet kan härledas. Litet QoL-värde; görs när någon ändå är inne i väljaren |
 | BUG-MP-01 | Matchpublicering sparade inte status/texter vid återbesök — man fick börja om | ✅ **LÖST 17/7 sen kväll** (`07fe18c`): materialet SPARADES men lästes aldrig tillbaka — laddaMatch återställer nu caption/kanaler/bildval+crop ur senaste materialraden, utkast sparar även banor, caption-läcka till färska matcher täppt, materialrad-klick öppnar matchen i Innehålls-fliken. Webbläsar-verifierad |
 | BUG-CULL-01 | Modellvalet nådde aldrig gallringen (etikett vs typnyckel) | ✅ **LÖST 17/7** (`1ff5a07` main, pushad): `_modell_typ` normaliserar UI-etikett→typnyckel (täcker gamla sparade jobb), selecten skickar typnycklar, vald-men-oladdbar modell loggas högt ("⚠ kunde inte laddas"). **SKARPVERIFIERAD av Stig 17/7 kväll** (efter omstart): "Poängsatt med modell (arkiv)" i loggen, urvalet skiljer 10/12 mot handsatta körningen på samma 117 bilder — modellen väljer på riktigt. Kvar (medvetet): Hybrid otränad (ger nu synlig ⚠-rad) + pkl_path pekar på gamla `~/.config/dpt/modeller/` (funkar, men skört — flytt vid tillfälle) |
 | BUG-CULL-02 | Handsatt poängformel är **rent fotbollsspecifik** — tennis/friidrott/övrigt gallras med fel signaler | ✅ **LÖST 18/7 kväll (SM-paketet).** `aktiva_signaler(profil, sport)` väljer signaluppsättning: lagsport (sportprofilens `squad`) = hela matchformeln (bit-identisk med arvet); individsport (friidrott/tennis/beachvolley) = bas+ögon+armar (jubel/ansträngning), boll/hemma/tröjnr/klunga/fas/väst/firande AV; brollop/portratt = bas+ögon (1× vikt); landskap = bara skärpa/exp/estetik. Profil+sport rundresar via `cull_jobb.vikter`-JSON (ingen migrering); `starta_cull` slår upp matchens sport. Vikterna i sig orörda (frysta). SM-redo: friidrottsgallring använder inte längre bollsignaler |
@@ -72,7 +72,7 @@ röst→action är LÅG prio.
 | FEAT-02 | "Featured"-markering → prio på startsidan | → **D7** (design först) |
 | FEAT-04 | Större färgklickar på jobbkorten | Småputs, code direkt |
 | FEAT-06 | Skiljelinje i dolt jobbs färg vid sportfilter | Småputs |
-| FEAT-10 | Galleri: sökvägs-UI (mindre typsnitt, `…/`-trunkering, filnamn ovanför) | Småputs |
+| FEAT-10 | Galleri: sökvägs-UI (mindre typsnitt, `…/`-trunkering, filnamn ovanför) | Småputs. Absorberar **SPIKE-07** (galleri-sökvägar) |
 | FEAT-11 | Kopiera mappsökväg-knapp i galleriet | Småputs |
 | B-004 | Enhetligt skapa/ändra-mönster (fotojobb/matcher/lag/liga) | Absorberar B-005 ("Ny" utan ändring), #26, FEAT-07-mönstret |
 | T-auto | Turnerings-autospar (tennis fas 3-rest) | Tennis-minnet |
@@ -379,7 +379,6 @@ snapshot-tidsstämpeln ska **visas** (`IDAG 07:01`), inte bara styra dimning
 | FEAT-iOS-04 | Systemstyrt mörkt tema | Litet (samma princip som DPT2 #25) |
 | B-012 | Kamerabrygga FTP: Z8 → telefon utan kortdrag (ersätter SPIKE-iOS-01) | **SKIVA 1+2 KLARA 18/7 kväll** (ios `df4e472`+`ec32b91`, INSTALLERAD på telefonen): FTP-motor på Network.framework (ren parser/tillståndsmaskin, atomisk STOR→importerade-hyllan, EPSV/PASV) + Kameran-segmentet i Bilder (PÅ/AV, adress stort, puls, remsa, Story av vald + Redigera i Lightroom, keep-awake) + FTP-lösen i Inställningar + **dpt://kamera**-deep-link (genväg/NFC → mottagaren PÅ). 16 nya tester; simulatorverifierad end-to-end m curl (byte-identisk fil, rätt grupp). **KVAR skiva 3:** skarpkörning m Z8 (recept §8 i planen: FTP-profil 172.20.10.1:2121, användare dpt, passivt läge PÅ, JPEG-sändning) + Vintage-preset-valideringen §6b |
 | SPIKE-iOS-02 | Översyn "Matchdata klar" | Liten, ihop med notis-flödet |
-| B-003 | Röst → transkribering → action | → **ABSORBERAD av K-3** (assistenten Dala, sektion K). Var LÅG prio 16 jul; lever nu vidare som Dalas kärna |
 | B-008 | iPad-spike + D3-implementation | Stigs prio 4-spår |
 | B-009 | Widgets (hem + låsskärm) | ✅ **BYGGD 19/7** (ios `8b88f79`, PUSHAD + installerad) — **Designöversynen är nu inne** (`HANDOFF-widget-lasskarm.md`): ytan är RÄTT, sex familjer/en snapshot/statiskt behålls. Fortsättningen = **C-iOS-W (W-1…W-8)** ovan |
 | B-010 | Låsskärm som startsida (Live Activity) | **SKIVA 1 ✅ KLAR 18/7** (ios `ea9cb88`, INSTALLERAD): widget-extension NEFBryggaWidgets — kompakt Island (LIVE-puls + lagkoder + ställning, klocka accent/tabular via timerInterval), expanderad + låsskärmskort (från avspark-läget per D6); LIVE-läget startar/uppdaterar, slutsignal → SLUT + 30 min kvar. **D6-REST ✅ KLAR 18/7** (ios `5d85363`, INSTALLERAD): FÖRE-läget (MATCHDAG-kort: avsparkstid, "Åk senast · N min restid" i accent, arenaväder, tidsprogress Nu→Åk→Avspark; kompakta Island räknar ner till åk senast), auto-start på matchdagen (nu ≥ åk−60min, ur Hem-restidsberäkningen), deep-link `dpt://match/<id>` → matchhubben. **Kvar:** icke-match-jobb (bröllop/porträtt-läget) + B-009-widgets (small/medium/rektangulär) |
@@ -390,10 +389,10 @@ snapshot-tidsstämpeln ska **visas** (`IDAG 07:01`), inte bara styra dimning
 | ID | Vad | Anteckning |
 |----|-----|-----------|
 | BUG-WEB-01 | Sessioner cachas under Människor i Chrome | Utred cache-headers/stale HTML |
-| FEAT-WEB-01 | Arkiv-/landningssida Ligor & Tävlingar | → **D4** |
-| FEAT-WEB-02 | Arkiv-/landningssida Matcher | → **D4** |
-| FEAT-WEB-03 | Nyhetsindikator "Sport" på startsidan | → **D4** |
-| FEAT-WEB-04 | Standardisera mörkt tema | → **D4** |
+| FEAT-WEB-01 | Arkiv-/landningssida Ligor & Tävlingar | ✅ **KLAR via D4** (LIVE 17/7) |
+| FEAT-WEB-02 | Arkiv-/landningssida Matcher | ✅ **KLAR via D4** (LIVE 17/7) |
+| FEAT-WEB-03 | Nyhetsindikator "Sport" på startsidan | ✅ **KLAR via D4** (LIVE 17/7) |
+| FEAT-WEB-04 | Standardisera mörkt tema | ✅ **KLAR via D4** (mörkt default, 17/7) |
 | B-006 | Sportsidans struktur (webb) | ✅ **HELA D4 LIVE 17/7** (sajt t.o.m. `334ef20`, dpt `536a18c`): tvåkolumn+rail+MatchRad m grenkant, Matcharkivet+Ligor-arkivet, startsidan→Astro m uppdaterad-rad, Montserrat-ordmärke, mörkt default. → D7 Featured oblockerad (index är Astro nu) |
 | W-friidrott | Verifiera att Mästerskap/kategori+Friidrott-sajtkoden är deployad | ✅ **VERIFIERAD LIVE 17/7**: Friidrott/Tävling/Ligor på /sport + Mästerskap i Ligor-arkivet — D4-deployen bar ut den gamla koden |
 | V2-04 | Mobil sport-layout: tidig liten "nästa event"-notis m ankarlänk ner till På gång-sektionen (ordningen behålls; desktop är rätt) | v2 §4 · litet, ovanpå D4-leveransen |
@@ -661,10 +660,11 @@ visar bara Dagens deltillfällen / hjälten bara nästa).*
 
 ## G · Spikes DPT2
 
-SPIKE-01 importera spelschema → absorberad av F18-3 · SPIKE-03 ML/modell-bibliotek ·
-SPIKE-04 PM-mapp · SPIKE-05 platshållare i ML-bildvyer · SPIKE-06
-push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
-(SPIKE-02 visningslogik → **D7**.)
+*RENSAD 20/7 (Stig): SPIKE-01 (importera spelschema) absorberad av F18-3 ·
+SPIKE-02 (visningslogik) av D7 · SPIKE-07 (galleri-sökvägar) inslagen i FEAT-10.
+**SPIKE-03 (ML-bibliotek), 04 (PM-mapp), 05 (ML-platshållare), 06 (push-kanaler)
+BORTTAGNA** — obsoleta (cull-stacken YOLO/MediaPipe/NIMA/CLIP byggd; push-infran
+byggd via IB-4/APNs). G-sektionen är därmed tom.*
 
 ## H · Infra/underhåll
 
