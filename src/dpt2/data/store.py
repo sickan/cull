@@ -1012,9 +1012,11 @@ def lista_discipliner(conn, tavling_id):
         # gren (dam/herr) följer med — overlayens kantfärg ska följa INDIVIDEN,
         # inte mästerskapet (SM är mixed men man tävlar i dam-/herrklass).
         d["deltagare"] = [dict(r) for r in conn.execute(
-            "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram FROM lag l "
+            "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, "
+            "dd.resultat, dd.placering, dd.medalj FROM lag l "
             "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
-            "WHERE dd.disciplin_id=? ORDER BY l.namn", (d["id"],))]
+            "WHERE dd.disciplin_id=? "
+            "ORDER BY dd.placering IS NULL, dd.placering, l.namn", (d["id"],))]
         for p in d["deltagare"]:
             p["handle"] = _handle(p.pop("instagram"))
     return rader
@@ -1210,12 +1212,16 @@ def _pass_deltagare(conn, disciplin_id):
     så dagen går att tagga direkt ur programmet."""
     ut = {}
     for r in conn.execute(
-            "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram FROM lag l "
+            "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, "
+            "dd.resultat, dd.placering, dd.medalj FROM lag l "
             "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
             "WHERE dd.disciplin_id=?", (disciplin_id,)):
         ut[r["id"]] = {"id": r["id"], "namn": r["namn"],
                        "klubb": r["klubb"] or "", "gren": r["gren"] or "",
-                       "handle": _handle(r["instagram"])}
+                       "handle": _handle(r["instagram"]),
+                       # M-6/F20-5: resultat per start följer med till fältflödet.
+                       "resultat": r["resultat"], "placering": r["placering"],
+                       "medalj": r["medalj"]}
     # Individregistret: grenar[] är en json-lista med disciplin-id:n.
     rad = conn.execute("SELECT tavling_id FROM disciplin WHERE id=?",
                        (disciplin_id,)).fetchone()
@@ -1228,7 +1234,9 @@ def _pass_deltagare(conn, disciplin_id):
                 continue
             ut.setdefault(r["id"], {"id": r["id"], "namn": r["namn"],
                                     "klubb": r["klubb"] or "", "gren": "",
-                                    "handle": _handle(r["instagram"])})
+                                    "handle": _handle(r["instagram"]),
+                                    "resultat": None, "placering": None,
+                                    "medalj": None})
     return sorted(ut.values(), key=lambda p: p["namn"])
 
 

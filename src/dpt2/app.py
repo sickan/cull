@@ -238,7 +238,10 @@ class Api:
                  "gren": d.get("gren") or "",
                  "deltagare": [{"namn": p["namn"], "klubb": p.get("klubb") or "",
                                 "gren": p.get("gren") or "",
-                                "handle": p.get("handle") or ""}
+                                "handle": p.get("handle") or "",
+                                "resultat": p.get("resultat"),
+                                "placering": p.get("placering"),
+                                "medalj": p.get("medalj")}
                                for p in d.get("deltagare", [])]}
                 for d in discipliner]},
             # V5 §8 S4: dagsprogrammet följer med — annars kan telefonen varken
@@ -264,7 +267,10 @@ class Api:
                     "resultat": r.get("resultat") or "",
                     "deltagare": [{"namn": d["namn"],
                                    "klubb": d.get("klubb") or "",
-                                   "handle": d.get("handle") or ""}
+                                   "handle": d.get("handle") or "",
+                                   "resultat": d.get("resultat"),
+                                   "placering": d.get("placering"),
+                                   "medalj": d.get("medalj")}
                                   for d in r["deltagare"]],
                 })
             ut.append({"datum": dag["datum"], "rader": rader})
