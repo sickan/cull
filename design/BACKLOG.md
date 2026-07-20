@@ -43,32 +43,42 @@ röst→action är LÅG prio.
 
 ## ⭐ PRIO-VY (grooming Stig 20/7) — enda prio-sanningen
 
-*Framgroomad post för post 20/7. Detaljer i respektive ID-rad nedan. SM = 24–26/7.*
+*Framgroomad post för post 20/7. Detaljer i respektive ID-rad nedan.*
+
+**SÄSONGS-ROADMAP (styr "efter SM"):** friidrott-SM **24–26/7** → beachvolley-SM U23
+Åhus **~27/7** → EM Volleyboll (EuroVolley) **21–28/8** → handbollsligan **~23/9** →
+volleyboll-elit **okt** → handboll-EM **dec** → handboll-VM **jan 2027**. Alla sporter
+stöds (se [[sportkalender-2026-2027]]). "Efter SM" har alltså hårda hållpunkter.
 
 **AKTIV TOPP (maskin #1, mest förbyggt):** slutför **koordinat/tavling-kedjan** —
 M-11-rest (deploy content-sync `2c90b53` + Svelte byt-knapp) + **F20-10** sätt-
 koordinat-UI i DPT2. Sen **C-iOS-K** kärnskärmarna + **W-8/S-3** färg-plisten.
 
-**P1 · FÖRE SM (24/7):**
+**P1 · FÖRE SM (24/7)** *(tjänar även beachvolley-SM ~27/7):*
 - FEAT-06 skiljelinje sportfilter · FEAT-10 galleri-sökväg · FEAT-11 kopiera
   mappsökväg *(din SM-arbetsyta i galleriet/filtret)*
 - B-012 skiva 3 — Z8-skarpkörning av kamerabryggan
 - F20-5 kval/final-scoring · F20-7 arenaväder fler datapunkter
 - *(+ installera build 14 på telefonen)*
 
-**P2 · EFTER SM:** FEAT-03 rich text ackr · B-004 enhetligt skapa/ändra (+FEAT-07)
-· FEAT-14 ackrediteringssvar-epic · FEAT-02 Featured · SP-pers snabbplock-persist
-· iOS-notis · iOS-story · iOS-lev · V2-06 noteringar · V2-04 mobil sport-notis ·
-V2-09 tjänstesektion · **M-6** Utövarsidan · **C-iOS** W-3/5/6/7 + S-2 · V2-17
-Matchlathund · Restid-epic **F20-2/3/4** · **V2-KUND** · **Dala/K** (K-5 först) ·
-F20-9 jobbkalender-kamera · CULL-03 gallra-häng (repro-kö) · GR-opencv + GR-kortrot
-(merga/stäng grenar).
+**P2 · FÖRE EUROVOLLEY (21/8):** **Restid-epic F20-2/3/4** (per-dag startpunkt/
+färdsätt/boende — tjänar varje borta-mästerskap i höst). *(Verifiera även volleyboll-
+overlay/scoring före 21/8 — ingen känd öppen post, men kolla.)*
+
+**P2 · EFTER SM (ingen hård deadline):** FEAT-03 rich text ackr · B-004 enhetligt
+skapa/ändra (+FEAT-07) · FEAT-14 ackrediteringssvar-epic · FEAT-02 Featured ·
+SP-pers snabbplock-persist · iOS-notis · iOS-story · iOS-lev · V2-06 noteringar ·
+V2-04 mobil sport-notis · V2-09 tjänstesektion · **C-iOS** W-3/5/6/7 + S-2 · V2-17
+Matchlathund · **Dala/K** (K-5 först) · F20-9 jobbkalender-kamera · CULL-03 gallra-häng
+(repro-kö) · GR-opencv + GR-kortrot (merga/stäng grenar).
 
 **P3 · LÅGT:** FEAT-01 drag-n-drop · FEAT-04 större färgklick · FEAT-08 avpublicera
-· T-auto tennis-autospar · IPTC-bildtexter · HDA-a gren·sport-suffix · FEAT-iOS-04
-mörkt tema · B-008 iPad · B-011 realtid-spike · SPIKE-iOS-02 · FEAT-iOS-02 (blockerad,
-Pillow) · V2-11 filmlogg · V2-18 nyckelspelare · V2-08 presskort/sidfot · **Rörligt (R)**
-· H-2/H-3 iOS-bakgrund/jobbtyp (blockerade av ★-flagga) · BUG-WEB-01 cache · #27 flagg-polish.
+· T-auto tennis-autospar · IPTC-bildtexter · HDA-a gren·sport-suffix · **M-6**
+Utövarsidan (friidrott-SM är nu; kan vänta) · **V2-KUND** (ingen sport-deadline) ·
+FEAT-iOS-04 mörkt tema · B-008 iPad · B-011 realtid-spike · SPIKE-iOS-02 · FEAT-iOS-02
+(blockerad, Pillow) · V2-11 filmlogg · V2-18 nyckelspelare · V2-08 presskort/sidfot ·
+**Rörligt (R)** · H-2/H-3 iOS-bakgrund/jobbtyp (blockerade av ★-flagga) · BUG-WEB-01
+cache · #27 flagg-polish.
 
 **BEHÖVER REPRO/BESLUT:** BUG-03 färgklick ej reaktivt (Stigs exakta repro, annars stäng).
 
