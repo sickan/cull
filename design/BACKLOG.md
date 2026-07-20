@@ -24,6 +24,16 @@ uppdaterad till v4.*
 Lag & Utövare) och **sektion C-iOS** (widget/låsskärm, signatur, färgsystem,
 jobbdetalj). Allt annat i C/V5 fortsätter som löpande merge.
 
+**VECKOPRIO (Stig 20/7 — STYRNING): FÄRDIGSTÄLL det vi har, inga stora nya
+förändringar denna vecka. Fokus friidrott (SM 24–26/7) + sport i stort.**
+Prioriteringsförslag i tre vågor: **Våg 0** installera det byggda men oinstallerade
+(SPORT-ORD-iOS, W-1/2/4, W-9/10, V5-D skiva 2 + DPT2-omstart t.o.m. v42) · **Våg 1**
+friidrotts-fältet korrekt (F-7 åk-senast-divergens, F-4 widgetväder, verifiera
+C19-kedjan end-to-end) · **Våg 2** härda jobb↔match↔tävling (M-11 + sport-på-jobb).
+Levererat 20/7: SPORT-ORD-iOS · widget-krav **W-9** (här-och-nu åter) + **W-10**
+(dygn överallt). Hopslagningen match+fotojobb: **SPEC skriven** (sektion MERGE),
+bygg EFTER SM.
+
 **Stigs prio-signaler (16 jul):** ① buggar generellt först — särskilt att
 Innehåll inte känns robust (= dubbletterna/publiceringskedjan) · ② iOS
 trupp/startelvor inför FOTBOLLSHELGEN · ③ tennis under veckan · ④ B-003
@@ -229,6 +239,8 @@ splash, hemskärm, låsskärm, widget, jobbdetalj och som "levererad"-stämpel.
 | W-6 | **Q3: LA-medvetenhet** — när Live Activityns FÖRE-kort är aktivt för jobbet ska `accessoryRectangular` **hoppa fram till nästa jobb** ("NÄSTA"). En yta = ett budskap. Ingen extension-till-extension-kommunikation | nytt fält `liveActivityAktivFor: <jobbId?>` i App Group-snapshoten |
 | W-7 | **StandBy-yta** (liggande, laddar): hästen som vattenmärke, `ÅK SENAST OM 1:02` i orange, avgång+restid, dag/ort/titel/arena/temp/soluppgång | följer W-1 |
 | W-8 | **Kategorifärg → delad App Group-resurs** (plist eller genererad Swift ur samma källa som `Theme.swift`) — de duplicerade Hav/Sol/Rosé/Film-värdena driftar isär när paletten ändras | ⚠️ klargör hex-konflikten först (punkt a) |
+| W-9 | **Här-och-nu-vädret ÅTER på stora widgeten** (Stig 20/7): W-2 gjorde remsan jobbnär (arenan, −1h/START/+2h) och tog bort de fem "här i dag"-segmenten vid GPS. Stig ville ha BÅDE här-och-nu OCH eventet | ✅ **KLAR 20/7** (ios, EJ committad/installerad): nytt snapshotfält `harIDagSerie` (08–20 vid ANVÄNDARENS GPS, skilt från `vaderSerie` = arenan) skrivs av `SnapshotSkrivare` via `VaderService.hamtaSerie` vid `Plats.shared.koord`. Stora widgeten (`storVy`) visar nu "HÄR I DAG"-remsa ovanpå event-remsan; eventvädret bevaras (temp+symbol+plats i hjältens header + −1h/START/+2h-remsan). DÄREFTER faller från 3→2 rader när båda remsorna finns (utrymme). 2 nya tester (209 gröna). **Öppet: layout ej visuellt verifierad** (ingen skärm här) — bekräfta att inget klipps på din systemLarge |
+| W-10 | **Dygn överallt** (Stig 20/7): "överallt där timmar visas ska det bli dagar om > ett dygn" | ✅ **KLAR 20/7** (ios, EJ installerad): huvudwidgetens tal var redan dygn-medvetet (W-7 `nedrakningsTal`, `37817a0`) men ligger **oinstallerat** på Stigs telefon → han ser fortfarande råa "100:4…". Nu även **Live Activity**-kompaktytan (`NEFBryggaWidgets` compactTrailing) dygn-medveten via samma `Nedrakningstext.arLangtBort`→`.kort` ("3 d"). Appen (`HemView`) + sigillet var redan klara. **Krav B kräver bara att den oinstallerade widgetkoden faktiskt installeras** |
 
 *Oförändrat/bekräftat: sex familjer · en snapshot · statiskt · klickmålstabellen
 (large/medium multi-target, small + låsskärm single → Jobb) · "dagen först" ·
@@ -243,7 +255,7 @@ splash, hemskärm, låsskärm, widget, jobbdetalj och som "levererad"-stämpel.
 | F-3 | **Soltiderna räknades för `Date()` i stället för jobbets dygn** — ett jobb fem dagar bort visade DAGENS soluppgång som om den vore arenans den dagen | ✅ **LÖST 19/7** (samma commit). Bifynd |
 | F-5 | **Appen och widgeten var oense om SAMMA jobb** — appens hjälte räknade mot 24 juli 08:00 ("AVSPARK OM 5 dagar", "16° prognos kl 08:00", "åk senast 00:27") medan widgeten inte fick någon tid alls | ✅ **LÖST 20/7** (ios `69bcc05`, 170 gröna, INSTALLERAD+PUSHAD): W-5 delade *siktes*-härledningen men inte **klockslags-konventionen**. `HemView` rad ~90 gav heldag 08:00 (`bySettingHour: 8`, Spec #20 sedan 16/7), snapshoten satte `malTid = nil` för heldag utan tidsatta punkter. Nu: `HemLogik.heldagStart()` = konventionen på ETT ställe (`Matchdag.start` läser den), `HemLogik.malTid()` = tidsatt deltillfälle → heldagens 08:00 → inget datum. Presentationsinvarianten orörd |
 | F-6 | **Appen och widgeten läser OLIKA objekt för samma verkliga händelse** | `HemView.kandidater` = `matcher.map(Matchdag.match)` + heldagsjobb. Hjälten sa "AVSPARK OM", vilket `toppText` bara ger när `m.heldag == false` → **appens hjälte är MATCHPAKETET** (en `Match` m avspark 08:00 + ANKOMST/UPPVÄRMNING/AVSPARK), **widgetens hjälte är `Jobb`-posten** m `heldag: true`. De konvergerar på 08:00 efter F-5, men modellerna är två. `Jobb.matchId` finns REDAN i snapshotet och skulle kunna ge widgeten matchens avspark direkt — egen post |
-| SPORT-ORD-iOS | **Hem-hjälten säger "MATCHDAG" · "AVSPARK OM" · "Till matchen →" för ett FRIIDROTTSMÄSTERSKAP** | Tre hårdkodade konstanter i `HemView.swift`: `Matchdag.etikett` (.match), `toppText` (~rad 642), och knapptexten. Ska komma ur **sportprofilens `start_moment`** — friidrott = "Start", inte "Avspark" (se SPORT-ORD i sektion B). Samma familj som handbollens `Avkast`-fix 18/7. Upptäckt på skärmbild 19/7, EJ byggt |
+| SPORT-ORD-iOS | **Hem-hjälten säger "MATCHDAG" · "AVSPARK OM" · "Till matchen →" för ett FRIIDROTTSMÄSTERSKAP** | ✅ **KLAR 20/7** (ios, EJ committad/installerad): ordet centraliserat på `Match` — `startOrd` speglar `sportprofil.start_moment` (fotboll Avspark · handboll Avkast · innebandy Nedsläpp · tennis/volleyboll/beachvolley Matchstart · friidrott Start, okänd→Avspark) + `arTavling` (individsport ELLER event). Fyra ställen i `HemView`: etiketten (MATCHDAG→**TÄVLINGSDAG** vid tävling), `toppText` ("AVSPARK OM"→**"{STARTORD} OM"**), schemaradens AVSPARK-etikett, CTA ("Till matchen →"→**"Till tävlingen →"**). Klientsidig härledning eftersom paketet ännu inte bär `start_moment` — samma mönster som `startAntal`. 1 nytt test (207 gröna). **Kvar (angränsande, EJ i denna fix):** `JobbDetaljView.tillMatchen` säger också "Till matchen" + soccerball — `Jobb` bär bara `kategori`, inte `sport`, så den kräver att sport trådas (hör ihop m H-1b/M-11). Startorden = min copy-tolkning (TÄVLINGSDAG/Till tävlingen ur appens egen Tävling-vokabulär) — säg till om annat ord önskas |
 | F-7 | ⛔ **ÖPPET: åk-senast divergerar fortfarande — samma glapp som F-5, ett lager till** | Appen sa 00:27, widgeten 04:57 för samma jobb. **Ingen av dem siktar på ANKOMST 06:00** (det är bara `start − 2 h` i schemaraden): appen räknar 08:00 − (60 framförhållning + 382 restid + 10 parkering) = 00:28 ✓, widgeten 04:57 + 452 min = **12:29** = ett deltillfälle. Roten: `Matchdag.event(j).start` ger ALLTID `heldagStart` (08:00) medan `HemLogik.malTid` (som `SnapshotSkrivare` läser) föredrar `nastaSikte`. **W-6:s test `XCTAssertEqual(malTid, Matchdag.event(jobbet).start)` håller bara när `matcher` är TOM** — med SM-programmet inläst går de isär igen. Fixen kräver att `Matchdag` bär `matcher`, vilket rör hjältens semantik + "Sikta på annan tid" → **eget jobb, smygs inte in under en renderingsfix** |
 | J-4/J-5 | **Sigillet försvann ur jobbdetaljen vid okänd arena — OCH "VALD"-brickan ljög. Samma rot.** | ✅ **LÖST 20/7** (ios `eccfa62`, INSTALLERAD+PUSHAD): **Sikta-arkets "Eget klockslag" startar sin DatePicker på `Date()`** → trycker man "Sikta" utan att röra ratten blir valet passerat i samma sekund. Beteendet föll tyst till auto (rätt), men brickan läste RÅVALET (`sikta != .auto`) och sa VALD. Samma passerade val gav `akSenast == nil`, och `JobbDetaljView.akSenast` krävde BÅDE starttid och restid → hela `sigillkort` föll till else-benet som bara var sikta-raden. **Två symptom, en kedja.** Nu: nedräkningen kräver bara en starttid; utan arena visas Start medan Åk senast/Restid får dämpade streck (samma språk som VAR-kortets "Karta — Restid — Väder —"). *Kvar (ofarligt): DatePickern startar fortfarande på `Date()` — delad yta med Hem-vyn* |
 | J-6 | Kartkortets rubrik var hela postadressen ("Uppåkra kyrka, Gamla Trelleborgsvägen 310, 245 93 Staffanstorp, Sverige" i tre rader) | ✅ **LÖST 20/7** (ios `6b16512`): `Jobbdetalj.arenalage` returnerade `jobb.plats` rakt av (kalenderns adress). Nu platsens namn som rubrik, adressen dämpad/i navigeringsmålet |
@@ -295,7 +307,7 @@ rena SVG-ikoner.
 
 | ID | Vad | Beroende |
 |----|-----|----------|
-| K-1 | **Hem — Matchdag.** Nedräkningen bor i **sigillet** (hästmärket opacity ~.13 i dubbel mässingsring, "AVSPARK OM / 5 dagar / 16° prognos · kl 08:00") — samma komponent som låsskärmens gauge, återanvänd den. Foto fyller toppen (~430 px) m mörk vinjett ned mot `#0a0d11`; header (logga + DPT + synk-chip) ligger **på** fotot i glas-pill. HÄR I DAG-kort: 5 tidpunkter 08–20 m mässings-väderikoner + restidsrad + ankomst/uppvärmning/avspark (avspark i mässing). CTA "Till matchen →" = mässings-gradient m mörk text | **S-1** (sigillkomponenten finns redan) · fotot i toppen överlappar **H-2** (★-bakgrundspotten) |
+| K-1 | **Hem — Matchdag.** Nedräkningen bor i **sigillet** (hästmärket opacity ~.13 i dubbel mässingsring, "AVSPARK OM / 5 dagar / 16° prognos · kl 08:00") — samma komponent som låsskärmens gauge, återanvänd den. Foto fyller toppen (~430 px) m mörk vinjett ned mot `#0a0d11`; header (logga + DPT + synk-chip) ligger **på** fotot i glas-pill. HÄR I DAG-kort: 5 tidpunkter 08–20 m mässings-väderikoner + restidsrad + ankomst/uppvärmning/avspark (avspark i mässing). CTA "Till matchen →" = mässings-gradient m mörk text | **S-1** (sigillkomponenten finns redan) · fotot i toppen överlappar **H-2** (★-bakgrundspotten) · ⚠️ sigillets "AVSPARK OM" + CTA:n ska läsa **`Match.startOrd`/`arTavling`** (SPORT-ORD-iOS, byggt 20/7) — hårdkoda inte om ordet i den nya tonen (friidrott = "START OM" / "Till tävlingen →") |
 | K-2 | **Bilder** (På telefonen / Kortet / Kameran). Titel i Saira Condensed, sigill-diskret rund knapp uppe till höger, segmenterad flikrad i kort-stil. **FTP-adressen `192.168.1.181:2121` i Saira Condensed mässing** — det enda man skriver av, ska sticka ut. Statuspunkt följer synksystemet (gul väntar · grön uppe · röd fel). Tomlägen: dämpad SVG-ikon + Saira Condensed-rubrik | B-012:s Kameran-segment finns redan |
 | K-3 | **Ny story.** MOMENT-rutnät: valt moment i mässings-gradient m mörk text, övriga i kort-stil; sektionsetiketter mässing-caps `.14em`. Foto- och Overlay-väljare som segmenterade kontroller i kort, LR-export-raden i mässing. **"Rendera & dela" tänds först när en fotokälla är vald** — annars nedtonad | ren presentation |
 | K-4 | **Matchdetalj.** Matchkort m **grenkant** (Damallsvenskan → Dam `#8E5A86`), arena/datum centrerat, sköldar som cirklar. **"Starta LIVE-läge" i statusrött** `#E06A5A` (fyllnad `rgba(224,106,90,.1)`) — enda röda ytan, precis som färgsystemet föreskriver. Handlingsrader m kategori-/grenfärgade SVG-ikonrutor: Publicera story (mässing ✦) · Matchtrupp (Sport-blå) · Föra matchen (Herr-teal) · Matchens bilder (Mixed-grön) | S-3 |
@@ -524,6 +536,55 @@ som stillbild, så klippen blir sökbara per pass.
 **Utanför scope (bekräftat):** TikTok · animerad grafik · video på publika
 sajten (`film.astro` orörd) · HLS. Publik rörligt-sida = egen handoff senare,
 **när ingesten (R-1) står**.
+
+## MERGE · Fotojobb som basenhet, match som facett (SPEC 20/7 — bygg EFTER SM)
+
+*Stigs observation 20/7: **det finns aldrig en match utan ett fotojobb, men
+många jobb utan match.** Alltså är jobbet den naturliga basenheten och matchen en
+valfri förlängning av det. Denna sektion är SPEC — inget byggs förrän efter
+Friidrotts-SM (24–26/7). Beslut Stig 20/7: "skriv en spec nu, bygg senare".*
+
+**Nuläge (det som skaver):**
+- `Match` och `Fotojobb` är två separata entiteter. De kopplas idag av en **tyst
+  namnjämförelse** (jobbets titel vs matchens rubrik) — ömtålig: byter Stig namn
+  på kalenderposten tappas kopplingen. M-11 (`fotojobb.tavling_id`) finns
+  uttryckligen för att den kopplingen är opålitlig.
+- **Asymmetri:** `Jobb` bär `kategori` men **inte `sport`**; `Match` bär `sport`.
+  Det är därför `JobbDetaljView` inte kan visa rätt startord/ikon (SPORT-ORD-iOS
+  lämnade den orörd) och varför bannern saknar sport (H-1b).
+- iOS bär TVÅ modeller för samma verkliga händelse (F-6): hjälten kan vara ett
+  `Match`-objekt ELLER en `Jobb`-post beroende på väg in.
+
+**Målmodell:** fotojobbet är förälder; en match är en **valfri facett (0..1)** av
+ett jobb — matchspecifika fält (lag, trupp, resultat, moment, liga/event) hänger
+på facetten, allt annat (plats, tid, kategori, kalender, leverans, gallring) bor
+på jobbet och gäller ALLA jobbtyper. "Skapa match" blir "skapa jobb + slå på
+match-facetten", aldrig ett eget parallellt objekt.
+
+**Migrering i skivor (additivt först, aldrig big-bang):**
+1. **Skiva 1 — kan göras NU, ofarligt (= Våg 2 i prio-förslaget):** `M-11`
+   `fotojobb.tavling_id` (nullable, auto på datum+namn, synligt+rättbart) +
+   **tråda `sport` på jobbet/paketet** (H-1b). Dödar tysta namnmatchen och
+   fixar JobbDetalj sport-ord + banner-sport. Ingen rivning.
+2. **Skiva 2 (efter SM):** gör kopplingen match→jobb **explicit** — `match.jobb_id`
+   (idag härledd via namn), backfill via namn+datum, behåll namnmatchen bara som
+   engångs-backfill.
+3. **Skiva 3 (efter SM):** ETT skapa-flöde i DPT2 — skapa jobb → "är det här en
+   match?" slår på match-facetten. Matchformulärets fält flyttar in som facett.
+4. **Skiva 4 (efter SM):** pensionera namnjämförelsen ÖVERALLT (worker-paket, iOS,
+   sajt); iOS konvergerar sina två modeller till en (jobb m valfri match-facett).
+
+**Blast radius (därför inte nu):** DPT2-schema + hela matchflödet + worker-paketet
++ iOS (både `Match`- och `Jobb`-modellerna används tungt) + sajten. Matchflödet
+är hjärtat i sportleveransen — en halvfärdig migrering mitt i SM = katastrof.
+
+**Invarianter att bevara:** eventmodellen (liga/tävling/event) och "Del av"-kedjan
+· gren-paletten · den server-renderade Horisont-vägen · D9-statusspråket ·
+kategorifacit Sport·Landskap·Människor·Film.
+
+**Rekommendation:** Skiva 1 (M-11 + sport-på-jobb) är det säkra första steget och
+levererar värde direkt — ta den i Våg 2. Skiva 2–4 = efter SM, med SM-veckans
+skarpkörning som facit på var kopplingen faktiskt brast.
 
 ## G · Spikes DPT2
 
