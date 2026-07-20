@@ -91,15 +91,19 @@ class Api:
             self._synka_ackr_paminnelse(jid)
         return {"ok": True, "id": mid}
 
-    def importera_spelschema(self, fixtures, sport=None):
+    def importera_spelschema(self, fixtures, sport=None, gren=None):
         """F18-3: bulk-importera ett spelschema (lista fixtures m home_team/
         away_team/date/kickoff/league, valfritt sport) → liga + lag + matcher via
         spara_match. Sporten tas per fixture (engelska mappas), annars `sport`-
         argumentet. Idempotent (omimport uppdaterar, dubblerar aldrig).
 
+        gren ('dam'|'herr'|'mixed') gäller hela filen och sätts på lag+tävling —
+        svenska herrserier är omärkta ("Elitserien"), så den kan inte härledas.
+
         Returnerar även `krockar` — bevakade matcher samma dag över HELA schemat
         (bevakningsprio), så inläsningen direkt visar var du måste välja lag."""
-        r = store.importera_spelschema(self.conn, fixtures or [], sport=sport)
+        r = store.importera_spelschema(self.conn, fixtures or [], sport=sport,
+                                       gren=gren)
         krockar = store.hitta_krockar(store.lista_matcher(self.conn))
         return {"ok": True, **r, "krockar": krockar}
 

@@ -2524,6 +2524,57 @@ class TestImporteraSpelschema(unittest.TestCase):
             self.c.execute("SELECT gren FROM lag WHERE namn='Litauen'")
             .fetchone()["gren"], "herr")
 
+    def test_valt_gren_skiljer_herr_och_damlag_med_samma_namn(self):
+        # Stigs skarpa fall: Lunds VK spelar i BÅDA serierna, och herrfilens
+        # liga heter bara "Elitserien" (omärkt). Utan gren-argumentet föll
+        # herrlaget ihop med damlaget på samma namn-slug.
+        dam = [{"league": "Elitserien Damer", "sport": "volleyball",
+                "home_team": "Lunds VK", "away_team": "RIG Falköping",
+                "date": "2026-11-07"}]
+        herr = [{"league": "Elitserien", "sport": "volleyball",
+                 "home_team": "Lunds VK", "away_team": "Habo Wolley",
+                 "date": "2026-11-07"}]
+        store.importera_spelschema(self.c, dam, gren="dam")
+        store.importera_spelschema(self.c, herr, gren="herr")
+        lag = {r["id"]: r["gren"] for r in
+               self.c.execute("SELECT id, gren FROM lag WHERE namn='Lunds VK'")}
+        self.assertEqual(lag, {"lunds-vk": "dam", "lunds-vk-herr": "herr"})
+        # Matcherna pekar på RÄTT Lunds VK — annars visas herrmatchen som dam.
+        par = {r["lag_borta_id"]: r["lag_hemma_id"] for r in
+               self.c.execute("SELECT lag_hemma_id, lag_borta_id FROM matchen")}
+        self.assertEqual(par, {"rig-falkoping": "lunds-vk",
+                               "habo-wolley": "lunds-vk-herr"})
+        self.assertEqual(
+            self.c.execute("SELECT gren FROM tavling WHERE id='elitserien'")
+            .fetchone()["gren"], "herr")
+
+    def test_valt_gren_fyller_i_pa_redan_importerad_grenlos_tavling(self):
+        # Omimport ska LÄKA data som kom in före grenvalet fanns.
+        herr = [{"league": "Elitserien", "sport": "volleyball",
+                 "home_team": "Lunds VK", "away_team": "Habo Wolley",
+                 "date": "2026-11-07"}]
+        dam = [{"league": "Elitserien Damer", "sport": "volleyball",
+                "home_team": "Lunds VK", "away_team": "RIG Falköping",
+                "date": "2026-11-07"}]
+        # Skarpa läget: båda filerna inlästa UTAN gren → ett enda Lunds VK.
+        store.importera_spelschema(self.c, dam)
+        store.importera_spelschema(self.c, herr)
+        self.assertEqual(self.c.execute(
+            "SELECT COUNT(*) FROM lag WHERE namn='Lunds VK'").fetchone()[0], 1)
+        self.assertIsNone(self.c.execute(
+            "SELECT gren FROM tavling WHERE id='elitserien'").fetchone()["gren"])
+
+        # Omimport med gren → tävlingen får sin gren, laget delas, och den
+        # BEFINTLIGA matchen pekas om till rätt Lunds VK (ingen dubblett).
+        store.importera_spelschema(self.c, dam, gren="dam")
+        store.importera_spelschema(self.c, herr, gren="herr")
+        self.assertEqual(self.c.execute(
+            "SELECT gren FROM tavling WHERE id='elitserien'").fetchone()["gren"], "herr")
+        self.assertEqual(self.c.execute(
+            "SELECT lag_hemma_id FROM matchen m JOIN tavling t ON t.id=m.tavling_id "
+            "WHERE t.namn='Elitserien'").fetchone()["lag_hemma_id"], "lunds-vk-herr")
+        self.assertEqual(self.c.execute("SELECT COUNT(*) FROM matchen").fetchone()[0], 2)
+
     def test_gren_lamnas_tom_nar_namnet_inte_sager_nagot(self):
         # "CEV EuroVolley 2026" säger ingenting om gren — gissa inte.
         vb = [{"league": "CEV EuroVolley 2026", "sport": "volleyball",

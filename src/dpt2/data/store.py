@@ -2157,7 +2157,7 @@ def _gren_ur_liga(liga):
     return None
 
 
-def importera_spelschema(conn, fixtures, *, sport=None):
+def importera_spelschema(conn, fixtures, *, sport=None, gren=None):
     """F18-3: importera ett spelschema (lista fixtures) → skapar liga + lag +
     matcher via spara_match (som normaliserar namn→id, så lag och liga aldrig
     dubbleras). Fält per fixture: home_team, away_team, date (ISO), kickoff
@@ -2170,8 +2170,13 @@ def importera_spelschema(conn, fixtures, *, sport=None):
 
     IDEMPOTENT: en match med samma liga+hemma+borta+datum UPPDATERAS i stället
     för att dubbleras — omimport är säker. Returnerar {skapade, uppdaterade,
-    hoppade}."""
+    hoppade}.
+
+    gren ('dam'|'herr'|'mixed'): hela filens gren. Sätts på lag OCH tävling och
+    vinner över allt som går att läsa ur namnen — nödvändigt eftersom svenska
+    herrserier är omärkta ("Elitserien" = herr) och därför inte går att härleda."""
     skapade = uppdaterade = hoppade = 0
+    vald_gren = _enum(gren, GRENAR)
     for f in fixtures:
         hemma = (f.get("home_team") or "").strip()
         borta = (f.get("away_team") or "").strip()
@@ -2190,12 +2195,14 @@ def importera_spelschema(conn, fixtures, *, sport=None):
             "WHERE h.namn=? AND b.namn=? AND m.datum=? "
             "AND (t.namn=? OR (t.namn IS NULL AND ?=''))",
             (hemma, borta, datum, liga, liga)).fetchone()
-        # Grenen kommer från fixturen när den finns, annars ur liganamnet
-        # ("Elitserien Damer" → dam). Utan den blir lagen grenlösa och dam-/
-        # herrlag med samma namn kollapsar ihop på samma namn-slug.
+        # Grenen: `gren`-argumentet (Stigs val i importrutan) VINNER — svenska
+        # herrserier är omärkta ("Elitserien" = herr, "Elitserien Damer" = dam),
+        # så liganamnet kan bara bekräfta dam, aldrig herr. Utan grenen faller
+        # herrlagen ihop med damlagen på samma namn-slug (Lunds VK finns i båda).
         match = {"lag_hemma": hemma, "lag_borta": borta, "datum": datum,
                  "tid": (f.get("kickoff") or ""), "liga": liga, "sport": sp,
-                 "gren": (_enum(f.get("gren"), GRENAR)
+                 "gren": (vald_gren
+                          or _enum(f.get("gren"), GRENAR)
                           or _gren_ur_liga(f.get("gender"))
                           or _gren_ur_liga(liga))}
         if befintlig:
@@ -2311,8 +2318,15 @@ def spara_match(conn, match):
         if not namn:
             return None
         rader = conn.execute(
-            "SELECT id, sport FROM tavling WHERE namn=?", (namn,)).fetchall()
+            "SELECT id, sport, gren FROM tavling WHERE namn=?", (namn,)).fetchall()
         if rader:
+            # Fyll i en SAKNAD gren på befintlig tävling (schemat importerades
+            # en gång utan gren). Aldrig skriva över en satt gren — då är det
+            # länken som börjar äga tävlingens metadata (BUG-01 igen).
+            for r in rader:
+                if gren_in and not r["gren"] and (not sport or r["sport"] == sport):
+                    conn.execute("UPDATE tavling SET gren=? WHERE id=?",
+                                 (gren_in, r["id"]))
             # Befintlig: matcha på sport när den är känd — okänd sport tar
             # första raden. Känd sport utan träff faller igenom till skapa
             # (samma namn + annan sport = skild post, suffixat id).

@@ -404,6 +404,10 @@
   // F18-3: klistra-in-JSON-läget (färdiga spelscheman) + krock-resultat.
   let importJson = ''
   let importJsonRes = null
+  // Grenen för HELA den inklistrade filen. Svenska herrserier är omärkta
+  // ("Elitserien" = herr, "Elitserien Damer" = dam), så den går inte att
+  // härleda ur liganamnet — utan valet faller herrlagen ihop med damlagen.
+  let importGren = ''
 
   function importVaxla() {
     importOpen = !importOpen
@@ -454,7 +458,7 @@
     if (!Array.isArray(fixtures)) { importFel = 'JSON ska vara en lista [ {…}, {…} ].'; return }
     importKor_ = true
     try {
-      importJsonRes = await importeraSpelschema(fixtures)
+      importJsonRes = await importeraSpelschema(fixtures, null, importGren || null)
       matcher = await listaMatcher()
     } catch (e) {
       importFel = 'Import misslyckades: ' + (e?.message || e)
@@ -907,6 +911,16 @@
           <div class="importeller">— eller klistra in ett färdigt spelschema (JSON) —</div>
           <textarea class="mono importjson" rows="4" bind:value={importJson}
             placeholder={'[{"league":"Handbollsligan","sport":"handboll","home_team":"HK Malmö","away_team":"…","date":"2026-09-26","kickoff":"16:00"}]'}></textarea>
+          <div class="importgren">
+            <span class="caps">Gren</span>
+            {#each [['dam', 'Dam'], ['herr', 'Herr'], ['mixed', 'Mixed']] as [v, etikett]}
+              <button class="grenval" class:pa={importGren === v}
+                on:click={() => (importGren = importGren === v ? '' : v)}>{etikett}</button>
+            {/each}
+            <span class="grennot">
+              {importGren ? 'sätts på alla lag i filen' : 'härleds ur liganamnet — "Elitserien" blir grenlös'}
+            </span>
+          </div>
           <button class="prim" on:click={importFranJson} disabled={importKor_}>
             {importKor_ ? 'Importerar…' : 'Importera JSON ›'}
           </button>
@@ -1156,6 +1170,11 @@
   .importjson { font-size: 12px; padding: 10px 12px; border: 1px solid var(--div); border-radius: 9px;
     background: var(--panel); color: var(--t-head); resize: vertical; width: 100%; box-sizing: border-box; }
   .importresultat { font-size: 13px; font-weight: 600; color: var(--t-head); }
+  .importgren { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .grenval { font-size: 12px; padding: 5px 12px; border: 1px solid var(--div); border-radius: 8px;
+    background: var(--panel); color: var(--t-mut); cursor: pointer; }
+  .grenval.pa { border-color: var(--accent, #c8963c); color: var(--t-head); font-weight: 600; }
+  .grennot { font-size: 11px; color: var(--t-mut); }
   .krockrubrik { font-size: 12px; font-weight: 600; color: var(--fel, #c0453e); margin-top: 4px; }
   .krock { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--div); }
   .krockdatum { font-size: 12px; font-weight: 700; color: var(--t-head); min-width: 88px; }
