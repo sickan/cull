@@ -1310,9 +1310,29 @@ class Api:
         # Människor-jobbens nyans (Porträtt/Student/Bröllop …) — lokal, v37.
         underkat = store.underkategorier_for_fotojobb(self.conn, ider)
         ackr = store.ackreditering_for_fotojobb(self.conn, ider)
+        # M-11: beständiga tävlingskopplingar (vinner) + tävling-registret för
+        # auto-förslag och sport-härledning.
+        tavlingref = store.tavlingref_for_fotojobb(self.conn, ider)
+        tavlingar = store.lista_tavlingar(self.conn)
+        tavling_map = {t["id"]: t for t in tavlingar}
         for j in alla:
             j["match_id"] = matchref.get(j.get("id"))
             j["underkategori"] = underkat.get(j.get("id")) or None
+            # M-11: prioritet — (1) utkastets egen tavling_id (fotojobb_utkast,
+            # den bär sin källtävling), (2) beständig koppling (fotojobb_tavling),
+            # (3) auto-FÖRSLAG via namn+datum, synligt och rättbart
+            # (tavling_auto=True). Sporten härleds ur tävlingen → appen slutar
+            # gissa via titeln.
+            tid = j.get("tavling_id") or tavlingref.get(j.get("id"))
+            auto = False
+            if tid is None:
+                tid = store.matcha_tavling(j.get("title"), j.get("start_at"), tavlingar)
+                auto = tid is not None
+            tv = tavling_map.get(tid)
+            j["tavling_id"] = tid
+            j["tavling_auto"] = auto
+            j["tavling_namn"] = tv.get("namn") if tv else None
+            j["tavling_sport"] = tv.get("sport") if tv else None
             # Ackreditering finns bara på matcher (Sport) — övriga kategorier
             # saknar fältet helt (handoff §5).
             if j.get("category") == "Sport":
@@ -1387,6 +1407,16 @@ class Api:
             if sparat_id:
                 if "match_id" in jobb:
                     store.lanka_fotojobb_match(self.conn, sparat_id, jobb.get("match_id"))
+                # M-11: explicit tävlingsval (byt-knappen, "" = koppla bort)
+                # persisteras. Annars, vid SKAPANDE (inget jid), auto-koppla via
+                # namn+datum så länken överlever framtida omdöpningar.
+                if "tavling_id" in jobb:
+                    store.lanka_fotojobb_tavling(self.conn, sparat_id, jobb.get("tavling_id"))
+                elif not jid:
+                    tid = store.matcha_tavling(jobb.get("title"), jobb.get("start_at"),
+                                               store.lista_tavlingar(self.conn))
+                    if tid:
+                        store.lanka_fotojobb_tavling(self.conn, sparat_id, tid)
                 if "underkategori" in jobb:
                     store.satt_fotojobb_underkategori(self.conn, sparat_id,
                                                       jobb.get("underkategori"))
@@ -3659,6 +3689,10 @@ def _jobb_till_app(j):
         "status": "offert" if j.get("utkast") else "bokad",
         "notering": j.get("notering") or None,
         "match_id": j.get("match_id"),
+        # M-11: den beständiga tävlingskopplingen + härledd sport, så appen
+        # slutar gissa jobbets tävling/sport via titeln (H-1b).
+        "tavling_id": j.get("tavling_id"),
+        "sport": j.get("tavling_sport"),
         "leverans": None,
     }
 

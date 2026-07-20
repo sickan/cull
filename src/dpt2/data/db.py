@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 42
+SCHEMA_VERSION = 43
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -965,6 +965,16 @@ def _migrera(conn, fran_version):
                                                              "favorit"):
             conn.execute("ALTER TABLE disciplin ADD COLUMN favorit "
                          "INTEGER NOT NULL DEFAULT 0")
+    if fran_version < 43:
+        # v43 (M-11): explicit, beständig koppling fotojobb→tävling. Ersätter
+        # den tysta namnjämförelsen som tappades vid omdöpning. Additiv tabell,
+        # ingen befintlig data rörs; kopplingar backfillas när jobb sparas.
+        if not _har_tabell(conn, "fotojobb_tavling"):
+            conn.execute(
+                "CREATE TABLE fotojobb_tavling ("
+                "  fotojobb_id TEXT PRIMARY KEY,"
+                "  tavling_id  TEXT NOT NULL REFERENCES tavling(id) ON DELETE CASCADE"
+                ")")
 
 
 def _har_kolumn(conn, tabell, kolumn):

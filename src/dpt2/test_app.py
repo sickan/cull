@@ -1131,6 +1131,53 @@ class TestFotojobbUtkastBridge(unittest.TestCase):
         jobb = self.api.lista_fotojobb()
         self.assertEqual(jobb[0]["match_id"], mid)
 
+    def test_m11_utkast_bar_tavling_och_sport(self):
+        # M-11/H-1b: ett utkast fött ur en tävling bär tävlingen + dess sport
+        # genom lista_fotojobb OCH app-payloaden.
+        self.api.spara_tavling({"namn": "Friidrotts-SM 2026", "sport": "friidrott",
+                                "typ": "masterskap", "fran": "2026-07-24",
+                                "till": "2026-07-26", "ort": "Uppsala"})
+        self.api.lagg_tavling_i_kalender("friidrotts-sm-2026")
+        self.api.kalender = _FakeKalender()
+        j = self.api.lista_fotojobb()[0]
+        self.assertEqual(j["tavling_id"], "friidrotts-sm-2026")
+        self.assertFalse(j["tavling_auto"])              # utkastets egen, ej gissad
+        self.assertEqual(j["tavling_sport"], "friidrott")
+        from dpt2.app import _jobb_till_app
+        app = _jobb_till_app(j)
+        self.assertEqual(app["tavling_id"], "friidrotts-sm-2026")
+        self.assertEqual(app["sport"], "friidrott")
+
+    def test_m11_kalenderjobb_far_auto_forslag(self):
+        self.api.spara_tavling({"namn": "Friidrotts-SM 2026", "sport": "friidrott",
+                                "typ": "masterskap", "fran": "2026-07-24",
+                                "till": "2026-07-26"})
+        k = _FakeKalender()
+        k.jobb = [{"id": "cal1", "title": "Friidrotts-SM 2026",
+                   "start_at": "2026-07-24T08:00:00", "end_at": "2026-07-26T20:00:00",
+                   "all_day": True, "category": "Sport"}]
+        self.api.kalender = k
+        j = next(x for x in self.api.lista_fotojobb() if x["id"] == "cal1")
+        self.assertEqual(j["tavling_id"], "friidrotts-sm-2026")
+        self.assertTrue(j["tavling_auto"])               # förslag, ej bekräftat
+        self.assertEqual(j["tavling_sport"], "friidrott")
+
+    def test_m11_bestandig_koppling_overlever_omdopning(self):
+        # KÄRNAN i M-11: den beständiga kopplingen håller även när kalender-
+        # postens namn ändrats så namnmatchen INTE längre skulle träffa.
+        self.api.spara_tavling({"namn": "Friidrotts-SM 2026", "sport": "friidrott",
+                                "typ": "masterskap", "fran": "2026-07-24",
+                                "till": "2026-07-26"})
+        store.lanka_fotojobb_tavling(self.api.conn, "cal1", "friidrotts-sm-2026")
+        k = _FakeKalender()
+        k.jobb = [{"id": "cal1", "title": "SM-helg (eget namn)",
+                   "start_at": "2026-07-24T08:00:00", "end_at": "2026-07-26T20:00:00",
+                   "all_day": True, "category": "Sport"}]
+        self.api.kalender = k
+        j = next(x for x in self.api.lista_fotojobb() if x["id"] == "cal1")
+        self.assertEqual(j["tavling_id"], "friidrotts-sm-2026")   # överlevde
+        self.assertFalse(j["tavling_auto"])                       # beständig, ej gissad
+
     def test_notering_pa_utkast_sparas_lokalt(self):
         self.api.spara_tavling({"namn": "OBOS Damallsvenskan", "sport": "fotboll",
                                 "fran": "2026-04-01", "till": "2026-10-31"})

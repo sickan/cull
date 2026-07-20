@@ -275,6 +275,16 @@ CREATE TABLE fotojobb_match (
   match_id    TEXT NOT NULL REFERENCES matchen(id) ON DELETE CASCADE
 );
 
+-- M-11: EXPLICIT, beständig koppling fotojobb→tävling. Ersätter den tysta
+-- namnjämförelsen (jobbets titel mot tävlingens namn) som tappades så fort
+-- kalenderpostens namn ändrades. Sätts automatiskt via namn+datum vid skapande
+-- men är synlig och rättbar ("Del av {tävling}") — och överlever omdöpning.
+-- Samma textnyckel-rymd som fotojobb_match (utkast-id eller tjänstens jobb-id).
+CREATE TABLE fotojobb_tavling (
+  fotojobb_id TEXT PRIMARY KEY,
+  tavling_id  TEXT NOT NULL REFERENCES tavling(id) ON DELETE CASCADE
+);
+
 -- Fotografens egen anteckning per jobb (kund, paket, utrustning). LOKAL —
 -- speglas aldrig till Google Calendars `description`, så synken kan inte
 -- skriva över den och den funkar även för jobb som importerats från Google.

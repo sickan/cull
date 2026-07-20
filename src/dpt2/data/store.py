@@ -744,6 +744,54 @@ def fotojobb_for_match(conn, match_id):
         (match_id,)).fetchall()]
 
 
+# ── M-11: explicit, beständig koppling fotojobb→tävling ──────────────────────
+
+def lanka_fotojobb_tavling(conn, fotojobb_id, tavling_id):
+    """Kopplar (eller kopplar bort, om tavling_id är falsy) ett fotojobb till en
+    tävling. Beständig — överlever att kalenderpostens namn ändras, till skillnad
+    från den tysta namnjämförelsen den ersätter."""
+    conn.execute("DELETE FROM fotojobb_tavling WHERE fotojobb_id=?", (fotojobb_id,))
+    if tavling_id:
+        conn.execute("INSERT INTO fotojobb_tavling(fotojobb_id,tavling_id) VALUES(?,?)",
+                     (fotojobb_id, tavling_id))
+    conn.commit()
+
+
+def tavlingref_for_fotojobb(conn, fotojobb_ider):
+    """Batch-uppslag: {fotojobb_id: tavling_id} för de jobb som HAR en beständig
+    koppling. Jobb utan rad saknas i dicten (då gäller auto-förslaget)."""
+    ider = [i for i in fotojobb_ider if i]
+    if not ider:
+        return {}
+    platshallare = ",".join("?" * len(ider))
+    rader = conn.execute(
+        f"SELECT fotojobb_id, tavling_id FROM fotojobb_tavling "
+        f"WHERE fotojobb_id IN ({platshallare})", ider).fetchall()
+    return {r["fotojobb_id"]: r["tavling_id"] for r in rader}
+
+
+def matcha_tavling(title, start_at, tavlingar):
+    """M-11 (ren, testbar): välj den tävling ett jobb hör till ur en lista
+    tävling-dicts. Regeln: tävlingens namn ska finnas i jobbets titel
+    (skiftlägesokänsligt) OCH jobbets datum ligga inom tävlingens period
+    (fran..till, ISO-datum sträng-jämförs). Saknas fran/till matchas på namn
+    ensamt. Returnerar tavling_id eller None. Detta är ett FÖRSLAG — den
+    bekräftade kopplingen persisteras separat via lanka_fotojobb_tavling."""
+    t = (title or "").strip().lower()
+    if not t:
+        return None
+    dag = (start_at or "")[:10]
+    for tv in tavlingar:
+        namn = (tv.get("namn") or "").strip().lower()
+        if not namn or namn not in t:
+            continue
+        fran, till = tv.get("fran") or "", tv.get("till") or ""
+        if dag and fran and till and not (fran <= dag <= till):
+            continue
+        return tv.get("id")
+    return None
+
+
 # ── Fotojobb → anteckning (fotografens egen, lokal) ──────────────────────────
 def satt_fotojobb_notering(conn, fotojobb_id, notering):
     """Skriver (eller raderar, om texten är tom) jobbets anteckning. Lokal —

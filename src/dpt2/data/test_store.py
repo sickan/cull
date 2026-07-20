@@ -2295,3 +2295,54 @@ class TestStadDeltagareFelKlass(unittest.TestCase):
         x = store.upsert_lag(self.c, "Okänd", kind="individ")   # ingen klass
         store.koppla_disciplin_deltagare(self.c, herr, x)
         self.assertEqual(store.stad_deltagare_fel_klass(self.c, self.ev), 0)
+
+
+class TestFotojobbTavling(unittest.TestCase):
+    """M-11: explicit, beständig koppling fotojobb→tävling + auto-matchningen."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.sm = store.upsert_tavling(
+            self.c, "Friidrotts-SM 2026", sport="friidrott", typ="masterskap",
+            fran="2026-07-24", till="2026-07-26")
+
+    def test_lankning_rundresa_och_bortkoppling(self):
+        store.lanka_fotojobb_tavling(self.c, "jobb1", self.sm)
+        self.assertEqual(store.tavlingref_for_fotojobb(self.c, ["jobb1"]),
+                         {"jobb1": self.sm})
+        # Beständig — inte beroende av namnet. Koppla bort med falsy värde.
+        store.lanka_fotojobb_tavling(self.c, "jobb1", "")
+        self.assertEqual(store.tavlingref_for_fotojobb(self.c, ["jobb1"]), {})
+
+    def test_tavlingref_batch_hoppar_over_okopplade(self):
+        store.lanka_fotojobb_tavling(self.c, "a", self.sm)
+        ref = store.tavlingref_for_fotojobb(self.c, ["a", "b", None])
+        self.assertEqual(ref, {"a": self.sm})
+
+    def test_matcha_namn_i_titel_och_datum_i_period(self):
+        tv = store.lista_tavlingar(self.c)
+        self.assertEqual(
+            store.matcha_tavling("Friidrotts-SM 2026", "2026-07-24T08:00:00", tv),
+            self.sm)
+
+    def test_matcha_utanfor_perioden_ger_none(self):
+        tv = store.lista_tavlingar(self.c)
+        self.assertIsNone(
+            store.matcha_tavling("Friidrotts-SM 2026", "2026-08-01T08:00:00", tv))
+
+    def test_matcha_okant_namn_ger_none(self):
+        tv = store.lista_tavlingar(self.c)
+        self.assertIsNone(store.matcha_tavling("Bröllop i Lund", "2026-07-24", tv))
+        self.assertIsNone(store.matcha_tavling("", "2026-07-24", tv))
+
+    def test_matcha_utan_period_faller_tillbaka_pa_namnet(self):
+        cup = store.upsert_tavling(self.c, "Skåne Cup", sport="fotboll", typ="cup")
+        tv = store.lista_tavlingar(self.c)
+        self.assertEqual(store.matcha_tavling("Skåne Cup", "2026-05-01", tv), cup)
+
+    def test_bortkoppling_overlever_men_kaskaderar_med_tavlingen(self):
+        store.lanka_fotojobb_tavling(self.c, "jobb1", self.sm)
+        self.c.execute("DELETE FROM tavling WHERE id=?", (self.sm,))
+        self.c.commit()
+        # ON DELETE CASCADE: kopplingen städas när tävlingen försvinner.
+        self.assertEqual(store.tavlingref_for_fotojobb(self.c, ["jobb1"]), {})
