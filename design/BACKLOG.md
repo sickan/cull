@@ -485,7 +485,17 @@ kör upp dagen innan och bor nära arenan, så restiden delas i etapper.*
 | F20-7 | Väder vid arenan: EN datapunkt 4 dagar innan (~24/7 14:00 gissat). Så nära inpå bör fler punkter/dag finnas; annars åtminstone rätt DAGAR (24–26/7) representerade | bug/förbättring | Relaterar F-4/F-8/J-8 + W-2. Logiken remote; skarp verifiering på device |
 | F20-1 | Åk-senast fungerar idag (samma dag, närområde, hemadress Lomma) | observation | Bakgrund, ingen åtgärd |
 
-## K · Kalendern & assistenten "Dala" (NYTT SPÅR — källa: `~/Downloads/backlog_kalender.md`, 19/7)
+### F20-9 · Fånga jobbkalender via kamera → blockers (feature)
+
+*Jobbkalendern får INTE exporteras (företagspolicy) → fotografera skärmen i
+iOS-appen, tolka bilden, extrahera blockers. Blockers visas även i DPT2.
+**Jobbkalendern har företräde över fotouppdrag** i DPT2/iOS. Referens/testdata:
+[blockers-jobbkalender-2026-07-20.md](blockers-jobbkalender-2026-07-20.md)
+(uttolkade blockers juli–aug 2026).*
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| F20-9 | **Kamera → OCR → blockers.** Månadsvy räcker (starttid, ej exakt längd). Appen tolkar bilden → datum · starttid · titel per post. **Regler:** *Inställt* → ledigt (exkludera) · namnlösa (bara klockslag) → generiska "upptaget"-block · heldags/tidlösa (Semester/Ledig/GBG) → bakgrund, ej klockslagsblock · **default 60 min** (ev. typ-heuristik senare: fika 30·CAB 60·1:1 30·avstämning 30·genomgång 60·synk 30) | **Återanvänder Vision-OCR-vägen** (IB-1/iOS-trupp skiva 2, sv/en) + **obligatoriskt bekräfta/redigera-steg** (OCR-osäkerhet + månadsvy saknar sluttid — samma godkänn-princip som Trupp-OCR-arket / Generera / FEAT-14). **Konceptuellt släkt med** krock-kollen mot privata kalendrar ([[project-privata-kalendrar]]) — men det är en TREDJE kalender (jobb, skrivskyddad källa = kameran, ingen Google-synk). Matar restid/planering (F20-2) + Dala-spårets utökade kalender (**K-1**). Öppen fråga: bekräfta/redigera innan spar (JA, per handoffen) |
 
 *Två epiker + fem features. Spåret hänger ihop: den utökade kalendern är
 underlaget, Dala är gränssnittet mot den, och Event-som-nav är vad det används
