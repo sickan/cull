@@ -198,7 +198,7 @@ samma form. Tröskeln är en gräns i koden, inget val Stig gör.
 | M-2 | **Gren-först deltagarkoppling** — `disciplin_deltagare` blir ENDA kopplingen person↔tävling. Sektionen *"Tävlar i"* på utövaren är **härledd** (gren m egen färgkant + "Del av {tävling}") och driver Kommande starter. Den flata tävling-chippen tas bort | ✅ **KLAR 19/7** (`bc88fc4`, 876 gröna): **EN härledning** — `utovare_discipliner()` ur `disciplin_deltagare`, och `utovare_starter()` (Kommande starter) bygger nu på SAMMA väg → de två vyerna kan inte längre divergera. Nya `utovare_grenar()` + `gren_kandidater()`. Raden bärs av **grenens** klassfärg, aldrig personens — en dam kopplad till herr-gren ger teal rad (regressionstest); ingen kant vid okänd klass. **Bifynd åtgärdat:** `spara_disciplin` tappade `gren` på vägen till store → en handskapad grens klass kunde bara sättas av importen. Hemsida-fältet återställt separat (`d28e5dc`) — det ströks av misstag i M-1, D12 pekar ut exakt fyra fält |
 | M-3 | **Mästerskaps-arbetsytan, läge *Grenar & deltagare*** — vänster navigator (322 px) m fri sök + växlingsbar **GRUPPERA: Klass (default) · Typ (löp/hopp/kast/mångkamp) · Dag** + **★-filter**. Gren-rad: klass-färgkant · namn · kat-chip · `Typ · dag N` · deltagarantal · ★. Höger gren-detalj: rubrik m klasstext + "Del av {tävling}", **PASS-kort** (passtyp · tid · antal, `+ Pass`), **DELTAGARE I {gren}** m sök "Lägg till utövare ur registret", startnummer, @-status per rad (`@handle` i accent / dashed "saknar @"), `N av M har @`, "Visa alla N" | ✅ **KLAR 19/7** (`f5969cc`, 903 gröna, **schema orört på v42**): ny modul `src/dpt2/motorer/masterskap.py` bär alla härledningar — kat, typgrupper, dagnummer och @-status räknas fram ur `disciplin` + `pass` + `disciplin_deltagare` som de redan ser ut. **Kat lyfts ur grennamnet som neutral grå textchip och färgsätts aldrig**; okänd klass → egen grupp "Utan klass", ingen kant. **Sidoeffekt värd att veta:** inläsningen (C8–C10) bröts ut till `lib/LasInTavling.svelte` — annars hade arbetsytan och kort-stapeln fått var sin kopia av 180 rader. Beteendet oförändrat. **Startnummer på deltagarraden finns inte i modellen (v42)** — fältet bärs men hittas aldrig på; kolumnen visas bara när värdet finns |
 | M-4 | **Mästerskaps-arbetsytan, läge *Program*** — dagflikar (Dag 1/2/3) + **tidsaxel** (tid i 56 px vänsterkolumn, prick i klassfärg, kort m 3 px klass-vänsterkant) i stället för platt 37-radslista + toggle **★ Bara favoritgrenar** | ✅ **KLAR 19/7** (`0a9461f`, 917 gröna, **schema orört på v42**): härledningarna i M-3:s modul (`programrad`/`tidsaxel`/`programlead`/`dagflikar`), och `hamta_masterskap_program` läser den **befintliga och enda** `store.program()` (V5 §8) — ingen andra programhärledning. ★-filtret **delas med läge A** (M-7:s `disciplin.favorit`) så stjärnmärkning i navigatorn slår igenom i programmet direkt. **Bifynd åtgärdat:** M-3:s navigator räknade "dag N" bara ur PASS, medan programmet också bär matcher och hållpunkter → en hållpunkt på en passlös dag hade gett de två lägena olika dagnummer. Dagarna härleds nu i EN datumfråga (`app._tavlingsdagar`) som båda lägena läser, med regressionstest på exakt det fallet |
-| M-5 | **Adaptiv växling liten↔stor** — tröskellogik i koden | ⚠️ **PROVISORIUM PÅ PLATS** (M-3): `masterskap.ARBETSYTA_MIN_GRENAR = 9`, ETT ställe, kommenterad som Stigs obesvarade beslut (Designs "liten = ≤ ~8 grenar"). Kort-stapeln för små tävlingar orörd — verifierat att EuroVolley fortfarande ritas som kort. **Ditt svar = enradsändring där.** ⛔ Kvarstår: grenantal? deltagarantal? eller alltid arbetsyta för typ Mästerskap? |
+| M-5 | **Adaptiv växling liten↔stor** — tröskellogik i koden | ✅ **BESLUTAT 20/7: grenantal ≥9** (Stig). `masterskap.ARBETSYTA_MIN_GRENAR = 9` blir kanon — provisoriet står, inget kodjobb kvar utom att ta bort ⚠-kommentaren om Stigs obesvarade beslut. Kort-stapeln för små tävlingar orörd (EuroVolley ritas som kort) |
 | M-6 | **Utövarsidan omtänkt** (`DPT v5 - Utövare`) — profil m klass-färgkant + **inline @-fält** ("sätts en gång — fältflödet taggar automatiskt sen", ✓ *bär till fältet*), fyra nyckeltal (starter · tävlingar · bilder · persrekord i accent), **Kommande starter** (härledda pass), **Historik** (härledd tidslinje, **medalj = accent-prick + accent-resultat**), **Bilder & jobb** (3-kolumnsgrid, klick → jobbet), "Nås ifrån"-pills | Sidan FINNS (`4398b0b`) men byggdes före D12 → omtag ihop m M-1/M-2. **Datakrav:** `disciplin_deltagare` måste bära **resultat per start** + medaljflagga, `tavling.ort/datum`; persrekord härleds; bildtaggning person→bild→jobb krävs för Bilder & jobb |
 | M-7 | **Favoritmarkering per gren behöver persistens** (per tävling) — bara klient-state i mockupen, men M-3 och M-4 vilar båda på den | ✅ **KLAR 19/7** (`59b2d4a`, **schema v42**, 884 gröna): **nyckelfyndet — `disciplin`-raden är sedan v39 redan unik per tävling + grennamn + klass**, så en flagga på raden ger BÅDE per-tävling-scopning och dam/herr-separationen gratis ("Diskus dam" ≠ "Diskus herr"). Additiv `disciplin.favorit`, ingen ny tabell. ★ per gren-rad + "★ N"-filter i Grenar-kortet. **Mobilen (`FavoritGrenar.swift`) nycklar `"gren\|klass"` per SPORT i UserDefaults, desktop på disciplin-id per TÄVLING** — modellerna är förenliga, en framtida synk kan mappa utan datamodelländring; skillnaden per sport ↔ per tävling är det enda som måste lösas den dagen |
 | M-8 | Nav-varianten: mockuparna spretar — `Lag & Utövare` som EN post (D12-filerna) vs `Utövare` + `Lag & ligor` (Utövare-filen). ⌘K + synk-märke ska samexistera i headern | ⛔ Stig-beslut, litet |
@@ -320,7 +320,14 @@ och hänger ihop m "Publicera story" → "Skapa SoMe".
 (Skagen Hav · Solljus · Minimal · Häst) + `wallpapers/ren/` (lås-Skagen,
 mörk mono, sten ljus). Rena tillgångar, inget att bygga.
 
-### ⚠️ Två punkter att stämma av INNAN bygge
+### ✅ Två punkter — BEKRÄFTADE av Stig 20/7
+
+**BESLUT (a) Hex:** kanonvärdena (`#2F7CB0` · `#C9871F` · `#C9657F` · `#8A6FB0`)
+är sanningen; canvas-värdena är enbart mörkt-läge-varianter. **Den delade
+färg-plisten (W-8/S-3) byggs på kanonvärdena.** — **BESLUT (b):** widgetens
+standard = **ljust** (Designs val bekräftat). *Kvar att stämma av med Design: att
+D13:s mässing `#F0B45A` är samma accent-roll som "brand orange", inte en andra
+parallell accent.* Underlaget nedan behålls som historik:
 
 **(a) Hex-konflikt.** ✅ **Sannolikt avgjord av D13 (20/7):** kärnskärms-handoffen
 listar kategorierna som **kanonvärdena** Sport `#2F7CB0` · Landskap `#C9871F` ·
@@ -673,23 +680,23 @@ push-notiser/kanaler i Inställningar · SPIKE-07 galleri-sökvägar.
 - [ ] **V2-08:** finslipa presskortsformuleringen (copy) när sidfoten byggs
 - [ ] Skarptesta IG Stories-delningen (V2-16) mot riktiga Instagram — appen ominstallerad, oskarpkört
 
-### Beslut som blockerar 19/7-designen (svara innan bygge)
+### Beslut — BESVARADE av Stig 20/7 (oblockerade inför maskin-sessionen)
 
-- [ ] **M-5:** var går tröskeln liten↔stor tävling — grenantal, deltagarantal, eller *alltid* arbetsyta för typ Mästerskap?
-- [ ] **M-8:** nav-varianten — `Lag & Utövare` som EN post, eller `Utövare` + `Lag & ligor` var för sig? (mockuparna spretar)
-- [ ] **M-9:** ska Läs in-granskningen byggas om i samma skala nu, eller räcker den till nästa stora inläsning?
-- [ ] **Ordvalet:** *Utövare* vs *Personer* — Design lutar åt Utövare, koden säger Utövare i dag
-- [ ] **Utövarsidan på webben** — spegla publikt under Sport i denna etapp, eller senare?
-- [ ] **C-iOS (a):** hex-konflikten — gäller kanonvärdena (`#2F7CB0` m.fl.) och färgsystem-canvasens värden är bara mörkt-läge-justering? **Måste bekräftas innan den delade färg-plisten byggs.**
-- [ ] **W-1 (litet):** cirkeln visar bara `1:02` (mockupen) medan handoff-texten säger `ÅK OM 1:02` — "ÅK OM" får inte plats i 58 pt utan att tränga ut siffran, och rektangeln stavar ändå ut "Åk 08:03". Följde mockupen; ändras i `SigillNedrakning.mitten` om Design vill ha ordet med
-- [ ] **C-iOS (b):** widgetens standardutseende = **ljust**, fast appen i övrigt är mörk Skagen Hav — OK?
-- [ ] **M-3/fältflödet:** ska 2:a och 3:e plats alltid efterfrågas, eller bara på ditt initiativ? (mockupen: valfritt)
+- [x] **M-5:** tröskel liten↔stor = **grenantal ≥9** (provisoriet blir kanon; `ARBETSYTA_MIN_GRENAR = 9` är redan satt → inget kodjobb, ta bort ⚠-kommentaren)
+- [x] **M-8:** **EN nav-post "Lag & Utövare"** (konsekvent med M-1:s sammanslagna register + Slag-växel)
+- [x] **M-9:** Läs in-granskningen i skala = **senare** (nästa stora inläsning; blockerar inget nu)
+- [x] **Ordvalet:** **Utövare** (behåll — registret är för idrottare)
+- [x] **Utövarsidan på webben:** **senare** (kräver M-6:s datamodell; ej SM-kritiskt)
+- [x] **C-iOS (a) hex:** **kanonvärdena är sanningen** (Sport `#2F7CB0` · Landskap `#C9871F` · Människor `#C9657F` · Film `#8A6FB0`); canvas-värdena = enbart mörkt-läge-varianter → **den delade färg-plisten (W-8/S-3) byggs på kanonvärdena**
+- [x] **W-1:** cirkeln visar **bara siffran `1:02`** (följ mockupen; "ÅK OM" tränger ut siffran, rektangeln bär ordet)
+- [x] **C-iOS (b):** widgetens standard = **ljust** (Designs val bekräftat — hemskärmen är alltid ljus)
+- [x] **M-3/fältflödet:** 2:a & 3:e plats efterfrågas **bara på initiativ** (valfritt; kval har ingen vinnare — jfr F20-5)
 
-### Beslut som blockerar kalender-/Dala-spåret (sektion K)
+### Beslut — kalender/Dala-spåret, BESVARADE 20/7
 
-- [ ] **Arkitekturvalet (blockerar K-1/K-4/K-6):** ska den LOKALA vägen få skrivscope (privat data lämnar aldrig Macen — min rekommendation), eller ska workern äga även privatkalendern (enklare, men fruns kalender passerar Cloudflare)?
-- [ ] **K-4:** vad står **"KH-kalendern"** för — handboll/Lugi (sonens lag) eller annat? Behöver verifieras innan det kodas in.
-- [ ] **K-2:** är arbetsnamnet **Dala** det som gäller, eller bara arbetsnamn? (valt för taligenkänning — byte har en kostnad)
+- [x] **Arkitekturvalet (K-1/K-4/K-6):** **(a) den lokala vägen får skrivscope** (`calendar.events` lokalt) — privat data lämnar aldrig Macen. Workern äger INTE privatkalendern
+- [x] **K-2:** **behåll "Dala"** (namnvalet är motiverat av taligenkänning)
+- [~] **K-4 "KH-kalendern":** Stig känner inte igen termen (kom ur hans egen 19/7-handoff utan förklaring) → **droppa "KH" som egen kalender**; Dala routar till **jobb + privata**. Återupptas bara om betydelsen dyker upp
 
 ## ✅ Levererat nyligen (rörligt — flyttas hit när klart)
 
