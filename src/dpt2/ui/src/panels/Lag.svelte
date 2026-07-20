@@ -5,7 +5,7 @@
     valjFil, lasLagTrupp, hamtaLagTrupp, sparaSpelare, raderaSpelare,
     laggTavlingIKalender, taBortTavlingUrKalender, kopplaLagTavling,
     listaDiscipliner, sparaDisciplin, raderaDisciplin, kopplaDisciplinDeltagare,
-    utovareGrenar, grenKandidater,
+    utovareGrenar, grenKandidater, hamtaUtovare,
   } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import Lagbricka from '../lib/Lagbricka.svelte'
@@ -310,7 +310,18 @@
     tavlarLaddar = { ...tavlarLaddar, [l.id]: false }
     // Kandidatlistan speglar kopplingarna — ladda om den när de ändras.
     grenval = { ...grenval, [l.id]: await grenKandidater(l.id, l.sport || null) }
+    // D16 §A: den härledda tidslinjen (Kommande starter + Historik) porterad ur
+    // gamla Utövare-sidan. Härleds i backend ur tävlingarnas program — aldrig
+    // lagrad på personen. Best-effort; utgår tyst om hämtningen faller.
+    try {
+      const u = await hamtaUtovare(l.id)
+      utProfil = { ...utProfil, [l.id]: { starter: u?.starter || [], historik: u?.historik || [] } }
+    } catch { /* tidslinjen är en bonus, aldrig blockerande */ }
   }
+
+  let utProfil = {}       // lag-id → { starter, historik } (härledd tidslinje)
+  const utStarter = (id) => (utProfil[id]?.starter || []).filter((s) => (s.datum || '') >= idag)
+  const utHistorik = (id) => utProfil[id]?.historik || []
 
   async function kopplaGren(l, disciplinId) {
     if (!disciplinId) return
@@ -716,6 +727,39 @@
                           </select>
                         {:else if !tavlarLaddar[l.id]}
                           <span class="kmeta">Inga fler grenar att koppla till — grenar skapas på tävlingen.</span>
+                        {/if}
+                      </div>
+
+                      <!-- D16 §A: härledd tidslinje porterad ur gamla Utövare-sidan.
+                           Kommande starter + Historik — ur tävlingarnas program,
+                           aldrig lagrat på personen. -->
+                      <div class="tidslinje">
+                        <div class="truppcaps">Kommande starter <span class="klasshint">härledda ur tävlingarnas program</span></div>
+                        {#if !utStarter(l.id).length}
+                          <p class="tavlartext">Inga kommande starter.</p>
+                        {:else}
+                          {#each utStarter(l.id) as s}
+                            <div class="starad">
+                              <span class="sdat scd">{s.datum}{s.tid ? ' · ' + s.tid : ''}</span>
+                              <span class="skant" style="background:{s.klass ? grenFarg(s.klass) : 'transparent'}"></span>
+                              <span class="sgren">{s.gren}{s.pass && s.pass !== s.gren ? ' · ' + s.pass : ''}</span>
+                              {#if s.event_namn}<span class="sdel">Del av {s.event_namn}</span>{/if}
+                            </div>
+                          {/each}
+                        {/if}
+                      </div>
+                      <div class="tidslinje">
+                        <div class="truppcaps">Historik <span class="klasshint">härledd tidslinje, nyast först</span></div>
+                        {#if !utHistorik(l.id).length}
+                          <p class="tavlartext">Ingen historik än.</p>
+                        {:else}
+                          {#each utHistorik(l.id) as e}
+                            <div class="histrad">
+                              <span class="hdat">{e.fran || ''}</span>
+                              <span class="hnamn scd">{e.namn}</span>
+                              <span class="htyp">{e.typ || ''}</span>
+                            </div>
+                          {/each}
                         {/if}
                       </div>
                     {:else}
@@ -1141,6 +1185,18 @@
   .truppvaljare { border: 1px solid var(--div3); border-radius: 9px; background: var(--panel);
     padding: 11px; display: flex; flex-direction: column; gap: 9px; }
   .truppcaps { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-caps); }
+  /* D16 §A: härledd utövar-tidslinje (porterad ur Utovare.svelte). */
+  .tidslinje { margin-top: 10px; }
+  .starad, .histrad { display: flex; align-items: center; gap: 10px; padding: 5px 0;
+    border-top: 1px solid var(--div); font-size: 12.5px; }
+  .starad:first-of-type, .histrad:first-of-type { border-top: 0; }
+  .sdat { flex: 0 0 118px; color: var(--t-head); }
+  .skant { flex: 0 0 4px; align-self: stretch; border-radius: 3px; min-height: 15px; }
+  .sgren { flex: 1; color: var(--t-head); }
+  .sdel { color: var(--t-help); font-size: 11.5px; }
+  .hdat { flex: 0 0 90px; color: var(--t-help); }
+  .hnamn { flex: 1; color: var(--t-head); }
+  .htyp { color: var(--t-help); font-size: 11.5px; text-transform: capitalize; }
   .truppurl { display: flex; gap: 6px; }
   .truppurl input { flex: 1; min-width: 0; background: var(--kort); font-size: 12px; padding: 7px 9px; }
   .hamta { background: var(--acc); color: #fff; border: 0; border-radius: 7px; padding: 7px 13px;
