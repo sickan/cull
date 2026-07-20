@@ -458,6 +458,33 @@ Stigs numrering. 2+4+5 är ETT klockmodul-paket.*
 | M18-8 | Gradienten över loggorna för kraftig — MFF-märket äts upp | ✅ **LÖST 19/7** (`3aec9c8`): roten var **cirkelmasken**, inte gradienten — transparent logga drogs in, saknad alfa gav ljus platta. Bröndby-filen är trasig i källan |
 | M18-9 | Automatisk HEMRESA efter match | ✅ **KLAR 18/7 em** (ios `209939b`, INSTALLERAD): "Hem: X min · Kajgatan 2B"-rad i glasarket när en match avslutats senaste ~3h och GPS ≠ hemma (>1 km); destinationen = fritt adressfält i Inställningar → Hemresa (geokodas), överstyrbar till hotell/nästa uppdrag |
 
+## F20 · Stigs testsession 20/7 (källa: `3ebb0b2f-IMG_7290.zip`, 7 skärmbilder)
+
+*Löpande test under SM-förberedelser. Flera punkter rör ytor vi nyss byggt
+(åk-senast, PlatsArk, ljuset, arenaväder). **Fetstil = remote-verifierbart idag
+(kod+test)**; övrigt kräver device/visuell kontroll.*
+
+### EPIC F20-REStid · Åk-senast för flerdagarsuppdrag på annan ort (F20-2/3/4)
+*Nuvarande åk-senast antar hemadress (Lomma) som start — stämmer för samma-dag-
+nära uppdrag (F20-1 bekräftat OK) men INTE för flerdagars borta-uppdrag där man
+kör upp dagen innan och bor nära arenan, så restiden delas i etapper.*
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| F20-2 | **Per-dag startpunkt** (override hemadress → hotell/valfri plats) + **per-dag press/starttider** kopplat till eventet. Framkörning dagen innan (~7h+laddstopp) kvar för planering; tävlingsdagarnas åk-senast utgår från boendet. Ex SM Uppsala: fre press 10:00/start 12:30 · lör 09:00/10:00 · sön 09:00/10:30 | Stor. DPT2-fält (per-dag startpunkt+tider på event/pass) + iOS. Överlappar V5 §8 pass (bär redan datum+tid) + V2-06 arenanoteringar |
+| F20-3 | **Färdsätt + restid per startpunkt/etapp** — inte bara bil hemifrån: bil·tunnelbana·promenad·buss·tåg·cykel. Ex: framkörning=bil, tävlingsdag=tunnelbana(~13m)+promenad(5m) från hotell | Utökar `RestidService` (idag bilcentrisk) → per-etapp färdsätt+restid |
+| F20-4 | **Boende (valbart) på fotojobb/uppdrag** → standardstartpunkt vid annan ort | Valbart fält; matar F20-2/3. Överlappar F20-2:s per-dag-startpunkt |
+
+### Övriga punkter
+
+| ID | Vad | Typ | Anteckning |
+|----|-----|-----|-----------|
+| F20-5 | Deltillfälle-arket: slå ihop **"Skapa SoMe" + "Öppna passet"** till EN vy m stjärnmärkta deltagare överst; **scoring per passtyp** (kval → bästa tid/placering; final → vinnare finns bara i finaler) | förbättring/fråga | iOS `GrenArk`/`FaltflodeView` (J-2/M-10) + urvalslogik (CULL-02). Vy-mergen = visuell; kval/final-scoringen = logik (delvis remote) |
+| **F20-6** | **BUG: ny plats sparas inte** (bröllop 8/8). PlatsArk "Nöbbelöv kyrka" m upphämtad koord, men jobbet visar ändå "Okänd arena — Lund, Sverige". "Vyn ser knepig ut" (förtydliga vad) | bug | **REMOTE-VERIFIERBART:** PlatsArk→`ArenaOverride`-persistensen (J-3/J-4/J-5). Trolig rot: override-nyckeln matchar inte jobbet vid inläsning. HÖG — trasig levererad funktion |
+| **F20-8** | "Ljuset idag" på fotojobb — oklar referens: jobbets plats/datum eller nuvarande position? Bör följa **jobbets** plats+datum; etiketten "IDAG" vilseleder när jobbet ligger dagar bort | bug/förbättring | **REMOTE-VERIFIERBART:** J-3 `LJUSET IDAG` räknar redan på arenan+jobbdatum — fixen är ETIKETTEN (skriv ut datum/plats i stället för "IDAG"). Litet |
+| F20-7 | Väder vid arenan: EN datapunkt 4 dagar innan (~24/7 14:00 gissat). Så nära inpå bör fler punkter/dag finnas; annars åtminstone rätt DAGAR (24–26/7) representerade | bug/förbättring | Relaterar F-4/F-8/J-8 + W-2. Logiken remote; skarp verifiering på device |
+| F20-1 | Åk-senast fungerar idag (samma dag, närområde, hemadress Lomma) | observation | Bakgrund, ingen åtgärd |
+
 ## K · Kalendern & assistenten "Dala" (NYTT SPÅR — källa: `~/Downloads/backlog_kalender.md`, 19/7)
 
 *Två epiker + fem features. Spåret hänger ihop: den utökade kalendern är
