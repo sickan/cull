@@ -67,3 +67,61 @@ Stigs önskade valmängd när han beslutar (per krock/överlapp i ett annat spå
 D13 införde **mässing `#F0B45A`** som appens enda accent, medan tidigare underlag
 säger "brand orange". Bekräfta att det är **samma accent-roll, ny ton** — inte
 två parallella accenter — innan den delade färg-resursen (W-8/S-3) gjuts.
+
+---
+
+## Tillägg 20/7 — panel-sammanslagningen (Lag+Utövare, Fotojobb/Match/Tävling)
+
+*Från: Code. Stig ställde en bredare fråga om att slå ihop paneler för bättre
+UX ("Vi har diskuterat att slå ihop Lag och Utövare … och Fotojobb och Matcher,
+men kanske Tävlingar ska in där. Allt är fotojobb, men allt är inte matcher").
+D14 ovan är match-halvan av det — här är helheten så du kan svara på allt i ETT
+sammanhang i stället för styckvis. Fortfarande brief, inget designat.*
+
+### A · Lag + Utövare: redan ETT register i botten
+`Utövare = lag(kind='individ')` sedan v40 (D11b §2) — `upsert_individ` slår in i
+`upsert_lag(kind="individ")`, `lista_individer` är bara `SELECT … FROM lag WHERE
+kind='individ'`. **Sammanslagningen är ren UI-konvergens: ingen schemaändring,
+ingen migrering, noll datarisk.** Frågan är alltså inte "slå ihop två register"
+(de ÄR ett) utan **hur en enda lista segmenteras** mellan lag och individ
+(kind-chip / filter / underflik). Designa den UX:en, inte en datamodell-merge.
+
+### B · Fotojobb / Match / Tävling har OLIKA kardinalitet — platta inte till dem lika
+Detta är kärnan och måste hållas isär:
+- **Match : Fotojobb ≈ 1:1** — matchen är en *facett* av ett jobb (en dag). Den
+  kan vika IN i jobbet. Det är precis D14-riktningen "jobbet äger matchen".
+- **Tävling : Fotojobb = 1:många** — en tävling *spänner över* flera jobb/dagar
+  (Friidrotts-SM: 79 grenar × 3 dagar; EuroVolley: en veckas matcher). En tävling
+  är en **behållare OVANFÖR jobben**, inte en facett av ett.
+
+Så Stigs mening stämmer, skärpt: *"allt är fotojobb, men allt är inte matcher —
+och en tävling är inte ett fotojobb, den binder ihop flera fotojobb."*
+**Match viker in i jobbet; Tävling ligger ovanför det.** Blanda inte de två i
+samma "fold-in" — en tävling ska inte bli "ett stort fotojobb".
+
+### C · Rören finns redan (M-11)
+`fotojobb.tavling_id` (byggt idag, schema v43) är den beständiga jobb↔tävling-
+kopplingen. "Ett jobb tillhör en tävling" är alltså redan en pålitlig relation i
+datan — luta dig på den, inte på namn-gissning. En tävling kan därmed lista
+"sina" jobb genom att fråga baklänges på `tavling_id`.
+
+### D · Uppgiften för Design (utöver D14:s två frågor)
+Rita **navigations-ryggen** när panelerna konvergerar:
+1. Är **Fotojobb** den enda topp-ytan (alla kategorier, kalenderdriven), där
+   Sport-jobb *avslöjar* Match (facett) och *grupperas under* Tävling (behållare)?
+2. Var bor **Tävling** då — som en vy/lager man kan zooma till från ett jobb, en
+   egen ingång, eller båda? (Kom ihåg 1:många — den kan inte bara vara en flik
+   inuti ett enskilt jobb.)
+3. Blir **Lag/Utövare** ett stödregister man når *inifrån* (chips i editorn,
+   deltagarval) snarare än en jämbördig topp-panel?
+
+### Invarianter (utöver D14:s)
+- **Kategorifacit** Sport · Landskap · Människor · Film — den hopslagna Fotojobb-
+  ryggen spänner över ALLA. Match och Tävling finns **bara** för Sport. Den
+  mergade vyn får aldrig visa match-/tävlings-grepp eller sport-ord på ett
+  bröllops-/landskaps-/porträttjobb (samma SPORT-ORD-städning vi redan kört).
+- **Lag ≠ Utövare i tonen** även om de delar tabell: ett lag har logga/ställ, en
+  utövare har porträtt/klubb — segmenteringen måste kännas naturlig, inte som
+  samma formulär två gånger.
+- **Designa nu, bygg efter SM.** Match- och tävlingsflödena får inte
+  destabiliseras under säsongen (samma tidslås som D14 / MERGE-spec skiva 4).
