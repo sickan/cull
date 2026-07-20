@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 *.pt
 _buildstamp.py
+
+# macOS
+.DS_Store
+**/.DS_Store
