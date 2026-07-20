@@ -65,22 +65,22 @@ röst→action är LÅG prio.
 | FEAT-13 | Purge/spegling av bygg-repot före publicering | ✅ **KLAR 17/7** (`1c0abe7`): reconciling publish per typ (skyddsvakt mot tom lokal DB) + radera_innehall propagerar till live |
 | FEAT-09 | Auto-status efter publicering (polla → realtid, bort med manuella "Kolla status") | ✅ **KLAR 17/7** (`3972fe8`): auto-poll var 10:e sek efter publicering — bygger-puls → Live/Fel per D9 §3, Kolla status-knappen borta |
 | FEAT-12 | Statusfärger + fasa ut utkastknappen (D9) | ✅ **HELT KLAR 18/7**: skiva 1 (`0e04977`) + skiva 2 fel-raden (`033e251`) + Sport-vyns kort (`7e7ca18`: hörnbåge i radens statusfärg + statusord i metaraden, fel-röd ram) |
-| FEAT-08 | Avpublicera match/tävling från DPT2 | Raderaflöde finns för vissa typer — utöka |
-| FEAT-07 | Varningsmodal vid radering av länkade objekt | |
+| FEAT-08 | Avpublicera match/tävling från DPT2 | 🔻 **P3 lågt** (Stig 20/7) — sällan-behov |
+| FEAT-07 | Varningsmodal vid radering av länkade objekt | 🔗 **SLÅS IN I B-004** (Stig 20/7) — hör till det enhetliga skapa/ändra-mönstret |
 | FEAT-01 | Drag-n-drop för bilder (Innehåll, särskilt galleri) | 🔻 **P3 efter SM** (Stig 20/7) |
 | FEAT-03 | Rich text-editor i ackrediteringsmallen (format + klickbara länkar) | **P2 efter SM** (Stig 20/7) |
-| FEAT-02 | "Featured"-markering → prio på startsidan | → **D7** (design först) |
+| FEAT-02 | "Featured"-markering → prio på startsidan | **P2 efter SM** (Stig 20/7). → **D7** (design finns) |
 | FEAT-04 | Större färgklickar på jobbkorten | 🔻 **P3 efter SM** (Stig 20/7) |
 | FEAT-06 | Skiljelinje i dolt jobbs färg vid sportfilter | ⭐ **P1 FÖRE SM** (Stig 20/7) — din SM-arbetsyta |
 | FEAT-10 | Galleri: sökvägs-UI (mindre typsnitt, `…/`-trunkering, filnamn ovanför) | ⭐ **P1 FÖRE SM** (Stig 20/7). Absorberar **SPIKE-07** (galleri-sökvägar) |
 | FEAT-11 | Kopiera mappsökväg-knapp i galleriet | ⭐ **P1 FÖRE SM** (Stig 20/7) — klistra in i Lightroom på plats |
-| B-004 | Enhetligt skapa/ändra-mönster (fotojobb/matcher/lag/liga) | Absorberar B-005 ("Ny" utan ändring), #26, FEAT-07-mönstret |
-| T-auto | Turnerings-autospar (tennis fas 3-rest) | Tennis-minnet |
-| SP-pers | Snabbplock: persist urval per jobb | Ej kritiskt |
+| B-004 | Enhetligt skapa/ändra-mönster (fotojobb/matcher/lag/liga) | **P2 efter SM** (Stig 20/7). Absorberar B-005 ("Ny" utan ändring), #26 och **FEAT-07** (varningsmodal vid radering av länkade objekt) |
+| T-auto | Turnerings-autospar (tennis fas 3-rest) | 🔻 **P3 lågt** (Stig 20/7) — tennis off-season; nära nästa turnering |
+| SP-pers | Snabbplock: persist urval per jobb | **P2 efter SM** (Stig 20/7) — arbetsflödes-QoL |
 | SPORT-ORD | **Startmomentets ord per sport** (Stig 18/7): heter inte alltid "Avspark" — fotboll Avspark · handboll **Avkast** (✅ rättad 18/7, låg fel som Avspark) · innebandy Nedsläpp · tennis/volleyboll/beachvolley Matchstart · friidrott Start. Bors i `sportprofil.start_moment` och följer med matchpaketet → overlay + appens momentknappar. **Vid NY sport: sätt rätt startord i profilen direkt** (t.ex. ishockey Nedsläpp, löpning/lopp Starttid) | Princip, inte öppen bugg — profilen är enda källan |
-| IPTC | Leverera fas 3: IPTC-bildtexter | Sparad sedan tidigare |
+| IPTC | Leverera fas 3: IPTC-bildtexter | 🔻 **P3 lågt** (Stig 20/7) — behövs bara vid agentur-leverans |
 | C-försl | Beslut om C-förslagen (design/C-FORSLAG.md) | Stig-beslut |
-| FEAT-14 | **EPIC: Ackrediteringssvar → DPT2** (svarsmail blir förslag Beviljad/Nekad + notering i appen) | Handoff §8 senare-fas; skivor nedan |
+| FEAT-14 | **EPIC: Ackrediteringssvar → DPT2** (svarsmail blir förslag Beviljad/Nekad + notering i appen) | **P2 efter SM** (Stig 20/7). Handoff §8 senare-fas; skivor 2–5 nedan |
 | V2-01 | Versionsvisning i ALLA appar (bokstaverat namn synligt + tekniskt byggnr under Om/Inställningar) | ✅ **KLAR 19/7** (dpt `537d69d` DPT5 · ios `d0be161` v2 — "plisten som aldrig lyssnade"). Sajten kvar |
 | V2-02 | Väderväxling "där jag är" ↔ "dit jag ska" | ✅ **KLAR 18/7** (ios `d5d6ac0`, INSTALLERAD): tap på väderremsan växlar GPS ↔ arenan (nästa match/deltillfälle), samma tidsspann; "DIT JAG SKA"-etikett + växlingspil. Destinationsväder vid deltillfälle (V5 §4) fanns redan i cirkeln (arena + deltillfälletid) |
 | V2-10 | Leveranskrav per uppdragsgivare sparas + visas i publiceringsflödet (ex CEV: 30 JPG, 2500×1500, ≤7 MB, efter set 1) | v2 §10 |
