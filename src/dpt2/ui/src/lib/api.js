@@ -1076,17 +1076,31 @@ export async function hamtaSpelschema(lag, url = '', sport = '') {
 export async function importeraSpelschema(fixtures, sport = null, gren = null) {
   const api = brygga()
   if (api) return api.importera_spelschema(fixtures, sport, gren)
-  // Mock: importera in i MOCK_MATCHER (utan krock-analys).
+  // Mock: importera in i MOCK_MATCHER. Krock-analysen är en förenkling av
+  // backendens hitta_krockar (utan bevakningsprio) — den finns för att
+  // krockväljaren ska gå att köra i dev-UI:t, inte för att vara exakt.
   let skapade = 0
+  const perDag = {}
   for (const f of fixtures || []) {
     if (!(f && f.home_team && f.away_team && f.date)) continue
     const sp = (f.sport || sport || '').toLowerCase()
       .replace('volleyball', 'volleyboll').replace('handball', 'handboll')
-    await sparaMatch({ lag_hemma: f.home_team, lag_borta: f.away_team, datum: f.date,
-      tid: f.kickoff || '', liga: f.league || '', sport: sp, gren: gren || '' })
+    const res = await sparaMatch({ lag_hemma: f.home_team, lag_borta: f.away_team,
+      datum: f.date, tid: f.kickoff || '', liga: f.league || '', sport: sp,
+      gren: gren || '' })
     skapade++
+    ;(perDag[f.date] ||= {})[f.home_team] ||= []
+    perDag[f.date][f.home_team].push(
+      { id: res?.id, hemma: f.home_team, borta: f.away_team, liga: f.league || '' })
   }
-  return wait({ ok: true, skapade, uppdaterade: 0, hoppade: 0, krockar: [] })
+  const krockar = []
+  for (const [datum, perArena] of Object.entries(perDag)) {
+    const arenor = Object.entries(perArena)
+    if (arenor.length < 2) continue          // en hall = dubbelmatch, ej krock
+    const alternativ = arenor.map(([arena, matcher]) => ({ arena, prio: 0, matcher }))
+    krockar.push({ datum, alternativ, forslag: alternativ[0] })
+  }
+  return wait({ ok: true, skapade, uppdaterade: 0, hoppade: 0, krockar })
 }
 
 export async function bevakningskrockar() {

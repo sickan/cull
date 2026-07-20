@@ -408,6 +408,34 @@
   // ("Elitserien" = herr, "Elitserien Damer" = dam), så den går inte att
   // härleda ur liganamnet — utan valet faller herrlagen ihop med damlagen.
   let importGren = ''
+  // Krockvalet: datum → valt arena-alternativ. Hela schemat importeras alltid;
+  // valet styr bara VILKEN match som får fotojobb i kalendern (du kan inte
+  // vara i två hallar samma dag). Ändras fritt efteråt — inget importeras om.
+  let krockVal = {}
+  let krockKor_ = ''
+
+  // Utgångsläget speglar verkligheten: det alternativ som redan HAR fotojobb
+  // är det valda. Utan fotojobb alls står valet öppet (★ är bara ett förslag).
+  $: if (importJsonRes?.krockar) {
+    for (const k of importJsonRes.krockar) {
+      if (krockVal[k.datum] !== undefined) continue
+      const i = k.alternativ.findIndex((a) => a.matcher.some((m) => m.synk_jobb_id))
+      if (i >= 0) krockVal = { ...krockVal, [k.datum]: i }
+    }
+  }
+
+  async function valjKrock(k, ai) {
+    if (krockKor_) return
+    krockKor_ = k.datum
+    // Valt alternativ får fotojobb, de andra får sina bortplockade — annars
+    // ligger gamla jobb kvar i kalendern när du ändrar dig.
+    for (const [i, alt] of k.alternativ.entries())
+      for (const m of alt.matcher)
+        if (m.id) await sattMatchSynk(m.id, i === ai)
+    krockVal = { ...krockVal, [k.datum]: ai }
+    matcher = await listaMatcher()
+    krockKor_ = ''
+  }
 
   function importVaxla() {
     importOpen = !importOpen
@@ -931,15 +959,23 @@
               ✓ {importJsonRes.skapade} skapade · {importJsonRes.uppdaterade} uppdaterade{importJsonRes.hoppade ? ` · ${importJsonRes.hoppade} hoppade` : ''}
             </div>
             {#if importJsonRes.krockar?.length}
-              <div class="krockrubrik">⚠ {importJsonRes.krockar.length} krockdatum — förslag markerat, du väljer:</div>
+              <div class="krockrubrik">⚠ {importJsonRes.krockar.length} krockdatum — allt är importerat, välj vad du bevakar:</div>
               {#each importJsonRes.krockar as k}
                 <div class="krock">
                   <span class="krockdatum">{k.datum}</span>
                   {#each k.alternativ as alt, ai}
-                    <span class="krockalt" class:forslag={ai === 0}>
+                    <button class="krockalt" class:forslag={ai === 0}
+                      class:vald={krockVal[k.datum] === ai}
+                      disabled={krockKor_ === k.datum}
+                      on:click={() => valjKrock(k, ai)}>
                       {alt.arena}{ai === 0 ? ' ★' : ''} · {alt.matcher.map((m) => `${m.hemma}–${m.borta}`).join(' + ')}
-                    </span>
+                    </button>
                   {/each}
+                  <span class="krocknot">
+                    {#if krockKor_ === k.datum}sätter fotojobb…
+                    {:else if krockVal[k.datum] !== undefined}✓ fotojobb i kalendern
+                    {:else}★ = förslag ur bevakningsprion{/if}
+                  </span>
                 </div>
               {/each}
             {/if}
@@ -1178,8 +1214,13 @@
   .krockrubrik { font-size: 12px; font-weight: 600; color: var(--fel, #c0453e); margin-top: 4px; }
   .krock { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--div); }
   .krockdatum { font-size: 12px; font-weight: 700; color: var(--t-head); min-width: 88px; }
-  .krockalt { font-size: 11px; color: var(--t-mut); padding: 3px 8px; border: 1px solid var(--div); border-radius: 7px; }
+  .krockalt { font-size: 11px; color: var(--t-mut); padding: 3px 8px; border: 1px solid var(--div);
+    border-radius: 7px; background: var(--panel); cursor: pointer; }
   .krockalt.forslag { color: var(--t-head); border-color: var(--accent, #c8963c); font-weight: 600; }
+  .krockalt.vald { color: var(--t-head); border-color: var(--accent, #c8963c);
+    background: color-mix(in srgb, var(--accent, #c8963c) 16%, transparent); font-weight: 600; }
+  .krockalt:disabled { opacity: 0.5; cursor: default; }
+  .krocknot { font-size: 11px; color: var(--t-mut); }
   .importlista { display: flex; flex-direction: column; gap: 8px; }
   .importrad { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--div);
     border-radius: 9px; background: var(--panel); text-align: left; }
