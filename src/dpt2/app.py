@@ -1349,7 +1349,8 @@ class Api:
             tavlingref = store.tavlingref_for_fotojobb(self.conn, ider)
             tavlingar = store.lista_tavlingar(self.conn)
             platser = store.lista_platser(self.conn)
-        except Exception:
+        except Exception as e:
+            self._logg.append({"typ": "fel", "text": f"M-11-berikning (setup): {e}"})
             tavlingref, tavlingar, platser = {}, [], []
         tavling_map = {t["id"]: t for t in tavlingar}
         for j in alla:
@@ -1371,7 +1372,9 @@ class Api:
                 k = store.koordinat_ur_platser(j.get("location"), platser)
                 j["lat"] = k[0] if k else None
                 j["lon"] = k[1] if k else None
-            except Exception:
+            except Exception as e:
+                self._logg.append({"typ": "fel",
+                                   "text": f"M-11-berikning jobb {j.get('id')}: {e}"})
                 j["tavling_auto"] = False
                 j.setdefault("lat", None)
                 j.setdefault("lon", None)
