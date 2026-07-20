@@ -740,6 +740,7 @@ byggd via IB-4/APNs). G-sektionen är därmed tom.*
 | D11b | Begrepp & navigation | ✅ **SVAR INNE + §1/§2/§4 IMPLEMENTERADE 19/7** (se C19). Kvar: `fotojobb.tavling_id` (§3) — se **M-11** |
 | D12 | **Tävlingar i stor skala + Lag & Utövare** | ✅ **SVAR INNE 19/7** (`HANDOFF-D12-SVAR-tavlingar-storskala.md` + 3 mockups) → **sektion C12** ovan. **PRIO ①+②**, väntar implementation |
 | D-widget | Widget & låsskärm (svar på B-009) + JobbDetaljView-designrunda | ✅ **SVAR INNE 19/7** → **sektion C-iOS** ovan. **PRIO ③** |
+| D14 | **Jobbet äger sina matcher (iOS-nav)** + Matcher-flikens vara/icke-vara | 📤 **BRIEF SKICKAD 20/7** (`HANDOFF-D14-jobbet-ager-matcher.md`) — jobbet/mästerskapet ska äga hela match-listan (utfällbar per dag), och beslut om Matcher-fliken tas bort. UI-sidan av merge-skiva 4. Väntar svar. Bygg EFTER SM |
 
 ## Stig — användarsteg (inget kodande)
 
