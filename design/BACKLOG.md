@@ -67,13 +67,13 @@ röst→action är LÅG prio.
 | FEAT-12 | Statusfärger + fasa ut utkastknappen (D9) | ✅ **HELT KLAR 18/7**: skiva 1 (`0e04977`) + skiva 2 fel-raden (`033e251`) + Sport-vyns kort (`7e7ca18`: hörnbåge i radens statusfärg + statusord i metaraden, fel-röd ram) |
 | FEAT-08 | Avpublicera match/tävling från DPT2 | Raderaflöde finns för vissa typer — utöka |
 | FEAT-07 | Varningsmodal vid radering av länkade objekt | |
-| FEAT-01 | Drag-n-drop för bilder (Innehåll, särskilt galleri) | |
-| FEAT-03 | Rich text-editor i ackrediteringsmallen (format + klickbara länkar) | |
+| FEAT-01 | Drag-n-drop för bilder (Innehåll, särskilt galleri) | 🔻 **P3 efter SM** (Stig 20/7) |
+| FEAT-03 | Rich text-editor i ackrediteringsmallen (format + klickbara länkar) | **P2 efter SM** (Stig 20/7) |
 | FEAT-02 | "Featured"-markering → prio på startsidan | → **D7** (design först) |
-| FEAT-04 | Större färgklickar på jobbkorten | Småputs, code direkt |
-| FEAT-06 | Skiljelinje i dolt jobbs färg vid sportfilter | Småputs |
-| FEAT-10 | Galleri: sökvägs-UI (mindre typsnitt, `…/`-trunkering, filnamn ovanför) | Småputs. Absorberar **SPIKE-07** (galleri-sökvägar) |
-| FEAT-11 | Kopiera mappsökväg-knapp i galleriet | Småputs |
+| FEAT-04 | Större färgklickar på jobbkorten | 🔻 **P3 efter SM** (Stig 20/7) |
+| FEAT-06 | Skiljelinje i dolt jobbs färg vid sportfilter | ⭐ **P1 FÖRE SM** (Stig 20/7) — din SM-arbetsyta |
+| FEAT-10 | Galleri: sökvägs-UI (mindre typsnitt, `…/`-trunkering, filnamn ovanför) | ⭐ **P1 FÖRE SM** (Stig 20/7). Absorberar **SPIKE-07** (galleri-sökvägar) |
+| FEAT-11 | Kopiera mappsökväg-knapp i galleriet | ⭐ **P1 FÖRE SM** (Stig 20/7) — klistra in i Lightroom på plats |
 | B-004 | Enhetligt skapa/ändra-mönster (fotojobb/matcher/lag/liga) | Absorberar B-005 ("Ny" utan ändring), #26, FEAT-07-mönstret |
 | T-auto | Turnerings-autospar (tennis fas 3-rest) | Tennis-minnet |
 | SP-pers | Snabbplock: persist urval per jobb | Ej kritiskt |
