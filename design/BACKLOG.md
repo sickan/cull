@@ -504,6 +504,17 @@ iOS-appen, tolka bilden, extrahera blockers. Blockers visas även i DPT2.
 |----|-----|-----------|
 | F20-9 | **Kamera → OCR → blockers.** Månadsvy räcker (starttid, ej exakt längd). Appen tolkar bilden → datum · starttid · titel per post. **Regler:** *Inställt* → ledigt (exkludera) · namnlösa (bara klockslag) → generiska "upptaget"-block · heldags/tidlösa (Semester/Ledig/GBG) → bakgrund, ej klockslagsblock · **default 60 min** (ev. typ-heuristik senare: fika 30·CAB 60·1:1 30·avstämning 30·genomgång 60·synk 30) | **Återanvänder Vision-OCR-vägen** (IB-1/iOS-trupp skiva 2, sv/en) + **obligatoriskt bekräfta/redigera-steg** (OCR-osäkerhet + månadsvy saknar sluttid — samma godkänn-princip som Trupp-OCR-arket / Generera / FEAT-14). **Konceptuellt släkt med** krock-kollen mot privata kalendrar ([[project-privata-kalendrar]]) — men det är en TREDJE kalender (jobb, skrivskyddad källa = kameran, ingen Google-synk). Matar restid/planering (F20-2) + Dala-spårets utökade kalender (**K-1**). Öppen fråga: bekräfta/redigera innan spar (JA, per handoffen) |
 
+### F20-10 · Koordinathantering i DPT2 (platsregister) (Stig 20/7)
+
+*"Jag vill kunna hantera plats och sätta koordinater i DPT2 också, inte bara i
+iOS-appen." DPT2 hade inga koordinater (bara fritext arena/ort) → iOS förlitade
+sig på sin hårdkodade `ArenaKoordinat`-tabell. Nu äger DPT2 koordinaterna
+(moln-som-sanning).*
+
+| ID | Vad | Anteckning |
+|----|-----|-----------|
+| F20-10 | **Platsregister i DPT2** (arenanamn → lat/lon) som skickas i paketen; iOS läser det före sin tabell | ✅ **BACKEND + iOS KLAR 20/7** (schema **v44**; dpt `6f292f1`+`b880cca`, ios `4058253`): `plats`-tabell + store (`upsert_plats`/`lista_platser`/`radera_plats`/`koordinat_for_plats`, normaliserat + delsträng-uppslag = SAMMA tolerans som iOS). Match-, tävlings- OCH jobb-paketen bär lat/lon (`_plats_koord`). iOS: `Match.koordinat` + `Matchdag.koordinat` + `Jobb.lat/lon`; `arenalage`-precedens **per-jobb-override (F20-6) → paketkoordinat → inbyggd tabell**. Tabellen kvar som fallback. 8 nya tester. **KVAR (visuellt, maskin):** sätt-koordinat-UI i DPT2 — dedikerad Platser-vy vs inline "slå upp adress"-knapp på tävlingen/jobbet (backenden stödjer båda) |
+
 *Två epiker + fem features. Spåret hänger ihop: den utökade kalendern är
 underlaget, Dala är gränssnittet mot den, och Event-som-nav är vad det används
 till. **Absorberar B-003** (röst → transkribering → action) — den posten är
