@@ -1342,6 +1342,12 @@ class Api:
             j["tavling_auto"] = auto
             j["tavling_namn"] = tv.get("namn") if tv else None
             j["tavling_sport"] = tv.get("sport") if tv else None
+            # Koordinat ur platsregistret (v44) för jobbets plats → appen slutar
+            # gissa via sin inbyggda tabell. Okänd plats → None (appen faller
+            # tillbaka på sin tabell / per-jobb-override).
+            k = store.koordinat_for_plats(self.conn, j.get("location"))
+            j["lat"] = k[0] if k else None
+            j["lon"] = k[1] if k else None
             # Ackreditering finns bara på matcher (Sport) — övriga kategorier
             # saknar fältet helt (handoff §5).
             if j.get("category") == "Sport":
@@ -3702,6 +3708,9 @@ def _jobb_till_app(j):
         # slutar gissa jobbets tävling/sport via titeln (H-1b).
         "tavling_id": j.get("tavling_id"),
         "sport": j.get("tavling_sport"),
+        # Koordinat ur platsregistret (v44) — appen läser den före sin tabell.
+        "lat": j.get("lat"),
+        "lon": j.get("lon"),
         "leverans": None,
     }
 

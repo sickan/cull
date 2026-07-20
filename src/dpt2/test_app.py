@@ -1162,6 +1162,30 @@ class TestFotojobbUtkastBridge(unittest.TestCase):
         self.assertTrue(j["tavling_auto"])               # förslag, ej bekräftat
         self.assertEqual(j["tavling_sport"], "friidrott")
 
+    def test_jobb_koordinat_ur_platsregistret(self):
+        # v44: jobbets plats resolvas mot platsregistret → lat/lon i paketet.
+        store.upsert_plats(self.api.conn, "Uppsala friidrottsarena", 59.8586, 17.6389)
+        k = _FakeKalender()
+        k.jobb = [{"id": "cal1", "title": "SM-jobb",
+                   "start_at": "2026-07-24T08:00:00", "end_at": "2026-07-24T20:00:00",
+                   "all_day": True, "category": "Sport",
+                   "location": "Uppsala friidrottsarena, Uppsala"}]  # delsträng
+        self.api.kalender = k
+        j = next(x for x in self.api.lista_fotojobb() if x["id"] == "cal1")
+        self.assertAlmostEqual(j["lat"], 59.8586)
+        self.assertAlmostEqual(j["lon"], 17.6389)
+        from dpt2.app import _jobb_till_app
+        self.assertAlmostEqual(_jobb_till_app(j)["lat"], 59.8586)
+
+    def test_jobb_utan_registrerad_plats_ger_none(self):
+        k = _FakeKalender()
+        k.jobb = [{"id": "cal2", "title": "Bröllop", "start_at": "2026-08-08T13:00:00",
+                   "end_at": "2026-08-08T20:00:00", "all_day": False,
+                   "category": "Människor", "location": "Lund, Sverige"}]
+        self.api.kalender = k
+        j = next(x for x in self.api.lista_fotojobb() if x["id"] == "cal2")
+        self.assertIsNone(j["lat"])
+
     def test_m11_bestandig_koppling_overlever_omdopning(self):
         # KÄRNAN i M-11: den beständiga kopplingen håller även när kalender-
         # postens namn ändrats så namnmatchen INTE längre skulle träffa.
