@@ -376,11 +376,10 @@
     const f = await valjFil('Välj tävlingslogga (bild)', ['Bilder (*.png;*.jpg;*.jpeg;*.webp)'])
     if (f.ok) { t.logga = f.path; tavlingar = tavlingar; gerTavling(t) }
   }
-  async function nyttLag() {
+  async function nyttLag(kind = 'team') {
     const id = 'nytt-' + Date.now()
-    // Slaget följer det filter man står i — står man i Utövare vill man skapa
-    // en utövare. Under "Alla" är lag fortsatt det vanligaste.
-    const kind = lagSlag === 'individ' ? 'individ' : 'team'
+    // D16 §A: typen väljs uttryckligen vid skapande ("+ Nytt lag" / "+ Ny
+    // utövare"), inte via en växel i editorn. En ny post kan inte byta slag.
     lag = [...lag, { id, namn: '', kind, sport: 'fotboll', gren: 'dam',
       instagram: '', hemsida: '', logga: null, stall_hemma: '#2f7cb0',
       stall_borta: '#ffffff', stall_tredje: '#16181c', profilfarg: '#2f7cb0',
@@ -530,8 +529,10 @@
             Arkiv · {arkiveradeLag.length}
           </button>
         {/if}
-        <!-- 7A: "+ Nytt" ligger i filterraden, utanför scroll-ytan. -->
-        <button class="ny irad" on:click={nyttLag}>+ Ny post</button>
+        <!-- 7A: "+ Nytt" ligger i filterraden, utanför scroll-ytan.
+             D16 §A: typ väljs vid skapande (två knappar), inte via växel i editorn. -->
+        <button class="ny irad" on:click={() => nyttLag('team')}>+ Nytt lag</button>
+        <button class="ny irad" on:click={() => nyttLag('individ')}>+ Ny utövare</button>
       </div>
 
       {#if !lagGrupperat.length}
@@ -588,14 +589,11 @@
               {#if teamOpen === l.id}
                 <div class="inlineform">
                   <div class="falt">
-                    <!-- M-1: EN delad editor. Slag-valet byter formulär —
-                         utövaren får bara det som hör en person till. -->
+                    <!-- M-1/D16 §A: EN delad editor som AUTO-MORPHAR efter postens
+                         slag — ingen manuell växel (typen är låst till det man
+                         valde vid skapande). Read-only etikett för tydlighet. -->
                     <div class="slagrad">
-                      <span class="lbl">Slag</span>
-                      <div class="seg">
-                        <button class:on={l.kind === 'individ'} on:click={() => sattKind(l, 'individ')}>Utövare</button>
-                        <button class:on={l.kind !== 'individ'} on:click={() => sattKind(l, 'team')}>Lag</button>
-                      </div>
+                      <span class="lbl">{l.kind === 'individ' ? 'Utövare' : 'Lag'}</span>
                       <span class="slaghint">{SLAG_HINT[slagAv(l)]}</span>
                     </div>
 
