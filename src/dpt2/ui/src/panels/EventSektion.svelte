@@ -431,8 +431,10 @@
     editorOppen = false
     if (r?.ok) {
       await ladda()
+      // Ligor saknar detaljvy (de öppnas i editorn via redigeraRad) — försök
+      // aldrig öppna en liga som event-detalj, då blir det "kunde inte laddas".
       if (vald) detalj = await hamtaEventDetalj(vald)
-      else if (r.id) await oppna(r.id)
+      else if (r.id && ev.typ !== 'liga') await oppna(r.id)
     }
   }
 </script>
