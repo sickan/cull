@@ -34,6 +34,16 @@ CREATE TABLE tavling (
   pagang_dold INTEGER NOT NULL DEFAULT 0 -- v30: dölj i webbens På gång (heldagsaktiviteten)
 );
 
+-- Platsregister: arenanamn → koordinat. DPT2 äger koordinaterna (moln-som-
+-- sanning) och skickar dem i paketen; iOS läser dem i stället för sin
+-- hårdkodade ArenaKoordinat-tabell. Nyckel = namnet som skrivet (visning);
+-- uppslag normaliserar (gemener, diakriter vikta, bara a–z0–9) precis som iOS.
+CREATE TABLE plats (
+  namn TEXT PRIMARY KEY,
+  lat  REAL NOT NULL,
+  lon  REAL NOT NULL
+);
+
 -- ── V5-B (eventmodell-epiken): Liga + Event ersätter Tävling ────────────────
 -- Tävling delas i två register (DATAMODELL v5): LIGA (långlivad struktur —
 -- säsongs-HISTORIK byggs på sikt, fran/till bär aktuell säsong så länge) och

@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 43
+SCHEMA_VERSION = 44
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -974,6 +974,16 @@ def _migrera(conn, fran_version):
                 "CREATE TABLE fotojobb_tavling ("
                 "  fotojobb_id TEXT PRIMARY KEY,"
                 "  tavling_id  TEXT NOT NULL REFERENCES tavling(id) ON DELETE CASCADE"
+                ")")
+    if fran_version < 44:
+        # v44: platsregister (arenanamn → koordinat). DPT2 äger koordinaterna,
+        # iOS slutar förlita sig på sin hårdkodade tabell. Additiv, tom vid start.
+        if not _har_tabell(conn, "plats"):
+            conn.execute(
+                "CREATE TABLE plats ("
+                "  namn TEXT PRIMARY KEY,"
+                "  lat  REAL NOT NULL,"
+                "  lon  REAL NOT NULL"
                 ")")
 
 

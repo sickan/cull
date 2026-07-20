@@ -173,6 +173,8 @@ class Api:
             "lag_hemma_logga_url": _logga("hemma"),
             "lag_borta_logga_url": _logga("borta"),
             "arena": m.get("arena") or "",
+            # Koordinat ur DPT2:s platsregister → iOS slutar gissa via sin tabell.
+            **self._plats_koord(m.get("arena")),
             "sport": m.get("sport") or "",
             "liga": m.get("liga") or "",
             "avspark": avspark,
@@ -199,6 +201,12 @@ class Api:
             **self._paket_program_for_match(m),
         }
 
+    def _plats_koord(self, arena):
+        """{lat, lon} ur platsregistret för ett arenanamn, annars {None, None}.
+        Alltid med i paketet (även tomt) så iOS kan lita på fältets närvaro."""
+        k = store.koordinat_for_plats(self.conn, arena) if arena else None
+        return {"lat": k[0], "lon": k[1]} if k else {"lat": None, "lon": None}
+
     def _tavling_till_paket(self, t, discipliner):
         """Paket för en TÄVLING med discipliner (friidrott): heldagsevent-form —
         tävlingsnamnet är rubriken, ingen motståndare, grenarna + deltagarna
@@ -212,6 +220,7 @@ class Api:
             "lag_hemma_logga_url": self.logga_url_for_lag(t) if t.get("logga") else "",
             "lag_borta_logga_url": "",
             "arena": t.get("arena") or t.get("ort") or "",
+            **self._plats_koord(t.get("arena") or t.get("ort")),
             "sport": t.get("sport") or "",
             "liga": "",
             "avspark": f"{fran}T08:00:00" if fran else None,

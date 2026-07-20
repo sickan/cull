@@ -2346,3 +2346,36 @@ class TestFotojobbTavling(unittest.TestCase):
         self.c.commit()
         # ON DELETE CASCADE: kopplingen städas när tävlingen försvinner.
         self.assertEqual(store.tavlingref_for_fotojobb(self.c, ["jobb1"]), {})
+
+
+class TestPlatsRegister(unittest.TestCase):
+    """v44: platsregister (arenanamn → koordinat) — DPT2 äger koordinaterna."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+
+    def test_upsert_och_uppslag(self):
+        store.upsert_plats(self.c, "Eleda Stadion", 55.6031, 12.9993)
+        self.assertEqual(store.koordinat_for_plats(self.c, "Eleda Stadion"),
+                         (55.6031, 12.9993))
+
+    def test_delstrangs_och_diakritmatch_som_ios(self):
+        store.upsert_plats(self.c, "Eleda Stadion", 55.6031, 12.9993)
+        # Paketets arena kan vara "Eleda Stadion, Malmö" → delsträng.
+        self.assertIsNotNone(store.koordinat_for_plats(self.c, "Eleda Stadion, Malmö"))
+        store.upsert_plats(self.c, "Båstad", 56.426, 12.852)
+        # Diakriter viks (bastad ↔ Båstad), som iOS ArenaKoordinat.
+        self.assertEqual(store.koordinat_for_plats(self.c, "Bastad Arena")[0], 56.426)
+
+    def test_upsert_uppdaterar_och_radering(self):
+        store.upsert_plats(self.c, "Arena X", 1.0, 2.0)
+        store.upsert_plats(self.c, "Arena X", 3.0, 4.0)   # samma namn → uppdatera
+        self.assertEqual(store.koordinat_for_plats(self.c, "Arena X"), (3.0, 4.0))
+        self.assertEqual(len(store.lista_platser(self.c)), 1)
+        store.radera_plats(self.c, "Arena X")
+        self.assertEqual(store.lista_platser(self.c), [])
+
+    def test_okant_eller_tomt_ger_none(self):
+        self.assertIsNone(store.koordinat_for_plats(self.c, "Finns ej"))
+        self.assertIsNone(store.koordinat_for_plats(self.c, ""))
+        self.assertIsNone(store.koordinat_for_plats(self.c, None))

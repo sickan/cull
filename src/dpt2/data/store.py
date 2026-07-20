@@ -7,6 +7,7 @@ urval + cull_jobb (Gallra-panelen producerar ett Urval). Fler entiteter
 
 import json
 import re
+import unicodedata
 import uuid
 from datetime import datetime
 
@@ -653,6 +654,51 @@ def upsert_tavling(conn, namn, *, id=None, sport, typ="liga", gren=None,
 
 def lista_tavlingar(conn):
     return [dict(r) for r in conn.execute("SELECT * FROM tavling ORDER BY namn")]
+
+
+# ── Platsregister: arenanamn → koordinat (DPT2 äger koordinaterna) ───────────
+
+def _normalisera_plats(s):
+    """Gemener, diakriter vikta (å/ä→a, ö→o), bara a–z0–9 — samma regel som
+    iOS ArenaKoordinat.normalisera, så uppslag matchar över bron."""
+    folded = unicodedata.normalize("NFKD", (s or "").lower())
+    utan = "".join(c for c in folded if not unicodedata.combining(c))
+    return "".join(c for c in utan if c.isascii() and c.isalnum())
+
+
+def upsert_plats(conn, namn, lat, lon):
+    """Sätt/uppdatera koordinat för ett arenanamn (nyckel = namnet som skrivet)."""
+    n = (namn or "").strip()
+    if not n:
+        return
+    conn.execute(
+        "INSERT INTO plats(namn,lat,lon) VALUES(?,?,?) "
+        "ON CONFLICT(namn) DO UPDATE SET lat=excluded.lat, lon=excluded.lon",
+        (n, float(lat), float(lon)))
+    conn.commit()
+
+
+def lista_platser(conn):
+    return [dict(r) for r in conn.execute("SELECT * FROM plats ORDER BY namn")]
+
+
+def radera_plats(conn, namn):
+    conn.execute("DELETE FROM plats WHERE namn=?", ((namn or "").strip(),))
+    conn.commit()
+
+
+def koordinat_for_plats(conn, namn):
+    """Koordinat för ett arenanamn eller None. Normaliserat, delsträng-match åt
+    båda håll (samma tolerans som iOS: "Eleda Stadion, Malmö" matchar "Eleda
+    Stadion"). Returnerar (lat, lon)."""
+    key = _normalisera_plats(namn)
+    if not key:
+        return None
+    for r in conn.execute("SELECT namn, lat, lon FROM plats"):
+        k = _normalisera_plats(r["namn"])
+        if k and (k == key or key in k or k in key):
+            return (r["lat"], r["lon"])
+    return None
 
 
 def hamta_tavling(conn, tavling_id):
