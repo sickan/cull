@@ -5,7 +5,7 @@
     lasUttagFil, valjFil, listaTavlingar, listaLag, listaLagForTavling,
     listaUrval, raderaMatch, sattMatchSynk, sportprofiler, sattAktivtUrval,
     listaMaterial, listaInnehall, sparaMaterial, sparaInnehall, hamtaSpelschema,
-    listaEventer, sparaTavling,
+    listaEventer, sparaTavling, importeraSpelschema,
   } from '../lib/api.js'
   import Combobox from '../lib/Combobox.svelte'
   import ProjektLista from '../lib/ProjektLista.svelte'
@@ -401,10 +401,13 @@
   let importFel = ''
   let importSkapaFotojobb = true
   let importKor_ = false
+  // F18-3: klistra-in-JSON-läget (färdiga spelscheman) + krock-resultat.
+  let importJson = ''
+  let importJsonRes = null
 
   function importVaxla() {
     importOpen = !importOpen
-    if (!importOpen) { importRader = []; importFel = '' }
+    if (!importOpen) { importRader = []; importFel = ''; importJson = ''; importJsonRes = null }
   }
   async function importHamta() {
     if (!importLag.trim()) { importFel = 'Ange ett lag.'; return }
@@ -437,6 +440,19 @@
     }
     matcher = await listaMatcher()
     importKor_ = false; importOpen = false; importRader = []; importLag = ''; importUrl = ''
+  }
+
+  // F18-3: importera ett färdigt spelschema (JSON-lista). Idempotent i backend;
+  // visar counts + krockar (du väljer lag på krockdatum — ena/andra/båda).
+  async function importFranJson() {
+    importFel = ''; importJsonRes = null
+    let fixtures
+    try { fixtures = JSON.parse(importJson) } catch { importFel = 'Ogiltig JSON.'; return }
+    if (!Array.isArray(fixtures)) { importFel = 'JSON ska vara en lista med matcher.'; return }
+    importKor_ = true
+    importJsonRes = await importeraSpelschema(fixtures)
+    matcher = await listaMatcher()
+    importKor_ = false
   }
 
   let hamtar = false
@@ -879,6 +895,32 @@
               {importKor_ ? 'Importerar…' : `Importera ${importValda.length} matcher`}
             </button>
           {/if}
+
+          <div class="importeller">— eller klistra in ett färdigt spelschema (JSON) —</div>
+          <textarea class="mono importjson" rows="4" bind:value={importJson}
+            placeholder={'[{"league":"Handbollsligan","sport":"handboll","home_team":"HK Malmö","away_team":"…","date":"2026-09-26","kickoff":"16:00"}]'}></textarea>
+          <button class="prim" on:click={importFranJson} disabled={!importJson.trim() || importKor_}>
+            {importKor_ ? 'Importerar…' : 'Importera JSON ›'}
+          </button>
+
+          {#if importJsonRes}
+            <div class="importresultat">
+              ✓ {importJsonRes.skapade} skapade · {importJsonRes.uppdaterade} uppdaterade{importJsonRes.hoppade ? ` · ${importJsonRes.hoppade} hoppade` : ''}
+            </div>
+            {#if importJsonRes.krockar?.length}
+              <div class="krockrubrik">⚠ {importJsonRes.krockar.length} krockdatum — förslag markerat, du väljer:</div>
+              {#each importJsonRes.krockar as k}
+                <div class="krock">
+                  <span class="krockdatum">{k.datum}</span>
+                  {#each k.alternativ as alt, ai}
+                    <span class="krockalt" class:forslag={ai === 0}>
+                      {alt.arena}{ai === 0 ? ' ★' : ''} · {alt.matcher.map((m) => `${m.hemma}–${m.borta}`).join(' + ')}
+                    </span>
+                  {/each}
+                </div>
+              {/each}
+            {/if}
+          {/if}
         </div>
       {/if}
     </div>
@@ -1101,6 +1143,15 @@
   .importkort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
     box-shadow: var(--skugga); padding: 16px; margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
   .importfel { font-size: 12px; color: var(--fel, #c0453e); }
+  .importeller { font-size: 11px; color: var(--t-mut); text-align: center; margin-top: 4px; }
+  .importjson { font-size: 12px; padding: 10px 12px; border: 1px solid var(--div); border-radius: 9px;
+    background: var(--panel); color: var(--t-head); resize: vertical; width: 100%; box-sizing: border-box; }
+  .importresultat { font-size: 13px; font-weight: 600; color: var(--t-head); }
+  .krockrubrik { font-size: 12px; font-weight: 600; color: var(--fel, #c0453e); margin-top: 4px; }
+  .krock { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--div); }
+  .krockdatum { font-size: 12px; font-weight: 700; color: var(--t-head); min-width: 88px; }
+  .krockalt { font-size: 11px; color: var(--t-mut); padding: 3px 8px; border: 1px solid var(--div); border-radius: 7px; }
+  .krockalt.forslag { color: var(--t-head); border-color: var(--accent, #c8963c); font-weight: 600; }
   .importlista { display: flex; flex-direction: column; gap: 8px; }
   .importrad { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--div);
     border-radius: 9px; background: var(--panel); text-align: left; }

@@ -1071,6 +1071,30 @@ export async function hamtaSpelschema(lag, url = '', sport = '') {
     ] })
 }
 
+// F18-3: bulk-importera ett spelschema (JSON-lista fixtures). Returnerar counts
+// + krockar (bevakade matcher på olika arenor samma dag).
+export async function importeraSpelschema(fixtures, sport = null) {
+  const api = brygga()
+  if (api) return api.importera_spelschema(fixtures, sport)
+  // Mock: importera in i MOCK_MATCHER (utan krock-analys).
+  let skapade = 0
+  for (const f of fixtures || []) {
+    if (!(f && f.home_team && f.away_team && f.date)) continue
+    const sp = (f.sport || sport || '').toLowerCase()
+      .replace('volleyball', 'volleyboll').replace('handball', 'handboll')
+    await sparaMatch({ lag_hemma: f.home_team, lag_borta: f.away_team, datum: f.date,
+      tid: f.kickoff || '', liga: f.league || '', sport: sp })
+    skapade++
+  }
+  return wait({ ok: true, skapade, uppdaterade: 0, hoppade: 0, krockar: [] })
+}
+
+export async function bevakningskrockar() {
+  const api = brygga()
+  if (api) return api.bevakningskrockar()
+  return wait([])
+}
+
 let _aktivMock = null
 
 export async function sattAktivMatch(id) {
