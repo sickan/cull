@@ -2139,6 +2139,24 @@ def _sport_ur_liga(liga):
     return None
 
 
+_GREN_ORD = (
+    ("dam", r"\b(dam|damer|damerna|women|womens|female|kvinnor|ladies)\b"),
+    ("herr", r"\b(herr|herrar|herrarna|men|mens|male)\b"),
+    ("mixed", r"\b(mixed|mix)\b"),
+)
+
+
+def _gren_ur_liga(liga):
+    """Härleder grenen ur ett liga-/turneringsnamn ("Elitserien Damer" → dam).
+    Ordgränser krävs — "men" får inte träffa i "Elitserien". None när namnet
+    inte säger något (t.ex. "CEV EuroVolley 2026")."""
+    n = (liga or "").lower()
+    for nyckel, monster in _GREN_ORD:
+        if re.search(monster, n):
+            return nyckel
+    return None
+
+
 def importera_spelschema(conn, fixtures, *, sport=None):
     """F18-3: importera ett spelschema (lista fixtures) → skapar liga + lag +
     matcher via spara_match (som normaliserar namn→id, så lag och liga aldrig
@@ -2172,8 +2190,14 @@ def importera_spelschema(conn, fixtures, *, sport=None):
             "WHERE h.namn=? AND b.namn=? AND m.datum=? "
             "AND (t.namn=? OR (t.namn IS NULL AND ?=''))",
             (hemma, borta, datum, liga, liga)).fetchone()
+        # Grenen kommer från fixturen när den finns, annars ur liganamnet
+        # ("Elitserien Damer" → dam). Utan den blir lagen grenlösa och dam-/
+        # herrlag med samma namn kollapsar ihop på samma namn-slug.
         match = {"lag_hemma": hemma, "lag_borta": borta, "datum": datum,
-                 "tid": (f.get("kickoff") or ""), "liga": liga, "sport": sp}
+                 "tid": (f.get("kickoff") or ""), "liga": liga, "sport": sp,
+                 "gren": (_enum(f.get("gren"), GRENAR)
+                          or _gren_ur_liga(f.get("gender"))
+                          or _gren_ur_liga(liga))}
         if befintlig:
             match["id"] = befintlig["id"]
             uppdaterade += 1
@@ -2269,6 +2293,10 @@ def spara_match(conn, match):
             mellan, malskyttar, galleri, sida_url, omslag, spelare[], id?, status?}
     """
     sport = (match.get("sport") or "").strip().lower() or None
+    # Grenen (dam/herr/mixed) bor på TÄVLINGEN — matchen bär den inte i
+    # databasen. Kommer den med i dict:et (schemaimporten härleder den ur
+    # liganamnet) sätts den på en NY tävling och ärvs ner till lagen.
+    gren_in = _enum(match.get("gren"), GRENAR)
 
     def _tavling_ref():
         """Matchens tävlingskoppling är en LÄNK — den får aldrig skriva över
@@ -2295,12 +2323,23 @@ def spara_match(conn, match):
                 return rader[0]["id"]
         # Ny (fritt inskrivet namn) → skapa minimal post; namnkrock med annan
         # sport/gren får suffixat id i upsert_tavling.
-        return upsert_tavling(conn, namn, sport=sport or "fotboll")
+        return upsert_tavling(conn, namn, sport=sport or "fotboll",
+                              gren=gren_in)
 
     tav_id = _tavling_ref()
 
     # Individuell sport (tennis) → inline-skapade sidor blir utövare, inte lag.
     individ_sport = bool(sportprofil.profil(sport)["individ"]) if sport else False
+
+    # Lagen ärver grenen: från dict:et när den finns, annars från den tävling
+    # matchen hamnar i. Utan detta skapade schemaimporten lagen helt utan gren
+    # (Lunds VK i "Elitserien Damer" blev grenlöst och krockade med herrlaget
+    # på samma namn-slug).
+    gren = gren_in
+    if not gren and tav_id:
+        r = conn.execute("SELECT gren FROM tavling WHERE id=?",
+                         (tav_id,)).fetchone()
+        gren = r["gren"] if r else None
 
     def _lag_ref(id_nyckel, namn_nyckel):
         # Comboboxens ref (lag-id) vinner över namnet — två lag kan heta lika
@@ -2313,6 +2352,7 @@ def spara_match(conn, match):
         # (profilfärg + klubb/land, ingen trupp). Namnkrock med annan sport får
         # ett sport-suffixat id i upsert_lag, så befintliga lag rörs inte.
         return upsert_lag(conn, match.get(namn_nyckel, ""), sport=sport,
+                          gren=gren,
                           kind="individ" if individ_sport else None)
 
     # p.5: heldagsevent = match utan motståndare. Ingen borta-referens (även om

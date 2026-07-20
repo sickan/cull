@@ -2501,6 +2501,39 @@ class TestImporteraSpelschema(unittest.TestCase):
         self.assertEqual(
             self.c.execute("SELECT sport FROM matchen").fetchone()["sport"], "handboll")
 
+    def test_gren_ur_liganamnet_satts_pa_lag_och_tavling(self):
+        # Buggen: importen skapade lagen men lämnade gren tom (Dam/Herr/Mixed
+        # ovald i Lag-editorn). Grenen härleds ur liganamnet.
+        vb = [{"league": "Elitserien Damer", "sport": "volleyball",
+               "home_team": "Lunds VK", "away_team": "Göteborg VBK",
+               "date": "2026-11-21", "kickoff": "16:00"}]
+        store.importera_spelschema(self.c, vb)
+        tav = [t for t in store.lista_tavlingar(self.c)
+               if t["namn"] == "Elitserien Damer"][0]
+        self.assertEqual(tav["gren"], "dam")
+        grenar = {r["namn"]: r["gren"] for r in
+                  self.c.execute("SELECT namn, gren FROM lag")}
+        self.assertEqual(grenar, {"Lunds VK": "dam", "Göteborg VBK": "dam"})
+
+    def test_gren_ur_gender_faltet(self):
+        vb = [{"league": "European League 2026", "sport": "volleyball",
+               "gender": "men", "home_team": "Litauen", "away_team": "Sverige",
+               "date": "2026-05-30"}]
+        store.importera_spelschema(self.c, vb)
+        self.assertEqual(
+            self.c.execute("SELECT gren FROM lag WHERE namn='Litauen'")
+            .fetchone()["gren"], "herr")
+
+    def test_gren_lamnas_tom_nar_namnet_inte_sager_nagot(self):
+        # "CEV EuroVolley 2026" säger ingenting om gren — gissa inte.
+        vb = [{"league": "CEV EuroVolley 2026", "sport": "volleyball",
+               "home_team": "Montenegro", "away_team": "Sverige",
+               "date": "2026-08-21"}]
+        store.importera_spelschema(self.c, vb)
+        self.assertIsNone(
+            self.c.execute("SELECT gren FROM lag WHERE namn='Montenegro'")
+            .fetchone()["gren"])
+
 
 class TestBevakningKrockar(unittest.TestCase):
     """Krock-hantering: prio HK Malmö > Lunds VK Dam > H65 > Lunds VK herr > OV."""
