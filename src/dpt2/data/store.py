@@ -687,18 +687,24 @@ def radera_plats(conn, namn):
     conn.commit()
 
 
-def koordinat_for_plats(conn, namn):
-    """Koordinat för ett arenanamn eller None. Normaliserat, delsträng-match åt
-    båda håll (samma tolerans som iOS: "Eleda Stadion, Malmö" matchar "Eleda
-    Stadion"). Returnerar (lat, lon)."""
+def koordinat_ur_platser(namn, platser):
+    """Ren resolver: koordinat för ett arenanamn ur en redan hämtad platslista
+    (dicts m namn/lat/lon), eller None. Så anropare kan hämta plats-registret EN
+    gång i stället för en fråga per jobb. Samma tolerans som iOS."""
     key = _normalisera_plats(namn)
     if not key:
         return None
-    for r in conn.execute("SELECT namn, lat, lon FROM plats"):
-        k = _normalisera_plats(r["namn"])
+    for p in platser:
+        k = _normalisera_plats(p["namn"])
         if k and (k == key or key in k or k in key):
-            return (r["lat"], r["lon"])
+            return (p["lat"], p["lon"])
     return None
+
+
+def koordinat_for_plats(conn, namn):
+    """Koordinat för ett arenanamn eller None (frågar registret). Normaliserat,
+    delsträng-match åt båda håll ("Eleda Stadion, Malmö" matchar "Eleda Stadion")."""
+    return koordinat_ur_platser(namn, lista_platser(conn))
 
 
 def hamta_tavling(conn, tavling_id):
