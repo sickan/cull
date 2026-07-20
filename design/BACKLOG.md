@@ -630,6 +630,24 @@ kategorifacit Sport·Landskap·Människor·Film.
 levererar värde direkt — ta den i Våg 2. Skiva 2–4 = efter SM, med SM-veckans
 skarpkörning som facit på var kopplingen faktiskt brast.
 
+### MERGE-iOS · Jobbet äger sina matcher i appen (Stig 20/7)
+
+*UI-uttrycket av merge-tänket: på samma sätt som grenar ligger under tävlingen
+Friidrotts-SM ska ett **jobb/mästerskap ÄGA sina matcher/deltillfällen** i iOS —
+**hela listan utfällbar under jobbet**, inte bara "nästa" som idag (JobbDetalj
+visar bara Dagens deltillfällen / hjälten bara nästa).*
+
+- **Konsekvens:** öppnar för att **ta bort den separata "Matcher"-fliken**
+  (sport-centrerad — se SPORT-ORD-iOS-restpunkten): matcherna nås då inifrån
+  jobbet i stället för en egen flik. ⛔ Stig-beslut: ta bort fliken, eller
+  behålla den vid sidan av?
+- **JobbDetaljs "Dagens deltillfällen"** utökas till HELA programmet (alla dagar,
+  utfällbart per dag) — inte bara idag.
+- **Remote-buildbar bit:** logiken "hela programmet grupperat per dag" är ren +
+  testbar nu; själva utfällnings-UI:t + flik-borttaget är visuellt (maskin).
+- **Hänger ihop med skiva 4** (iOS konvergerar `Match`- och `Jobb`-modellerna
+  till en: jobb m valfri match-facett). Del av samma riktning, inte ett eget spår.
+
 ## G · Spikes DPT2
 
 SPIKE-01 importera spelschema → absorberad av F18-3 · SPIKE-03 ML/modell-bibliotek ·
