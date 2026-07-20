@@ -15,8 +15,7 @@
       { id: 'fotojobb', namn: 'Fotojobb' },
       { id: 'matcher', namn: 'Matcher' },
       { id: 'eventsektion', namn: 'Tävlingar' },          // V5-C (handoff §2); D11b §1: 'Event' försvinner ur UI
-      { id: 'lag', namn: 'Lag' },                         // D11b §1: ligor flyttade till Tävlingar
-      { id: 'utovare', namn: 'Utövare' },                 // D11b §2: eget register
+      { id: 'lag', namn: 'Lag & utövare' },               // D16 §A: ETT register (Utövare-posten borttagen; ligor bor i Tävlingar)
     ] },
     // §8 (UX-lyftet): jobbet som nav — "Efter jobb" + "Publicera" (inte
     // match-specifikt); §9: Träna har lämnat naven (tyst träning + rad i

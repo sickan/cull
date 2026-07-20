@@ -11,6 +11,7 @@
   import Lagbricka from '../lib/Lagbricka.svelte'
   import { grenFarg } from '../lib/gren.js'
   import { radTillToppen } from '../lib/scroll.js'
+  import { oppnaMal } from '../lib/oppna.js'
 
   let lag = []
   let tavlingar = []
@@ -41,6 +42,16 @@
     ;[lag, tavlingar] = await Promise.all([listaLag(), listaTavlingar()])
     laddar = false
   })
+
+  // D16 §A: Utövare-posten är borttagen ur navet — ⌘K-djuplänken för utövare
+  // landar nu HÄR i det enade registret. En utövare ÄR lag(kind='individ'), så
+  // id:t är ett lag-id; öppna posten direkt (raden fälls ut när listan laddat).
+  $: if ($oppnaMal && $oppnaMal.mal === 'utovare' && $oppnaMal.id) {
+    const id = $oppnaMal.id
+    oppnaMal.set(null)
+    lagSlag = 'alla'; visaArkiv = false; teamOpen = id
+    laddaTavlarI({ id })   // "Tävlar i" för den djuplänkade utövaren
+  }
 
   function initial(namn) {
     return (namn || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()

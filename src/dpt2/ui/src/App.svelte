@@ -5,7 +5,6 @@
   import Matcher from './panels/Matcher.svelte'
   import EventSektion from './panels/EventSektion.svelte'
   import Lag from './panels/Lag.svelte'
-  import Utovare from './panels/Utovare.svelte'
   import Gallra from './panels/Gallra.svelte'
   import Leverera from './panels/Leverera.svelte'
   import Snabbplock from './panels/Snabbplock.svelte'
@@ -47,7 +46,10 @@
     }
   }
   function valjSok(e) {
-    aktiv = e.detail.mal
+    // D16 §A: Utövare-posten är borttagen — utövarträffar öppnas i registret
+    // (panel 'lag'). oppnaMal behåller mal='utovare' så Lag-panelen vet att den
+    // ska fälla ut just den utövaren.
+    aktiv = e.detail.mal === 'utovare' ? 'lag' : e.detail.mal
     oppnaMal.set(e.detail)
     palettOppen = false
   }
@@ -164,8 +166,6 @@
       <EventSektion on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'lag'}
       <Lag />
-    {:else if aktiv === 'utovare'}
-      <Utovare />
     {:else if aktiv === 'gallra'}
       <Gallra {aktivMatchData} on:navigera={(e) => (aktiv = e.detail)} on:urval={uppdateraUrval} />
     {:else if aktiv === 'leverera'}
