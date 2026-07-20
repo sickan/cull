@@ -446,13 +446,20 @@
   // visar counts + krockar (du väljer lag på krockdatum — ena/andra/båda).
   async function importFranJson() {
     importFel = ''; importJsonRes = null
+    if (!importJson.trim()) { importFel = 'Klistra in ett spelschema (JSON) först.'; return }
     let fixtures
-    try { fixtures = JSON.parse(importJson) } catch { importFel = 'Ogiltig JSON.'; return }
-    if (!Array.isArray(fixtures)) { importFel = 'JSON ska vara en lista med matcher.'; return }
+    try { fixtures = JSON.parse(importJson) }
+    catch (e) { importFel = 'Ogiltig JSON: ' + (e?.message || e); return }
+    if (!Array.isArray(fixtures)) { importFel = 'JSON ska vara en lista [ {…}, {…} ].'; return }
     importKor_ = true
-    importJsonRes = await importeraSpelschema(fixtures)
-    matcher = await listaMatcher()
-    importKor_ = false
+    try {
+      importJsonRes = await importeraSpelschema(fixtures)
+      matcher = await listaMatcher()
+    } catch (e) {
+      importFel = 'Import misslyckades: ' + (e?.message || e)
+    } finally {
+      importKor_ = false
+    }
   }
 
   let hamtar = false
@@ -899,9 +906,10 @@
           <div class="importeller">— eller klistra in ett färdigt spelschema (JSON) —</div>
           <textarea class="mono importjson" rows="4" bind:value={importJson}
             placeholder={'[{"league":"Handbollsligan","sport":"handboll","home_team":"HK Malmö","away_team":"…","date":"2026-09-26","kickoff":"16:00"}]'}></textarea>
-          <button class="prim" on:click={importFranJson} disabled={!importJson.trim() || importKor_}>
+          <button class="prim" on:click={importFranJson} disabled={importKor_}>
             {importKor_ ? 'Importerar…' : 'Importera JSON ›'}
           </button>
+          {#if importFel}<div class="importfel">⚠ {importFel}</div>{/if}
 
           {#if importJsonRes}
             <div class="importresultat">
