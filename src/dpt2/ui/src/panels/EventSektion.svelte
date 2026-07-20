@@ -22,6 +22,7 @@
   let filter = 'alla'          // alla | pagaende | kommande | avslutade
   let vald = null              // event-id → detaljvy
   let detalj = null
+  let detaljFel = ''           // synligt felläge — aldrig tyst evig "Laddar…"
 
   // Typ-etikett + kantfärg (handoff §2: mästerskap amber, cup #3E7C87,
   // turnering #6E8757, världscup #2F7CB0; övrigt neutral).
@@ -89,13 +90,23 @@
 
   async function oppna(id) {
     vald = id
-    detalj = await hamtaEventDetalj(id).catch(() => null)
+    detalj = null; detaljFel = ''
+    try {
+      // Timeout-vakt: en hängd brygga får aldrig fastna som evig "Laddar…".
+      detalj = await Promise.race([
+        hamtaEventDetalj(id),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('tidsgräns (8s)')), 8000))])
+      if (!detalj) detaljFel = 'Tävlingen kunde inte laddas.'
+    } catch (e) {
+      detaljFel = 'Kunde inte ladda tävlingen: ' + (e?.message || 'okänt fel') +
+        '. Starta om appen om det står kvar.'
+    }
     dagIx = 0
     // M-3: arbetsytan börjar om per tävling (läge, gruppering, sök, val).
     laget = 'grenar'; gruppera = 'klass'; grenSok = ''; baraFavoriter = false
     valdGren = null; grenDetalj = null; allaDeltagare = false
     mastDag = 1; tidsaxel = null
-    await laddaProgram()
+    if (detalj) await laddaProgram()
   }
   async function tillbaka() {
     vald = null; detalj = null; mast = null
@@ -950,6 +961,12 @@
       {/if}
     </div>
     {/if}
+  {:else if detaljFel}
+    <div class="tom">
+      <p>⚠ {detaljFel}</p>
+      <button class="sek" on:click={tillbaka} style="margin-right:8px">‹ Tillbaka</button>
+      <button class="sek" on:click={() => oppna(vald)}>Försök igen</button>
+    </div>
   {:else}
     <p class="tom">Laddar…</p>
   {/if}
