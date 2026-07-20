@@ -2491,3 +2491,12 @@ class TestImporteraSpelschema(unittest.TestCase):
                 "away_team": "B", "date": "2026-11-21"}]
         self.assertEqual(store.importera_spelschema(self.c, bad),
                          {"skapade": 0, "uppdaterade": 0, "hoppade": 1})
+
+    def test_sport_ur_liganamnet_nar_falt_och_arg_saknas(self):
+        # Handboll-filerna saknar sport-fält → härleds ur "Handbollsligan Dam".
+        hb = [{"league": "Handbollsligan Dam", "home_team": "H65 Höör",
+               "away_team": "Skövde HF", "date": "2026-10-10", "kickoff": "14:00"}]
+        r = store.importera_spelschema(self.c, hb)   # varken sport-arg el. -fält
+        self.assertEqual(r["skapade"], 1)
+        self.assertEqual(
+            self.c.execute("SELECT sport FROM matchen").fetchone()["sport"], "handboll")
