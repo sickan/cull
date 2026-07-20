@@ -95,9 +95,17 @@ class Api:
         """F18-3: bulk-importera ett spelschema (lista fixtures m home_team/
         away_team/date/kickoff/league, valfritt sport) → liga + lag + matcher via
         spara_match. Sporten tas per fixture (engelska mappas), annars `sport`-
-        argumentet. Idempotent (omimport uppdaterar, dubblerar aldrig)."""
+        argumentet. Idempotent (omimport uppdaterar, dubblerar aldrig).
+
+        Returnerar även `krockar` — bevakade matcher samma dag över HELA schemat
+        (bevakningsprio), så inläsningen direkt visar var du måste välja lag."""
         r = store.importera_spelschema(self.conn, fixtures or [], sport=sport)
-        return {"ok": True, **r}
+        krockar = store.hitta_krockar(store.lista_matcher(self.conn))
+        return {"ok": True, **r, "krockar": krockar}
+
+    def bevakningskrockar(self):
+        """Alla krockar i det aktuella schemat (bevakade matcher samma dag)."""
+        return store.hitta_krockar(store.lista_matcher(self.conn))
 
     def satt_resultat(self, match_id, resultat, mellan, malskyttar):
         """Resultat-remsan (Publicera/Innehåll) — kontinuerlig, fältvis

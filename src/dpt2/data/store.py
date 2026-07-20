@@ -2177,6 +2177,67 @@ def importera_spelschema(conn, fixtures, *, sport=None):
     return {"skapade": skapade, "uppdaterade": uppdaterade, "hoppade": hoppade}
 
 
+# Bevakningsprioritet (Stig 20/7): vid krock (bevakade matcher SAMMA dag) vinner
+# laget som står högst. Regel = {lag: substräng av lagnamnet, liga: valfri
+# substräng}. Ordningen ÄR prioriteten (först = högst). Lunds VK skiljs på LIGA
+# — Dam (Elitserien Damer) vs herr (Elitserien) — båda heter "Lunds VK".
+BEVAKNINGSPRIO = [
+    {"lag": "HK Malmö", "liga": None},
+    {"lag": "Lunds VK", "liga": "Damer"},
+    {"lag": "H65", "liga": None},
+    {"lag": "Lunds VK", "liga": "Elitserien"},
+    {"lag": "OV Helsingborg", "liga": None},
+]
+
+
+def match_prio(hemma, borta, liga, prio=None):
+    """Prioritetsrank för en match (0 = högst) givet bevakningsprio. Lag-regeln
+    matchas mot hemma ELLER borta (substräng, skiftlägesokänsligt) + ev. liga-
+    krav. Ingen träff → len(prio) ('bevakas ej', lägst). Dam-regeln kollas före
+    herr-regeln (ordning), så en Damer-match aldrig fångas av herr-regeln."""
+    prio = BEVAKNINGSPRIO if prio is None else prio
+    h, b, lg = (hemma or "").lower(), (borta or "").lower(), (liga or "").lower()
+    for i, regel in enumerate(prio):
+        lag = regel["lag"].lower()
+        if lag in h or lag in b:
+            krav = regel.get("liga")
+            if krav is None or krav.lower() in lg:
+                return i
+    return len(prio)
+
+
+def hitta_krockar(matcher, prio=None):
+    """Krockar = flera BEVAKADE matcher (match_prio < 'bevakas ej') samma datum
+    — du kan inte vara på två ställen. matcher: dicts m lag_hemma/lag_borta (el.
+    hemma/borta/home_team…), datum (el. date), liga (el. tavling/league), tid.
+    Returnerar per krock-datum {datum, vald (högst prio), krockar (resten,
+    sorterade på prio→tid)}. Bara datum med ≥2 bevakade matcher."""
+    prio = BEVAKNINGSPRIO if prio is None else prio
+    def falt(m, *nycklar):
+        for n in nycklar:
+            if m.get(n):
+                return m[n]
+        return ""
+    per_dag = {}
+    for m in matcher:
+        hemma = falt(m, "lag_hemma", "hemma", "home_team")
+        borta = falt(m, "lag_borta", "borta", "away_team")
+        liga = falt(m, "liga", "tavling", "league")
+        datum = falt(m, "datum", "date")
+        rank = match_prio(hemma, borta, liga, prio)
+        if rank >= len(prio) or not datum:
+            continue                       # bevakas ej / odaterad
+        per_dag.setdefault(datum, []).append(
+            {**m, "prio": rank, "hemma": hemma, "borta": borta, "liga": liga})
+    ut = []
+    for datum, ms in sorted(per_dag.items()):
+        if len(ms) < 2:
+            continue
+        ms.sort(key=lambda x: (x["prio"], falt(x, "tid", "kickoff") or "99:99"))
+        ut.append({"datum": datum, "vald": ms[0], "krockar": ms[1:]})
+    return ut
+
+
 def spara_match(conn, match):
     """Skapar/uppdaterar en match ur ett UI-dict (inline-spelare). Normaliserar
     liga→tävling, lagnamn→lag, spelare→match_trupp. Returnerar match-id.

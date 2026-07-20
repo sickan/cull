@@ -2500,3 +2500,50 @@ class TestImporteraSpelschema(unittest.TestCase):
         self.assertEqual(r["skapade"], 1)
         self.assertEqual(
             self.c.execute("SELECT sport FROM matchen").fetchone()["sport"], "handboll")
+
+
+class TestBevakningKrockar(unittest.TestCase):
+    """Krock-hantering: prio HK Malmö > Lunds VK Dam > H65 > Lunds VK herr > OV."""
+
+    def test_match_prio_ordning_liga_och_borta(self):
+        p = store.match_prio
+        self.assertEqual(p("HK Malmö", "X", "Handbollsligan"), 0)
+        self.assertEqual(p("Lunds VK", "RIG Falköping", "Elitserien Damer"), 1)
+        self.assertEqual(p("H65 Höör", "Boden", "Handbollsligan Dam"), 2)
+        self.assertEqual(p("Lunds VK", "Habo", "Elitserien"), 3)          # herr
+        self.assertEqual(p("OV Helsingborg", "X", "Handbollsligan Dam"), 4)
+        self.assertEqual(p("Kristianstad HK", "Sävehof", "Handbollsligan Dam"), 5)  # ej
+        self.assertEqual(p("LUGI HF", "HK Malmö", "Handbollsligan"), 0)   # borta räknas
+
+    def test_krock_11_07_lunds_dam_vinner_over_h65_och_herr(self):
+        matcher = [
+            {"lag_hemma": "H65 Höör", "lag_borta": "Boden Handboll",
+             "datum": "2026-11-07", "liga": "Handbollsligan Dam", "tid": "14:00"},
+            {"lag_hemma": "Lunds VK", "lag_borta": "Habo Wolley",
+             "datum": "2026-11-07", "liga": "Elitserien", "tid": "16:00"},
+            {"lag_hemma": "Lunds VK", "lag_borta": "RIG Falköping",
+             "datum": "2026-11-07", "liga": "Elitserien Damer", "tid": "16:00"},
+        ]
+        k = store.hitta_krockar(matcher)
+        self.assertEqual(len(k), 1)
+        self.assertEqual(k[0]["vald"]["liga"], "Elitserien Damer")        # prio 1
+        self.assertEqual([m["prio"] for m in k[0]["krockar"]], [2, 3])    # H65, herr
+
+    def test_krock_hk_malmo_vinner_over_ov(self):
+        matcher = [
+            {"lag_hemma": "HK Malmö", "lag_borta": "HF Karlskrona",
+             "datum": "2026-10-09", "liga": "Handbollsligan", "tid": "19:00"},
+            {"lag_hemma": "OV Helsingborg", "lag_borta": "Kristianstad HK",
+             "datum": "2026-10-09", "liga": "Handbollsligan Dam", "tid": "19:00"},
+        ]
+        k = store.hitta_krockar(matcher)
+        self.assertEqual(k[0]["vald"]["hemma"], "HK Malmö")               # prio 0
+
+    def test_obevakad_match_ar_ingen_krock(self):
+        matcher = [
+            {"lag_hemma": "HK Malmö", "lag_borta": "X", "datum": "2026-11-01",
+             "liga": "Handbollsligan"},
+            {"lag_hemma": "Kristianstad HK", "lag_borta": "Sävehof",
+             "datum": "2026-11-01", "liga": "Handbollsligan Dam"},        # bevakas ej
+        ]
+        self.assertEqual(store.hitta_krockar(matcher), [])
