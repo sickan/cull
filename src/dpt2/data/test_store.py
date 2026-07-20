@@ -2474,3 +2474,20 @@ class TestImporteraSpelschema(unittest.TestCase):
         self.assertEqual(r2, {"skapade": 0, "uppdaterade": 3, "hoppade": 1})
         n = self.c.execute("SELECT COUNT(*) FROM matchen").fetchone()[0]
         self.assertEqual(n, 3)                                # inga dubbletter
+
+    def test_sport_ur_fixture_engelska_mappas(self):
+        # Volleyboll-filerna bär "sport": "volleyball" per fixture → mappas till
+        # schemats "volleyboll"; inget sport-argument behövs.
+        vb = [{"league": "Elitserien Damer", "sport": "volleyball",
+               "home_team": "Lunds VK", "away_team": "Göteborg VBK",
+               "date": "2026-11-21", "kickoff": "16:00"}]
+        r = store.importera_spelschema(self.c, vb)   # inget sport-arg
+        self.assertEqual(r["skapade"], 1)
+        m = self.c.execute("SELECT sport FROM matchen").fetchone()
+        self.assertEqual(m["sport"], "volleyboll")
+
+    def test_otolkbar_sport_hoppas(self):
+        bad = [{"league": "X", "sport": "curling", "home_team": "A",
+                "away_team": "B", "date": "2026-11-21"}]
+        self.assertEqual(store.importera_spelschema(self.c, bad),
+                         {"skapade": 0, "uppdaterade": 0, "hoppade": 1})

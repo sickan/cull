@@ -2103,11 +2103,35 @@ def hamta_installning(conn, nyckel, default=None):
 
 
 # ── Match (normalisering ↔ rekonstruktion av inline-spelare) ─────────────────
-def importera_spelschema(conn, fixtures, *, sport):
+# Engelska (och svenska) sportnamn → DPT2:s schema-nycklar. Källfilerna kan
+# skriva "volleyball"/"handball"; schemat kräver "volleyboll"/"handboll".
+_SPORT_ALIAS = {
+    "volleyball": "volleyboll", "handball": "handboll", "football": "fotboll",
+    "soccer": "fotboll", "floorball": "innebandy", "beach volleyball": "beachvolley",
+    "beachvolleyball": "beachvolley", "athletics": "friidrott",
+    "track and field": "friidrott", "tennis": "tennis",
+}
+_GILTIGA_SPORTER = {"fotboll", "handboll", "innebandy", "volleyboll",
+                    "beachvolley", "tennis", "friidrott"}
+
+
+def _normalisera_sport(s):
+    """Mappar ett sportnamn (engelska/svenska) → DPT2:s schema-nyckel, eller
+    None om det inte går att tolka."""
+    n = (s or "").strip().lower()
+    n = _SPORT_ALIAS.get(n, n)
+    return n if n in _GILTIGA_SPORTER else None
+
+
+def importera_spelschema(conn, fixtures, *, sport=None):
     """F18-3: importera ett spelschema (lista fixtures) → skapar liga + lag +
     matcher via spara_match (som normaliserar namn→id, så lag och liga aldrig
     dubbleras). Fält per fixture: home_team, away_team, date (ISO), kickoff
-    ('HH:MM' el. None), league.
+    ('HH:MM' el. None), league, sport (valfritt).
+
+    Sporten tas per fixture (`sport`-fältet) när det finns, annars `sport`-
+    argumentet; engelska namn mappas ("volleyball"→"volleyboll"). Fixtures utan
+    tolkbar sport eller ofullständiga (saknar lag/datum) HOPPAS.
 
     IDEMPOTENT: en match med samma liga+hemma+borta+datum UPPDATERAS i stället
     för att dubbleras — omimport är säker. Returnerar {skapade, uppdaterade,
@@ -2117,7 +2141,8 @@ def importera_spelschema(conn, fixtures, *, sport):
         hemma = (f.get("home_team") or "").strip()
         borta = (f.get("away_team") or "").strip()
         datum = (f.get("date") or "").strip()
-        if not (hemma and borta and datum):
+        sp = _normalisera_sport(f.get("sport")) or _normalisera_sport(sport)
+        if not (hemma and borta and datum and sp):
             hoppade += 1
             continue
         liga = (f.get("league") or "").strip()
@@ -2130,7 +2155,7 @@ def importera_spelschema(conn, fixtures, *, sport):
             "AND (t.namn=? OR (t.namn IS NULL AND ?=''))",
             (hemma, borta, datum, liga, liga)).fetchone()
         match = {"lag_hemma": hemma, "lag_borta": borta, "datum": datum,
-                 "tid": (f.get("kickoff") or ""), "liga": liga, "sport": sport}
+                 "tid": (f.get("kickoff") or ""), "liga": liga, "sport": sp}
         if befintlig:
             match["id"] = befintlig["id"]
             uppdaterade += 1

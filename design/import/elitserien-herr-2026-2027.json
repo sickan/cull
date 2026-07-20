@@ -1,0 +1,12 @@
+[
+  {"league": "Elitserien", "season": "2026/2027", "sport": "volleyball", "home_team": "Lunds VK", "away_team": "Sollentuna VK", "date": "2026-10-17", "kickoff": "16:00"},
+  {"league": "Elitserien", "season": "2026/2027", "sport": "volleyball", "home_team": "Lunds VK", "away_team": "Habo Wolley", "date": "2026-11-07", "kickoff": "16:00"},
+  {"league": "Elitserien", "season": "2026/2027", "sport": "volleyball", "home_team": "Lunds VK", "away_team": "Vingåkers VK", "date": "2026-11-14", "kickoff": "16:00"},
+  {"league": "Elitserien", "season": "2026/2027", "sport": "volleyball", "home_team": "Lunds VK", "away_team": "Hylte/Halmstad VBK", "date": "2026-11-28", "kickoff": "16:00"},
+  {"league": "Elitserien", "season": "2026/2027", "sport": "volleyball", "home_team": "Lunds VK", "away_team": "Örkelljunga VK", "date": "2026-12-06", "kickoff": "16:00"},
+  {"league": "Elitserien", "season": "2026/2027", "sport": "volleyball", "home_team": "Lunds VK", "away_team": "RIG Falköping", "date": "2026-12-19", "kickoff": "16:00"},
+  {"league": "Elitserien", "season": "2026/2027", "sport": "volleyball", "home_team": "Lunds VK", "away_team": "Södertelge VBK", "date": "2027-01-06", "kickoff": null},
+  {"league": "Elitserien", "season": "2026/2027", "sport": "volleyball", "home_team": "Lunds VK", "away_team": "Uppsala VBS", "date": "2027-02-06", "kickoff": null},
+  {"league": "Elitserien", "season": "2026/2027", "sport": "volleyball", "home_team": "Lunds VK", "away_team": "Hästhagen IF", "date": "2027-02-14", "kickoff": null},
+  {"league": "Elitserien", "season": "2026/2027", "sport": "volleyball", "home_team": "Lunds VK", "away_team": "Floby VBK", "date": "2027-03-13", "kickoff": null}
+]

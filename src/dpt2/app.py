@@ -91,10 +91,11 @@ class Api:
             self._synka_ackr_paminnelse(jid)
         return {"ok": True, "id": mid}
 
-    def importera_spelschema(self, fixtures, sport="handboll"):
+    def importera_spelschema(self, fixtures, sport=None):
         """F18-3: bulk-importera ett spelschema (lista fixtures m home_team/
-        away_team/date/kickoff/league) → liga + lag + matcher via spara_match.
-        Idempotent (omimport uppdaterar, dubblerar aldrig). Returnerar counts."""
+        away_team/date/kickoff/league, valfritt sport) → liga + lag + matcher via
+        spara_match. Sporten tas per fixture (engelska mappas), annars `sport`-
+        argumentet. Idempotent (omimport uppdaterar, dubblerar aldrig)."""
         r = store.importera_spelschema(self.conn, fixtures or [], sport=sport)
         return {"ok": True, **r}
 
