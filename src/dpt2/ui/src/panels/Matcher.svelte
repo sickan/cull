@@ -1,5 +1,5 @@
 <script>
-  import { onMount, createEventDispatcher } from 'svelte'
+  import { onMount, createEventDispatcher, tick } from 'svelte'
   import {
     listaMatcher, hamtaMatch, sparaMatch, hamtaTrupp, sattAktivMatch,
     lasUttagFil, valjFil, listaTavlingar, listaLag, listaLagForTavling,
@@ -408,6 +408,7 @@
   function importVaxla() {
     importOpen = !importOpen
     if (!importOpen) { importRader = []; importFel = ''; importJson = ''; importJsonRes = null }
+    else tick().then(() => document.querySelector('.importkort')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
   async function importHamta() {
     if (!importLag.trim()) { importFel = 'Ange ett lag.'; return }
