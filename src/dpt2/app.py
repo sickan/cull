@@ -1481,6 +1481,14 @@ class Api:
                 "antal_kommande_matcher": antal_matcher,
                 "antal_kommande_jobb": len(kommande)}
 
+    def fotojobb_for_tavling(self, tavling_id):
+        """M-11 baklänges (D16 §A): alla fotojobb kopplade till en tävling —
+        bekräftad länk ELLER auto-matchad, samma härledning som lista_fotojobb
+        gör per jobb. Tävlingar-panelen listar sina jobb med den här."""
+        if not tavling_id:
+            return []
+        return [j for j in self.lista_fotojobb() if j.get("tavling_id") == tavling_id]
+
     def spara_fotojobb(self, jobb):
         """Skapar (utan id) eller uppdaterar (med id) ett fotojobb. Ett utkast
         (jobb.utkast=True) sparas bara LOKALT — pushas aldrig till tjänsten

@@ -790,6 +790,16 @@ export async function listaTavlingar() {
   return wait(structuredClone(MOCK_TAVLINGAR))
 }
 
+// M-11 baklänges (D16 §A): fotojobb kopplade till en tävling. Backend härleder
+// ur lista_fotojobb (bekräftad länk + auto). Mock: filtrera MOCK-jobben.
+export async function fotojobbForTavling(tavlingId) {
+  const api = brygga()
+  if (api) return api.fotojobb_for_tavling(tavlingId)
+  const jobb = (typeof MOCK_FOTOJOBB !== 'undefined' ? MOCK_FOTOJOBB : [])
+    .filter((j) => j.tavling_id === tavlingId)
+  return wait(structuredClone(jobb))
+}
+
 export async function sportprofiler() {
   const api = brygga()
   if (api) return api.sportprofiler()

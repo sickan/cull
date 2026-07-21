@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte'
   import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher, listaLag,
     privatKalendrar, privatHandelser, sattAckreditering, skickaAckrMail,
-    momentStatus, listaUnderkategorier } from '../lib/api.js'
+    momentStatus, listaUnderkategorier, listaTavlingar } from '../lib/api.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { grenFarg } from '../lib/gren.js'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
@@ -74,6 +74,7 @@
   let klockIv
 
   let modal = null              // redigeringsutkast för "＋ Nytt fotojobb" eller null
+  let tavlingar = []            // M-11: väljbara tävlingar i editorn ("Del av …")
   let jobEditId = null          // id på fotojobbet vars redigeringskort är utfällt
   let redigerar = null          // redigeringsutkast för jobEditId (seedas vid öppning)
   const GREN_ETIKETT = { dam: 'Dam', herr: 'Herr', mixed: 'Mixed' }
@@ -116,14 +117,16 @@
       // Matcher/lag laddas TILLSAMMANS med jobben (inte efter) — grenForJobb()
       // läser dem i en {@const}, och Svelte upptäcker inte det beroendet om de
       // sätts i ett separat steg efter att listan redan renderats en gång.
-      const [j, m, l] = await Promise.all([
+      const [j, m, l, tv] = await Promise.all([
         listaFotojobb().catch(() => []),
         listaMatcher().catch(() => []),
         listaLag().catch(() => []),
+        listaTavlingar().catch(() => []),
       ])
       jobb = Array.isArray(j) ? j : []
       matcher = m
       lagAlla = l
+      tavlingar = Array.isArray(tv) ? tv : []
     } finally {
       laddar = false        // släpp ALLTID laddningsläget, även vid fel/timeout
     }
@@ -258,7 +261,7 @@
   function nyttJobb() {
     // notering speglas som Google-description av backend (tvåvägs) — UI:t
     // skickar bara fältet, app.py bygger beskrivningen.
-    modal = { title: '', start_at: '', end_at: '', location: '', notering: '', category: '', all_day: false, match_id: '' }
+    modal = { title: '', start_at: '', end_at: '', location: '', notering: '', category: '', all_day: false, match_id: '', tavling_id: '' }
   }
   // datetime-local kräver 'YYYY-MM-DDTHH:mm' — heldagsjobb lagras som rent datum
   // ('2026-10-24') och skulle annars lämna fältet tomt (placeholder).
@@ -270,7 +273,7 @@
   // Månad borrar först ner till veckan (drill-down), veckan öppnar modalen.
   function oppnaModalFor(j) {
     modal = { ...j, category: j.category || '', match_id: j.match_id || '', notering: j.notering || '',
-      start_at: tillLokal(j.start_at), end_at: tillLokal(j.end_at) }
+      tavling_id: j.tavling_id || '', start_at: tillLokal(j.start_at), end_at: tillLokal(j.end_at) }
   }
   function visaVeckaFor(dag) { vyAnkare = dag; bytLayout('vecka') }
 
@@ -655,7 +658,7 @@
                     </div>
                     <div class="mitt">
                       <div class="rtitel stor">{#if gren}<span class="grenlbl3 scd" style="color:{grenFarg(gren)}">{GREN_ETIKETT[gren]}</span>{/if}{j.title}{#if res}<span class="resultat scd">{res}</span>{/if}{#if arIdag(j)}<span class="idagbricka">Idag</span>{/if}</div>
-                      <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}</div>
+                      <div class="when">{klocka(j.start_at)}{j.end_at ? '–' + klocka(j.end_at) : ''}{j.location ? ' · ' + j.location : ''}{#if j.category === 'Sport'} · <span class="delav" class:auto={j.tavling_auto}>{j.tavling_namn ? `Del av ${j.tavling_namn}` : 'Fristående'}</span>{/if}</div>
                       {#if j.notering}<div class="notering">{j.notering}</div>{/if}
                       {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                     </div>
@@ -761,6 +764,19 @@
                 <option value={m.id}>{m.lag_hemma} – {m.lag_borta}{m.datum ? ` (${m.datum})` : ''}</option>
               {/each}
             </select>
+          </label>
+          <!-- M-11 (D16 §A): jobbet ligger UNDER en tävling. "" = Fristående;
+               invarianten är att sport-jobbet aldrig står lösryckt. -->
+          <label class="full">Del av tävling
+            <select bind:value={modal.tavling_id} on:change={() => (modal.tavling_auto = false)}>
+              <option value="">Fristående</option>
+              {#each tavlingar as t}
+                <option value={t.id}>{t.namn}</option>
+              {/each}
+            </select>
+            {#if modal.tavling_auto && modal.tavling_id}
+              <span class="autohint scd">auto-förslag ur namn + datum — spara för att låsa kopplingen</span>
+            {/if}
           </label>
           <!-- Ackreditering (handoff §2) — bara sparade, synkade matchjobb:
                statusen bor skilt från jobbet och sparas direkt vid tap. -->
@@ -918,6 +934,10 @@
   .rtitel { font-size: 13.5px; font-weight: 600; color: var(--t-head); }
   .rtitel.stor { font-size: 15px; }
   .when { font-size: 12.5px; color: var(--t-mut); margin-top: 2px; }
+  /* M-11: "Del av {tävling}" — bekräftad koppling i accent, auto-förslag dämpat. */
+  .delav { color: var(--acc); font-weight: 600; }
+  .delav.auto { color: var(--t-help); font-weight: 500; font-style: italic; }
+  .autohint { display: block; margin-top: 4px; font-size: 11px; color: var(--t-help); }
   /* §3 p.2: fotografens anteckning (kund/paket/utrustning). Egen rad under
      tid+plats, avkortad — den kan vara godtyckligt lång och får inte bryta raden. */
   .notering { font-size: 11.5px; color: var(--t-body); margin-top: 3px;

@@ -9,7 +9,7 @@
     kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle,
     sparaDisciplin, raderaDisciplin, sattDisciplinFavorit, sparaTavling, sportprofiler,
     hamtaMasterskapGrenar, hamtaGrenDetalj, hamtaMasterskapProgram,
-    hamtaProgram, sparaPass, raderaPass } from '../lib/api.js'
+    hamtaProgram, sparaPass, raderaPass, fotojobbForTavling } from '../lib/api.js'
   import LasInTavling from '../lib/LasInTavling.svelte'
   import { markeraAndring } from '../lib/livesynk.js'
   import { oppnaMal } from '../lib/oppna.js'
@@ -23,6 +23,12 @@
   let vald = null              // event-id → detaljvy
   let detalj = null
   let detaljFel = ''           // synligt felläge — aldrig tyst evig "Laddar…"
+  // M-11 baklänges: fotojobb som hör till den öppna tävlingen (Del av …).
+  let tavlingsjobb = []
+  $: if (vald) laddaTavlingsjobb(vald); else tavlingsjobb = []
+  async function laddaTavlingsjobb(id) {
+    tavlingsjobb = (await fotojobbForTavling(id).catch(() => [])) || []
+  }
 
   // Typ-etikett + kantfärg (handoff §2: mästerskap amber, cup #3E7C87,
   // turnering #6E8757, världscup #2F7CB0; övrigt neutral).
@@ -863,6 +869,22 @@
               <button class="kopplaknapp" on:click={() => koppla(m.id)}>Koppla ›</button>
             </div>
           {/each}
+        {/if}
+      </div>
+
+      <!-- M-11 baklänges (D16 §A): tävlingen listar sina fotojobb. -->
+      <div class="kort">
+        <div class="krubrik"><span class="caps">Fotojobb</span><span class="khint">jobb som ligger under tävlingen</span></div>
+        {#if tavlingsjobb.length}
+          {#each tavlingsjobb as j (j.id)}
+            <div class="mrad">
+              <span class="fixture">{j.title}</span>
+              <span class="nar">{(j.start_at || '').slice(0, 10)}{j.location ? ` · ${j.location}` : ''}</span>
+              {#if j.tavling_auto}<span class="khint">auto-förslag</span>{/if}
+            </div>
+          {/each}
+        {:else}
+          <p class="tomkort">Inga kopplade fotojobb än — sätt "Del av {e.namn}" på ett jobb i Fotojobb-panelen.</p>
         {/if}
       </div>
 
