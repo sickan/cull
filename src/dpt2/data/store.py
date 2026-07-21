@@ -2560,6 +2560,27 @@ def lista_matcher(conn):
     return [dict(r) for r in rader]
 
 
+def matcher_utan_trupp(conn, idag):
+    """Kommande LAGSPORT-matcher (datum ≥ idag, ej heldagsevent) som saknar
+    inläst trupp. Grund för Idag-kön 'Startlista saknas' (D16 §C). Tennis och
+    friidrott exkluderas — de är individsporter utan match_trupp, annars skulle
+    varje friidrottsstart flagga 'startlista saknas' hela SM-veckan."""
+    rader = conn.execute(
+        "SELECT m.id FROM matchen m "
+        "WHERE COALESCE(m.datum,'') >= ? AND m.event = 0 "
+        "  AND COALESCE(m.sport,'') NOT IN ('tennis','friidrott') "
+        "  AND NOT EXISTS (SELECT 1 FROM match_trupp t WHERE t.match_id = m.id)",
+        (idag,)).fetchall()
+    return [r[0] for r in rader]
+
+
+def urval_vantar_leverans(conn):
+    """Antal gallrade urval som ännu inte levererats (status='gallrad'). Grund
+    för Idag-kön 'Leverans väntar' (D16 §C)."""
+    return conn.execute(
+        "SELECT COUNT(*) FROM urval WHERE status='gallrad'").fetchone()[0]
+
+
 def radera_match(conn, match_id):
     conn.execute("DELETE FROM matchen WHERE id=?", (match_id,))
     conn.commit()

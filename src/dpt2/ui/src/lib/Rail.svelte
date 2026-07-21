@@ -43,6 +43,10 @@
     <img class="mark" src={logoHast} alt="" />
     <div class="ord scd">Dalecarlia Photo Tools<span>{versionsord}</span></div>
   </div>
+  <!-- D16 §C: "Idag" är en egen toppnivå ovanför Planera (kommandobryggan). -->
+  <button class="post topp" class:aktiv={aktiv === 'idag'} on:click={() => dispatch('valj', 'idag')}>
+    <span>Idag</span>
+  </button>
   {#each grupper as g}
     <div class="rubrik">{g.rubrik}</div>
     {#each g.poster as p}
@@ -80,6 +84,7 @@
   }
   .post:hover { background: var(--div3); color: var(--t-head); }
   .post.aktiv { background: var(--acc-soft); color: var(--acc); font-weight: 600; }
+  .post.topp { margin-top: 10px; }
   .nr {
     width: 18px; height: 18px; flex: none; border-radius: 5px;
     background: var(--div3); color: var(--t-mut);

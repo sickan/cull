@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import Rail from './lib/Rail.svelte'
+  import Idag from './panels/Idag.svelte'
   import Fotojobb from './panels/Fotojobb.svelte'
   import Matcher from './panels/Matcher.svelte'
   import EventSektion from './panels/EventSektion.svelte'
@@ -24,7 +25,7 @@
 
   const ARMOCK = erMock()
 
-  let aktiv = 'fotojobb'
+  let aktiv = 'idag'   // D16 §C: startskärmen är kommandobryggan
   // Temat följer OS (prefers-color-scheme) tills användaren manuellt växlar.
   const osTema = () => (typeof window !== 'undefined' && window.matchMedia
     && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark'
@@ -156,7 +157,9 @@
       </div>
     {/if}
 
-    {#if aktiv === 'fotojobb'}
+    {#if aktiv === 'idag'}
+      <Idag on:navigera={(e) => (aktiv = e.detail)} />
+    {:else if aktiv === 'fotojobb'}
       <Fotojobb on:navigera={(e) => (aktiv = e.detail)} />
     {:else if aktiv === 'matcher'}
       <Matcher on:aktiverad={(e) => aktiveraFranMatcher(e.detail)}

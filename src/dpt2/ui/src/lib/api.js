@@ -1132,6 +1132,32 @@ export async function stangAktivMatch() {
   return wait({ ok: true })
 }
 
+// Startskärm "Idag" (D16 §C) — härledd åtgärdskö + närmast på tur. Backenden
+// (hamta_idag) räknar ur befintliga källor; mocken speglar strukturen så
+// dev-UI:t och vaktesterna kan rendera utan pywebview-brygga.
+export async function hamtaIdag() {
+  const api = brygga()
+  if (api) return api.hamta_idag()
+  return wait({
+    kraver: [
+      { typ: 'ackreditering', niva: 'danger', titel: 'Ackreditering ej klar',
+        sub: '1 sport-jobb utan beviljad ackreditering', antal: 1, dest: 'fotojobb', cta: 'Öppna' },
+      { typ: 'startlista', niva: 'warn', titel: 'Startlista saknas',
+        sub: '5 matcher utan inläst trupp', antal: 5, dest: 'matcher', cta: 'Läs in' },
+    ],
+    narmast: [
+      { id: 'm1', titel: 'Malmö FF – Kristianstad DFF', kategori: 'Sport',
+        start_at: '2026-07-24T14:00', end_at: null, all_day: false,
+        plats: 'Eleda Stadion', tavling_namn: 'OBOS Damallsvenskan', match_id: 'm1' },
+      { id: 'j2', titel: 'Bröllop — Sofia & Erik', kategori: 'Människor',
+        start_at: '2026-07-26T13:00', end_at: null, all_day: false,
+        plats: 'Sofiero slott', tavling_namn: null, match_id: null },
+    ],
+    antal_kommande_matcher: 6,
+    antal_kommande_jobb: 11,
+  })
+}
+
 // ── Arbetsyta — autosparade utkast (Live/SoMe/Webb-Sport, per match) ────────
 const _mockUtkast = {}
 

@@ -1412,6 +1412,75 @@ class Api:
                 pass
         return alla
 
+    def hamta_idag(self):
+        """Startskärmens datakälla (D16 §C): en HÄRLEDD åtgärdskö + närmast på
+        tur, allt ur befintliga källor (inga hårdkodade siffror, ingen ny
+        datamodell). Best-effort per signal — en trasig delfråga får aldrig
+        fälla hela skärmen."""
+        idag = datetime.now().strftime("%Y-%m-%d")
+        try:
+            jobb = self.lista_fotojobb()
+        except Exception:
+            jobb = []
+        # Bara framtida/pågående jobb är åtgärdbara; passerade lämnas i historiken.
+        kommande = [j for j in jobb
+                    if (j.get("end_at") or j.get("start_at") or "") >= idag]
+
+        kraver = []
+        # 1. Ackreditering ej klar — sport-jobb utan BEVILJAD ackreditering.
+        ack = [j for j in kommande if j.get("category") == "Sport"
+               and (j.get("ackreditering") or {}).get("status") != "beviljad"]
+        if ack:
+            kraver.append({"typ": "ackreditering", "niva": "danger",
+                           "titel": "Ackreditering ej klar",
+                           "sub": f"{len(ack)} sport-jobb utan beviljad ackreditering",
+                           "antal": len(ack), "dest": "fotojobb", "cta": "Öppna"})
+        # 2. Plats saknas — jobb utan angiven plats/arena.
+        utan_plats = [j for j in kommande if not (j.get("location") or "").strip()]
+        if utan_plats:
+            kraver.append({"typ": "plats", "niva": "danger",
+                           "titel": "Plats saknas",
+                           "sub": f"{len(utan_plats)} jobb utan angiven plats",
+                           "antal": len(utan_plats), "dest": "fotojobb", "cta": "Öppna"})
+        # 3. Startlista saknas — kommande lagsport-matcher utan inläst trupp.
+        try:
+            utan_trupp = store.matcher_utan_trupp(self.conn, idag)
+        except Exception:
+            utan_trupp = []
+        if utan_trupp:
+            kraver.append({"typ": "startlista", "niva": "warn",
+                           "titel": "Startlista saknas",
+                           "sub": f"{len(utan_trupp)} matcher utan inläst trupp",
+                           "antal": len(utan_trupp), "dest": "matcher", "cta": "Läs in"})
+        # 4. Leverans väntar — gallrade urval som inte levererats.
+        try:
+            vantar = store.urval_vantar_leverans(self.conn)
+        except Exception:
+            vantar = 0
+        if vantar:
+            kraver.append({"typ": "leverans", "niva": "warn",
+                           "titel": "Leverans väntar",
+                           "sub": f"{vantar} gallrat urval att leverera",
+                           "antal": vantar, "dest": "leverera", "cta": "Öppna"})
+
+        # Närmast på tur — kommande jobb stigande, topp 6 (kort-projektion).
+        narmast = sorted(kommande, key=lambda j: (j.get("start_at") or "9999"))[:6]
+
+        def _kort(j):
+            return {"id": j.get("id"), "titel": j.get("title"),
+                    "kategori": j.get("category"), "start_at": j.get("start_at"),
+                    "end_at": j.get("end_at"), "all_day": j.get("all_day"),
+                    "plats": j.get("location"), "tavling_namn": j.get("tavling_namn"),
+                    "match_id": j.get("match_id")}
+
+        try:
+            antal_matcher = len(self._pagang_kommande(idag))
+        except Exception:
+            antal_matcher = 0
+        return {"kraver": kraver, "narmast": [_kort(j) for j in narmast],
+                "antal_kommande_matcher": antal_matcher,
+                "antal_kommande_jobb": len(kommande)}
+
     def spara_fotojobb(self, jobb):
         """Skapar (utan id) eller uppdaterar (med id) ett fotojobb. Ett utkast
         (jobb.utkast=True) sparas bara LOKALT — pushas aldrig till tjänsten
