@@ -1,0 +1,83 @@
+"""EN sanning för plats: fält/iOS-satta plats-overrides ska vävas in i
+jobblistan INNAN wholesale-pushen — så en plats som fältet satt (för jobb utan
+plats i Google Calendar) aldrig klampas över och speglas till alla klienter.
+
+Testar `Api._vav_in_platsoverrides` isolerat mot en stub-live_synk (inget nät,
+ingen DB): rätt jobb får platsen, jobb med egen plats rörs inte, koordinater
+fylls i, tom karta är en no-op, och nätfel får aldrig kasta.
+"""
+
+import unittest
+
+from dpt2.app import Api
+
+
+class StubSynk:
+    def __init__(self, svar):
+        self._svar = svar
+        self.anrop = 0
+
+    def hamta_jobbplats(self):
+        self.anrop += 1
+        if isinstance(self._svar, Exception):
+            raise self._svar
+        return self._svar
+
+
+class Stub:
+    """Minsta yta `_vav_in_platsoverrides` rör (self.live_synk + cache)."""
+
+    def __init__(self, synk):
+        self.live_synk = synk
+
+    vav = Api._vav_in_platsoverrides
+
+
+class TestVavInPlatsoverrides(unittest.TestCase):
+    def _kor(self, karta, jobb):
+        s = Stub(StubSynk({"jobb": karta}))
+        s.vav(jobb)
+        return s, jobb
+
+    def test_jobb_utan_plats_far_overridens(self):
+        jobb = [{"id": "j1", "location": ""}]
+        _, ut = self._kor({"j1": {"namn": "Nöbbelöv kyrka", "lat": 55.7, "lon": 13.2}}, jobb)
+        self.assertEqual(ut[0]["location"], "Nöbbelöv kyrka")
+        self.assertTrue(ut[0]["plats_override"])
+        self.assertEqual((ut[0]["lat"], ut[0]["lon"]), (55.7, 13.2))
+
+    def test_jobb_med_egen_plats_rors_inte(self):
+        jobb = [{"id": "j1", "location": "Malmö IP", "lat": 1.0, "lon": 2.0}]
+        _, ut = self._kor({"j1": {"namn": "Annat", "lat": 9.0, "lon": 9.0}}, jobb)
+        self.assertEqual(ut[0]["location"], "Malmö IP")
+        self.assertNotIn("plats_override", ut[0])
+        self.assertEqual((ut[0]["lat"], ut[0]["lon"]), (1.0, 2.0))
+
+    def test_koordinat_fylls_nar_platsnamn_finns_men_koord_saknas(self):
+        # location finns men lat/lon saknas → koordinaten ska ändå fyllas.
+        jobb = [{"id": "j1", "location": "Arena", "lat": None, "lon": None}]
+        _, ut = self._kor({"j1": {"namn": "Arena", "lat": 3.0, "lon": 4.0}}, jobb)
+        self.assertEqual((ut[0]["lat"], ut[0]["lon"]), (3.0, 4.0))
+
+    def test_tom_karta_ar_noop(self):
+        jobb = [{"id": "j1", "location": ""}]
+        _, ut = self._kor({}, jobb)
+        self.assertEqual(ut[0]["location"], "")
+        self.assertNotIn("plats_override", ut[0])
+
+    def test_natfel_kastar_aldrig(self):
+        s = Stub(StubSynk(RuntimeError("nätet nere")))
+        jobb = [{"id": "j1", "location": ""}]
+        s.vav(jobb)  # får inte kasta
+        self.assertEqual(jobb[0]["location"], "")
+
+    def test_cache_undviker_upprepade_anrop(self):
+        synk = StubSynk({"jobb": {"j1": {"namn": "A", "lat": 1, "lon": 2}}})
+        s = Stub(synk)
+        s.vav([{"id": "j1", "location": ""}])
+        s.vav([{"id": "j1", "location": ""}])
+        self.assertEqual(synk.anrop, 1)  # andra gången ur cachen (~30 s)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -229,3 +229,18 @@ class LiveSynk:
         except Exception as e:
             return {"ok": False, "fel": str(e)}
         return {"ok": status == 200}
+
+    def hamta_jobbplats(self):
+        """Läser plats-overrides som fältet/iOS satt: {jobb:{jobbId:{namn,lat,lon}},
+        arenor:{namn:{lat,lon}}}. DPT2 väver in `jobb`-kartan i jobblistan INNAN
+        wholesale-push (`_vav_in_platsoverrides`) så en fält-satt plats aldrig
+        klampas över och speglas till alla klienter. Best-effort → {} vid fel."""
+        if not self.har_nyckel():
+            return {}
+        try:
+            status, data = self._anrop("GET", "/api/jobbplats")
+        except Exception:
+            return {}
+        if status != 200 or not isinstance(data, dict):
+            return {}
+        return data

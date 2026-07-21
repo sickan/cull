@@ -1412,6 +1412,10 @@ class Api:
                 # Lokal rad = fallback för noter skrivna innan description-synken.
                 note, _ = _dela_beskrivning(j.get("description"))
                 j["notering"] = note or noteringar.get(j.get("id"), "")
+        # EN sanning för plats: väv in fält-/iOS-satta plats-overrides INNAN
+        # wholesale-pushen så en plats som fältet satt (för jobb utan plats i
+        # Google Calendar) aldrig klampas över och speglas till alla klienter.
+        self._vav_in_platsoverrides(alla)
         # Auto-synk till mobilen: panelen laddar om lista_fotojobb vid montering och
         # efter varje ändring (spara/radera/aktivera), så det räcker att haka på
         # HÄR för att jobben ska nå appens Kalender/Jobb utan ett manuellt steg.
@@ -1423,6 +1427,35 @@ class Api:
             except Exception:
                 pass
         return alla
+
+    def _vav_in_platsoverrides(self, jobb):
+        """Sätter plats (+ lat/lon) från molnets override-karta på jobb som
+        saknar plats i sin källa (Google Calendar). Fält/iOS satte den; det här
+        gör den till EN sanning innan wholesale-pushen så alla klienter ser samma
+        och nästa push aldrig raderar den. Best-effort, cachad ~30 s (panelen
+        laddar om lista_fotojobb ofta — får aldrig hänga på nätet)."""
+        try:
+            import time
+            nu = time.monotonic()
+            cache = getattr(self, "_platsoverride_cache", None)
+            if cache is None or nu - cache[0] > 30:
+                data = self.live_synk.hamta_jobbplats() or {}
+                self._platsoverride_cache = (nu, data.get("jobb") or {})
+            karta = self._platsoverride_cache[1]
+        except Exception:
+            return
+        if not karta:
+            return
+        for j in jobb:
+            o = karta.get(str(j.get("id")))
+            if not o:
+                continue
+            if not (j.get("location") or "").strip():
+                j["location"] = o.get("namn")
+                j["plats_override"] = True   # UI: visa att fältet satte platsen
+            if j.get("lat") is None and o.get("lat") is not None:
+                j["lat"] = o.get("lat")
+                j["lon"] = o.get("lon")
 
     def hamta_idag(self):
         """Startskärmens datakälla (D16 §C): en HÄRLEDD åtgärdskö + närmast på
