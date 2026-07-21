@@ -84,9 +84,12 @@
     const j = jobb.find((x) => x.id === pendingOppna)
     if (!j) return
     pendingOppna = null
-    await tick()   // låt listan rendera så raden finns att scrolla in i fokus
+    oppnaRedigering(j)              // öppnar (modal för sport, inline-kort annars)
+    await tick(); await tick()     // låt inline-kortet renderas fullt före mätning
+    // Centrera raden i vy — robust (aldrig tom vy som scrollBy kunde ge nära slutet).
     const rad = bodyEl && bodyEl.querySelector(`[data-jid="${CSS.escape(j.id)}"]`)
-    oppnaRedigering(j, rad)   // rad → radTillToppen scrollar den i vy (inline-fallet)
+    if (rad) rad.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    else if (bodyEl) bodyEl.scrollTo({ top: 0, behavior: 'smooth' })
   }
   let jobEditId = null          // id på fotojobbet vars redigeringskort är utfällt
   let redigerar = null          // redigeringsutkast för jobEditId (seedas vid öppning)
