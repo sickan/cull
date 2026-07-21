@@ -79,17 +79,14 @@
   // Djuplänk: öppna en specifik post när Idags åtgärdskö/⌘K pekar hit.
   let pendingOppna = null
   let avslutaOppna = null
-  async function forsokOppnaPending() {
+  function forsokOppnaPending() {
     if (!pendingOppna) return
     const j = jobb.find((x) => x.id === pendingOppna)
     if (!j) return
     pendingOppna = null
-    oppnaRedigering(j)              // öppnar (modal för sport, inline-kort annars)
-    await tick(); await tick()     // låt inline-kortet renderas fullt före mätning
-    // Centrera raden i vy — robust (aldrig tom vy som scrollBy kunde ge nära slutet).
-    const rad = bodyEl && bodyEl.querySelector(`[data-jid="${CSS.escape(j.id)}"]`)
-    if (rad) rad.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    else if (bodyEl) bodyEl.scrollTo({ top: 0, behavior: 'smooth' })
+    // Deep-link → ALLTID modalen (centrerad overlay, alltid synlig). Undviker
+    // scroll-skörheten när listan just mountats; modalen bär plats/ackreditering.
+    oppnaModalFor(j)
   }
   let jobEditId = null          // id på fotojobbet vars redigeringskort är utfällt
   let redigerar = null          // redigeringsutkast för jobEditId (seedas vid öppning)
