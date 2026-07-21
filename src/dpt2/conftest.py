@@ -12,5 +12,11 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _inga_skarpa_synkanrop(monkeypatch):
-    monkeypatch.delenv("CONTENT_SYNC_API_KEY", raising=False)
-    monkeypatch.delenv("CONTENT_SYNC_BASE_URL", raising=False)
+    # Alla tjänstenycklar nollas: koden faller genomgående tillbaka på
+    # os.environ (`api_key or os.environ.get(...)`), så en nyckel i utvecklarens
+    # skal läcker annars in i "utan-nyckel"-testerna (meta/bildhosting/kalender)
+    # OCH riskerar skarpa anrop. Testerna injicerar egna fejk-transporter/nycklar.
+    for var in ("CONTENT_SYNC_API_KEY", "CONTENT_SYNC_BASE_URL",
+                "CALENDAR_SYNC_API_KEY", "CALENDAR_SYNC_BASE_URL",
+                "DPT_BILD_API_KEY", "META_ACCESS_TOKEN", "IG_USER_ID"):
+        monkeypatch.delenv(var, raising=False)

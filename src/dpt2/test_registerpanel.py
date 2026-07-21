@@ -18,9 +18,11 @@ BRICKA = (UI / "lib" / "Lagbricka.svelte").read_text(encoding="utf-8")
 
 
 def _registerlistan(kalla):
-    """Registerlistans markup — utan den döda Tävlingar-vyn som ligger kvar
-    oåtkomlig i filen (D11b §1) och väntar på en egen städ-pass."""
-    return kalla[:kalla.index("{#each tavlingar as t (t.id)}")]
+    """Registerlistans markup. Den döda Tävlingar-vyn (D11b §1) är städad sedan
+    1372d77 — finns markören ändå kvar (äldre träd) klipps den bort, annars är
+    hela filen registerlistan."""
+    markor = "{#each tavlingar as t (t.id)}"
+    return kalla[:kalla.index(markor)] if markor in kalla else kalla
 
 
 def _utovargrenen(kalla):
@@ -64,10 +66,13 @@ class TestDeladEditor(unittest.TestCase):
     """M-1: ett register, ett Slag-val, rätt fält per slag."""
 
     def test_slagvalet_byter_formular(self):
+        # D16 §A: typen väljs UTTRYCKLIGEN vid skapande (split-create), och
+        # editorn auto-morphar sedan på l.kind — ingen manuell Slag-växel kvar.
         self.assertIn("const SLAG = [['alla', 'Alla'], ['individ', 'Utövare'], "
                       "['team', 'Lag']]", LAG)
-        self.assertIn("sattKind(l, 'individ')", LAG)
-        self.assertIn("sattKind(l, 'team')", LAG)
+        self.assertIn("nyttLag('individ')", LAG)
+        self.assertIn("nyttLag('team')", LAG)
+        self.assertIn("l.kind === 'individ'", LAG)
 
     def test_utovarformularets_falt(self):
         # Porträtt, namn och klubb är det DELADE huvudet (rätt etikett per
