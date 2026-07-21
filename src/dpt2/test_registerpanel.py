@@ -33,7 +33,9 @@ def _utovargrenen(kalla):
     finns där — lag-fälten som tidigare läckte in på personen.
     """
     ankare = kalla.index("<!-- Klassen är PERSONENS egen")
-    start = kalla.rindex("{#if l.kind === 'individ'}", 0, ankare)
+    # Master-detail (D12): editorn bor i högerkolumnen (.mddetalj) och binder mot
+    # `vald` i stället för radens `l`.
+    start = kalla.rindex("{#if vald.kind === 'individ'}", 0, ankare)
     return kalla[start:kalla.index("{:else}", ankare)]
 
 
@@ -48,7 +50,9 @@ class TestKlasspalett(unittest.TestCase):
     def test_okand_klass_ger_ingen_kant(self):
         # Utövar-avataren och porträttet får kant BARA när klassen är satt.
         for rad in re.findall(r"kant=\{[^}]*\}", LAG):
-            self.assertIn("l.gren ?", rad, rad)
+            # Master-detail: listan använder `l.gren`, editorn i högerkolumnen
+            # `vald.gren` — invarianten (kant BARA när klassen är satt) gäller båda.
+            self.assertRegex(rad, r"(l|vald)\.gren \?", rad)
             self.assertIn("''", rad, rad)
         self.assertIn("kant ? `border-left:3px solid ${kant};` : ''", BRICKA)
 
@@ -78,16 +82,16 @@ class TestDeladEditor(unittest.TestCase):
         # Porträtt, namn och klubb är det DELADE huvudet (rätt etikett per
         # slag); klass, @-konto och anteckning är utövarens egna.
         self.assertIn("Byt porträtt…", LAG)
-        self.assertIn("placeholder={l.kind === 'individ' ? 'Namn' : 'Lagnamn'}",
+        self.assertIn("placeholder={vald.kind === 'individ' ? 'Namn' : 'Lagnamn'}",
                       LAG)
-        self.assertIn("placeholder={l.kind === 'individ' ? 'Klubb' "
+        self.assertIn("placeholder={vald.kind === 'individ' ? 'Klubb' "
                       ": 'Förening / förbund'}", LAG)
         u = _utovargrenen(LAG)
         for markor in ("Klass",                   # personens egen klass
                        "— personens egen",
                        "@-konto (Instagram)",     # @-konto med @-prefix
                        "atprefix",
-                       "l.anteckning"):           # anteckning
+                       "vald.anteckning"):        # anteckning
             self.assertIn(markor, u, markor)
 
     def test_hemsidan_finns_kvar_pa_utovaren(self):
@@ -96,7 +100,7 @@ class TestDeladEditor(unittest.TestCase):
         # matchspråket · flat tävling-chip) — hemsidan är inget av dem, och
         # datat ligger kvar i registret.
         u = _utovargrenen(LAG)
-        self.assertIn("l.hemsida", u)
+        self.assertIn("vald.hemsida", u)
 
     def test_lagfalten_lacker_inte_in_pa_utovaren(self):
         u = _utovargrenen(LAG)
@@ -124,7 +128,7 @@ class TestTavlarI(unittest.TestCase):
         self.assertIn("härlett — kopplingen bor på grenen", u)
         # Raderna kommer ur backend-härledningen, inte ur något på personen.
         self.assertIn("utovareGrenar", LAG)
-        self.assertIn("tavlarI[l.id]", u)
+        self.assertIn("tavlarI[vald.id]", u)
 
     def test_raden_bar_grenens_egen_klass_som_kant(self):
         # Grenens klass (g.klass), inte personens (l.gren) — och ingen kant
