@@ -230,6 +230,21 @@ class LiveSynk:
             return {"ok": False, "fel": str(e)}
         return {"ok": status == 200}
 
+    def hamta_andringar(self):
+        """Realtids ändringskanal: {jobb, idag, jobbplats, live, nu} — ISO-stämpel
+        per domän (saknad = None). DPT2 pollar tätt och laddar om berörd panel när
+        en domänstämpel ändrats mot senast sedda. D1-backad = starkt konsistent.
+        Best-effort → {} vid fel (pollen tystnar aldrig på ett nätblipp)."""
+        if not self.har_nyckel():
+            return {}
+        try:
+            status, data = self._anrop("GET", "/api/changes")
+        except Exception:
+            return {}
+        if status != 200 or not isinstance(data, dict):
+            return {}
+        return data
+
     def hamta_jobbplats(self):
         """Läser plats-overrides som fältet/iOS satt: {jobb:{jobbId:{namn,lat,lon}},
         arenor:{namn:{lat,lon}}}. DPT2 väver in `jobb`-kartan i jobblistan INNAN

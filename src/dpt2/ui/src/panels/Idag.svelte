@@ -1,5 +1,5 @@
 <script>
-  import { createEventDispatcher, onMount } from 'svelte'
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte'
   import { hamtaIdag, aktivMatch } from '../lib/api.js'
   import { oppna, tillbaka, idagOppet } from '../lib/oppna.js'
   const dispatch = createEventDispatcher()
@@ -30,13 +30,24 @@
   let aktiv = null
   let laddar = true
 
-  onMount(async () => {
+  async function ladda() {
     ;[data, aktiv] = await Promise.all([
       hamtaIdag().catch(() => null),
       aktivMatch().catch(() => null),
     ])
     laddar = false
+  }
+  // Realtid: räkna om åtgärdskön när jobb/plats/idag ändrats i molnet (t.ex. en
+  // plats iOS satte får "plats saknas" att försvinna) — auto, ingen omladdning.
+  function paAndring(e) {
+    const d = e.detail || []
+    if (d.includes('jobb') || d.includes('jobbplats') || d.includes('idag')) ladda()
+  }
+  onMount(async () => {
+    await ladda()
+    window.addEventListener('dpt-andring', paAndring)
   })
+  onDestroy(() => window.removeEventListener('dpt-andring', paAndring))
 
   const nu = new Date()
   function halsning() {

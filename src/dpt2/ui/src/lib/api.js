@@ -1686,6 +1686,14 @@ export async function synkDelta() {
   return wait({ ok: true, andrade: [] })
 }
 
+// Realtids ändringskanal (jobb/idag/jobbplats) — vilka domäner ändrats sedan
+// förra pollen. Paneler laddar om berörd vy utan omladdning/omstart.
+export async function hamtaAndringar() {
+  const api = brygga()
+  if (api) return api.synk_andringar()
+  return wait({ ok: true, andrade: [] })
+}
+
 export async function originalStatus() {
   const api = brygga()
   if (api) return api.original_status()

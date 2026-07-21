@@ -20,7 +20,7 @@
   import Kommandopalett from './lib/Kommandopalett.svelte'
   import { oppnaMal, tillbaka } from './lib/oppna.js'
   import { synka as livesynkaNu } from './lib/livesynk.js'
-  import { erMock, aktivMatch, aktivtUrval, listaMaterial, stangAktivMatch, synkDelta } from './lib/api.js'
+  import { erMock, aktivMatch, aktivtUrval, listaMaterial, stangAktivMatch, synkDelta, hamtaAndringar } from './lib/api.js'
   import { testMode } from './lib/testlage.js'
 
   const ARMOCK = erMock()
@@ -81,6 +81,16 @@
         window.dispatchEvent(new CustomEvent('dpt-synk', { detail: d.andrade }))
       }
     }, 15000)
+    // Realtids ändringskanal (jobb/idag/jobbplats): tät, billig poll så en plats
+    // eller ett jobb som ändrats i molnet (t.ex. iOS satte en plats) auto-laddas
+    // om i berörd panel INOM ett par sekunder — ingen omladdning/omstart. Egen,
+    // snabbare takt än matchdeltan ovan; paneler lyssnar på 'dpt-andring'.
+    setInterval(async () => {
+      const a = await hamtaAndringar().catch(() => null)
+      if (a?.ok && a.andrade?.length) {
+        window.dispatchEvent(new CustomEvent('dpt-andring', { detail: a.andrade }))
+      }
+    }, 3000)
   })
   async function uppdateraDelvis() {
     const mat = await listaMaterial()

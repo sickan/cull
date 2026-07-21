@@ -79,5 +79,43 @@ class TestVavInPlatsoverrides(unittest.TestCase):
         self.assertEqual(synk.anrop, 1)  # andra gången ur cachen (~30 s)
 
 
+class TestSynkAndringar(unittest.TestCase):
+    """Realtids ändringskanal: första pollen sätter baslinje (inga 'ändrade'),
+    därefter rapporteras bara domäner vars stämpel faktiskt rört sig."""
+
+    def _api(self, svar):
+        class SynkStub:
+            def __init__(s): s.svar = svar; s.i = 0
+            def hamta_andringar(s):
+                v = s.svar[s.i] if s.i < len(s.svar) else s.svar[-1]
+                s.i += 1
+                return v
+        s = Stub(None)
+        s.live_synk = SynkStub()
+        s.synk_andringar = Api.synk_andringar.__get__(s)
+        return s
+
+    def test_forsta_ar_baslinje(self):
+        a = self._api([{"jobb": "t1", "idag": "t1", "jobbplats": "t1", "nu": "x"}])
+        self.assertEqual(a.synk_andringar(), {"ok": True, "andrade": []})
+
+    def test_andrad_doman_rapporteras(self):
+        a = self._api([
+            {"jobb": "t1", "idag": "t1", "jobbplats": "t1", "nu": "x"},
+            {"jobb": "t1", "idag": "t1", "jobbplats": "t2", "nu": "y"},  # plats rörde sig
+        ])
+        a.synk_andringar()                       # baslinje
+        self.assertEqual(a.synk_andringar()["andrade"], ["jobbplats"])
+
+    def test_oforandrat_ger_inga(self):
+        a = self._api([{"jobb": "t1", "idag": None, "jobbplats": None, "nu": "x"}])
+        a.synk_andringar()
+        self.assertEqual(a.synk_andringar()["andrade"], [])
+
+    def test_natfel_ger_ok_false(self):
+        a = self._api([{}])
+        self.assertEqual(a.synk_andringar(), {"ok": False, "andrade": []})
+
+
 if __name__ == "__main__":
     unittest.main()

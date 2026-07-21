@@ -3724,6 +3724,24 @@ class Api:
                 continue   # en trasig match får inte stoppa deltan
         return {"ok": nu is not None, "andrade": ids}
 
+    def synk_andringar(self):
+        """Realtids ändringskanal (jobb/idag/jobbplats): billig poll mot molnets
+        /api/changes. Returnerar vilka domäner som ändrats sedan förra frågan så
+        UI:t kan auto-ladda om BERÖRD panel utan omladdning/omstart. Första
+        anropet sätter baslinjen (allt vore 'ändrat' = brus). En plats iOS satt
+        når så här skrivbordet inom ett pollintervall utan att Stig rör något."""
+        data = self.live_synk.hamta_andringar()
+        if not data:
+            return {"ok": False, "andrade": []}
+        senast = getattr(self, "_andring_stamplar", None)
+        nu = {d: data.get(d) for d in ("jobb", "idag", "jobbplats")}
+        if senast is None:
+            self._andring_stamplar = nu
+            return {"ok": True, "andrade": []}   # baslinje
+        andrade = [d for d, s in nu.items() if s and s != senast.get(d)]
+        self._andring_stamplar = nu
+        return {"ok": True, "andrade": andrade}
+
     def _reconciliera_roster(self, mid, m, moln_roster):
         """Mobilens paket-roster → lokala matchtruppen. Mobilen är auktoritativ
         för start/med och kan bära OCR-tillagda spelare; merge-logiken låter

@@ -168,8 +168,18 @@
                  isoDag(new Date(idag.getFullYear(), idag.getMonth() + 4, 1)))
     await tick()
     setTimeout(scrollTillIdag, 80)
+    // Realtid: laddar om jobblistan när molnet säger att jobb/plats ändrats
+    // (t.ex. en plats iOS satte). Auto — Stig rör inget, ingen omladdning.
+    window.addEventListener('dpt-andring', paAndring)
   })
-  onDestroy(() => { clearInterval(klockIv); avslutaOppna && avslutaOppna() })
+  function paAndring(e) {
+    const d = e.detail || []
+    if (d.includes('jobb') || d.includes('jobbplats')) laddaOm()
+  }
+  onDestroy(() => {
+    clearInterval(klockIv); avslutaOppna && avslutaOppna()
+    window.removeEventListener('dpt-andring', paAndring)
+  })
 
   function dateKey(iso) {
     const d = del(iso)
