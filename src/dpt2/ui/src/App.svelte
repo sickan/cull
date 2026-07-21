@@ -89,6 +89,14 @@
       const a = await hamtaAndringar().catch(() => null)
       if (a?.ok && a.andrade?.length) {
         window.dispatchEvent(new CustomEvent('dpt-andring', { detail: a.andrade }))
+        // #11: live-ändring i molnet → kör match-reconcile DIREKT (mot 15s-
+        // deltan). Samma synk_delta som 15s-loopen; ingen ny merge-logik.
+        if (a.andrade.includes('live')) {
+          const d = await synkDelta().catch(() => null)
+          if (d?.ok && d.andrade?.length) {
+            window.dispatchEvent(new CustomEvent('dpt-synk', { detail: d.andrade }))
+          }
+        }
       }
     }, 3000)
   })

@@ -3755,7 +3755,9 @@ class Api:
         if not data:
             return {"ok": False, "andrade": []}
         senast = getattr(self, "_andring_stamplar", None)
-        nu = {d: data.get(d) for d in ("jobb", "idag", "jobbplats")}
+        # #11 (21/7): "live" med i kanalen → App.svelte kör reconcile direkt vid
+        # live-ändring (mot 15s-deltan), utan att röra LWW-mergen.
+        nu = {d: data.get(d) for d in ("jobb", "idag", "jobbplats", "live")}
         if senast is None:
             self._andring_stamplar = nu
             return {"ok": True, "andrade": []}   # baslinje
