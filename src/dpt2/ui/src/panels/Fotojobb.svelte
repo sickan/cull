@@ -434,6 +434,12 @@
       <div class="headtitel">
         <h1 class="scd">Fotojobb</h1>
         <span class="livedate">{liveDate}</span>
+        <!-- D17 (approach A): Matcher är inte längre en egen navpost — den nås
+             som segment härifrån (befintliga Matcher-panelen, allt bevarat). -->
+        <div class="seg panelseg">
+          <button class="on">Alla jobb</button>
+          <button on:click={() => dispatch('navigera', 'matcher')}>Matcher</button>
+        </div>
       </div>
       <div class="hverktyg">
         <div class="seg">

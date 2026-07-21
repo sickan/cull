@@ -13,7 +13,8 @@
   const grupper = [
     { rubrik: 'Planera', poster: [
       { id: 'fotojobb', namn: 'Fotojobb' },
-      { id: 'matcher', namn: 'Matcher' },
+      // D17 (approach A): Matcher är inte längre en egen navpost — den nås som
+      // segment "Alla jobb / Matcher" inifrån Fotojobb.
       { id: 'eventsektion', namn: 'Tävlingar' },          // V5-C (handoff §2); D11b §1: 'Event' försvinner ur UI
       { id: 'lag', namn: 'Lag & utövare' },               // D16 §A: ETT register (Utövare-posten borttagen; ligor bor i Tävlingar)
     ] },

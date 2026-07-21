@@ -579,6 +579,11 @@
 
 <div class="panel">
   <header>
+    <!-- D17 (approach A): Matcher är ett segment av Fotojobb, inte en navpost. -->
+    <div class="seg panelseg">
+      <button on:click={() => dispatch('navigera', 'fotojobb')}>Alla jobb</button>
+      <button class="on">Matcher</button>
+    </div>
     <h1 class="scd">Matcher</h1>
     <span class="sub">Planera kommande matcher och återuppta tidigare projekt</span>
     <!-- 7A: skapa-knapparna i rubrikraden, utanför den scrollande listan. -->
