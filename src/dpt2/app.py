@@ -476,7 +476,19 @@ class Api:
         if not self.live_synk.har_nyckel():
             return {"ok": False, "fel": "CONTENT_SYNC_API_KEY saknas."}
         appjobb = [_jobb_till_app(j) for j in jobb_lista if _ar_appjobb(j)]
-        return self.live_synk.push_jobb(appjobb)
+        r = self.live_synk.push_jobb(appjobb)
+        # Idag som EN sanning (moln-som-sanning): räkna om + pusha så iOS speglar
+        # DPT2-ändringar direkt. Guarda så hamta_idag→lista_fotojobb inte
+        # re-triggar den här synken (rekursion).
+        prev = getattr(self, "_i_jobbsynk", False)
+        try:
+            self._i_jobbsynk = True
+            self.live_synk.push_idag(self.hamta_idag())
+        except Exception:
+            pass
+        finally:
+            self._i_jobbsynk = prev
+        return r
 
     def _synka_kalenderjobb(self, match_id):
         """Push:ar matchens aktuella titel/tid/arena — och numera även

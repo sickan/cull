@@ -218,3 +218,14 @@ class LiveSynk:
             return {"ok": False, "fel": str(e)}
         return {"ok": status == 200,
                 "antal": (data or {}).get("antal") if isinstance(data, dict) else None}
+
+    def push_idag(self, idag):
+        """Pushar Idag-startskärmens beräknade data (hamta_idag) till /api/idag så
+        iOS speglar EXAKT samma kö + statistik + inkorg. Wholesale, best-effort."""
+        if not self.har_nyckel():
+            return {"ok": False, "fel": "CONTENT_SYNC_API_KEY saknas."}
+        try:
+            status, _ = self._anrop("PUT", "/api/idag", body=idag)
+        except Exception as e:
+            return {"ok": False, "fel": str(e)}
+        return {"ok": status == 200}
