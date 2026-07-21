@@ -1151,9 +1151,11 @@ export async function hamtaIdag() {
   return wait({
     kraver: [
       { typ: 'ackreditering', niva: 'danger', titel: 'Ackreditering ej klar',
-        sub: '1 sport-jobb utan beviljad ackreditering', antal: 1, dest: 'fotojobb', cta: 'Öppna' },
+        sub: '1 sport-jobb utan beviljad ackreditering', antal: 1, dest: 'fotojobb', cta: 'Öppna',
+        poster: [{ id: 'j1', titel: 'Malmö FF – Kristianstad DFF', mal: 'fotojobb' }] },
       { typ: 'startlista', niva: 'warn', titel: 'Startlista saknas',
-        sub: '5 matcher utan inläst trupp', antal: 5, dest: 'matcher', cta: 'Läs in' },
+        sub: '5 matcher utan inläst trupp', antal: 5, dest: 'matcher', cta: 'Läs in',
+        poster: Array.from({ length: 5 }, (_, i) => ({ id: 'm' + i, titel: 'Match ' + (i + 1), mal: 'matcher' })) },
     ],
     narmast: [
       { id: 'm1', titel: 'Malmö FF – Kristianstad DFF', kategori: 'Sport',

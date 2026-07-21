@@ -3,6 +3,7 @@
   import { listaFotojobb, sparaFotojobb, raderaFotojobb, kalenderStatus, aktiveraSynkFotojobb, listaMatcher, listaLag,
     privatKalendrar, privatHandelser, sattAckreditering, skickaAckrMail,
     momentStatus, listaUnderkategorier, listaTavlingar } from '../lib/api.js'
+  import { oppnaMal } from '../lib/oppna.js'
   import { armerad, taBortKlick } from '../lib/bekrafta.js'
   import { grenFarg } from '../lib/gren.js'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
@@ -75,6 +76,14 @@
 
   let modal = null              // redigeringsutkast för "＋ Nytt fotojobb" eller null
   let tavlingar = []            // M-11: väljbara tävlingar i editorn ("Del av …")
+  // Djuplänk: öppna en specifik post när Idags åtgärdskö/⌘K pekar hit.
+  let pendingOppna = null
+  let avslutaOppna = null
+  function forsokOppnaPending() {
+    if (!pendingOppna) return
+    const j = jobb.find((x) => x.id === pendingOppna)
+    if (j) { pendingOppna = null; oppnaRedigering(j) }
+  }
   let jobEditId = null          // id på fotojobbet vars redigeringskort är utfällt
   let redigerar = null          // redigeringsutkast för jobEditId (seedas vid öppning)
   const GREN_ETIKETT = { dam: 'Dam', herr: 'Herr', mixed: 'Mixed' }
@@ -130,6 +139,14 @@
     } finally {
       laddar = false        // släpp ALLTID laddningsläget, även vid fel/timeout
     }
+    // Djuplänk (⌘K + Idags åtgärdskö): öppna en specifik post raka vägen.
+    forsokOppnaPending()
+    // Store kan ha satts INNAN panelen mountade — subscribe fångar båda fallen.
+    avslutaOppna = oppnaMal.subscribe((mal) => {
+      if (mal && mal.mal === 'fotojobb' && mal.id) {
+        pendingOppna = mal.id; oppnaMal.set(null); forsokOppnaPending()
+      }
+    })
     // Synk-status i bakgrunden — blockera inte agendan på hälsokollen (kall Worker).
     kalenderStatus().then((s) => (status = s)).catch(() => {})
     // Privata kalendrar + ett startspann runt idag. Bara de som MARKERATS som
@@ -148,7 +165,7 @@
     await tick()
     setTimeout(scrollTillIdag, 80)
   })
-  onDestroy(() => clearInterval(klockIv))
+  onDestroy(() => { clearInterval(klockIv); avslutaOppna && avslutaOppna() })
 
   function dateKey(iso) {
     const d = del(iso)

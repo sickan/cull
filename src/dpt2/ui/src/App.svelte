@@ -18,7 +18,7 @@
   import Installningar from './panels/Installningar.svelte'
   import SynkMarke from './lib/SynkMarke.svelte'
   import Kommandopalett from './lib/Kommandopalett.svelte'
-  import { oppnaMal } from './lib/oppna.js'
+  import { oppnaMal, tillbaka } from './lib/oppna.js'
   import { synka as livesynkaNu } from './lib/livesynk.js'
   import { erMock, aktivMatch, aktivtUrval, listaMaterial, stangAktivMatch, synkDelta } from './lib/api.js'
   import { testMode } from './lib/testlage.js'
@@ -49,6 +49,8 @@
       e.preventDefault(); palettOppen = !palettOppen
     }
   }
+  // "← Tillbaka" — hem till panelen man djuplänkade ifrån (Idags åtgärdskö).
+  function gaTillbaka() { const m = $tillbaka; tillbaka.set(null); if (m) aktiv = m }
   function valjSok(e) {
     // D16 §A: Utövare-posten är borttagen — utövarträffar öppnas i registret
     // (panel 'lag'). oppnaMal behåller mal='utovare' så Lag-panelen vet att den
@@ -110,10 +112,13 @@
 {/if}
 
 <div class="app">
-  <Rail {aktiv} delvis={harDelvis} on:valj={(e) => (aktiv = e.detail)} />
+  <Rail {aktiv} delvis={harDelvis} on:valj={(e) => { aktiv = e.detail; tillbaka.set(null) }} />
 
   <main>
     <div class="topbar">
+      {#if $tillbaka}
+        <button class="tillbakachip" on:click={gaTillbaka} title="Tillbaka dit du kom ifrån">← Tillbaka</button>
+      {/if}
       <div class="matchgrupp">
         <!-- §8: jobbet som nav — chippet heter "Aktivt jobb". Sportjobb visar
              matchdata som förut; tomläget bjuder in alla jobbtyper. -->
@@ -209,6 +214,10 @@
   .widget { display: flex; align-items: center; gap: 8px; padding: 4px 2px;
     background: transparent; border: 0; color: var(--t-head); }
   .widget:hover .wval { color: var(--acc); }
+  .tillbakachip { display: inline-flex; align-items: center; gap: 6px; flex: none;
+    padding: 5px 12px; border: 1px solid var(--acc-border); border-radius: 999px;
+    background: var(--acc-soft); color: var(--acc); font-size: 12.5px; font-weight: 700; }
+  .tillbakachip:hover { filter: brightness(1.03); }
   .matchgrupp { display: flex; align-items: center; gap: 4px; margin-right: auto; }
   .stangmatch { width: 22px; height: 22px; border: 0; border-radius: 50%; flex: none;
     background: transparent; color: var(--t-mut); font-size: 14px; line-height: 1; }

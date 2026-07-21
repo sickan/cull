@@ -1426,6 +1426,9 @@ class Api:
         kommande = [j for j in jobb
                     if (j.get("end_at") or j.get("start_at") or "") >= idag]
 
+        def _jpost(j):   # en berörd fotojobb-post → öppningsbar i Fotojobb
+            return {"id": j.get("id"), "titel": j.get("title") or "Jobb", "mal": "fotojobb"}
+
         kraver = []
         # 1. Ackreditering ej klar — sport-jobb utan BEVILJAD ackreditering.
         ack = [j for j in kommande if j.get("category") == "Sport"
@@ -1434,25 +1437,35 @@ class Api:
             kraver.append({"typ": "ackreditering", "niva": "danger",
                            "titel": "Ackreditering ej klar",
                            "sub": f"{len(ack)} sport-jobb utan beviljad ackreditering",
-                           "antal": len(ack), "dest": "fotojobb", "cta": "Öppna"})
+                           "antal": len(ack), "dest": "fotojobb", "cta": "Öppna",
+                           "poster": [_jpost(j) for j in ack]})
         # 2. Plats saknas — jobb utan angiven plats/arena.
         utan_plats = [j for j in kommande if not (j.get("location") or "").strip()]
         if utan_plats:
             kraver.append({"typ": "plats", "niva": "danger",
                            "titel": "Plats saknas",
                            "sub": f"{len(utan_plats)} jobb utan angiven plats",
-                           "antal": len(utan_plats), "dest": "fotojobb", "cta": "Öppna"})
+                           "antal": len(utan_plats), "dest": "fotojobb", "cta": "Öppna",
+                           "poster": [_jpost(j) for j in utan_plats]})
         # 3. Startlista saknas — kommande lagsport-matcher utan inläst trupp.
         try:
             utan_trupp = store.matcher_utan_trupp(self.conn, idag)
+            m_map = {m["id"]: m for m in store.lista_matcher(self.conn)}
         except Exception:
-            utan_trupp = []
+            utan_trupp, m_map = [], {}
         if utan_trupp:
+            def _mpost(mid):
+                m = m_map.get(mid, {})
+                namn = m.get("lag_hemma") or "Match"
+                if m.get("lag_borta"):
+                    namn = f"{namn} – {m['lag_borta']}"
+                return {"id": mid, "titel": namn, "mal": "matcher"}
             kraver.append({"typ": "startlista", "niva": "warn",
                            "titel": "Startlista saknas",
                            "sub": f"{len(utan_trupp)} matcher utan inläst trupp",
-                           "antal": len(utan_trupp), "dest": "matcher", "cta": "Läs in"})
-        # 4. Leverans väntar — gallrade urval som inte levererats.
+                           "antal": len(utan_trupp), "dest": "matcher", "cta": "Läs in",
+                           "poster": [_mpost(mid) for mid in utan_trupp]})
+        # 4. Leverans väntar — gallrade urval som inte levererats (panelen = listan).
         try:
             vantar = store.urval_vantar_leverans(self.conn)
         except Exception:
@@ -1461,7 +1474,8 @@ class Api:
             kraver.append({"typ": "leverans", "niva": "warn",
                            "titel": "Leverans väntar",
                            "sub": f"{vantar} gallrat urval att leverera",
-                           "antal": vantar, "dest": "leverera", "cta": "Öppna"})
+                           "antal": vantar, "dest": "leverera", "cta": "Öppna",
+                           "poster": []})
 
         # Närmast på tur — kommande jobb stigande, topp 6 (kort-projektion).
         narmast = sorted(kommande, key=lambda j: (j.get("start_at") or "9999"))[:6]

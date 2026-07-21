@@ -1,7 +1,23 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte'
   import { hamtaIdag, aktivMatch } from '../lib/api.js'
+  import { oppna, tillbaka, idagOppet } from '../lib/oppna.js'
   const dispatch = createEventDispatcher()
+
+  // En berörd post → dit direkt; flera → fäll ut listan; ingen → panelen.
+  // Utfällningen persistas (idagOppet) så listan finns kvar när man kommer
+  // tillbaka och plockar nästa post.
+  function oppnaKrav(k) {
+    const n = (k.poster || []).length
+    if (n === 1) return oppnaPost(k.poster[0])
+    if (n > 1) { $idagOppet = $idagOppet === k.typ ? null : k.typ; return }
+    dispatch('navigera', k.dest)
+  }
+  function oppnaPost(p) {
+    tillbaka.set('idag')        // toppradens "← Tillbaka" hittar hem
+    oppna(p.mal, p.id)          // målpanelen läser storen och öppnar posten
+    dispatch('navigera', p.mal)
+  }
 
   // Kanoniska kategorifärger (D16 §C: prick/kant, aldrig fylld bakgrund) —
   // speglar Fotojobb.svelte:s KAT_FARG så Idag och listan aldrig glider isär.
@@ -99,8 +115,20 @@
                 <span class="radtitel">{k.titel}</span>
                 <span class="radsub">{k.sub}</span>
               </span>
-              <button class="cta" on:click={() => dispatch('navigera', k.dest)}>{k.cta}</button>
+              <button class="cta" on:click={() => oppnaKrav(k)}>
+                {(k.poster && k.poster.length > 1) ? ($idagOppet === k.typ ? 'Dölj' : 'Visa') : k.cta}
+              </button>
             </div>
+            {#if $idagOppet === k.typ && k.poster}
+              <div class="undlist">
+                {#each k.poster as p}
+                  <button class="undrad" on:click={() => oppnaPost(p)}>
+                    <span class="undtitel">{p.titel}</span>
+                    <span class="undpil">›</span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
           {/each}
         {:else}
           <div class="tom">Allt i ordning — inget väntar.</div>
@@ -216,6 +244,15 @@
     border-radius: 8px; background: transparent; color: var(--acc);
     font-size: 12.5px; font-weight: 600; }
   .cta:hover { background: var(--acc-soft); }
+
+  /* Utfälld lista när flera poster berörs — var och en öppnar sin post. */
+  .undlist { display: flex; flex-direction: column; gap: 4px; padding: 2px 0 8px 23px; }
+  .undrad { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    padding: 8px 12px; border: 1px solid var(--div); border-radius: 8px;
+    background: var(--panel); color: var(--t-body); font-size: 13px; font-weight: 500; }
+  .undrad:hover { border-color: var(--acc-border); color: var(--acc); }
+  .undtitel { margin-right: auto; }
+  .undpil { color: var(--t-help); font-weight: 700; }
 
   .jobb { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px;
     border-left: 3px solid var(--div); border-radius: 8px; background: var(--panel);
