@@ -1163,6 +1163,17 @@ export async function hamtaIdag() {
         start_at: '2026-07-26T13:00', end_at: null, all_day: false,
         plats: 'Sofiero slott', tavling_namn: null, match_id: null },
     ],
+    statistik: [
+      { tal: 11, etikett: 'Fotojobb', dest: 'fotojobb' },
+      { tal: 3, etikett: 'Publiceringar', dest: 'publicera' },
+      { tal: 2, etikett: 'Väntar leverans', dest: 'leverera' },
+      { tal: 6, etikett: 'Kommande matcher', dest: 'matcher' },
+    ],
+    inkorg: [
+      { niva: 'info', titel: 'Ackreditering begärd', sub: 'Malmö FF – Kristianstad DFF', nar: 'väntar svar', dest: 'fotojobb' },
+      { niva: 'ok', titel: 'Ackreditering beviljad', sub: 'IFK – BK Häcken', nar: '', dest: 'fotojobb' },
+      { niva: 'rose', titel: 'Nytt utkast', sub: 'Företagsporträtt SjöAB · Människor', nar: '', dest: 'fotojobb' },
+    ],
     antal_kommande_matcher: 6,
     antal_kommande_jobb: 11,
   })

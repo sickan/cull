@@ -1477,7 +1477,46 @@ class Api:
             antal_matcher = len(self._pagang_kommande(idag))
         except Exception:
             antal_matcher = 0
+
+        # Statistik · denna månad (D16 §C-högerkolumnen) — riktig data.
+        manad = idag[:7]
+        try:
+            publ = self.conn.execute(
+                "SELECT COUNT(*) FROM matchen WHERE COALESCE(sida_url,'')<>'' "
+                "AND substr(COALESCE(datum,''),1,7)=?", (manad,)).fetchone()[0]
+        except Exception:
+            publ = 0
+        statistik = [
+            {"tal": len([j for j in jobb if (j.get("start_at") or "")[:7] == manad]),
+             "etikett": "Fotojobb", "dest": "fotojobb"},
+            {"tal": publ, "etikett": "Publiceringar", "dest": "publicera"},
+            {"tal": vantar, "etikett": "Väntar leverans", "dest": "leverera"},
+            {"tal": antal_matcher, "etikett": "Kommande matcher", "dest": "matcher"},
+        ]
+
+        # Inkorg & svar — ackrediteringssvar + nya utkast (riktig data, topp 5).
+        inkorg = []
+        for j in jobb:
+            if j.get("category") != "Sport":
+                continue
+            st = (j.get("ackreditering") or {}).get("status")
+            if st == "begard":
+                inkorg.append({"niva": "info", "titel": "Ackreditering begärd",
+                               "sub": j.get("title"), "nar": "väntar svar", "dest": "fotojobb"})
+            elif st == "beviljad":
+                inkorg.append({"niva": "ok", "titel": "Ackreditering beviljad",
+                               "sub": j.get("title"), "nar": "", "dest": "fotojobb"})
+            elif st == "nekad":
+                inkorg.append({"niva": "danger", "titel": "Ackreditering nekad",
+                               "sub": j.get("title"), "nar": "", "dest": "fotojobb"})
+        for j in jobb:
+            if j.get("utkast"):
+                inkorg.append({"niva": "rose", "titel": "Nytt utkast",
+                               "sub": " · ".join(x for x in [j.get("title"), j.get("category")] if x),
+                               "nar": "", "dest": "fotojobb"})
+
         return {"kraver": kraver, "narmast": [_kort(j) for j in narmast],
+                "statistik": statistik, "inkorg": inkorg[:5],
                 "antal_kommande_matcher": antal_matcher,
                 "antal_kommande_jobb": len(kommande)}
 

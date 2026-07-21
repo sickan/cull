@@ -6,6 +6,9 @@
   // Kanoniska kategorifärger (D16 §C: prick/kant, aldrig fylld bakgrund) —
   // speglar Fotojobb.svelte:s KAT_FARG så Idag och listan aldrig glider isär.
   const KAT_FARG = { Sport: '#2f7cb0', Landskap: '#c9871f', Människor: '#c9657f', Film: '#8a6fb0' }
+  // Inkorg-prickens färg per nivå (delar tokens med resten av appen).
+  const NIVAFARG = { info: 'var(--info)', ok: 'var(--ok)', danger: 'var(--danger)',
+                     warn: 'var(--warn)', rose: 'var(--rose)' }
 
   let data = null
   let aktiv = null
@@ -53,14 +56,17 @@
 
 <div class="idag">
   <header>
-    <div class="datum scd">{datumrad}</div>
-    <h1 class="scd">{halsning()}</h1>
-    {#if data}
-      <div class="sum">
-        {data.kraver.length} {data.kraver.length === 1 ? 'sak väntar' : 'saker väntar'} på dig
-        · {data.antal_kommande_matcher} kommande matcher
-      </div>
-    {/if}
+    <div class="hleft">
+      <div class="datum scd">{datumrad}</div>
+      <h1 class="scd">{halsning()}</h1>
+      {#if data}
+        <div class="sum">
+          {data.kraver.length} {data.kraver.length === 1 ? 'sak väntar' : 'saker väntar'} på dig
+          · {data.antal_kommande_matcher} kommande matcher
+        </div>
+      {/if}
+    </div>
+    <button class="nyprim" on:click={() => dispatch('navigera', 'fotojobb')}>+ Nytt fotojobb</button>
   </header>
 
   {#if aktiv}
@@ -70,36 +76,42 @@
         <span class="rlbl">Fortsätt där du var</span>
         <span class="rval scd">{aktivEtikett(aktiv)}</span>
       </span>
+      <span class="rsenast">senast öppnad</span>
+      <span class="ropen">Öppna</span>
     </button>
   {/if}
 
   <div class="grid">
-    <section class="kort">
-      <div class="korthd">
-        <h2 class="scd">Kräver åtgärd</h2>
-        {#if data}<span class="badge">{data.kraver.length}</span>{/if}
-      </div>
-      {#if laddar}
-        <div class="tom">Laddar…</div>
-      {:else if data && data.kraver.length}
-        {#each data.kraver as k}
-          <div class="rad">
-            <span class="prick" style="background: var(--{k.niva})"></span>
-            <span class="radtext">
-              <span class="radtitel">{k.titel}</span>
-              <span class="radsub">{k.sub}</span>
-            </span>
-            <button class="cta" on:click={() => dispatch('navigera', k.dest)}>{k.cta}</button>
-          </div>
-        {/each}
-      {:else}
-        <div class="tom">Allt i ordning — inget väntar.</div>
-      {/if}
-    </section>
-
-    <section class="hoger">
+    <!-- Vänster: åtgärdskö + närmast på tur -->
+    <section class="vanster">
       <div class="kort">
-        <div class="korthd"><h2 class="scd">Närmast på tur</h2></div>
+        <div class="korthd">
+          <h2 class="scd">Kräver åtgärd</h2>
+          {#if data}<span class="badge">{data.kraver.length}</span>{/if}
+        </div>
+        {#if laddar}
+          <div class="tom">Laddar…</div>
+        {:else if data && data.kraver.length}
+          {#each data.kraver as k}
+            <div class="rad">
+              <span class="prick" style="background: var(--{k.niva})"></span>
+              <span class="radtext">
+                <span class="radtitel">{k.titel}</span>
+                <span class="radsub">{k.sub}</span>
+              </span>
+              <button class="cta" on:click={() => dispatch('navigera', k.dest)}>{k.cta}</button>
+            </div>
+          {/each}
+        {:else}
+          <div class="tom">Allt i ordning — inget väntar.</div>
+        {/if}
+      </div>
+
+      <div class="kort">
+        <div class="korthd">
+          <h2 class="scd">Närmast på tur</h2>
+          <button class="lank" on:click={() => dispatch('navigera', 'fotojobb')}>Till fotojobb →</button>
+        </div>
         {#if data && data.narmast.length}
           {#each data.narmast as j}
             <div class="jobb" style="border-left-color: {KAT_FARG[j.kategori] || 'var(--div)'}">
@@ -113,27 +125,56 @@
           <div class="tom">Inga kommande jobb.</div>
         {/if}
       </div>
+    </section>
+
+    <!-- Höger: statistik + inkorg & svar -->
+    <section class="hoger">
+      <div class="kort">
+        <div class="korthd"><h2 class="scd">Statistik · denna månad</h2></div>
+        {#if data && data.statistik}
+          <div class="statgrid">
+            {#each data.statistik as s}
+              <button class="stat" on:click={() => dispatch('navigera', s.dest)}>
+                <span class="stal scd">{s.tal}</span>
+                <span class="setikett">{s.etikett}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
 
       <div class="kort">
-        <div class="korthd"><h2 class="scd">Snabbvägar</h2></div>
-        <div class="snabbrad">
-          <button on:click={() => dispatch('navigera', 'fotojobb')}>Fotojobb</button>
-          <button on:click={() => dispatch('navigera', 'gallra')}>Gallra</button>
-          <button on:click={() => dispatch('navigera', 'leverera')}>Leverera</button>
-          <button on:click={() => dispatch('navigera', 'publicera')}>Publicera</button>
-        </div>
+        <div class="korthd"><h2 class="scd">Inkorg & svar</h2></div>
+        {#if data && data.inkorg && data.inkorg.length}
+          {#each data.inkorg as i}
+            <button class="inrad" on:click={() => dispatch('navigera', i.dest || 'fotojobb')}>
+              <span class="prick" style="background: {NIVAFARG[i.niva] || 'var(--t-help)'}"></span>
+              <span class="intext">
+                <span class="intitel">{i.titel}</span>
+                <span class="insub">{i.sub}</span>
+              </span>
+              {#if i.nar}<span class="inar">{i.nar}</span>{/if}
+            </button>
+          {/each}
+        {:else}
+          <div class="tom">Inga svar just nu.</div>
+        {/if}
       </div>
     </section>
   </div>
 </div>
 
 <style>
-  .idag { padding: 26px 30px 40px; max-width: 1100px; }
-  header { margin-bottom: 20px; }
+  .idag { padding: 26px 30px 40px; max-width: 1180px; }
+  header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+  .hleft { margin-right: auto; }
   .datum { font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--t-caps); }
   h1 { font-size: 32px; font-weight: 700; color: var(--t-head); margin: 4px 0 6px; }
   .sum { font-size: 13.5px; color: var(--t-mut); }
+  .nyprim { flex: none; margin-top: 20px; padding: 10px 16px; border: 0; border-radius: 10px;
+    background: var(--acc); color: var(--kort); font-size: 13.5px; font-weight: 700; }
+  .nyprim:hover { filter: brightness(1.05); }
 
   .resume { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
     padding: 14px 16px; border: 1px solid var(--div); border-left: 3px solid var(--info);
@@ -143,13 +184,16 @@
     background: var(--info-soft); color: var(--info);
     display: inline-flex; align-items: center; justify-content: center; }
   .play svg { width: 18px; height: 18px; }
-  .rtext { display: flex; flex-direction: column; gap: 2px; }
+  .rtext { display: flex; flex-direction: column; gap: 2px; margin-right: auto; }
   .rlbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em;
     text-transform: uppercase; color: var(--t-mut); }
   .rval { font-size: 17px; font-weight: 700; color: var(--t-head); }
+  .rsenast { font-size: 11.5px; color: var(--t-help); }
+  .ropen { flex: none; padding: 6px 16px; border-radius: 8px; background: var(--acc-soft);
+    color: var(--acc); font-size: 12.5px; font-weight: 700; }
 
-  .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; align-items: start; }
-  .hoger { display: flex; flex-direction: column; gap: 18px; }
+  .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; align-items: start; }
+  .vanster, .hoger { display: flex; flex-direction: column; gap: 18px; }
   .kort { background: var(--kort); border: 1px solid var(--div); border-radius: var(--r);
     padding: 16px 18px; box-shadow: var(--skugga); }
   .korthd { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
@@ -157,6 +201,9 @@
   .badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
     background: var(--acc-soft); color: var(--acc); font-size: 12px; font-weight: 700;
     display: inline-flex; align-items: center; justify-content: center; }
+  .lank { margin-left: auto; border: 0; background: transparent; color: var(--acc);
+    font-size: 12.5px; font-weight: 600; }
+  .lank:hover { text-decoration: underline; }
 
   .rad { display: flex; align-items: center; gap: 12px; padding: 11px 2px;
     border-top: 1px solid var(--div); }
@@ -178,10 +225,24 @@
   .jsub { font-size: 11.5px; color: var(--t-mut); }
   .delav { color: var(--t-help); }
 
-  .snabbrad { display: flex; flex-wrap: wrap; gap: 8px; }
-  .snabbrad button { padding: 8px 14px; border: 1px solid var(--div); border-radius: 8px;
-    background: var(--panel); color: var(--t-body); font-size: 13px; font-weight: 600; }
-  .snabbrad button:hover { border-color: var(--acc-border); color: var(--acc); }
+  /* Statistik — 2×2 rutnät med stora tal. */
+  .statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+    padding: 12px 14px; border: 1px solid var(--div); border-radius: 10px;
+    background: var(--panel); text-align: left; }
+  .stat:hover { border-color: var(--acc-border); }
+  .stal { font-size: 26px; font-weight: 700; color: var(--t-head); line-height: 1; }
+  .setikett { font-size: 11.5px; color: var(--t-mut); }
+
+  /* Inkorg & svar — prick + titel/sub + tid. */
+  .inrad { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+    padding: 10px 2px; border: 0; border-top: 1px solid var(--div); background: transparent; }
+  .inrad:first-of-type { border-top: 0; }
+  .inrad:hover .intitel { color: var(--acc); }
+  .intext { display: flex; flex-direction: column; gap: 1px; margin-right: auto; }
+  .intitel { font-size: 13px; font-weight: 600; color: var(--t-head); }
+  .insub { font-size: 11.5px; color: var(--t-mut); }
+  .inar { font-size: 10.5px; color: var(--t-help); flex: none; }
 
   .tom { font-size: 13px; color: var(--t-mut); padding: 8px 2px; }
 </style>

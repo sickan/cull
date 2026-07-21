@@ -25,7 +25,9 @@ class TestKallInvarianter(unittest.TestCase):
         self.assertIn("dispatch('valj', 'idag')", RAIL)
 
     def test_app_startar_pa_idag_och_ruttar_panelen(self):
-        self.assertIn("let aktiv = 'idag'", APP)
+        # Default är 'idag' (ev. via ?panel=-deep-link för headless verifiering).
+        self.assertIn("let aktiv =", APP)
+        self.assertIn("|| 'idag'", APP)
         self.assertIn("import Idag from './panels/Idag.svelte'", APP)
         self.assertIn("aktiv === 'idag'", APP)
 
