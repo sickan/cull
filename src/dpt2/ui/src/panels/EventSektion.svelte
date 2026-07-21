@@ -6,7 +6,7 @@
   import { onMount, createEventDispatcher } from 'svelte'
   import { listaEventer, listaTavlingar, hamtaEventDetalj, sattEventPagangLage,
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
-    kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle,
+    kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle, sattDisciplinResultat,
     sparaDisciplin, raderaDisciplin, sattDisciplinFavorit, sparaTavling, sportprofiler,
     hamtaMasterskapGrenar, hamtaGrenDetalj, hamtaMasterskapProgram,
     hamtaProgram, sparaPass, raderaPass, fotojobbForTavling } from '../lib/api.js'
@@ -296,6 +296,17 @@
     await kopplaBortEventIndivid(vald, id)
     detalj = await hamtaEventDetalj(vald)
   }
+
+  // F20-5: sätt resultat/placering/medalj för en deltagare i den valda grenen.
+  // Medaljen auto-följer placering 1/2/3 tills man ändrar den för hand (kval
+  // har placering men inga medaljer — då nollar man den).
+  async function sattRes(p) {
+    const plac = p.placering === '' || p.placering == null ? null : parseInt(p.placering, 10)
+    await sattDisciplinResultat(valdGren, p.id,
+      { resultat: (p.resultat || '').trim() || null, placering: plac, medalj: p.medalj || null })
+    await valjGren(valdGren, allaDeltagare)   // ladda om i placeringsordning
+  }
+  const autoMedalj = (plac) => ({ 1: 'guld', 2: 'silver', 3: 'brons' }[plac] || null)
   const grenNamn = (grenId) =>
     (detalj?.grenar || []).find((g) => g.id === grenId)?.namn || grenId
 
@@ -659,6 +670,17 @@
                       </span>
                       {#if p.har_handle}<span class="harhandle">{p.handle}</span>
                       {:else}<span class="saknarhandle">saknar @</span>{/if}
+                      <!-- F20-5: resultat/placering/medalj → fältflödets scoring. -->
+                      <input class="resin" placeholder="resultat" bind:value={p.resultat}
+                        on:change={() => sattRes(p)} />
+                      <input class="placin" placeholder="pl" inputmode="numeric" bind:value={p.placering}
+                        on:change={() => { const n = parseInt(p.placering, 10); if (autoMedalj(n)) p.medalj = autoMedalj(n); sattRes(p) }} />
+                      <select class="medin" bind:value={p.medalj} on:change={() => sattRes(p)}>
+                        <option value={null}>—</option>
+                        <option value="guld">🥇</option>
+                        <option value="silver">🥈</option>
+                        <option value="brons">🥉</option>
+                      </select>
                     </div>
                   {:else}
                     <p class="tomkort">Inga deltagare kopplade till grenen än.</p>
@@ -1265,6 +1287,13 @@
   .harhandle { flex: none; font-size: 11px; font-weight: 600; color: var(--acc); }
   .saknarhandle { flex: none; font-size: 9.5px; font-weight: 700; color: var(--t-help);
     border: 1px dashed var(--div); border-radius: 5px; padding: 1px 6px; }
+  /* F20-5: scoring-fält per deltagare. */
+  .resin, .placin, .medin { flex: none; border: 1px solid var(--div); border-radius: 6px;
+    background: var(--kort); color: var(--t-head); font-size: 11.5px; padding: 4px 7px; font-family: inherit; }
+  .resin { width: 84px; }
+  .placin { width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+  .medin { padding: 4px 4px; }
+  .resin:focus, .placin:focus, .medin:focus { outline: none; border-color: var(--acc); }
   .visaalla { margin-top: 9px; border: 0; background: none; font-family: inherit;
     font-size: 12px; font-weight: 600; color: var(--acc); cursor: pointer; padding: 0; }
   .programtom { padding: 22px; }

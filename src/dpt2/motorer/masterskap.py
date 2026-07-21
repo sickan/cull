@@ -216,6 +216,11 @@ def deltagarrad(p):
         "initialer": initialer(p.get("namn")),
         "handle": handle,
         "har_handle": bool(handle),
+        # F20-5: resultat/placering/medalj (M-6) — sätts i gren-detaljen, trådas
+        # till fältflödets scoring i appen.
+        "resultat": p.get("resultat"),
+        "placering": p.get("placering"),
+        "medalj": p.get("medalj"),
         # Startnummer finns inte i modellen (v42) — raden bär det när/om det
         # kommer, men vi hittar aldrig på ett.
         "nr": (p.get("nr") or ""),

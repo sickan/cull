@@ -751,6 +751,17 @@ export async function kopplaDisciplinDeltagare(disciplinId, lagId, pa = true) {
   return wait({ ok: true })
 }
 
+// F20-5: sätt en deltagares resultat/placering/medalj för en gren (M-6) →
+// fältflödets scoring i appen.
+export async function sattDisciplinResultat(disciplinId, lagId, { resultat = null, placering = null, medalj = null } = {}) {
+  const api = brygga()
+  if (api) return api.satt_disciplin_resultat(disciplinId, lagId, resultat, placering, medalj)
+  const d = MOCK_DISCIPLINER.find((x) => x.id === disciplinId)
+  const p = d && (d.deltagare || []).find((x) => x.id === lagId)
+  if (p) { p.resultat = resultat; p.placering = placering; p.medalj = medalj }
+  return wait({ ok: true })
+}
+
 // ── C12/M-2: "Tävlar i" — härlett ur grendeltagandet ───────────────────────
 // Samma härledning som utövarsidans Kommande starter (store.utovare_
 // discipliner). Mockläget bygger den ur MOCK_DISCIPLINER + MOCK_PASS på samma

@@ -884,6 +884,23 @@ class Api:
         store.koppla_disciplin_deltagare(self.conn, disciplin_id, lag_id, pa)
         return {"ok": True}
 
+    def satt_disciplin_resultat(self, disciplin_id, lag_id, resultat=None,
+                                placering=None, medalj=None):
+        """F20-5: sätt en deltagares resultat/placering/medalj för en gren (M-6).
+        Trådas till fältflödets scoring i appen (final→medaljörer, kval→placering).
+        Tom sträng → None; placering tolkas som heltal."""
+        res = (resultat or "").strip() or None
+        try:
+            plac = int(placering) if placering not in (None, "", False) else None
+        except (TypeError, ValueError):
+            plac = None
+        med = (medalj or "").strip().lower() or None
+        if med not in ("guld", "silver", "brons", None):
+            med = None
+        store.satt_disciplin_resultat(self.conn, disciplin_id, lag_id,
+                                      resultat=res, placering=plac, medalj=med)
+        return {"ok": True}
+
     # ── Pass & program (V5 §8) ───────────────────────────────────────────────
     # Passet bär eget datum+tid; dagsprogrammet LAGRAS ALDRIG utan härleds ur
     # pass + tidsatta matcher. Ändra passets tid och programmet följer med.
