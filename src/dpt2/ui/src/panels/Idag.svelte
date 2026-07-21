@@ -71,9 +71,15 @@
     const mid = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate())
     const dagar = Math.round((mid(d) - mid(nu)) / 86400000)
     const tid = (!j.all_day && s.includes('T')) ? s.split('T')[1].slice(0, 5) : ''
+    // Change 4: bara Idag/Imorgon som relativ text — allt längre bort som datum
+    // (inga "Om 3 dgr"). Change 5: heldag bär veckodag, aldrig klockslag.
     if (dagar <= 0) return tid ? `Idag ${tid}` : 'Idag'
     if (dagar === 1) return tid ? `Imorgon ${tid}` : 'Imorgon'
-    if (dagar < 7) return `Om ${dagar} dgr${tid ? ' · ' + tid : ''}`
+    if (j.all_day) {
+      const v = d.toLocaleDateString('sv-SE', { weekday: 'long' })
+      const dat = d.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })
+      return `${v[0].toUpperCase()}${v.slice(1)} ${dat}`   // "Fredag 24 okt"
+    }
     return d.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }) + (tid ? ` · ${tid}` : '')
   }
 

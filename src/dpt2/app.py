@@ -1385,6 +1385,10 @@ class Api:
                 j["tavling_auto"] = auto
                 j["tavling_namn"] = tv.get("namn") if tv else None
                 j["tavling_sport"] = tv.get("sport") if tv else None
+                # Eventtyp (masterskap/tavling/…) styr ackrediterings-ledtiden i
+                # hamta_idag (change 3, 21/7): mästerskap flaggas 3 mån innan, en
+                # tävling 1 mån, en fristående match/jobb 1 vecka.
+                j["tavling_typ"] = tv.get("typ") if tv else None
                 k = store.koordinat_ur_platser(j.get("location"), platser)
                 j["lat"] = k[0] if k else None
                 j["lon"] = k[1] if k else None
@@ -1475,9 +1479,20 @@ class Api:
             return {"id": j.get("id"), "titel": j.get("title") or "Jobb", "mal": "fotojobb"}
 
         kraver = []
-        # 1. Ackreditering ej klar — sport-jobb utan BEVILJAD ackreditering.
+        # 1. Ackreditering ej klar — sport-jobb utan BEVILJAD ackreditering, men
+        # bara inom ledtidsfönstret per eventtyp (change 3, 21/7): mästerskap 3
+        # månader innan, en tävling 1 månad, en fristående match/jobb 1 vecka.
+        # Odaterat jobb kan inte fönstras → visas ändå.
+        def _ack_inom_fonster(j):
+            start = (j.get("start_at") or j.get("end_at") or "")[:10]
+            if not start:
+                return True
+            dagar = ackrediterings_ledtid(j.get("tavling_typ"))
+            grans = (datetime.now() + timedelta(days=dagar)).strftime("%Y-%m-%d")
+            return start <= grans
         ack = [j for j in kommande if j.get("category") == "Sport"
-               and (j.get("ackreditering") or {}).get("status") != "beviljad"]
+               and (j.get("ackreditering") or {}).get("status") != "beviljad"
+               and _ack_inom_fonster(j)]
         if ack:
             kraver.append({"typ": "ackreditering", "niva": "danger",
                            "titel": "Ackreditering ej klar",
@@ -1498,6 +1513,12 @@ class Api:
             m_map = {m["id"]: m for m in store.lista_matcher(self.conn)}
         except Exception:
             utan_trupp, m_map = [], {}
+        # Change 2 (21/7): trupp/startelva påminns FÖRST dagen innan — matcher
+        # längre bort än imorgon flaggas inte (annars stod hela säsongens matcher
+        # som "startlista saknas", 54 st). Tidsfönster per åtgärdstyp.
+        imorgon = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        utan_trupp = [mid for mid in utan_trupp
+                      if (m_map.get(mid, {}).get("datum") or "9999")[:10] <= imorgon]
         if utan_trupp:
             def _mpost(mid):
                 m = m_map.get(mid, {})
@@ -3851,6 +3872,19 @@ def _resultat_block(m):
     if (m.get("malskyttar") or "").strip():
         rad += "\nMål: " + m["malskyttar"].strip()
     return rad
+
+
+def ackrediterings_ledtid(tavling_typ):
+    """Change 3 (21/7): hur många dagar INNAN jobbet ackrediterings-påminnelsen
+    ska börja visas, styrt av eventtyp. Mästerskap kräver mest framförhållning
+    (3 mån), en tävling en månad, en fristående match/jobb en vecka. Ren funktion
+    → testbar utan hela hamta_idag."""
+    typ = (tavling_typ or "").lower()
+    if typ in ("masterskap", "mästerskap"):
+        return 90
+    if typ:                       # någon annan tävlingstyp (cup/liga/turnering/…)
+        return 30
+    return 7                      # fristående match/jobb
 
 
 def _dela_beskrivning(beskrivning):

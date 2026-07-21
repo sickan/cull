@@ -81,5 +81,34 @@ class TestIdagFragor(unittest.TestCase):
         self.assertEqual(store.urval_vantar_leverans(self.c), 1)
 
 
+class TestAckrediteringsLedtid(unittest.TestCase):
+    """Change 3 (21/7): ackrediterings-påminnelsens ledtid per eventtyp."""
+
+    def test_ledtid_per_eventtyp(self):
+        from dpt2.app import ackrediterings_ledtid
+        self.assertEqual(ackrediterings_ledtid("masterskap"), 90)   # mästerskap 3 mån
+        self.assertEqual(ackrediterings_ledtid("mästerskap"), 90)
+        self.assertEqual(ackrediterings_ledtid("cup"), 30)          # tävling 1 mån
+        self.assertEqual(ackrediterings_ledtid("liga"), 30)
+        self.assertEqual(ackrediterings_ledtid("turnering"), 30)
+        self.assertEqual(ackrediterings_ledtid(None), 7)            # fristående 1 vecka
+        self.assertEqual(ackrediterings_ledtid(""), 7)
+
+
+class TestIdagFonsterKallor(unittest.TestCase):
+    """Change 2+3: tidsfönstren måste finnas i hamta_idag-källan (annars flaggas
+    hela säsongen)."""
+
+    APP_PY = (Path(__file__).parent / "app.py").read_text(encoding="utf-8")
+
+    def test_trupp_fonstras_till_imorgon(self):
+        self.assertIn("imorgon = (datetime.now() + timedelta(days=1))", self.APP_PY)
+        self.assertIn("<= imorgon", self.APP_PY)
+
+    def test_ack_anvander_ledtidsfonster(self):
+        self.assertIn("ackrediterings_ledtid(j.get(\"tavling_typ\"))", self.APP_PY)
+        self.assertIn("_ack_inom_fonster(j)", self.APP_PY)
+
+
 if __name__ == "__main__":
     unittest.main()
