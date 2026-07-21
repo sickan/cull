@@ -25,7 +25,10 @@
 
   const ARMOCK = erMock()
 
-  let aktiv = 'idag'   // D16 §C: startskärmen är kommandobryggan
+  // D16 §C: startskärmen är kommandobryggan. ?panel= tillåter deep-link (bl.a.
+  // för visuell verifiering headless); i appen är search tom → 'idag'.
+  let aktiv = (typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('panel')) || 'idag'
   // Temat följer OS (prefers-color-scheme) tills användaren manuellt växlar.
   const osTema = () => (typeof window !== 'undefined' && window.matchMedia
     && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark'

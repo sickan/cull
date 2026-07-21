@@ -10,6 +10,23 @@
   // ligger i Inställningar → Om, inte i naven.
   const versionsord = bokstaverad()
 
+  // Nav-ikoner — extraherade EXAKT ur Designs prototyp (v5-snabb, 17px linje,
+  // stroke-width 1.7, currentColor så de följer postens text/accentfärg). De
+  // numrerade "Efter jobb"-posterna behåller nummer-märket (som mockupen);
+  // Upprätning finns inte i mockupen → crop-ikon i samma stil.
+  const IK = {
+    idag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6.5 13a5.5 5.5 0 0 1 11 0"/><path d="M2.5 17.5h19M5.5 21h13M12 4V2M5 6.5 3.6 5.1M19 6.5l1.4-1.4"/></svg>',
+    fotojobb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/><path d="M12 12.5v2.4l1.7 1.1"/></svg>',
+    eventsektion: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 9.2l5.4-.8z"/></svg>',
+    lag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l7 2.5v5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9v-5z"/></svg>',
+    snabbplock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/></svg>',
+    upprattning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14"/></svg>',
+    innehall: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18"/></svg>',
+    pagang: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.5h17"/><path d="M7.5 13.5h5M7.5 16.5h8"/></svg>',
+    logg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.6" y="4.5" width="18.8" height="15" rx="2.4"/><path d="M6.5 9.5l3 2.6-3 2.6M12.5 15h4.5"/></svg>',
+    installningar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5"/></svg>',
+  }
+
   const grupper = [
     { rubrik: 'Planera', poster: [
       { id: 'fotojobb', namn: 'Fotojobb' },
@@ -46,6 +63,7 @@
   </div>
   <!-- D16 §C: "Idag" är en egen toppnivå ovanför Planera (kommandobryggan). -->
   <button class="post topp" class:aktiv={aktiv === 'idag'} on:click={() => dispatch('valj', 'idag')}>
+    <span class="navik">{@html IK.idag}</span>
     <span>Idag</span>
   </button>
   {#each grupper as g}
@@ -54,6 +72,8 @@
       <button class="post" class:aktiv={aktiv === p.id} on:click={() => dispatch('valj', p.id)}>
         {#if p.nr}
           <span class="nr">{p.nr}{#if p.id === 'publicera' && delvis}<span class="dot" title="Delvis publicerat material väntar"></span>{/if}</span>
+        {:else if IK[p.id]}
+          <span class="navik">{@html IK[p.id]}</span>
         {/if}
         <span>{p.namn}</span>
       </button>
@@ -93,6 +113,11 @@
     font-size: 11px; font-weight: 700; position: relative;
   }
   .post.aktiv .nr { background: var(--acc); color: var(--kort); }
+  /* Nav-ikoner (Design v5): 17px linje, ärver postens färg via currentColor. */
+  .navik { width: 18px; height: 18px; flex: none; display: inline-flex;
+    align-items: center; justify-content: center; opacity: 0.85; }
+  .post.aktiv .navik { opacity: 1; }
+  .navik :global(svg) { width: 17px; height: 17px; }
   .dot {
     position: absolute; top: -3px; right: -3px; width: 9px; height: 9px;
     border-radius: 50%; background: #B0483A; box-shadow: 0 0 0 2px var(--panel);
