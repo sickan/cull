@@ -79,10 +79,14 @@
   // Djuplänk: öppna en specifik post när Idags åtgärdskö/⌘K pekar hit.
   let pendingOppna = null
   let avslutaOppna = null
-  function forsokOppnaPending() {
+  async function forsokOppnaPending() {
     if (!pendingOppna) return
     const j = jobb.find((x) => x.id === pendingOppna)
-    if (j) { pendingOppna = null; oppnaRedigering(j) }
+    if (!j) return
+    pendingOppna = null
+    await tick()   // låt listan rendera så raden finns att scrolla in i fokus
+    const rad = bodyEl && bodyEl.querySelector(`[data-jid="${CSS.escape(j.id)}"]`)
+    oppnaRedigering(j, rad)   // rad → radTillToppen scrollar den i vy (inline-fallet)
   }
   let jobEditId = null          // id på fotojobbet vars redigeringskort är utfällt
   let redigerar = null          // redigeringsutkast för jobEditId (seedas vid öppning)
@@ -538,7 +542,7 @@
                 {@const gren = grenForJobb(j)}
                 {@const res = resultatForJobb(j)}
                 {@const krock = krockar.get(j.id)}
-                <div class="tlrad" data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)}>
+                <div class="tlrad" data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} data-jid={j.id}>
                   <div class="tltid scd">
                     <div class="tlt">{j.all_day ? '–' : klocka(j.start_at)}</div>
                     <div class="tld">{veckodag(j.start_at)} {del(j.start_at)[2] || ''}</div>
@@ -633,7 +637,7 @@
                 <div class="radwrap">
                 {#if krock && krockVisas === j.id}<KrockPop krockar={krock} {kalendrar} heldag={j.all_day} />{/if}
                 {#if j.all_day}
-                  <div class="rad heldag" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)}
+                  <div class="rad heldag" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} data-jid={j.id}
                     on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
                     <Hornmarkor farg={katFarg(j.category)} r={12} horn="uppe-vanster" titel={j.category || 'Okategoriserat'} />
                     <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
@@ -663,7 +667,7 @@
                     {#if synkFelId === j.id}<div class="synkfel">⚠ {synkFelMsg}</div>{/if}
                   </div>
                 {:else}
-                  <div class="rad" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)}
+                  <div class="rad" role="button" tabindex="0" class:idag={arIdag(j)} class:forfluten={arForfluten(j)} data-jobdate={dateKey(j.start_at)} data-idag={arIdag(j)} data-jid={j.id}
                     on:click={(e) => oppnaRedigering(j, e.currentTarget)} on:keydown={(e) => e.key === 'Enter' && oppnaRedigering(j, e.currentTarget)}>
                     <Hornmarkor farg={katFarg(j.category)} r={12} horn="uppe-vanster" titel={j.category || 'Okategoriserat'} />
                     <Hornmarkor farg={synkFarg(jobbSynkStatus(j))} r={12} titel={synkText(j)} />
