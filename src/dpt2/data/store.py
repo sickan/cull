@@ -1795,6 +1795,58 @@ def stad_grendubbletter(conn, event_id):
     return hopslagna
 
 
+def stad_mangkamp(conn, event_id):
+    """Mångkamp ska vara EN gren (Sjukamp/Tiokamp) med delgrenarna som PASS och
+    utövarna kopplade en gång — samma tävlande i alla delgrenar, poäng avgör.
+
+    Ett tidsprogram som listar varje delgren som egen gren ('Sjukamp 100m häck')
+    ger tomma dubblettgrenar bredvid den riktiga. Slå ihop: delgrenen blir ett
+    pass på förälder-grenen (skapas om den saknas — t.ex. bara tidsprogram
+    inläst), deltagare flyttas, dubbletten tas bort. No-op när inget matchar.
+    Returnerar antalet ihopvikta delgrenar."""
+    def _norm(s):
+        return "".join((s or "").lower().split())
+    grenar = [dict(r) for r in conn.execute(
+        "SELECT id, namn, gren FROM disciplin WHERE tavling_id=?", (event_id,))]
+
+    def foralder(kampord, klass):
+        for g in grenar:
+            if _norm(g["namn"]) == _norm(kampord) and g["gren"] == klass:
+                return g["id"]
+        did = upsert_disciplin(conn, event_id, kampord, gren=klass)
+        grenar.append({"id": did, "namn": kampord, "gren": klass})
+        return did
+
+    vikta = 0
+    for g in list(grenar):
+        delar = (g["namn"] or "").strip().split(None, 1)
+        # "Sjukamp 100m häck" → kampord "Sjukamp" (slutar på -kamp) + delgren
+        if len(delar) != 2 or not delar[0].lower().endswith("kamp"):
+            continue
+        kampord, delgren = delar[0], delar[1].strip()
+        pid = foralder(kampord, g["gren"])
+        if pid == g["id"]:
+            continue
+        finns = {_norm(p["namn"]) for p in conn.execute(
+            "SELECT namn FROM pass WHERE disciplin_id=?", (pid,))}
+        # Delgrenen som pass på föräldern om den saknas ("100m häck" ≈ "100 m
+        # häck" via normaliseringen → ingen dubblett mot startlistans pass).
+        if _norm(delgren) not in finns:
+            p = conn.execute("SELECT datum, tid, plats FROM pass WHERE disciplin_id=? "
+                             "ORDER BY id LIMIT 1", (g["id"],)).fetchone()
+            if p:
+                upsert_pass(conn, pid, delgren, p["datum"], tid=p["tid"], plats=p["plats"])
+        conn.execute(
+            "INSERT OR IGNORE INTO disciplin_deltagare(disciplin_id,lag_id) "
+            "SELECT ?, lag_id FROM disciplin_deltagare WHERE disciplin_id=?",
+            (pid, g["id"]))
+        conn.execute("DELETE FROM disciplin WHERE id=?", (g["id"],))
+        vikta += 1
+    if vikta:
+        conn.commit()
+    return vikta
+
+
 def backfilla_deltagarklass(conn, event_id):
     """Sätter klass (dam/herr) på deltagare som saknar den, härledd ur den gren
     de tävlar i. Startlistan bar klassen men skrev den bara på grenen — inte på

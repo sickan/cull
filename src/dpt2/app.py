@@ -1070,6 +1070,7 @@ class Api:
             # ("100m" ur PDF:en, "100 m" ur startlistan) och fyll klassen på
             # deltagare som saknar den. Båda är no-op när allt redan stämmer.
             sam["hopslagna"] = store.stad_grendubbletter(self.conn, event_id)
+            sam["mangkamp_vikta"] = store.stad_mangkamp(self.conn, event_id)
             sam["klass_satt"] = store.backfilla_deltagarklass(self.conn, event_id)
             sam["flyttade_klass"] = store.stad_deltagare_fel_klass(self.conn, event_id)
             return {"ok": True, **sam}
@@ -1080,6 +1081,7 @@ class Api:
         else:
             sam = store.importera_program(self.conn, event_id, rader)
         sam["hopslagna"] = store.stad_grendubbletter(self.conn, event_id)
+        sam["mangkamp_vikta"] = store.stad_mangkamp(self.conn, event_id)
         sam["klass_satt"] = store.backfilla_deltagarklass(self.conn, event_id)
         sam["flyttade_klass"] = store.stad_deltagare_fel_klass(self.conn, event_id)
         return {"ok": True, **sam}

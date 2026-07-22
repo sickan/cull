@@ -2673,3 +2673,43 @@ class TestMassgallring(unittest.TestCase):
         self.assertEqual(store.radera_discipliner(self.c, []), 0)
         self.assertEqual(store.radera_discipliner(self.c, [None, ""]), 0)
         self.assertEqual(self.c.execute("SELECT count(*) c FROM disciplin").fetchone()["c"], 1)
+
+
+class TestStadMangkamp(unittest.TestCase):
+    """Mångkamp = EN gren med delgrenar som pass; städa bort tidsprogrammets
+    per-delgren-splittar ('Sjukamp 100m häck')."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.t = store.upsert_tavling(self.c, "SM", sport="friidrott")
+
+    def test_split_viks_in_i_foraldern_utan_dubblettpass(self):
+        par = store.upsert_disciplin(self.c, self.t, "Sjukamp", gren="dam")
+        store.upsert_pass(self.c, par, "100 m häck", "2026-07-25", tid="10:30")
+        a = store.upsert_lag(self.c, "Sydney Karström", kind="individ")
+        store.koppla_disciplin_deltagare(self.c, par, a)
+        s = store.upsert_disciplin(self.c, self.t, "Sjukamp 100m häck", gren="dam")
+        store.upsert_pass(self.c, s, "Sjukamp 100m häck", "2026-07-25", tid="10:30")
+        n = store.stad_mangkamp(self.c, self.t)
+        self.assertEqual(n, 1)
+        grenar = [r["namn"] for r in self.c.execute(
+            "SELECT namn FROM disciplin WHERE tavling_id=?", (self.t,))]
+        self.assertEqual(grenar, ["Sjukamp"])
+        # "100m häck" ≈ "100 m häck" (normaliserat) → inget dubblettpass.
+        self.assertEqual(self.c.execute(
+            "SELECT count(*) c FROM pass WHERE disciplin_id=?", (par,)).fetchone()["c"], 1)
+        self.assertEqual(self.c.execute(
+            "SELECT count(*) c FROM disciplin_deltagare WHERE disciplin_id=?", (par,)).fetchone()["c"], 1)
+
+    def test_skapar_foralder_nar_bara_tidsprogram_lasts_in(self):
+        for split in ["Tiokamp 100m", "Tiokamp Stav"]:
+            s = store.upsert_disciplin(self.c, self.t, split, gren="herr")
+            store.upsert_pass(self.c, s, split, "2026-07-24", tid="12:45")
+        n = store.stad_mangkamp(self.c, self.t)
+        self.assertEqual(n, 2)
+        rad = self.c.execute("SELECT id FROM disciplin WHERE tavling_id=? AND namn='Tiokamp'",
+                             (self.t,)).fetchone()
+        self.assertIsNotNone(rad)
+        passar = sorted(p["namn"] for p in self.c.execute(
+            "SELECT namn FROM pass WHERE disciplin_id=?", (rad["id"],)))
+        self.assertEqual(passar, ["100m", "Stav"])
