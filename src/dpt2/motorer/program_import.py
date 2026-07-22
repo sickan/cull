@@ -405,10 +405,35 @@ def tolka_startlista_med_tider(text, fran=None, till=None):
     slängas."""
     dagar = _dagar_i_perioden(fran, till)
     pas, delt = [], []
-    gren = klass = ""
+    grenar = []          # grenar det aktuella blocket gäller (>1 = mixad gren)
+    klass = ""
+    klasskolumn = False  # sätts när en "Klass"-kolumnrubrik setts (mixad startlista)
+
+    def _norm(s):
+        return "".join((s or "").lower().split())
+
+    def _gren_for_klass(rad_klass):
+        # "(Kvinnor) I-20" → grenen i den mixade uppsättningen vars namn bär
+        # klassdelen ("I-20 100 m"). Faller till första grenen utan träff.
+        k = (rad_klass or "").lower()
+        for ko in KLASSORD:
+            if k.startswith(ko):
+                k = k[len(ko):]
+                break
+        kn = _norm(k)
+        for g in grenar:
+            if kn and kn in _norm(g):
+                return g
+        return grenar[0] if grenar else ""
+
     for rå in (text or "").splitlines():
         rad = rå.strip()
         if not rad or _ANTAL.match(rad):
+            continue
+        # "Klass"-kolumnrubrik: deltagarraderna bär då en klass per rad (mixad
+        # gren där t.ex. Kvinnor I-20 och Kvinnor R-stående springer samma lopp).
+        if rad.lower() == "klass":
+            klasskolumn = True
             continue
         # Deltagarrad: tabbar och startnummer först. Testas FÖRE grenrubriken —
         # en klubb kan heta "Män..." och ska inte tolkas som ny gren.
@@ -419,29 +444,51 @@ def tolka_startlista_med_tider(text, fran=None, till=None):
             # Namnet i andra fältet är det som gör raden till en deltagare.
             if (len(d) >= 3 and d[1] and not d[1].isdigit()
                     and (not d[0] or re.fullmatch(r"\d{1,5}", d[0]))):
+                g = grenar[0] if grenar else ""
+                # Mixad startlista: Klass-kolumnen (efter klubben) styr vilken av
+                # de mixade grenarna raden hör till.
+                if (klasskolumn and len(d) > 4 and d[4]
+                        and not d[4].replace(".", "").isdigit()):
+                    g = _gren_for_klass(d[4])
                 delt.append({
-                    "gren": gren, "klass": klass, "namn": d[1],
+                    "gren": g, "klass": klass, "namn": d[1],
                     "klubb": d[3] if len(d) > 3 else "", "handle": "",
-                    "varning": "" if gren else "Ingen gren — välj i listan",
+                    "varning": "" if g else "Ingen gren — välj i listan",
                 })
                 continue
+        # "Mixad med {gren}": grenen körs ihop med en till klass i samma lopp —
+        # lägg till den som en gren till i blocket (delar pass + startlista).
+        if rad.lower().startswith("mixad med "):
+            m2 = _GRENRUBRIK.match(rad[len("mixad med "):].strip())
+            if m2:
+                g2 = m2.group("rest").strip()
+                if g2 and g2 not in grenar:
+                    grenar.append(g2)
+            continue
         m = _GRENRUBRIK.match(rad)
         if m and not m.group("rest").lower().startswith(("startlista", "gren")):
+            rest = m.group("rest").strip()
+            # Kombinerad mixad-rubrik "A & B …" — grenarna är redan satta via
+            # primärraden + "Mixad med"; låt den inte skriva över dem.
+            if "&" in rest and len(grenar) > 1:
+                continue
             klass = KLASSORD.get(m.group("klass").lower(), "")
-            gren = m.group("rest").strip()
+            grenar = [rest]
+            klasskolumn = False
             continue
         m = _PASSRAD.match(rad)
-        if m and gren:
+        if m and grenar:
             datum = dagar.get(m.group("dag").lower(), "")
             t = m.group("tid").replace(".", ":")
             tim, mi = t.split(":")
-            pas.append({
-                "datum": datum, "tid": f"{int(tim):02d}:{mi}",
-                "gren": gren, "pass": m.group("namn").strip(),
-                "plats": "", "klass": klass,
-                "varning": "" if datum else
-                           f"Kunde inte datera {m.group('dag')} — sätt eventets period",
-            })
+            for g in grenar:      # mixad gren → passet gäller båda grenarna
+                pas.append({
+                    "datum": datum, "tid": f"{int(tim):02d}:{mi}",
+                    "gren": g, "pass": m.group("namn").strip(),
+                    "plats": "", "klass": klass,
+                    "varning": "" if datum else
+                               f"Kunde inte datera {m.group('dag')} — sätt eventets period",
+                })
     return {"pass": pas, "deltagare": delt}
 
 

@@ -281,6 +281,34 @@ class TestStartlistaMedTider(unittest.TestCase):
         r = PI.tolka_startlista_med_tider("", fran="2026-07-24")
         self.assertEqual((r["pass"], r["deltagare"]), ([], []))
 
+    # Mixad gren (easyrecord): två klasser springer samma lopp. Rubriken säger
+    # "Mixad med …" + en kombinerad "A & B"-rad, och varje deltagarrad bär en
+    # Klass-kolumn. Passet ska gälla båda grenarna och deltagarna delas på klass.
+    MIXAD = (
+        "Kvinnor R-stående 100 m\n"
+        "Mixad med Kvinnor I-20 100 m\n"
+        "\n"
+        "Kvinnor I-20 & Kvinnor R-stående 100 m\n"
+        "Final Fredag, 13:15\n"
+        "#\nKlass\nSB\nPB\n"
+        "45\tNyakuan Kang Gai\t05\tEskilstuna FI\tKvinnor I-20\t15.27\t14.932025\t\n"
+        "57\tEllen Westling\t07\tFalu IK\tKvinnor R-stående\t17.39\t16.942025\t\n"
+        "292\tFilippa Ivarsson\t07\tKFUM Kristianstad\tKvinnor I-20\t14.20\t14.202026\t\n"
+        "Antal deltagare: 3\n"
+    )
+
+    def test_mixad_gren_delas_pa_klasskolumnen(self):
+        r = PI.tolka_startlista_med_tider(self.MIXAD, fran="2026-07-24", till="2026-07-26")
+        # Passet (Final) gäller BÅDA grenarna — ej en hopklumpad "A & B"-gren.
+        self.assertEqual({p["gren"] for p in r["pass"]},
+                         {"R-stående 100 m", "I-20 100 m"})
+        self.assertTrue(all(p["pass"] == "Final" for p in r["pass"]))
+        # Deltagarna delas på sin Klass-kolumn, inte alla i en gren.
+        per = {d["namn"]: d["gren"] for d in r["deltagare"]}
+        self.assertEqual(per["Nyakuan Kang Gai"], "I-20 100 m")
+        self.assertEqual(per["Ellen Westling"], "R-stående 100 m")
+        self.assertEqual(per["Filippa Ivarsson"], "I-20 100 m")
+
 
 class TestKannaIgen(unittest.TestCase):
     """C8 — gissa dokumenttyp så Stig slipper välja flik."""

@@ -372,8 +372,9 @@
   // ── Pass för hand ────────────────────────────────────────────────────────
   let passOppen = false
   let pas = null
-  function nyttPass() {
-    pas = { id: null, disciplin_id: (detalj?.grenar || [])[0]?.id || '',
+  function nyttPass(grenId = null) {
+    // #7: förvälj den gren vars "+ Pass" klickades (inte alltid eventets första).
+    pas = { id: null, disciplin_id: grenId || (detalj?.grenar || [])[0]?.id || '',
       namn: '', datum: dag?.datum || detalj?.event?.fran || '', tid: '', plats: '' }
     passOppen = true
   }
@@ -630,8 +631,23 @@
                       <span class="passantal">{p.antal}</span>
                     </div>
                   {/each}
-                  <button class="passny" on:click={nyttPass}>+ Pass</button>
+                  <button class="passny" on:click={() => nyttPass(grenDetalj.id)}>+ Pass</button>
                 </div>
+                {#if passOppen}
+                  <div class="nyrad passrad">
+                    <select bind:value={pas.disciplin_id}>
+                      {#each detalj.grenar as g (g.id)}<option value={g.id}>{g.namn}</option>{/each}
+                    </select>
+                    <input class="smal" bind:value={pas.namn} placeholder="Försök, Final…" />
+                    <input class="smal" type="date" bind:value={pas.datum} />
+                    <input class="mini" bind:value={pas.tid} placeholder="19:10" />
+                    <input class="smal" bind:value={pas.plats} placeholder="Plats (valfri)" />
+                    <button class="prim liten" on:click={sparaPasset}
+                      disabled={!pas.namn.trim() || !pas.datum || !pas.disciplin_id}>Spara</button>
+                    {#if pas.id}<button class="bort" title="Ta bort pass" on:click={() => taBortPass(pas.id)}>✕</button>{/if}
+                    <button class="avbryt liten" on:click={() => (passOppen = false)}>Avbryt</button>
+                  </div>
+                {/if}
               </div>
 
               <div class="kort">
