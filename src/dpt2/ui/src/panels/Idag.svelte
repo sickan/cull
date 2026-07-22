@@ -155,16 +155,17 @@
       <div class="kort">
         <div class="korthd">
           <h2 class="scd">Närmast på tur</h2>
-          <button class="lank" on:click={() => dispatch('navigera', 'fotojobb')}>Till fotojobb →</button>
+          <button class="lank" on:click={() => { tillbaka.set('idag'); dispatch('navigera', 'fotojobb') }}>Till fotojobb →</button>
         </div>
         {#if data && data.narmast.length}
           {#each data.narmast as j}
-            <div class="jobb" style="border-left-color: {KAT_FARG[j.kategori] || 'var(--div)'}">
+            <button class="jobb" style="border-left-color: {KAT_FARG[j.kategori] || 'var(--div)'}"
+              on:click={() => oppnaPost(j)}>
               <span class="jtitel">{j.titel}</span>
               <span class="jsub">
                 {narText(j)}{#if j.plats} · {j.plats}{/if}{#if j.tavling_namn} · <span class="delav">Del av {j.tavling_namn}</span>{/if}
               </span>
-            </div>
+            </button>
           {/each}
         {:else}
           <div class="tom">Inga kommande jobb.</div>
@@ -192,7 +193,7 @@
         <div class="korthd"><h2 class="scd">Inkorg & svar</h2></div>
         {#if data && data.inkorg && data.inkorg.length}
           {#each data.inkorg as i}
-            <button class="inrad" on:click={() => dispatch('navigera', i.dest || 'fotojobb')}>
+            <button class="inrad" on:click={() => i.id && i.mal ? oppnaPost(i) : dispatch('navigera', i.dest || 'fotojobb')}>
               <span class="prick" style="background: {NIVAFARG[i.niva] || 'var(--t-help)'}"></span>
               <span class="intext">
                 <span class="intitel">{i.titel}</span>
@@ -273,7 +274,9 @@
 
   .jobb { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px;
     border-left: 3px solid var(--div); border-radius: 8px; background: var(--panel);
-    margin-bottom: 8px; }
+    margin-bottom: 8px; width: 100%; text-align: left; border-top: 0; border-right: 0;
+    border-bottom: 0; font: inherit; cursor: pointer; }
+  .jobb:hover { background: color-mix(in srgb, var(--acc) 8%, var(--panel)); }
   .jobb:last-child { margin-bottom: 0; }
   .jtitel { font-size: 13.5px; font-weight: 600; color: var(--t-head); }
   .jsub { font-size: 11.5px; color: var(--t-mut); }

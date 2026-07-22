@@ -1575,7 +1575,9 @@ class Api:
                     "kategori": j.get("category"), "start_at": j.get("start_at"),
                     "end_at": j.get("end_at"), "all_day": j.get("all_day"),
                     "plats": j.get("location"), "tavling_namn": j.get("tavling_namn"),
-                    "match_id": j.get("match_id")}
+                    "match_id": j.get("match_id"),
+                    # #1: djuplänk till posten (öppnas i Fotojobb) + "← Tillbaka".
+                    "mal": "fotojobb"}
 
         try:
             antal_matcher = len(self._pagang_kommande(idag))
@@ -1603,21 +1605,24 @@ class Api:
         for j in jobb:
             if j.get("category") != "Sport":
                 continue
+            # #2: bär id+mal så raden öppnar SJÄLVA posten (matchen/ackr-jobbet),
+            # inte bara fotojobblistan.
+            djup = {"id": j.get("id"), "mal": "fotojobb", "dest": "fotojobb"}
             st = (j.get("ackreditering") or {}).get("status")
             if st == "begard":
                 inkorg.append({"niva": "info", "titel": "Ackreditering begärd",
-                               "sub": j.get("title"), "nar": "väntar svar", "dest": "fotojobb"})
+                               "sub": j.get("title"), "nar": "väntar svar", **djup})
             elif st == "beviljad":
                 inkorg.append({"niva": "ok", "titel": "Ackreditering beviljad",
-                               "sub": j.get("title"), "nar": "", "dest": "fotojobb"})
+                               "sub": j.get("title"), "nar": "", **djup})
             elif st == "nekad":
                 inkorg.append({"niva": "danger", "titel": "Ackreditering nekad",
-                               "sub": j.get("title"), "nar": "", "dest": "fotojobb"})
+                               "sub": j.get("title"), "nar": "", **djup})
         for j in jobb:
             if j.get("utkast"):
                 inkorg.append({"niva": "rose", "titel": "Nytt utkast",
                                "sub": " · ".join(x for x in [j.get("title"), j.get("category")] if x),
-                               "nar": "", "dest": "fotojobb"})
+                               "nar": "", "id": j.get("id"), "mal": "fotojobb", "dest": "fotojobb"})
 
         return {"kraver": kraver, "narmast": [_kort(j) for j in narmast],
                 "statistik": statistik, "inkorg": inkorg[:5],

@@ -108,7 +108,9 @@
     Event: '#C9657F', 'Övrigt': '#6E8B5E' }
   const LEGACY_KAT = ['Event', 'Övrigt']
   const NULLKAT = 'rgba(35,32,26,.45)'
-  const FILTER = ['Alla', ...KATEGORIER, 'Okategoriserat']
+  // Film har inga fotojobb (analog film bor i Innehåll/Rörligt) → ingen
+  // filterchip, men kategorin finns kvar i kort-väljaren. (Stig 22/7, jfr iOS.)
+  const FILTER = ['Alla', ...KATEGORIER.filter((k) => k !== 'Film'), 'Okategoriserat']
 
   // ── Ackreditering (bara matcher/Sport — handoff "Ackreditering") ──────────
   // Hörnfärgerna delar familj med synk/krock: Begärd amber, Beviljad grön,

@@ -873,10 +873,13 @@
 
   /* Master-detail (D12-prototyp): grupperad lista vänster, editor höger. */
   .mdvy { display: flex; gap: 22px; align-items: flex-start; }
-  .mdlista { flex: 0 0 420px; min-width: 320px; }
+  /* #13: listan scrollar självständigt, editorn står kvar — bind bägge
+     kolumnerna till skärmhöjden i stället för att hela sidan scrollar. */
+  .mdlista { flex: 0 0 420px; min-width: 320px; position: sticky; top: 12px;
+    display: flex; flex-direction: column; max-height: calc(100vh - 24px); }
   .mddetalj { flex: 1; min-width: 0; position: sticky; top: 12px;
     border: 1px solid var(--div); border-radius: 16px; background: var(--kort);
-    padding: 18px 20px; }
+    padding: 18px 20px; max-height: calc(100vh - 24px); overflow-y: auto; }
   .kkort.vald { outline: 2px solid var(--acc-border); outline-offset: -1px; }
   .detaljtom { padding: 60px 8px; text-align: center; color: var(--t-help); font-size: 13px; }
   header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -898,7 +901,8 @@
   .grenchip.on:first-child { background: var(--acc-soft); color: var(--acc); }
 
   .kmeta { font-size: 12px; color: var(--t-mut); }
-  .lista { display: flex; flex-direction: column; gap: 12px; }
+  .lista { display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+    overflow-x: hidden; min-height: 0; flex: 1; padding-right: 4px; }
 
   .sportgrupp { display: flex; flex-direction: column; gap: 6px; }
   .sportnamn { display: flex; align-items: center; gap: 6px; border: 0; background: transparent; text-align: left;
@@ -972,7 +976,10 @@
   .klasstapel { width: 3px; height: 14px; border-radius: 2px; flex: none; }
   .handlerad, .anteckningsrad, .hemsidsrad { display: flex; flex-direction: column; gap: 5px; }
   /* Prototypens fält-par sida vid sida (@-konto | Anteckning). */
-  .parrad { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  /* #15: minmax(0,…) — annars vägrar grid-kolumnen krympa och @-kontot
+     flödar ut över panelens högerkant. */
+  .parrad { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .parrad > label { min-width: 0; }
   .parrad .handlefalt { max-width: none; }
   .handlefalt { display: flex; align-items: center; gap: 0; border: 1px solid var(--div);
     border-radius: 8px; background: var(--panel); overflow: hidden; max-width: 280px; }
