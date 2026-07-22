@@ -96,17 +96,19 @@
     'Augusti', 'September', 'Oktober', 'November', 'December']
   const MAN_KORT = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
   const VD = ['sön', 'mån', 'tis', 'ons', 'tor', 'fre', 'lör']
-  // Stigs kategorier (fältnot 18/7): Sport · Landskap · Människor · Film.
+  // Stigs kategorier: Sport · Landskap · Människor · Film · Övrigt.
   // Människor har underkategorier (Porträtt/Student/Bröllop m.fl.) — egen
   // väljare i kortet, inte fler toppkategorier. Blogg är en innehållstyp i
-  // Innehåll-panelen, inte ett fotojobb.
-  const KATEGORIER = ['Sport', 'Landskap', 'Människor', 'Film']
+  // Innehåll-panelen, inte ett fotojobb. Övrigt = catch-all för jobb som inte
+  // är någon av de fyra (t.ex. Elmia Husvagn Husbil) — Okategoriserat är alltid
+  // ett "måste åtgärdas"-läge, aldrig ett vilo-läge (Stig 22/7).
+  const KATEGORIER = ['Sport', 'Landskap', 'Människor', 'Film', 'Övrigt']
   const KAT_FARG = { Sport: '#2F7CB0', Landskap: '#C9871F', 'Människor': '#C9657F',
-    Film: '#8A6FB0',
-    // Äldre jobb kan bära de gamla etiketterna — behåll färgerna så historiken
-    // inte blir grå, men de går inte att VÄLJA längre.
-    Event: '#C9657F', 'Övrigt': '#6E8B5E' }
-  const LEGACY_KAT = ['Event', 'Övrigt']
+    Film: '#8A6FB0', 'Övrigt': '#6E8B5E',
+    // Äldre "Event"-etikett behåller sin färg så historiken inte blir grå, men
+    // går inte att VÄLJA längre.
+    Event: '#C9657F' }
+  const LEGACY_KAT = ['Event']
   const NULLKAT = 'rgba(35,32,26,.45)'
   // Film har inga fotojobb (analog film bor i Innehåll/Rörligt) → ingen
   // filterchip, men kategorin finns kvar i kort-väljaren. (Stig 22/7, jfr iOS.)
