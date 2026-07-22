@@ -935,9 +935,13 @@
     border-radius: 6px; flex: none; }
 
   .falt { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .rad1 { display: flex; gap: 8px; align-items: center; }
+  .rad1 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .rad1 .namn-in { flex: 1; min-width: 0; }
-  .dubbel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  /* Lag-editorns hemsida/@-fält flödade ut — låt inputs krympa. */
+  .rad1 input { flex: 1; min-width: 0; }
+  /* minmax(0,…) så press-/ackr-kolumnerna inte flödar över panelkanten. */
+  .dubbel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .dubbel input { min-width: 0; }
   .trippel { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 
   /* Tävlingskoppling: chips (many-to-many, borttagbara) */

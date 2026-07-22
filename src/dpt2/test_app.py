@@ -3371,8 +3371,9 @@ class TestMasterskapsArbetsytan(unittest.TestCase):
         self.assertEqual([g["etikett"] for g in grupper],
                          ["Dag 1", "Dag 2", "Utan dag"])
         self.assertEqual(self._namn(grupper[0]), ["100 m"])
-        # Undertexten på raden: "Typ · dag N"
-        self.assertEqual(grupper[0]["grenar"][0]["sub"], "Löpning · dag 1")
+        # Undertexten på raden: passets veckodag + klocka (Stig vill se tiderna,
+        # inte typen). Faller till typ först när grenen saknar tidsatta pass.
+        self.assertEqual(grupper[0]["grenar"][0]["sub"], "Pass 1 fre 18:40")
         self.assertEqual(grupper[2]["grenar"][0]["sub"], "Övrigt")
 
     def test_fri_sok_ovanpa_grupperingen(self):

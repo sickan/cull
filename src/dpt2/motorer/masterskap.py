@@ -20,6 +20,7 @@ Låsta invarianter som den här modulen bär:
 """
 
 import re
+import datetime as _datetime
 
 # ── M-5-provisorium ─────────────────────────────────────────────────────────
 # ⚠️ M-5 (var går gränsen liten↔stor tävling — grenantal? deltagarantal? eller
@@ -118,6 +119,37 @@ def dagnummer(datum, dagar):
     return dagar.index(d) + 1 if d in (dagar or []) else None
 
 
+_VDAG = ["mån", "tis", "ons", "tor", "fre", "lör", "sön"]
+
+
+def _veckodag(datum):
+    """'2026-07-24' → 'fre'. Tomt vid okänt/felaktigt datum."""
+    d = (datum or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
+        return ""
+    try:
+        y, m, dd = (int(x) for x in d.split("-"))
+        return _VDAG[_datetime.date(y, m, dd).weekday()]
+    except (ValueError, IndexError):
+        return ""
+
+
+def passtider(pass_rader):
+    """Gren-radens undertext: passen med veckodag + klockslag
+    ('Kval fre 15:00 · Final lör 16:15'). Stig vill se TIDERNA i listan (både
+    kval och final), inte typen (hopp/kast). Tom när grenen saknar tidsatta pass."""
+    delar = []
+    for p in sorted(pass_rader or [],
+                    key=lambda p: (p.get("datum") or "~", p.get("tid") or "")):
+        namn = (p.get("namn") or "").strip()
+        vd = _veckodag(p.get("datum"))
+        tid = (p.get("tid") or "").strip()
+        bit = " ".join(x for x in [namn, vd, tid] if x)
+        if bit:
+            delar.append(bit)
+    return " · ".join(delar)
+
+
 # ── Gren-raden i navigatorn ─────────────────────────────────────────────────
 
 def gren_rad(gren, dagar=None, pass_rader=None):
@@ -131,7 +163,10 @@ def gren_rad(gren, dagar=None, pass_rader=None):
         dagnr = dagnummer(p.get("datum"), dagar or [])
         if dagnr:
             break
-    sub = TYPETIKETT[tg] + (f" · dag {dagnr}" if dagnr else "")
+    # Stig vill se pass-TIDERNA (Kval + Final, veckodag + klocka) i listan, inte
+    # typen. Faller till "Typ · dag N" bara när grenen saknar tidsatta pass.
+    sub = passtider(pass_rader) or \
+        (TYPETIKETT[tg] + (f" · dag {dagnr}" if dagnr else ""))
     return {
         "id": gren.get("id"),
         "namn": namn,
