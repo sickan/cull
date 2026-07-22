@@ -837,7 +837,11 @@ class Api:
             prefix = f"dag {dagnr} " if dagnr and dagnr != rad["dag"] else ""
             pass_ut.append({"id": p["id"], "typ": p["namn"],
                             "nar": prefix + (p.get("tid") or p.get("datum") or ""),
-                            "antal": p.get("plats") or ""})
+                            "antal": p.get("plats") or "",
+                            # #6: råfält så gren-detaljens pass-brickor går att
+                            # redigera (justera starttider på plats).
+                            "datum": p.get("datum") or "", "tid": p.get("tid") or "",
+                            "plats": p.get("plats") or "", "disciplin_id": disciplin_id})
         delt = [masterskap.deltagarrad(p) for p in
                 store.disciplin_deltagare(self.conn, disciplin_id)]
         gransen = len(delt) if alla else masterskap.DELTAGARGRANS

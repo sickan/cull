@@ -416,6 +416,13 @@
       tid: r.tid || '', plats: r.plats || '' }
     passOppen = true
   }
+  // #6: klick på en pass-bricka (Kval/Final) i gren-detaljen öppnar editorn
+  // förifylld → justera starttid direkt.
+  function redigeraPassbricka(p) {
+    pas = { id: p.id, disciplin_id: p.disciplin_id || grenDetalj?.id,
+      namn: p.typ, datum: p.datum || '', tid: p.tid || '', plats: p.plats || '' }
+    passOppen = true
+  }
   async function sparaPasset() {
     if (!pas?.namn?.trim() || !pas?.datum || !pas?.disciplin_id) return
     await sparaPass(pas)
@@ -690,11 +697,12 @@
                 <span class="caps">Pass (tidsatta deltillfällen)</span>
                 <div class="passbrickor">
                   {#each grenDetalj.pass as p (p.id)}
-                    <div class="passbricka">
+                    <button class="passbricka" on:click={() => redigeraPassbricka(p)}
+                      title="Redigera pass — justera starttid">
                       <span class="passtyp">{p.typ}</span>
                       <span class="passnar scd">{p.nar || '—'}</span>
                       <span class="passantal">{p.antal}</span>
-                    </div>
+                    </button>
                   {/each}
                   <button class="passny" on:click={() => nyttPass(grenDetalj.id)}>+ Pass</button>
                 </div>
@@ -1243,7 +1251,7 @@
   .tomkort { font-size: 12.5px; color: var(--t-help); margin: 4px 0 2px; }
   .fotnot { font-size: 11px; color: var(--t-help); margin: 10px 0 0; }
 
-  .nyrad { display: flex; gap: 8px; margin-bottom: 10px; }
+  .nyrad { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   .nyrad input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--div); border-radius: 8px;
     background: var(--panel); color: var(--t-head); font-size: 13px; font-family: inherit; }
   .nyrad input:focus { border-color: var(--acc); outline: none; }
@@ -1357,7 +1365,9 @@
   .passbrickor { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
   .passbricka { background: var(--panel); border: 1px solid var(--div);
     border-radius: 9px; padding: 8px 12px; min-width: 120px;
-    display: flex; flex-direction: column; }
+    display: flex; flex-direction: column; align-items: flex-start;
+    font-family: inherit; text-align: left; cursor: pointer; }
+  .passbricka:hover { border-color: var(--acc); }
   .passtyp { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--t-mut); }
   .passnar { font-size: 16px; font-weight: 700; color: var(--t-head);
     font-variant-numeric: tabular-nums; }
