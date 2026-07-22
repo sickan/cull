@@ -1482,12 +1482,15 @@ class Api:
             o = karta.get(str(j.get("id")))
             if not o:
                 continue
-            if not (j.get("location") or "").strip():
-                j["location"] = o.get("namn")
+            # En satt override är ett MEDVETET fält-val → vinner över den vaga
+            # kalenderplatsen ("Nöbbelövs Kyrka" ersätter "Lund, Sverige").
+            # Tomt namn = frånkoppling → guarden lämnar kalenderplatsen orörd.
+            if (o.get("namn") or "").strip():
+                j["location"] = o["namn"]
                 j["plats_override"] = True   # UI: visa att fältet satte platsen
-            if j.get("lat") is None and o.get("lat") is not None:
-                j["lat"] = o.get("lat")
-                j["lon"] = o.get("lon")
+                if o.get("lat") is not None:
+                    j["lat"] = o["lat"]
+                    j["lon"] = o["lon"]
 
     def hamta_idag(self):
         """Startskärmens datakälla (D16 §C): en HÄRLEDD åtgärdskö + närmast på
