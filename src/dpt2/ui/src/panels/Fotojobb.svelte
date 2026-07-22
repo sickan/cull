@@ -10,6 +10,7 @@
   import KrockPop from '../lib/KrockPop.svelte'
   import FotojobbVecka from '../lib/FotojobbVecka.svelte'
   import FotojobbManad from '../lib/FotojobbManad.svelte'
+  import KartValjare from '../lib/KartValjare.svelte'
   import { synkFarg, jobbSynkStatus } from '../lib/synk.js'
   import { radTillToppen } from '../lib/scroll.js'
   import { krockKarta, synligaPrivata } from '../lib/privat.js'
@@ -599,6 +600,14 @@
                           <label>Slut<input type="datetime-local" bind:value={redigerar.end_at} /></label>
                         </div>
                         <label class="full">Plats<input bind:value={redigerar.location} placeholder="t.ex. Rättvik" /></label>
+                    {#if redigerar.id}
+                      <div class="kartrad">
+                        <span class="kartcaps">Koordinat på karta</span>
+                        <KartValjare jobbId={redigerar.id} namn={redigerar.location}
+                          lat={redigerar.lat} lon={redigerar.lon}
+                          on:sparad={(e) => { redigerar.lat = e.detail.lat; redigerar.lon = e.detail.lon }} />
+                      </div>
+                    {/if}
                         <label class="full">Anteckning<textarea bind:value={redigerar.notering} rows="2" placeholder="Kund, paket, övrigt…"></textarea></label>
                         <div class="katblock">
                           <span class="lbl">Kategori</span>
@@ -721,6 +730,14 @@
                       <label>Slut<input type="datetime-local" bind:value={redigerar.end_at} /></label>
                     </div>
                     <label class="full">Plats<input bind:value={redigerar.location} placeholder="t.ex. Rättvik" /></label>
+                    {#if redigerar.id}
+                      <div class="kartrad">
+                        <span class="kartcaps">Koordinat på karta</span>
+                        <KartValjare jobbId={redigerar.id} namn={redigerar.location}
+                          lat={redigerar.lat} lon={redigerar.lon}
+                          on:sparad={(e) => { redigerar.lat = e.detail.lat; redigerar.lon = e.detail.lon }} />
+                      </div>
+                    {/if}
                     <label class="full">Anteckning<textarea bind:value={redigerar.notering} rows="2" placeholder="Kund, paket, övrigt…"></textarea></label>
                     <div class="katblock">
                       <span class="lbl">Kategori</span>
@@ -1073,6 +1090,8 @@
     text-transform: none; letter-spacing: 0; outline: none; }
   .redigerakort textarea { resize: vertical; width: 100%; box-sizing: border-box; }
   .redigerakort input:focus, .redigerakort textarea:focus { border-color: var(--acc); }
+  .kartrad { display: flex; flex-direction: column; gap: 6px; }
+  .kartcaps { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-caps); }
   .rkfoot { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
   .grenlbl3 { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-right: 8px; }
 

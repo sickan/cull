@@ -1492,6 +1492,43 @@ class Api:
                     j["lat"] = o["lat"]
                     j["lon"] = o["lon"]
 
+    def satt_jobbplats(self, jobb_id, namn, lat, lon):
+        """Sätter/korrigerar en jobb-koordinat från DPT2:s kartväljare → molnets
+        `jobbplats` (samma sanning som iOS). Invaliderar overridecachen så nästa
+        lista_fotojobb ser den nya punkten direkt."""
+        ok = self.live_synk.pusha_jobbplats(jobb_id, namn, lat, lon)
+        if ok:
+            self._platsoverride_cache = None   # tvinga färsk hämtning
+        return {"ok": ok}
+
+    def geokoda(self, namn):
+        """Slår upp ett platsnamn → koordinat via Nominatim/OSM (POI-vänligt,
+        träffar arenan/kyrkan — inte tätorten som CLGeocoder). Startgissning;
+        användaren finjusterar pinnen på kartan. {lat, lon, namn, typ} eller
+        {fel}. Preciserar med ', Sverige' när ingen ort angetts."""
+        import json
+        import urllib.request
+        import urllib.parse
+        sok = (namn or "").strip()
+        if not sok:
+            return {"fel": "Tomt namn."}
+        fraga = sok if "," in sok else f"{sok}, Sverige"
+        url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
+            {"q": fraga, "format": "json", "limit": "1"})
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "DPT2-plats/1.0 (stig.johansson@sjuab.se)"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                res = json.load(r)
+        except Exception as e:
+            return {"fel": f"Uppslag misslyckades: {e}"}
+        if not res:
+            return {"fel": f"Hittade inte \"{sok}\" — dra pinnen manuellt."}
+        t = res[0]
+        return {"lat": float(t["lat"]), "lon": float(t["lon"]),
+                "namn": t.get("display_name", sok),
+                "typ": f"{t.get('class', '')}/{t.get('type', '')}"}
+
     def hamta_idag(self):
         """Startskärmens datakälla (D16 §C): en HÄRLEDD åtgärdskö + närmast på
         tur, allt ur befintliga källor (inga hårdkodade siffror, ingen ny

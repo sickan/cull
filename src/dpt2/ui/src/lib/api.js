@@ -618,6 +618,19 @@ export async function raderaDiscipliner(ids) {
   return wait({ ok: true, antal: (ids || []).length })
 }
 
+// ── Plats/koordinat (kartväljaren) ──────────────────────────────────────────
+export async function geokoda(namn) {
+  const api = brygga()
+  if (api) return api.geokoda(namn)
+  return wait({ lat: 62.0, lon: 15.0, namn, typ: 'mock' })
+}
+
+export async function sattJobbplats(jobbId, namn, lat, lon) {
+  const api = brygga()
+  if (api) return api.satt_jobbplats(jobbId, namn, lat, lon)
+  return wait({ ok: true })
+}
+
 // ── Pass & program (V5 §8) ──────────────────────────────────────────────────
 // Programmet HÄRLEDS i backend ur pass + tidsatta matcher — det finns ingen
 // mock-lagring att spegla, så webbläsarläget bygger sitt program ur MOCK_PASS

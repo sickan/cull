@@ -259,3 +259,17 @@ class LiveSynk:
         if status != 200 or not isinstance(data, dict):
             return {}
         return data
+
+    def pusha_jobbplats(self, jobb_id, namn, lat, lon):
+        """SÄTTER en plats-override för ett jobb (samma väg som iOS PlatsSync).
+        Skriver till molnets `jobbplats` = EN sanning → iOS + DPT2 ser samma
+        koordinat. Tomt namn = koppla bort. Returnerar True vid 200."""
+        if not self.har_nyckel():
+            return False
+        try:
+            status, _ = self._anrop("PUT", "/api/jobbplats/jobb", body={
+                "jobbId": str(jobb_id), "namn": namn or "",
+                "lat": float(lat), "lon": float(lon)})
+        except Exception:
+            return False
+        return status == 200
