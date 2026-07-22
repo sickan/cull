@@ -1008,7 +1008,10 @@
   .grenx { border: 0; background: none; color: var(--t-help); font-size: 14px;
     line-height: 1; padding: 0 2px; cursor: pointer; flex: none; }
   .grenx:hover { color: var(--acc); }
-  .grenny { align-self: flex-start; }
+  /* "+ Koppla till en gren…" auto-breddades efter sitt bredaste alternativ
+     ("Diskus — Friidrotts-SM 2026") och flödade ut över kortkanten. Fyll
+     containern i stället, kapa vid 100 %. */
+  .grenny { align-self: stretch; width: 100%; max-width: 100%; box-sizing: border-box; }
   .arkivrad { display: flex; align-items: center; gap: 8px; }
   .arkivrad input[type="checkbox"] { flex: none; }
   .arkivrad .lbl { font-size: 13px; }
