@@ -7,7 +7,7 @@
   import { listaEventer, listaTavlingar, hamtaEventDetalj, sattEventPagangLage,
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
     kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle, sattDisciplinResultat,
-    sparaDisciplin, raderaDisciplin, sattDisciplinFavorit, sparaTavling, sportprofiler,
+    sparaDisciplin, raderaDisciplin, raderaDiscipliner, sattDisciplinFavorit, sparaTavling, sportprofiler,
     hamtaMasterskapGrenar, hamtaGrenDetalj, hamtaMasterskapProgram,
     hamtaProgram, sparaPass, raderaPass, fotojobbForTavling } from '../lib/api.js'
   import LasInTavling from '../lib/LasInTavling.svelte'
@@ -213,6 +213,38 @@
     await laddaNavigator(vald, gruppera, grenSok, baraFavoriter)
     await laddaTidsaxel(vald, mastDag, baraFavoriter)   // ★ styr båda lägena
     if (valdGren === id) await valjGren(id, allaDeltagare)
+  }
+
+  // ── Gallra-läge (B): bocka flera grenar → ta bort på en gång ──────────────
+  // Para/integrationsklasserna (I-20, R-stående …) sitter i grennamnet, så
+  // fleval är renare än ett klassfilter — Stig ser exakt vad som försvinner.
+  let gallraLage = false
+  let markerade = new Set()
+  let bekraftaGallra = false
+  function vaxlaGallra() {
+    gallraLage = !gallraLage
+    markerade = new Set(); bekraftaGallra = false
+  }
+  function togglaMarkerad(id) {
+    markerade.has(id) ? markerade.delete(id) : markerade.add(id)
+    markerade = markerade; bekraftaGallra = false     // rör setet → Svelte ritar om
+  }
+  function markeraGrupp(grp, pa) {
+    for (const g of grp.grenar || []) pa ? markerade.add(g.id) : markerade.delete(g.id)
+    markerade = markerade; bekraftaGallra = false
+  }
+  const gruppAllaMarkerade = (grp) =>
+    (grp.grenar || []).length > 0 && (grp.grenar || []).every((g) => markerade.has(g.id))
+  async function raderaMarkerade() {
+    const ids = [...markerade]
+    if (!ids.length) return
+    if (!bekraftaGallra) { bekraftaGallra = true; return }   // tvåstegs, ingen window.confirm
+    await raderaDiscipliner(ids)
+    if (markerade.has(valdGren)) { valdGren = null; grenDetalj = null }
+    gallraLage = false; markerade = new Set(); bekraftaGallra = false
+    await laddaNavigator(vald, gruppera, grenSok, baraFavoriter)
+    await laddaTidsaxel(vald, mastDag, baraFavoriter)
+    detalj = await hamtaEventDetalj(vald)
   }
 
   // ── Läge Program (C12/M-4): dagflikar + tidsaxel ─────────────────────────
@@ -575,12 +607,20 @@
                 <button class="favfilter" class:pa={baraFavoriter}
                   title="Bara favoritgrenar"
                   on:click={() => (baraFavoriter = !baraFavoriter)}>★ {mast.antal_favoriter}</button>
+                <button class="gallraknapp" class:pa={gallraLage}
+                  title="Gallra: bocka grenar och ta bort flera"
+                  on:click={vaxlaGallra}>{gallraLage ? 'Klar' : 'Gallra'}</button>
               </div>
             </div>
             <div class="navlista">
               {#each mast.grupper as grp (grp.nyckel)}
                 <div class="navgrupp">
                   <div class="grupprubrik">
+                    {#if gallraLage}
+                      <input type="checkbox" class="gallrabock" checked={gruppAllaMarkerade(grp)}
+                        title="Markera hela gruppen"
+                        on:change={(e) => markeraGrupp(grp, e.currentTarget.checked)} />
+                    {/if}
                     <!-- Färgmarkör bara i klass-grupperingen — paletten är
                          låst till kön, och okänd klass får ingen kant alls. -->
                     {#if grp.kant}<span class="kant" style="background:{grp.kant}"></span>{/if}
@@ -588,20 +628,26 @@
                     <span class="gruppantal">{grp.antal_text}</span>
                   </div>
                   {#each grp.grenar as g (g.id)}
-                    <div class="grenrad" class:vald={g.id === valdGren}
+                    <div class="grenrad" class:vald={!gallraLage && g.id === valdGren}
+                      class:markerad={gallraLage && markerade.has(g.id)}
                       role="button" tabindex="0"
-                      on:click={() => valjGren(g.id)}
-                      on:keydown={(k) => k.key === 'Enter' && valjGren(g.id)}>
-                      {#if g.farg}<span class="grenkant" style="background:{g.farg}"></span>
+                      on:click={() => gallraLage ? togglaMarkerad(g.id) : valjGren(g.id)}
+                      on:keydown={(k) => k.key === 'Enter' && (gallraLage ? togglaMarkerad(g.id) : valjGren(g.id))}>
+                      {#if gallraLage}
+                        <input type="checkbox" class="gallrabock" checked={markerade.has(g.id)}
+                          on:click|stopPropagation={() => togglaMarkerad(g.id)} />
+                      {:else if g.farg}<span class="grenkant" style="background:{g.farg}"></span>
                       {:else}<span class="grenkant tom"></span>{/if}
                       <span class="grenmitt">
                         <span class="grennamn">{g.namn}{#if g.kat}<span class="kat">{g.kat}</span>{/if}</span>
                         <span class="grensub">{g.sub}</span>
                       </span>
                       <span class="grenantal">{g.antal_deltagare}</span>
-                      <button class="stjarna" class:pa={g.favorit}
-                        title={g.favorit ? 'Favoritgren' : 'Stjärnmärk grenen'}
-                        on:click|stopPropagation={() => vaxlaFavoritArbetsyta(g.id, !g.favorit)}>★</button>
+                      {#if !gallraLage}
+                        <button class="stjarna" class:pa={g.favorit}
+                          title={g.favorit ? 'Favoritgren' : 'Stjärnmärk grenen'}
+                          on:click|stopPropagation={() => vaxlaFavoritArbetsyta(g.id, !g.favorit)}>★</button>
+                      {/if}
                     </div>
                   {/each}
                 </div>
@@ -609,6 +655,17 @@
                 <p class="tomkort">{baraFavoriter ? 'Inga stjärnmärkta grenar.' : 'Ingen gren matchar sökningen.'}</p>
               {/each}
             </div>
+            {#if gallraLage}
+              <div class="gallrabar">
+                <span class="gallraantal">{markerade.size} markerad{markerade.size === 1 ? '' : 'e'}</span>
+                <span class="spacer"></span>
+                {#if bekraftaGallra}<button class="gallraavbryt" on:click={() => (bekraftaGallra = false)}>Ångra</button>{/if}
+                <button class="gallraborta" class:bekrafta={bekraftaGallra}
+                  disabled={!markerade.size} on:click={raderaMarkerade}>
+                  {bekraftaGallra ? `Bekräfta – ta bort ${markerade.size} ›` : 'Ta bort markerade'}
+                </button>
+              </div>
+            {/if}
           </div>
 
           <!-- höger: gren-detalj -->
@@ -1096,6 +1153,19 @@
   .favfilter { border: 1px solid var(--linje, rgba(128,128,128,.3)); background: none; color: var(--t-mut);
     border-radius: 8px; padding: 2px 8px; font-size: 11.5px; cursor: pointer; margin-left: auto; }
   .favfilter.pa { border-color: var(--acc); color: var(--acc); }
+  .gallraknapp { border: 1px solid var(--linje, rgba(128,128,128,.3)); background: none; color: var(--t-mut);
+    border-radius: 8px; padding: 2px 8px; font-size: 11.5px; cursor: pointer; margin-left: 6px; }
+  .gallraknapp.pa { border-color: var(--fara, #B0483A); color: var(--fara, #E06A5A); }
+  .gallrabock { accent-color: var(--fara, #B0483A); width: 15px; height: 15px; cursor: pointer; flex: none; }
+  .grenrad.markerad { background: color-mix(in srgb, var(--fara, #B0483A) 15%, transparent); }
+  .gallrabar { display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+    border-top: 1px solid var(--div); background: var(--panel2, rgba(128,128,128,.05)); }
+  .gallraantal { font-size: 11.5px; color: var(--t-mut); }
+  .gallraborta { border: 1px solid var(--fara, #B0483A); background: none; color: var(--fara, #E06A5A);
+    border-radius: 8px; padding: 4px 11px; font-size: 12px; cursor: pointer; font-weight: 600; }
+  .gallraborta:disabled { opacity: 0.4; cursor: default; }
+  .gallraborta.bekrafta { background: var(--fara, #B0483A); color: #fff; border-color: var(--fara, #B0483A); }
+  .gallraavbryt { border: 0; background: none; color: var(--t-mut); font-size: 11.5px; cursor: pointer; padding: 4px 6px; }
 
   .pagang { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .seg { display: inline-flex; border: 1px solid var(--div); border-radius: 9px; overflow: hidden; }

@@ -2646,3 +2646,30 @@ class TestBevakningKrockar(unittest.TestCase):
              "datum": "2026-11-01", "liga": "Handbollsligan Dam"},        # bevakas ej
         ]
         self.assertEqual(store.hitta_krockar(matcher), [])
+
+
+class TestMassgallring(unittest.TestCase):
+    """B: massradera valda grenar efter import (para/junior-klasser bort)."""
+
+    def setUp(self):
+        self.c = db.oppna(":memory:")
+        self.t = store.upsert_tavling(self.c, "SM", sport="friidrott")
+
+    def test_radera_discipliner_tar_flera_med_kaskad(self):
+        a = store.upsert_disciplin(self.c, self.t, "I-20 100 m", gren="dam")
+        b = store.upsert_disciplin(self.c, self.t, "100 m", gren="dam")
+        cc = store.upsert_disciplin(self.c, self.t, "R-71 200 m", gren="herr")
+        store.upsert_pass(self.c, a, "Final", "2026-07-24", tid="13:00")
+        n = store.radera_discipliner(self.c, [a, cc])
+        kvar = [r["namn"] for r in self.c.execute(
+            "SELECT namn FROM disciplin WHERE tavling_id=?", (self.t,))]
+        self.assertEqual(n, 2)
+        self.assertEqual(kvar, ["100 m"])
+        # Pass för raderad gren följer med via ON DELETE CASCADE.
+        self.assertEqual(self.c.execute("SELECT count(*) c FROM pass").fetchone()["c"], 0)
+
+    def test_radera_discipliner_tom_lista_ar_noop(self):
+        store.upsert_disciplin(self.c, self.t, "100 m", gren="dam")
+        self.assertEqual(store.radera_discipliner(self.c, []), 0)
+        self.assertEqual(store.radera_discipliner(self.c, [None, ""]), 0)
+        self.assertEqual(self.c.execute("SELECT count(*) c FROM disciplin").fetchone()["c"], 1)

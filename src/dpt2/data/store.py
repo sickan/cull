@@ -1133,6 +1133,19 @@ def radera_disciplin(conn, disciplin_id):
     conn.commit()
 
 
+def radera_discipliner(conn, ids):
+    """Massgallring av grenar efter import (Stigs B): ta bort flera valda grenar
+    på en gång. Pass och deltagarkopplingar följer med via ON DELETE CASCADE.
+    Returnerar antalet raderade."""
+    rena = [i for i in (ids or []) if i]
+    if not rena:
+        return 0
+    q = ",".join("?" * len(rena))
+    cur = conn.execute(f"DELETE FROM disciplin WHERE id IN ({q})", rena)
+    conn.commit()
+    return cur.rowcount if cur.rowcount and cur.rowcount > 0 else len(rena)
+
+
 def koppla_disciplin_deltagare(conn, disciplin_id, lag_id, pa=True,
                                sb=None, pb=None):
     """Kopplar i/ur en deltagare för en disciplin. Kopplar också in deltagaren

@@ -765,6 +765,11 @@ class Api:
         store.radera_disciplin(self.conn, id)
         return {"ok": True}
 
+    def radera_discipliner(self, ids):
+        """Massgallring: ta bort flera valda grenar på en gång (B)."""
+        antal = store.radera_discipliner(self.conn, ids or [])
+        return {"ok": True, "antal": antal}
+
     # ── Mästerskaps-arbetsytan (C12/M-3) ─────────────────────────────────────
     # Läge "Grenar & deltagare": vänster navigator (grupperad, sökbar,
     # ★-filtrerad) → höger gren-detalj. Allt HÄRLEDS ur disciplin/pass/

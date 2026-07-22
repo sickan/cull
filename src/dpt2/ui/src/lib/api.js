@@ -611,6 +611,13 @@ export async function raderaDisciplin(id) {
   return wait({ ok: true })
 }
 
+export async function raderaDiscipliner(ids) {
+  const api = brygga()
+  if (api) return api.radera_discipliner(ids)
+  MOCK_DISCIPLINER = MOCK_DISCIPLINER.filter((d) => !(ids || []).includes(d.id))
+  return wait({ ok: true, antal: (ids || []).length })
+}
+
 // ── Pass & program (V5 §8) ──────────────────────────────────────────────────
 // Programmet HÄRLEDS i backend ur pass + tidsatta matcher — det finns ingen
 // mock-lagring att spegla, så webbläsarläget bygger sitt program ur MOCK_PASS
