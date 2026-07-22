@@ -63,7 +63,7 @@
           {#if c.krock}<span class="utrop" title="Krockar med privat kalender">!</span>{/if}
         </div>
         {#each c.dagJobb.slice(0, 3) as j (j.id)}
-          <div class="jrad" style="--f:{katFarg(j.category)}"><span class="jprick"></span>{j.title}</div>
+          <div class="jrad" style="--f:{katFarg(j.category)}"><span class="jprick"></span><span class="jtxt">{j.title}</span></div>
         {/each}
         {#if c.dagJobb.length > 3}<div class="fler">+{c.dagJobb.length - 3} till</div>{/if}
       </button>
@@ -83,14 +83,17 @@
   .krockrakning { margin-left: 10px; padding: 3px 10px; border-radius: 999px; font-size: 11.5px;
     font-weight: 700; color: var(--krock); background: var(--krock-soft); border: 1px solid var(--krock); }
 
-  .veckodagar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; padding: 0 1px; }
+  .veckodagar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; padding: 0 1px; }
   .vd { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-caps);
     text-align: center; padding-bottom: 2px; }
 
-  .rutnat { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(92px, auto);
+  /* minmax(0,…): annars blir kolumnens golv cellens min-content (en lång
+     jobbtitel med nowrap) → EN dag med långt namn tänjer ut sin kolumn och
+     klämmer de andra. Nu håller alla sju lika bredd och titeln kapas. */
+  .rutnat { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(92px, auto);
     gap: 1px; background: var(--div3); border: 1px solid var(--div); }
   .cell { display: flex; flex-direction: column; gap: 3px; align-items: stretch; text-align: left;
-    background: var(--panel); border: 0; padding: 6px; cursor: pointer; }
+    background: var(--panel); border: 0; padding: 6px; cursor: pointer; min-width: 0; }
   .cell:hover { background: var(--div3); }
   /* Utanför månaden: dämpa ramen/siffran, aldrig texten (AA-golvet i tokens). */
   .cell.utanfor .cnr { color: var(--t-caps); }
@@ -104,7 +107,8 @@
   .utrop { font-size: 11px; font-weight: 800; color: var(--krock); line-height: 1; margin-left: auto; }
 
   .jrad { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--t-body);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    min-width: 0; overflow: hidden; }
+  .jtxt { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .jprick { width: 5px; height: 5px; border-radius: 50%; background: var(--f); flex: none; }
   .fler { font-size: 10px; color: var(--t-help); }
 </style>
