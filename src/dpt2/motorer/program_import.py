@@ -396,6 +396,47 @@ def _dagar_i_perioden(fran, till):
     return ut
 
 
+def _tolka_mixad_rubrik(klass_ord, rest):
+    """Kombinerad "A & B [& …] {gren}"-rubrik → [(grennamn, dam/herr), …] + event.
+
+    "Kvinnor I-20 & Kvinnor R-stående 100 m" → [("I-20 100 m","dam"),
+    ("R-stående 100 m","dam")], event "100 m". Grennamnet bär inte könet (klassen
+    gör det, precis som för vanliga grenar) så Kvinnor I-20 och Män I-20 delar
+    grennamn men skiljs på klass. Sträckan tas ur sista ledet — mixade lopp är
+    alltid löpgrenar. Returnerar (None, None) om formatet inte känns igen eller
+    om leden bär OLIKA sträckor (t.ex. gång där Män=10 000, Kvinnor=5000) — då
+    går det inte att dela rent och raden får falla till manuellt val."""
+    full = f"{klass_ord} {rest}".strip()
+    seg = [s.strip() for s in full.split("&") if s.strip()]
+    if len(seg) < 2:
+        return None, None
+    # Sträckan = "<siffror> m [gång/hinder]" i sista ledet. Måste kräva "m" —
+    # klassled som "I-20", "R-71", "S12" bär egna siffror utan att vara sträckor.
+    STRACKA = r"\d[\d ]*m\b[\wå ]*"
+    m = re.search(STRACKA + r"$", seg[-1])
+    if not m:
+        return None, None
+    event = m.group(0).strip()
+    # Fler än ett led med egen sträcka = oregelbunden multi-distans (gång där
+    # Män=10 000, Kvinnor=5000) → går ej att dela rent, låt raden falla igenom.
+    if sum(1 for s in seg if re.search(STRACKA, s)) > 1:
+        return None, None
+    grenar = []
+    for s in seg:
+        namn_del, klass = s, ""
+        for ko, dh in KLASSORD.items():
+            if namn_del.lower().startswith(ko):
+                namn_del = namn_del[len(ko):].strip()
+                klass = dh
+                break
+        if event in namn_del:
+            namn_del = namn_del[:namn_del.rfind(event)].strip()
+        namn = f"{namn_del} {event}".strip() if namn_del else event
+        if (namn, klass) not in grenar:
+            grenar.append((namn, klass))
+    return grenar, event
+
+
 def tolka_startlista_med_tider(text, fran=None, till=None):
     """Klistrad startlistesida → {"pass": [...], "deltagare": [...]}.
 
@@ -405,26 +446,21 @@ def tolka_startlista_med_tider(text, fran=None, till=None):
     slängas."""
     dagar = _dagar_i_perioden(fran, till)
     pas, delt = [], []
-    grenar = []          # grenar det aktuella blocket gäller (>1 = mixad gren)
-    klass = ""
+    grenar = []          # [(grennamn, klass), …] för blocket (>1 = mixad gren)
+    mixad_event = None   # sträckan i en kombinerad "A & B {gren}"-rubrik
     klasskolumn = False  # sätts när en "Klass"-kolumnrubrik setts (mixad startlista)
 
-    def _norm(s):
-        return "".join((s or "").lower().split())
-
-    def _gren_for_klass(rad_klass):
-        # "(Kvinnor) I-20" → grenen i den mixade uppsättningen vars namn bär
-        # klassdelen ("I-20 100 m"). Faller till första grenen utan träff.
-        k = (rad_klass or "").lower()
-        for ko in KLASSORD:
-            if k.startswith(ko):
-                k = k[len(ko):]
+    def _mixad_rad(rad_klass):
+        # "Kvinnor I-20" + mixad_event "100 m" → ("I-20 100 m","dam"): raden hör
+        # till grenen som bär dess underklass, klassen kommer ur radens kön.
+        s, k = rad_klass or "", ""
+        for ko, dh in KLASSORD.items():
+            if s.lower().startswith(ko):
+                s = s[len(ko):].strip()
+                k = dh
                 break
-        kn = _norm(k)
-        for g in grenar:
-            if kn and kn in _norm(g):
-                return g
-        return grenar[0] if grenar else ""
+        namn = f"{s} {mixad_event}".strip() if s else (mixad_event or "")
+        return namn, k
 
     for rå in (text or "").splitlines():
         rad = rå.strip()
@@ -444,12 +480,12 @@ def tolka_startlista_med_tider(text, fran=None, till=None):
             # Namnet i andra fältet är det som gör raden till en deltagare.
             if (len(d) >= 3 and d[1] and not d[1].isdigit()
                     and (not d[0] or re.fullmatch(r"\d{1,5}", d[0]))):
-                g = grenar[0] if grenar else ""
-                # Mixad startlista: Klass-kolumnen (efter klubben) styr vilken av
-                # de mixade grenarna raden hör till.
-                if (klasskolumn and len(d) > 4 and d[4]
+                g, klass = grenar[0] if grenar else ("", "")
+                # Mixad startlista: Klass-kolumnen (efter klubben) styr grenen —
+                # underklassen + sträckan ur den kombinerade rubriken.
+                if (klasskolumn and mixad_event and len(d) > 4 and d[4]
                         and not d[4].replace(".", "").isdigit()):
-                    g = _gren_for_klass(d[4])
+                    g, klass = _mixad_rad(d[4])
                 # SB/PB (#8): kolumnerna efter klubb (+ ev. Klass). PB bär ofta
                 # årtal i svansen ("54012026" = 5401 år 2026, "14.932025" = 14.93
                 # år 2025) — strippa det så bara värdet visas.
@@ -464,24 +500,25 @@ def tolka_startlista_med_tider(text, fran=None, till=None):
                     "varning": "" if g else "Ingen gren — välj i listan",
                 })
                 continue
-        # "Mixad med {gren}": grenen körs ihop med en till klass i samma lopp —
-        # lägg till den som en gren till i blocket (delar pass + startlista).
+        # "Mixad med {gren}": bara en pekare till det kombinerade loppet. Den
+        # riktiga uppdelningen sker på den kombinerade "A & B {gren}"-rubriken
+        # (som ligger längre ned) — stubbraden i sig bär inga deltagare.
         if rad.lower().startswith("mixad med "):
-            m2 = _GRENRUBRIK.match(rad[len("mixad med "):].strip())
-            if m2:
-                g2 = m2.group("rest").strip()
-                if g2 and g2 not in grenar:
-                    grenar.append(g2)
             continue
         m = _GRENRUBRIK.match(rad)
         if m and not m.group("rest").lower().startswith(("startlista", "gren")):
             rest = m.group("rest").strip()
-            # Kombinerad mixad-rubrik "A & B …" — grenarna är redan satta via
-            # primärraden + "Mixad med"; låt den inte skriva över dem.
-            if "&" in rest and len(grenar) > 1:
-                continue
+            # Kombinerad mixad-rubrik "A & B {gren}" (t.ex. "Kvinnor I-20 &
+            # Kvinnor R-stående 100 m"): dela i en gren per klass, sträckan ur
+            # sista ledet. Deltagarna delas sedan på Klass-kolumnen.
+            if "&" in rest:
+                g, ev = _tolka_mixad_rubrik(m.group("klass"), rest)
+                if g:
+                    grenar, mixad_event, klasskolumn = g, ev, False
+                    continue
             klass = KLASSORD.get(m.group("klass").lower(), "")
-            grenar = [rest]
+            grenar = [(rest, klass)]
+            mixad_event = None
             klasskolumn = False
             continue
         m = _PASSRAD.match(rad)
@@ -489,11 +526,11 @@ def tolka_startlista_med_tider(text, fran=None, till=None):
             datum = dagar.get(m.group("dag").lower(), "")
             t = m.group("tid").replace(".", ":")
             tim, mi = t.split(":")
-            for g in grenar:      # mixad gren → passet gäller båda grenarna
+            for g, k in grenar:   # mixad gren → passet gäller varje delgren
                 pas.append({
                     "datum": datum, "tid": f"{int(tim):02d}:{mi}",
                     "gren": g, "pass": m.group("namn").strip(),
-                    "plats": "", "klass": klass,
+                    "plats": "", "klass": k,
                     "varning": "" if datum else
                                f"Kunde inte datera {m.group('dag')} — sätt eventets period",
                 })

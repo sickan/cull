@@ -392,3 +392,43 @@ class TestAvvikelser(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestMixadSeparerad(unittest.TestCase):
+    """Full SM-lista: "Mixad med"-stubbarna ligger separerade från den
+    kombinerade "A & B"-rubriken, och kön kan blandas. Regressionsvakt."""
+
+    TXT = (
+        "Kvinnor R-stående 100 m\n"
+        "Mixad med Kvinnor I-20 100 m\n"
+        "\n"
+        "Kvinnor R-stående Längd\n"
+        "Final Söndag, 12:40\n"
+        "#\nSB\nPB\n"
+        "57\tEllen Westling\t07\tFalu IK\t3.38\t3.402025\t\n"
+        "Antal deltagare: 1\n"
+        "\n"
+        "Kvinnor I-20 & Kvinnor R-stående 100 m\n"
+        "Final Fredag, 13:15\n"
+        "#\nKlass\nSB\nPB\n"
+        "45\tNyakuan Kang Gai\t05\tEskilstuna FI\tKvinnor I-20\t15.27\t14.932025\t\n"
+        "57\tEllen Westling\t07\tFalu IK\tKvinnor R-stående\t17.39\t16.942025\t\n"
+        "Antal deltagare: 2\n"
+        "\n"
+        "Män I-20 & Kvinnor R-stående & Kvinnor I-20 & Män R-stående 1500 m\n"
+        "Final Fredag, 15:05\n"
+        "#\nKlass\nSB\nPB\n"
+        "278\tKarin Petersson\t64\tIK Ymer\tKvinnor R-stående\t\t6:59.732025\t\n"
+        "465\tAdam Hellgren\t93\tTjalve FIF\tMän I-20\t4:22.51\t4:17.132025\t\n"
+        "Antal deltagare: 2\n"
+    )
+
+    def test_kombinerad_rubrik_delas_aven_langt_fran_stubben(self):
+        r = PI.tolka_startlista_med_tider(self.TXT, fran="2026-07-24", till="2026-07-26")
+        per = {d["namn"]: (d["gren"], d["klass"]) for d in r["deltagare"]}
+        # 100 m-loppet delas rätt trots att stubben låg tre grenar bort.
+        self.assertEqual(per["Nyakuan Kang Gai"], ("I-20 100 m", "dam"))
+        self.assertEqual(per["Ellen Westling"], ("R-stående 100 m", "dam"))
+        # Blandat kön: klassen kommer ur radens kön, inte rubrikens första.
+        self.assertEqual(per["Karin Petersson"], ("R-stående 1500 m", "dam"))
+        self.assertEqual(per["Adam Hellgren"], ("I-20 1500 m", "herr"))
