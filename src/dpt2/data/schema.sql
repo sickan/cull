@@ -220,6 +220,10 @@ CREATE TABLE disciplin_deltagare (
   resultat     TEXT,
   placering    INTEGER,
   medalj       TEXT CHECK (medalj IN ('guld','silver','brons')),
+  -- v46 (#8): säsongs-/personbästa ur startlistan (easyrecord) — visas i
+  -- deltagarlistan. Text (tid "14.93" eller poäng "5401"); årtal strippat.
+  sb           TEXT,
+  pb           TEXT,
   PRIMARY KEY (disciplin_id, lag_id)
 );
 

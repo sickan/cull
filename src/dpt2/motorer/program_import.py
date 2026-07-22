@@ -450,9 +450,17 @@ def tolka_startlista_med_tider(text, fran=None, till=None):
                 if (klasskolumn and len(d) > 4 and d[4]
                         and not d[4].replace(".", "").isdigit()):
                     g = _gren_for_klass(d[4])
+                # SB/PB (#8): kolumnerna efter klubb (+ ev. Klass). PB bär ofta
+                # årtal i svansen ("54012026" = 5401 år 2026, "14.932025" = 14.93
+                # år 2025) — strippa det så bara värdet visas.
+                sb_idx = 5 if klasskolumn else 4
+                sb = d[sb_idx] if len(d) > sb_idx else ""
+                pb_rå = d[sb_idx + 1] if len(d) > sb_idx + 1 else ""
+                pb = re.sub(r"\s*(20\d\d)\s*$", "", pb_rå).strip() if pb_rå else ""
                 delt.append({
                     "gren": g, "klass": klass, "namn": d[1],
                     "klubb": d[3] if len(d) > 3 else "", "handle": "",
+                    "sb": sb, "pb": pb,
                     "varning": "" if g else "Ingen gren — välj i listan",
                 })
                 continue

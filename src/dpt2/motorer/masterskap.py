@@ -221,6 +221,9 @@ def deltagarrad(p):
         "resultat": p.get("resultat"),
         "placering": p.get("placering"),
         "medalj": p.get("medalj"),
+        # #8: säsongs-/personbästa ur startlistan (easyrecord), om de finns.
+        "sb": p.get("sb") or "",
+        "pb": p.get("pb") or "",
         # Startnummer finns inte i modellen (v42) — raden bär det när/om det
         # kommer, men vi hittar aldrig på ett.
         "nr": (p.get("nr") or ""),

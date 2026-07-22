@@ -682,7 +682,7 @@
                       <span class="bricka">{p.initialer}</span>
                       <span class="deltmitt">
                         <span class="deltnamn">{p.namn}</span>
-                        <span class="deltklubb">{p.klubb}</span>
+                        <span class="deltklubb">{p.klubb}{#if p.pb || p.sb} · {#if p.pb}PB {p.pb}{/if}{#if p.pb && p.sb} · {/if}{#if p.sb}SB {p.sb}{/if}{/if}</span>
                       </span>
                       {#if p.har_handle}<span class="harhandle">{p.handle}</span>
                       {:else}<span class="saknarhandle">saknar @</span>{/if}

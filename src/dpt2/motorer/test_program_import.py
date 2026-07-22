@@ -309,6 +309,14 @@ class TestStartlistaMedTider(unittest.TestCase):
         self.assertEqual(per["Ellen Westling"], "R-stående 100 m")
         self.assertEqual(per["Filippa Ivarsson"], "I-20 100 m")
 
+    def test_sb_pb_fangas_med_arstrippat_pb(self):
+        # #8: SB/PB ur kolumnerna. PB bär årtal i svansen ("14.932025") som ska
+        # bort så bara värdet ("14.93") lagras. Tom SB ska bli tom, inte krascha.
+        r = PI.tolka_startlista_med_tider(self.MIXAD, fran="2026-07-24", till="2026-07-26")
+        per = {d["namn"]: (d.get("sb"), d.get("pb")) for d in r["deltagare"]}
+        self.assertEqual(per["Nyakuan Kang Gai"], ("15.27", "14.93"))
+        self.assertEqual(per["Ellen Westling"], ("17.39", "16.94"))
+
 
 class TestKannaIgen(unittest.TestCase):
     """C8 — gissa dokumenttyp så Stig slipper välja flik."""

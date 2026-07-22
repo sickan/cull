@@ -1102,7 +1102,7 @@ def disciplin_deltagare(conn, disciplin_id):
     (rankade först, nulls sist) → F20-5-scoringen får listan färdigordnad."""
     ut = [dict(r) for r in conn.execute(
         "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, "
-        "dd.resultat, dd.placering, dd.medalj FROM lag l "
+        "dd.resultat, dd.placering, dd.medalj, dd.sb, dd.pb FROM lag l "
         "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
         "WHERE dd.disciplin_id=? "
         "ORDER BY dd.placering IS NULL, dd.placering, l.namn", (disciplin_id,))]
@@ -1133,15 +1133,23 @@ def radera_disciplin(conn, disciplin_id):
     conn.commit()
 
 
-def koppla_disciplin_deltagare(conn, disciplin_id, lag_id, pa=True):
+def koppla_disciplin_deltagare(conn, disciplin_id, lag_id, pa=True,
+                               sb=None, pb=None):
     """Kopplar i/ur en deltagare för en disciplin. Kopplar också in deltagaren
-    i tävlingen (tavling_lag) så hen syns i tävlingens deltagarlista."""
+    i tävlingen (tavling_lag) så hen syns i tävlingens deltagarlista.
+    #8: sb/pb (ur startlistan) sätts när de finns — skriver aldrig över med tomt."""
     if not (disciplin_id and lag_id):
         return
     if pa:
         conn.execute(
             "INSERT OR IGNORE INTO disciplin_deltagare(disciplin_id,lag_id) "
             "VALUES(?,?)", (disciplin_id, lag_id))
+        if sb:
+            conn.execute("UPDATE disciplin_deltagare SET sb=? "
+                         "WHERE disciplin_id=? AND lag_id=?", (sb, disciplin_id, lag_id))
+        if pb:
+            conn.execute("UPDATE disciplin_deltagare SET pb=? "
+                         "WHERE disciplin_id=? AND lag_id=?", (pb, disciplin_id, lag_id))
         rad = conn.execute("SELECT tavling_id FROM disciplin WHERE id=?",
                            (disciplin_id,)).fetchone()
         if rad:
@@ -1531,7 +1539,8 @@ def importera_startlista(conn, event_id, rader, sport=None):
                          instagram=rad.get("handle") or None)
         if not lid:
             continue
-        koppla_disciplin_deltagare(conn, did, lid)
+        koppla_disciplin_deltagare(conn, did, lid,
+                                   sb=rad.get("sb") or None, pb=rad.get("pb") or None)
         if fanns:
             befintliga += 1
         else:
