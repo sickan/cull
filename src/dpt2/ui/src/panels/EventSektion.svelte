@@ -12,7 +12,7 @@
     hamtaProgram, sparaPass, raderaPass, fotojobbForTavling } from '../lib/api.js'
   import LasInTavling from '../lib/LasInTavling.svelte'
   import { markeraAndring } from '../lib/livesynk.js'
-  import { oppnaMal } from '../lib/oppna.js'
+  import { oppnaMal, oppna as djuplankOppna } from '../lib/oppna.js'
   import { kopieraText } from '../lib/kopiera.js'
 
   const dispatch = createEventDispatcher()
@@ -402,6 +402,14 @@
     markeraAndring()
   }
 
+  // #9: öppna en deltagare för redigering i Lag & Utövare-registret. oppna()
+  // sätter djuplänken, 'navigera' byter till lag-panelen (utövare bor där).
+  function oppnaUtovare(id) {
+    if (!id) return
+    djuplankOppna('utovare', id)
+    dispatch('navigera', 'lag')
+  }
+
   // ── Läs in (C8–C10) ─────────────────────────────────────────────────────
   // Hela inläsningen bor i lib/LasInTavling.svelte — EN implementation som
   // både kort-stapeln och M-3:s arbetsyta öppnar.
@@ -681,7 +689,7 @@
                       {#if p.nr}<span class="deltnr">{p.nr}</span>{/if}
                       <span class="bricka">{p.initialer}</span>
                       <span class="deltmitt">
-                        <span class="deltnamn">{p.namn}</span>
+                        <button class="deltnamn lank" title="Öppna utövaren" on:click={() => oppnaUtovare(p.id)}>{p.namn}</button>
                         <span class="deltklubb">{p.klubb}{#if p.pb || p.sb} · {#if p.pb}PB {p.pb}{/if}{#if p.pb && p.sb} · {/if}{#if p.sb}SB {p.sb}{/if}{/if}</span>
                       </span>
                       {#if p.har_handle}<span class="harhandle">{p.handle}</span>
@@ -1297,8 +1305,11 @@
     border-bottom: 1px solid var(--div3, var(--div)); }
   .deltnr { font-size: 11px; font-weight: 700; color: var(--t-mut); min-width: 30px;
     text-align: center; font-variant-numeric: tabular-nums; }
-  .deltmitt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .deltmitt { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
   .deltnamn { font-size: 12.5px; font-weight: 600; color: var(--t-head); line-height: 1.1; }
+  .deltnamn.lank { background: none; border: 0; padding: 0; margin: 0; text-align: left;
+    font-family: inherit; cursor: pointer; }
+  .deltnamn.lank:hover { text-decoration: underline; color: var(--accent); }
   .deltklubb { font-size: 10.5px; color: var(--t-mut); }
   .harhandle { flex: none; font-size: 11px; font-weight: 600; color: var(--acc); }
   .saknarhandle { flex: none; font-size: 9.5px; font-weight: 700; color: var(--t-help);
