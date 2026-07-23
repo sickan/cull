@@ -69,6 +69,7 @@ class Api:
         self._original_hamtning = {"pagar": False}
         self._leverans = {"pagar": False}   # bakgrundsleveransens poll-status
         self._upprat = {"pagar": False}     # upprätningens poll-status
+        self._galleri = {"pagar": False}    # galleripubliceringens poll-status
 
     # ── Sportprofiler ────────────────────────────────────────────────────────
     def sportprofiler(self):
@@ -2267,6 +2268,122 @@ class Api:
 
     def leverans_status(self):
         return dict(self._leverans)
+
+    # ── Galleripublicering (GUI runt publicera-galleri.mjs) ───────────────────
+    # DPT2 är BARA gränssnitt + orkestrering. publicera-galleri.mjs (galleri-
+    # sessionens verktyg) äger affärsreglerna — vattenstämpel på/av (låst vs
+    # öppet), kameranamn ur filnamn, 0-byte-kontroll, orörda original. Vi bygger
+    # ALDRIG om den logiken här; en Python-kopia hade tyst glidit isär. Vi kör
+    # scriptet som subprocess och speglar dess stdout till UI-pollen.
+    _GALLERI_SCRIPT = os.path.expanduser(
+        "~/dalecarlia-photo/content-sync/scripts/publicera-galleri.mjs")
+
+    def galleri_forhandsgranska(self, mapp):
+        """Snabb sanity-koll före publicering: räkna JPEG + flagga 0-byte-filer
+        (Dropbox 'endast online'). Ingen affärslogik — bara en förhandsvisning
+        så Stig ser att rätt mapp är vald och att den är materialiserad."""
+        from pathlib import Path as _P
+        p = _P(mapp).expanduser() if mapp else None
+        if not p or not p.is_dir():
+            return {"ok": False, "fel": "Mappen finns inte."}
+        filer = sorted(
+            (f for f in p.iterdir()
+             if f.suffix.lower() in (".jpg", ".jpeg") and not f.name.startswith(".")),
+            key=lambda f: f.name)
+        tomma = [f.name for f in filer if f.stat().st_size == 0]
+        return {"ok": True, "antal": len(filer), "tomma": len(tomma),
+                "exempel": [f.name for f in filer[:4]],
+                "tom_exempel": tomma[:3]}
+
+    def publicera_galleri_bakgrund(self, config):
+        """Startar galleripubliceringen i bakgrunden; UI:t pollar
+        galleri_status(). config: {mapp, slug, titel, kategori?, datum?, plats?,
+        ingress?, match_id?, hogupplost?, last?, torrkor?}."""
+        if self._galleri.get("pagar"):
+            return {"ok": False, "fel": "En galleripublicering pågår redan."}
+        cfg = config or {}
+        if not (cfg.get("mapp") and cfg.get("slug") and cfg.get("titel")):
+            return {"ok": False, "fel": "Mapp, slug och titel krävs."}
+        if not os.path.exists(self._GALLERI_SCRIPT):
+            return {"ok": False, "fel": f"Hittar inte scriptet: {self._GALLERI_SCRIPT}"}
+        status = {"pagar": True, "fas": "Förbereder", "klara": 0, "totalt": 0,
+                  "logg": [], "url": None, "resultat": None}
+        self._galleri = status
+
+        def _kor():
+            try:
+                self._kor_galleri_script(cfg, status)
+            except Exception as e:
+                status["resultat"] = {"ok": False, "fel": str(e)}
+            finally:
+                status["pagar"] = False
+
+        threading.Thread(target=_kor, daemon=True).start()
+        return {"ok": True}
+
+    def galleri_status(self):
+        return dict(self._galleri)
+
+    def _kor_galleri_script(self, cfg, status):
+        """Kör node-scriptet och speglar stdout → status. INTERIM: progress
+        skrapas ur textraderna ('N/M uppladdade' m.fl.). Galleri-sessionen
+        lägger till en --json-flagga (en JSON-rad per händelse) som gör det
+        robust — byt då parsning nedan mot json.loads per rad."""
+        import subprocess
+        import shutil
+        import re
+        node = shutil.which("node") or "/opt/homebrew/bin/node"
+        # cwd = content-sync/ så sharp/node_modules resolvar.
+        cwd = os.path.dirname(os.path.dirname(self._GALLERI_SCRIPT))
+        cmd = [node, self._GALLERI_SCRIPT,
+               "--mapp", cfg["mapp"], "--slug", cfg["slug"], "--titel", cfg["titel"]]
+        for flagga, nyckel in (("kategori", "kategori"), ("datum", "datum"),
+                               ("plats", "plats"), ("ingress", "ingress"),
+                               ("match-id", "match_id")):
+            v = cfg.get(nyckel)
+            v = v.strip() if isinstance(v, str) else v
+            if v:
+                cmd += [f"--{flagga}", str(v)]
+        if cfg.get("hogupplost"):
+            cmd.append("--full")
+        if cfg.get("last"):
+            cmd.append("--last")
+        if cfg.get("torrkor"):
+            cmd.append("--torrkor")
+
+        status["fas"] = "Startar"
+        proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, bufsize=1)
+        url = None
+        for rad in proc.stdout:
+            rad = rad.rstrip("\n")
+            if not rad:
+                continue
+            status["logg"].append(rad)
+            del status["logg"][:-200]
+            m = re.match(r"\s*(\d+) bilder i källmappen", rad)
+            if m:
+                status["totalt"] = int(m.group(1))
+            m = re.match(r"\s*(\d+)/(\d+) uppladdade", rad)
+            if m:
+                status["klara"], status["totalt"] = int(m.group(1)), int(m.group(2))
+                status["fas"] = "Laddar upp"
+            if "Publicerat:" in rad:
+                status["fas"] = "Publicerar galleri"
+            if "Bygger om och deployar" in rad:
+                status["fas"] = "Bygger sajten"
+            m = re.search(r"(https://bilder\.dalecarliaphoto\.se/galleri/\S+)", rad)
+            if m:
+                url = m.group(1)
+                status["url"] = url
+        kod = proc.wait()
+        if kod == 0:
+            status["fas"] = "Klar"
+            status["resultat"] = {"ok": True, "url": url, "antal": status.get("klara")}
+        else:
+            svans = "\n".join(status["logg"][-6:])
+            status["resultat"] = {"ok": False,
+                                  "fel": svans or f"Scriptet avslutades med kod {kod}"}
 
     def leverera_egen_mapp(self, mapp, config=None):
         """§6: bildkälla i Leverera — 'Egen mapp' (t.ex. redan gallrat i Photo

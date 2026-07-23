@@ -1690,6 +1690,28 @@ export async function leveransStatus() {
     resultat: { ok: true, skrivna: 8 } })
 }
 
+// Galleripublicering (GUI runt publicera-galleri.mjs): förhandsgranska mappen,
+// starta i bakgrund + polla status. DPT2 är bara gränssnitt — scriptet äger
+// affärsreglerna (vattenstämpel, kameranamn, 0-byte-koll, orörda original).
+export async function galleriForhandsgranska(mapp) {
+  const api = brygga()
+  if (api) return api.galleri_forhandsgranska(mapp)
+  return wait({ ok: true, antal: 202, tomma: 0,
+    exempel: ['Z81_9151.jpg', 'Z81_9152.jpg', 'D51_4093.jpg', 'D85_1751.jpg'], tom_exempel: [] })
+}
+export async function publiceraGalleriBakgrund(config) {
+  const api = brygga()
+  if (api) return api.publicera_galleri_bakgrund(config)
+  return wait({ ok: true })
+}
+export async function galleriStatus() {
+  const api = brygga()
+  if (api) return api.galleri_status()
+  return wait({ pagar: false, fas: 'Klar', klara: 202, totalt: 202,
+    url: 'https://bilder.dalecarliaphoto.se/galleri/demo',
+    resultat: { ok: true, url: 'https://bilder.dalecarliaphoto.se/galleri/demo', antal: 202 } })
+}
+
 // FEAT-15: telefonens uppladdade original på molnets privata yta — lista,
 // hämta hem (bakgrund, polla status). Mock: en grupp med två NEF:er.
 let MOCK_ORIGINAL_STATUS = { pagar: false }

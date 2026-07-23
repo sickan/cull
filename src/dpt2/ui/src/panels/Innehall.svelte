@@ -13,6 +13,7 @@
   import { grenFarg } from '../lib/gren.js'
   import { losText, tokenVals, strippaSocialt } from '../lib/webtext.js'
   import BildvaljareFokuspunkt from '../lib/BildvaljareFokuspunkt.svelte'
+  import Galleri from './Galleri.svelte'
   import Hornmarkor from '../lib/Hornmarkor.svelte'
   import ResultatRemsa from '../lib/ResultatRemsa.svelte'
   import StatusChip from '../lib/StatusChip.svelte'
@@ -28,6 +29,7 @@
     { id: 'event', namn: 'Människor', farg: '#C9657F', hint: 'Porträtt, bröllop, student & företag.' },
     { id: 'blogg', namn: 'Blogg', farg: '#7A8794', hint: 'Journal, resor & fritext — en fristående bloggpost.' },
     { id: 'film', namn: 'Film', farg: '#8A6FB0', hint: 'Analog / film — hero, ingress och ett bildgalleri.' },
+    { id: 'galleri', namn: 'Galleri', farg: '#B08A4A', hint: 'Publicera ett bildgalleri (Dropbox-mapp → bilder.dalecarliaphoto.se).' },
   ]
   const EVENT_KAT = ['Porträtt', 'Bröllop', 'Student', 'Företag', 'Mode', 'Övrigt']
   // Editor-typ → export-mapp (content-collection). 'match' = matcher.
@@ -859,13 +861,14 @@
               {:else if lt.id === 'landskap'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-8 4 6 3-4 6 6"/><circle cx="17.5" cy="7.5" r="1.8"/></svg>
               {:else if lt.id === 'event'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.5 3.1-5.5 7-5.5s7 2 7 5.5"/></svg>
               {:else if lt.id === 'film'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M8 5v14M16 5v14M4 9.5h4M4 14.5h4M16 9.5h4M16 14.5h4"/></svg>
+              {:else if lt.id === 'galleri'}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="5.5" width="13" height="10" rx="1.5"/><path d="M7.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-8"/><circle cx="7.3" cy="9" r="1.1"/><path d="M3.5 13l3-2.5 4 3 2.5-2 3.5 3"/></svg>
               {:else}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>{/if}
             </span>
             <span class="cmstnamn scd">{lt.namn}</span>
           </button>
         {/each}
       </div>
-      {#if libType !== 'sport'}
+      {#if libType !== 'sport' && libType !== 'galleri'}
         <button class="nyknapp" on:click={() => {
           if (libType === 'blogg') cmsBlogg = { innehallId: null, kategori: '', titel: '', datum: '', ingress: '', body: '', hero: '', heroPosition: 'center center', heroKalla: '', platser: [], figurer: [] }
           else if (libType === 'landskap') cmsLandskap = { innehallId: null, titel: '', plats: '', period: '', ingress: '', hero: '', heroPosition: 'center center', heroKalla: '', figurer: [] }
@@ -880,7 +883,10 @@
       {#if libType === 'sport'}<span class="cmshint2">Matchartiklar skapas från en match · tävling från en heldagsaktivitet i Fotojobb.</span>{/if}
     </div>
 
-    {#if laddar}
+    {#if libType === 'galleri'}
+      <!-- Galleripublicering: eget flöde, delar inte CMS-bibliotekets state. -->
+      <Galleri />
+    {:else if laddar}
       <!-- En långsam hämtning får aldrig se ut som tom data (Stigs CMS-skräck). -->
       <div class="laddstatus">
         <span class="laddspinner"></span>
