@@ -192,15 +192,16 @@
 
   // Filterinput skickas som ARGUMENT — `$:` spårar inte closure-variabler
   // som läses inuti en anropad funktion (lärdomen från lag-panelen).
-  async function laddaNavigator(id, efter, sok, favs) {
+  async function laddaNavigator(id, efter, sok, favs, sortera) {
     if (!id) { mast = null; return }
-    mast = await hamtaMasterskapGrenar(id, efter, sok, favs).catch(() => null)
+    mast = await hamtaMasterskapGrenar(id, efter, sok, favs, sortera).catch(() => null)
     if (!mast?.arbetsyta) return
     const finns = (mast.grupper || []).some(
       (g) => g.grenar.some((x) => x.id === valdGren))
     if (!finns && !valdGren) await valjGren(mast.grupper?.[0]?.grenar?.[0]?.id)
   }
-  $: laddaNavigator(vald, gruppera, grenSok, baraFavoriter)
+  let sorteraTid = false   // Stig 23/7: sortera grenarna efter tid, närmast överst
+  $: laddaNavigator(vald, gruppera, grenSok, baraFavoriter, sorteraTid ? 'tid' : 'namn')
 
   async function valjGren(id, alla = false) {
     if (!id) { valdGren = null; grenDetalj = null; return }
@@ -610,6 +611,9 @@
                       on:click={() => (gruppera = id)}>{namn}</button>
                   {/each}
                 </div>
+                <button class="favfilter" class:pa={sorteraTid}
+                  title="Sortera grenarna efter tid — närmast överst"
+                  on:click={() => (sorteraTid = !sorteraTid)}>⏱ Tid</button>
                 <span class="spacer"></span>
                 <button class="favfilter" class:pa={baraFavoriter}
                   title="Bara favoritgrenar"

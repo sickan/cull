@@ -795,7 +795,7 @@ class Api:
         return masterskap.tavlingsdagar(rader)
 
     def hamta_masterskap_grenar(self, tavling_id, efter="klass", sok="",
-                                bara_favoriter=False):
+                                bara_favoriter=False, sortera="namn"):
         """Gren-navigatorn: grupper + rader, samt om tävlingen alls ska ritas
         som arbetsyta (M-5-provisorium, se motorer/masterskap.py)."""
         grenar = store.lista_discipliner(self.conn, tavling_id)
@@ -816,7 +816,7 @@ class Api:
             "dagar": dagar,
             "grupper": masterskap.navigator(
                 rader, efter=efter, sok=sok,
-                bara_favoriter=bool(bara_favoriter)),
+                bara_favoriter=bool(bara_favoriter), sortera=sortera),
         }
 
     def hamta_gren_detalj(self, disciplin_id, alla=False):

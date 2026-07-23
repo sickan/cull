@@ -167,6 +167,15 @@ def gren_rad(gren, dagar=None, pass_rader=None):
     # typen. Faller till "Typ · dag N" bara när grenen saknar tidsatta pass.
     sub = passtider(pass_rader) or \
         (TYPETIKETT[tg] + (f" · dag {dagnr}" if dagnr else ""))
+    # Sorterbar tid = grenens FÖRSTA tidsatta pass ("YYYY-MM-DD HH:MM"). Utan
+    # tidsatt pass → None (sorteras sist vid tidssortering).
+    tidsatta = sorted(
+        [p for p in (pass_rader or []) if (p.get("datum") or "").strip()],
+        key=lambda p: (p.get("datum") or "~", p.get("tid") or "~"))
+    forsta_pass = None
+    if tidsatta:
+        p0 = tidsatta[0]
+        forsta_pass = f"{p0.get('datum', '')} {(p0.get('tid') or '')}".strip()
     return {
         "id": gren.get("id"),
         "namn": namn,
@@ -177,6 +186,7 @@ def gren_rad(gren, dagar=None, pass_rader=None):
         "typgrupp": tg,
         "dag": dagnr,
         "sub": sub,
+        "forsta_pass": forsta_pass,       # sorterbar tid (tidssortering)
         "antal_deltagare": gren.get("antal_deltagare") or 0,
         "favorit": bool(gren.get("favorit")),
     }
@@ -190,16 +200,21 @@ def _trafflig(rad, sok):
         or q in rad["kat"].lower()
 
 
-def navigator(rader, *, efter="klass", sok="", bara_favoriter=False):
+def navigator(rader, *, efter="klass", sok="", bara_favoriter=False, sortera="namn"):
     """Grupperade gren-rader för vänsterpanelen.
 
     `efter`: 'klass' (default — dam/herr/mixed i skilda sektioner) · 'typ' ·
-    'dag'. Fri sök och ★-filtret läggs ovanpå vald gruppering. Tomma grupper
-    faller bort.
+    'dag'. `sortera`: 'namn' (import-/namnordning) · 'tid' (grenens första pass
+    först — närmast överst, Stig 23/7). Fri sök och ★-filtret läggs ovanpå vald
+    gruppering. Tomma grupper faller bort.
     """
     pool = [r for r in rader if _trafflig(r, sok)]
     if bara_favoriter:
         pool = [r for r in pool if r["favorit"]]
+    if sortera == "tid":
+        # Sortera GRENARNA (inte grupperna) på första pass — utan tid sist.
+        pool = sorted(pool, key=lambda r: (r.get("forsta_pass") is None,
+                                           r.get("forsta_pass") or ""))
 
     if efter == "typ":
         ordning = [(k, e, None) for k, e in TYPGRUPPER]

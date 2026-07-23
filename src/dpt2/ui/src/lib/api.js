@@ -509,9 +509,9 @@ function mockRad(d) {
     antal_deltagare: (d.deltagare || []).length, favorit: !!d.favorit }
 }
 export async function hamtaMasterskapGrenar(tavlingId, efter = 'klass', sok = '',
-                                            baraFavoriter = false) {
+                                            baraFavoriter = false, sortera = 'namn') {
   const api = brygga()
-  if (api) return api.hamta_masterskap_grenar(tavlingId, efter, sok, baraFavoriter)
+  if (api) return api.hamta_masterskap_grenar(tavlingId, efter, sok, baraFavoriter, sortera)
   // Mockdatan bär tävlingen under två id:n (event- resp. tävlingsspegeln).
   const tid = tavlingId === 'friidrotts-sm-2026' ? 'friidrotts-sm' : tavlingId
   const alla = MOCK_DISCIPLINER.filter((d) => d.tavling_id === tid).map(mockRad)
