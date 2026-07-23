@@ -3425,7 +3425,11 @@ class Api:
                         max_bredd=1600, kvalitet=75)
                     if url:
                         bild_urls[i] = url
-        fm, body, slug, _md = _innehall_md(data, bild_urls=bild_urls)
+        # Nät-publicering: match-figurer utan uppladdad fil ska falla till den
+        # kanoniska R2-URL:en (bilderna lever bara där), inte git-flödets /sport/.
+        fm, body, slug, _md = _innehall_md(
+            data, bild_urls=bild_urls,
+            bild_bas=f"{self.innehall_synk.bas_url}/bilder/match")
         iid = store.spara_innehall(
             self.conn, typ=typ, match_id=data.get("match_id") or None,
             status=fm.get("status"), frontmatter=fm, body=body,
@@ -4058,7 +4062,7 @@ _INNEHALL_MAPP = {"blogg": "blogg", "match": "matcher", "sportevent": "sporteven
                   "landskap": "landskap", "event": "event", "film": "film"}
 
 
-def _innehall_md(data, bild_urls=None):
+def _innehall_md(data, bild_urls=None, bild_bas=None):
     """CMS-fält (UI-form) → (frontmatter-dict, body, slug, komplett .md).
     Typmedveten enligt DATAMODELL.md + Innehåll-synk-handoffen: match
     (befintligt sajt-kontrakt, rörs ej), event (kategori/kund/plats/galleri/
@@ -4209,7 +4213,26 @@ def _innehall_md(data, bild_urls=None):
     # ALLTID den kanoniska webbsökvägen dit kopieringssteget lägger filen,
     # aldrig den lokala sökvägen (den ska förstås aldrig hamna publikt).
     if typ == "match":
-        figurer = [{"bild": bild_urls.get(i) or f"/sport/{bildslug}/{i}.jpg",
+        # Bevara en redan absolut http-URL (republicering: figurernas src är då
+        # R2-URL:en från förra publiceringen, INTE en lokal fil). Saknas både
+        # uppladdad URL och http-src (bulk-hämtade galleribilder har bara
+        # stam-namn, ingen upplöst lokal fil → laddas aldrig upp) föll den förr
+        # till relativ /sport/…, som bara finns i git-export-flödet (Astro
+        # public/sport/) och 404:ar vid NÄT-publicering där bilderna lever i R2.
+        # bild_bas (satt av publicera_innehall_natet) pekar då på den kanoniska
+        # R2-katalogen så fallbacken blir rätt URL. (Malmö–Bröndby 23/7:
+        # galleri-länkbyte skrev om de 8 bilderna till /sport/ → trasiga rutor.)
+        fallback_bas = bild_bas.rstrip("/") if bild_bas else None
+        def _figbild_match(i, f):
+            b = f.get("bild") or ""
+            if str(b).startswith("http"):
+                return b
+            if bild_urls.get(i):
+                return bild_urls[i]
+            if fallback_bas:
+                return f"{fallback_bas}/{bildslug}/{i}.jpg"
+            return f"/sport/{bildslug}/{i}.jpg"
+        figurer = [{"bild": _figbild_match(i, f),
                     "alt": f.get("alt") or "", "bildtext": f.get("bildtext") or ""}
                    for i, f in enumerate(data.get("figurer") or [], 1)]
     else:
