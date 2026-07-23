@@ -3,8 +3,9 @@ jobblistan INNAN wholesale-pushen — så en plats som fältet satt (för jobb u
 plats i Google Calendar) aldrig klampas över och speglas till alla klienter.
 
 Testar `Api._vav_in_platsoverrides` isolerat mot en stub-live_synk (inget nät,
-ingen DB): rätt jobb får platsen, jobb med egen plats rörs inte, koordinater
-fylls i, tom karta är en no-op, och nätfel får aldrig kasta.
+ingen DB): rätt jobb får platsen, en satt override VINNER över källans plats
+(b0b253b: medvetet fält-val slår vag kalenderplats), tomt override-namn lämnar
+källan orörd, koordinater fylls i, tom karta är en no-op, nätfel kastar aldrig.
 """
 
 import unittest
@@ -46,9 +47,22 @@ class TestVavInPlatsoverrides(unittest.TestCase):
         self.assertTrue(ut[0]["plats_override"])
         self.assertEqual((ut[0]["lat"], ut[0]["lon"]), (55.7, 13.2))
 
-    def test_jobb_med_egen_plats_rors_inte(self):
+    def test_override_vinner_over_kallans_plats(self):
+        # b0b253b (Stig 22/7): en satt override är ett MEDVETET fält-val och
+        # vinner över kalenderplatsen — "Nöbbelövs Kyrka" ersätter "Lund".
+        # (Ersätter gamla test_jobb_med_egen_plats_rors_inte som vaktade
+        # regeln FÖRE beslutet och blev stående rött efter v5.0-taggen.)
+        jobb = [{"id": "j1", "location": "Lund, Sverige", "lat": 1.0, "lon": 2.0}]
+        _, ut = self._kor({"j1": {"namn": "Nöbbelövs Kyrka", "lat": 9.0, "lon": 9.0}}, jobb)
+        self.assertEqual(ut[0]["location"], "Nöbbelövs Kyrka")
+        self.assertTrue(ut[0]["plats_override"])
+        self.assertEqual((ut[0]["lat"], ut[0]["lon"]), (9.0, 9.0))
+
+    def test_tomt_overridenamn_lamnar_kallans_plats(self):
+        # Frånkopplings-guarden: tomt namn i overriden = ingen override —
+        # källans plats och koordinat ska stå orörda.
         jobb = [{"id": "j1", "location": "Malmö IP", "lat": 1.0, "lon": 2.0}]
-        _, ut = self._kor({"j1": {"namn": "Annat", "lat": 9.0, "lon": 9.0}}, jobb)
+        _, ut = self._kor({"j1": {"namn": "  ", "lat": 9.0, "lon": 9.0}}, jobb)
         self.assertEqual(ut[0]["location"], "Malmö IP")
         self.assertNotIn("plats_override", ut[0])
         self.assertEqual((ut[0]["lat"], ut[0]["lon"]), (1.0, 2.0))
