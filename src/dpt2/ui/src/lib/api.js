@@ -1704,6 +1704,11 @@ export async function publiceraGalleriBakgrund(config) {
   if (api) return api.publicera_galleri_bakgrund(config)
   return wait({ ok: true })
 }
+export async function listaGalleriSlugs() {
+  const api = brygga()
+  if (api) return api.lista_galleri_slugs()
+  return wait({ ok: true, slugs: ['malmo-brondby-20260718', 'demo'] })
+}
 export async function galleriStatus() {
   const api = brygga()
   if (api) return api.galleri_status()

@@ -3,8 +3,9 @@
   // publicera med progressbar. DPT2 är BARA gränssnitt + orkestrering —
   // publicera-galleri.mjs äger affärsreglerna (vattenstämpel på/av, kameranamn,
   // 0-byte-koll, orörda original). Se handover-dpt-galleri-gui-2026-07-23.
+  import { onMount } from 'svelte'
   import { valjMapp, galleriForhandsgranska,
-    publiceraGalleriBakgrund, galleriStatus } from '../lib/api.js'
+    publiceraGalleriBakgrund, galleriStatus, listaGalleriSlugs } from '../lib/api.js'
 
   const KATEGORIER = [
     { id: 'sport', namn: 'Sport' },
@@ -42,6 +43,15 @@
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
   }
   $: if (!slugRord) slug = slugga(titel)
+
+  // Befintliga slugs → varna vid krock (upsert skriver annars tyst över
+  // det gamla galleriet). Best-effort: hämtas en gång vid mount.
+  let befintligaSlugs = []
+  onMount(async () => {
+    const r = await listaGalleriSlugs().catch(() => null)
+    if (r?.ok) befintligaSlugs = r.slugs || []
+  })
+  $: slugKrock = slug && befintligaSlugs.includes(slug)
 
   // Vattenstämpel styrs av LÅST kontra ÖPPET, inte kategorin (affärsregel).
   $: vattenstampel = !last
@@ -144,6 +154,10 @@
     <div class="frad"><span class="fl">Match-id</span>
       <input class="mono" bind:value={matchId} placeholder="(valfritt, kopplar galleriet till en match)" /></div>
     <div class="slughint">bilder.dalecarliaphoto.se/galleri/<b>{slug || '…'}</b></div>
+    {#if slugKrock}
+      <div class="fh varn liten">⚠ Slugen finns redan — publicering <b>skriver över</b>
+        det befintliga galleriet med samma slug. Byt slug om du vill skapa ett nytt.</div>
+    {/if}
   </div>
 
   <!-- 3. Alternativ + vattenstämpel-indikator (affärskritisk) -->

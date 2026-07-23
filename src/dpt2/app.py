@@ -2324,6 +2324,44 @@ class Api:
     def galleri_status(self):
         return dict(self._galleri)
 
+    def _galleri_konfig(self):
+        """~/.config/dpt/galleri.env → dict. Samma fil som scriptet läser, så
+        GUI:t pratar med SAMMA worker/nyckel (dpt-galleri, inte skarpa
+        content-sync)."""
+        import re
+        konfig = {}
+        fil = os.path.expanduser("~/.config/dpt/galleri.env")
+        try:
+            with open(fil, encoding="utf-8") as f:
+                for rad in f:
+                    m = re.match(r"\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$", rad)
+                    if m:
+                        konfig[m.group(1)] = m.group(2).strip()
+        except OSError:
+            pass
+        return konfig
+
+    def lista_galleri_slugs(self):
+        """Slugs för redan publicerade/utkast-gallerier — för slug-krock-
+        varningen i GUI:t (upsert skriver annars tyst över). Best-effort:
+        fel/saknad konfig → {ok:False}, GUI:t varnar då bara inte."""
+        import httpx
+        konf = self._galleri_konfig()
+        bas = (konf.get("CONTENT_SYNC_URL") or "").rstrip("/")
+        nyckel = konf.get("CONTENT_SYNC_API_KEY") or ""
+        if not bas or not nyckel:
+            return {"ok": False, "slugs": []}
+        try:
+            # OBS: ingen trailing slash — '/api/galleri/' routas till :id-rutten
+            # (id="") och ger 404. Listan ligger på '/api/galleri'.
+            r = httpx.get(f"{bas}/api/galleri",
+                          headers={"Authorization": f"Bearer {nyckel}"}, timeout=10)
+            rader = (r.json() or {}).get("galleri") or []
+            return {"ok": True,
+                    "slugs": [str(g.get("slug")) for g in rader if g.get("slug")]}
+        except Exception:
+            return {"ok": False, "slugs": []}
+
     def _kor_galleri_script(self, cfg, status):
         """Kör node-scriptet och speglar stdout → status. INTERIM: progress
         skrapas ur textraderna ('N/M uppladdade' m.fl.). Galleri-sessionen
