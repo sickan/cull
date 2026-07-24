@@ -54,10 +54,13 @@ _STATE_MAP = {
     "startelva": "Startelva",
     "malgorare": "Målgörare", "målgörare": "Målgörare",
     "nasta_match": "Nästa match", "nästa_match": "Nästa match", "nästa match": "Nästa match",
+    # E3 (v6): icke-match-overlay — landskap m.fl.: plats + logga, INGET datum.
+    "plats": "Plats",
 }
 
 # Filnamnsslug för ut-filen
 _SLUG = {
+    "Plats": "plats",
     "Avspark": "avspark", "Halvtid": "halvtid", "Slutresultat": "resultat",
     "Startelva": "startelva", "Målgörare": "malgorare", "Nästa match": "nastamatch",
     "Tiebreak": "tiebreak",
@@ -1582,6 +1585,38 @@ def skapa_story(bild_path, moment, lag_hemma, lag_borta,
         lager = _tema_logga_lager(W, H, tema)
         if lager:
             canvas.alpha_composite(lager)
+
+        # E3 (v6, våg 3.3): "Plats"-momentet — landskap/icke-match. Diskret
+        # signatur: temaloggan (redan ritad i steg 3) + ortnamn nere till
+        # vänster, valfri regionsunderrad (liga-fältet återbrukas som region).
+        # INGET datum (backlogbeslut E3 — datum hör hemma i metadata, inte på
+        # bilden). Låg scrim (≈30 % av höjden) så fotot dominerar. Layouten är
+        # ett FUNKTIONELLT FÖRSTA UTKAST — slutlig form ägs av Design (W6).
+        if state == "Plats":
+            lag_scrim = _botten_scrim(W, int(H * 0.44))
+            canvas.alpha_composite(lag_scrim, (0, H - lag_scrim.height))
+            ort = (arena or "").strip().upper()
+            if ort:
+                d = ImageDraw.Draw(canvas)
+                fnt_ort = _saira(600, 46)   # vanliga Saira — har space-glyf
+                fnt_reg = _saira(600, 26)
+                x, y = 72, H - 170
+                d.text((x, y), ort, font=fnt_ort, fill="#FFFFFF")
+                region = (liga or "").strip().upper()
+                if region:
+                    d.text((x, y + 62), region, font=fnt_reg,
+                           fill=(255, 255, 255, 205))
+            result = canvas.convert("RGB")
+            if ut_path is None:
+                if ut_mapp:
+                    ut_dir = Path(ut_mapp).expanduser()
+                else:
+                    ut_dir = Path(bild_path).parent / "Story"
+                ut_dir.mkdir(parents=True, exist_ok=True)
+                prefix = FORMAT_PREFIX.get(format, "story")
+                ut_path = ut_dir / f"{prefix}_plats.jpg"
+            result.save(ut_path, "JPEG", quality=92, optimize=True)
+            return Path(ut_path)
 
         # 4. (A3) Liga-/tävlingstexten uppe till höger är BORTTAGEN ur
         #    renderaren (medvetet beslut från skarp användning). `competition`
