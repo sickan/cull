@@ -4,7 +4,7 @@
   // inbäddad slipper den sin egen rubrik/panelram.
   export let inbaddad = false
   import { listaModeller, sattAktivModell, startaTraning, startaOmraknaArkiv,
-    valjMapp, listaUrval, larAvMatch, traningshistorik } from '../lib/api.js'
+    valjMapp, listaUrval, larAvMatch, larAvGallring, traningshistorik } from '../lib/api.js'
 
   const TYP_NAMN = { din_smak: 'Din smak', arkiv: 'Arkiv', hybrid: 'Hybrid' }
 
@@ -69,6 +69,31 @@
   }
 
   function aterstallLar() { larStatus = null }
+
+  // ── Lär av gallring (genvägen 24/7): tagning + urval → fullt 1/0-facit ────
+  let gallrTagning = ''
+  let gallrUrval = ''
+  let gallrNamn = ''
+  let gallrKor = false
+  let gallrStatus = null
+
+  async function valjTagning() {
+    const r = await valjMapp('Välj tagningens mapp (hela)')
+    if (r.ok) { gallrTagning = r.path; gallrStatus = null
+      if (!gallrNamn) gallrNamn = (r.path || '').split('/').pop() || '' }
+  }
+  async function valjGallrUrval() {
+    const r = await valjMapp('Välj urvalets mapp (behållna)')
+    if (r.ok) { gallrUrval = r.path; gallrStatus = null }
+  }
+  async function korLarAvGallring() {
+    if (!gallrTagning || !gallrUrval || gallrKor) return
+    gallrKor = true; gallrStatus = null
+    const r = await larAvGallring(gallrTagning, gallrUrval, gallrNamn, '')
+    gallrKor = false
+    gallrStatus = r
+    if (r.ok) historik = await traningshistorik()
+  }
 
   const MANADER = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
   function kortDatum(s) {
@@ -213,6 +238,57 @@
         {:else}
           <button class="sek pmknapp" on:click={valjPmMapp}>Välj PM-mapp…</button>
           <button class="prim" on:click={korLarAvMatch} disabled={!valtUrval}>Märk och lär</button>
+        {/if}
+      </div>
+    </div>
+
+    <!-- Lär av gallring (genvägen 24/7): tagning + urval → fullt 1/0-facit i
+         ett steg. Till skillnad från Lär av match (bara positiva) märks HELA
+         tagningen: behållna = 1, bortgallrade = 0. -->
+    <div class="kort larkort">
+      <div class="larhuvud">
+        <span class="larikon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+            <path d="M4 7h7M4 12h7M4 17h7"/><path d="M15 7l2 2 4-4"/>
+            <path d="M15.5 15.5l4 4M19.5 15.5l-4 4"/>
+          </svg>
+        </span>
+        <div>
+          <div class="lartitel scd">Lär av gallring</div>
+          <p class="larbesk">Gallrade du manuellt? Peka på HELA tagningen och din
+            urvalsmapp — behållna märks 1, bortgallrade 0. Fullt facit i ett steg,
+            ingen maskingallring krävs (matchning på filstam/frame-id, NEF funkar).</p>
+        </div>
+      </div>
+
+      <div class="mapprad">
+        <button class="sek" on:click={valjTagning}>Tagningen…</button>
+        <span class="mappvag" class:tom={!gallrTagning}>{gallrTagning || 'hela tagningens mapp (NEF/JPG)'}</span>
+      </div>
+      <div class="mapprad">
+        <button class="sek" on:click={valjGallrUrval}>Urvalet…</button>
+        <span class="mappvag" class:tom={!gallrUrval}>{gallrUrval || 'mappen med de behållna bilderna'}</span>
+      </div>
+      <label class="full">Namn (t.ex. gren/pass)
+        <input bind:value={gallrNamn} placeholder="Friidrotts-SM · Höjd final" />
+      </label>
+
+      <div class="larslot">
+        {#if gallrKor}
+          <div class="larbar korbar"><span class="spinner"></span> Extraherar features ur tagningen — kan ta flera minuter…</div>
+        {:else if gallrStatus && gallrStatus.ok}
+          <div class="larbar okbar">
+            <span class="bock">✓</span>
+            <span class="larmed">{gallrStatus.meddelande}</span>
+            <button class="sek" on:click={() => (gallrStatus = null)}>Kör igen</button>
+          </div>
+        {:else if gallrStatus && !gallrStatus.ok}
+          <div class="larbar felbar">
+            <span class="larmed">{gallrStatus.fel}</span>
+            <button class="sek" on:click={() => (gallrStatus = null)}>Försök igen</button>
+          </div>
+        {:else}
+          <button class="prim" on:click={korLarAvGallring} disabled={!gallrTagning || !gallrUrval}>Märk och lär</button>
         {/if}
       </div>
     </div>
@@ -548,4 +624,9 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hmeta { font-size: 12px; color: var(--t-mut); flex: none; }
   .panel.inbaddad { padding: 4px 0 8px; max-width: none; }
+  /* Lär av gallring */
+  .mapprad { display: flex; align-items: center; gap: 9px; margin-top: 9px; }
+  .mappvag { font-size: 12px; color: var(--t-head); overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; direction: rtl; text-align: left; }
+  .mappvag.tom { color: var(--t-help); direction: ltr; }
 </style>

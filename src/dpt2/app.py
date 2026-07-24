@@ -2621,6 +2621,28 @@ class Api:
                 "meddelande": f"{antal} bilder märkta som träningsdata "
                               "— AI lär av denna gallring."}
 
+    def lar_av_gallring(self, tagning, urval, namn="", sport=""):
+        """Genvägen (Stig 24/7): manuell helg-gallring → FULLT 1/0-facit i ett
+        steg. Peka på tagningens mapp (hela — NEF funkar) och urvalets mapp
+        (de behållna); workern extraherar features ur tagningen och märker
+        urvalets frame-id:n som 1, resten 0. Kräver INTE att maskingallringen
+        körts först. Returnerar {ok, antal, valda, meddelande} eller fel."""
+        if not tagning or not urval:
+            return {"ok": False, "fel": "Peka ut både tagningen och urvalet."}
+        r = self._kor_jobb("lar_gallring", {"tagning": tagning, "urval": urval,
+                                            "namn": namn, "sport": sport})
+        if not r["ok"]:
+            return {"ok": False,
+                    "fel": r.get("fel") or "Kunde inte märka gallringen."}
+        res = r["resultat"] or {}
+        antal, valda = res.get("n_bilder", 0), res.get("valda", 0)
+        omatchade = res.get("omatchade", 0)
+        msg = (f"{antal} bilder märkta: {valda} behållna, "
+               f"{antal - valda} bortgallrade — fullt facit lagrat.")
+        if omatchade:
+            msg += f" ({omatchade} urvalsbilder utan motsvarighet i tagningen.)"
+        return {"ok": True, "antal": antal, "valda": valda, "meddelande": msg}
+
     def traningshistorik(self):
         """Facit-uppdragen (Lär av match + arkiv-omräkning) för Träna-panelens
         historik — nyast först: {match_namn, n, skapad, sport}."""

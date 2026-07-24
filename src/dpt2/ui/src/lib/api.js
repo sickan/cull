@@ -1545,6 +1545,16 @@ export async function larAvMatch(mapp, matchNamn = '', sport = '') {
     meddelande: `${antal} bilder märkta som träningsdata — AI lär av denna gallring.` })
 }
 
+// Genvägen (24/7): tagning + urval → fullt 1/0-facit i ett steg, utan krav på
+// att maskingallringen körts först.
+export async function larAvGallring(tagning, urval, namn = '', sport = '') {
+  const api = brygga()
+  if (api) return api.lar_av_gallring(tagning, urval, namn, sport)
+  if (!tagning || !urval) return wait({ ok: false, fel: 'Peka ut både tagningen och urvalet.' })
+  return wait({ ok: true, antal: 412, valda: 57,
+    meddelande: '412 bilder märkta: 57 behållna, 355 bortgallrade — fullt facit lagrat.' })
+}
+
 let MOCK_HISTORIK = [
   { id: 'f_rosengard', match_namn: 'FC Rosengård – Malmö FF', sport: 'fotboll', n: 38, skapad: '2026-07-04 14:20' },
   { id: 'f_kristianstad', match_namn: 'Malmö FF – Kristianstads DFF', sport: 'fotboll', n: 40, skapad: '2026-06-30 09:12' },

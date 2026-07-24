@@ -116,6 +116,31 @@ def jobb_lar(args):
         _emit(event("klar", resultat=r))
 
 
+def jobb_lar_gallring(args):
+    """Lär av gallring (genvägen, Stig 24/7): HELA tagningen + urvalsmappen →
+    fullt 1/0-facit i ett steg. Samma tunga extraktion som lar, men över
+    tagningen (NEF-previews) — urvalet används bara som facit-nyckel."""
+    from dpt2.motorer import ai_lager
+    from dpt2.tjanster import traning
+    tagning = args.get("tagning")
+    urval = args.get("urval")
+    if not tagning or not urval:
+        _emit(event("fel", text="Ange både tagningens och urvalets mapp.")); return
+    _emit(event("start", jobb="lar_gallring"))
+    _emit(event("progress", andel=0.05, text="Laddar modeller…"))
+    modeller = ai_lager.ladda_modeller(n_pose=1, med_estetik=True,
+                                       med_ogon=True, med_clip=True)
+    _emit(event("progress", andel=0.15, text="Extraherar features ur tagningen…"))
+    r = traning.lar_av_gallring(_db(args), os.path.expanduser(tagning),
+                                os.path.expanduser(urval), modeller,
+                                namn=args.get("namn", ""),
+                                sport=args.get("sport", ""), logg=_logg())
+    if r.get("fel"):
+        _emit(event("fel", text=r["fel"]))
+    else:
+        _emit(event("klar", resultat=r))
+
+
 def jobb_gallra(args):
     """Kör cull på ett urval (läser kalla + cull_jobb ur db): extrahera features
     → poängsätt (modell/handsatt) → urvalsmotor → uppdatera urval.bilder."""
@@ -222,6 +247,7 @@ JOBB = {
     "demo": jobb_demo,
     "omrakna": jobb_omrakna,
     "lar": jobb_lar,
+    "lar_gallring": jobb_lar_gallring,
     "trana": jobb_trana,
     "gallra": jobb_gallra,
     "nummer": jobb_nummer,
