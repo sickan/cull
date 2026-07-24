@@ -1252,7 +1252,7 @@ def _pass_deltagare(conn, disciplin_id):
     ut = {}
     for r in conn.execute(
             "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, "
-            "dd.resultat, dd.placering, dd.medalj FROM lag l "
+            "dd.resultat, dd.placering, dd.medalj, dd.nr FROM lag l "
             "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
             "WHERE dd.disciplin_id=?", (disciplin_id,)):
         ut[r["id"]] = {"id": r["id"], "namn": r["namn"],
@@ -1260,7 +1260,9 @@ def _pass_deltagare(conn, disciplin_id):
                        "handle": _handle(r["instagram"]),
                        # M-6/F20-5: resultat per start följer med till fältflödet.
                        "resultat": r["resultat"], "placering": r["placering"],
-                       "medalj": r["medalj"]}
+                       "medalj": r["medalj"],
+                       # v47: startnumret — programvägens deltagare till iOS.
+                       "nr": r["nr"] or ""}
     # Individregistret: grenar[] är en json-lista med disciplin-id:n.
     rad = conn.execute("SELECT tavling_id FROM disciplin WHERE id=?",
                        (disciplin_id,)).fetchone()
