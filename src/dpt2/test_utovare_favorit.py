@@ -91,5 +91,48 @@ class TestUtovareFavorit(unittest.TestCase):
         self.assertTrue(_har_kolumn(gammal, "lag", "favorit"))
 
 
+class TestPassDedup(unittest.TestCase):
+    """Stigs fynd 24/7: tidsprogrammets gren-eko ("3000m hinder") skapade ett
+    EGET pass bredvid riktiga "Final" på samma tid → dubbletter i appen."""
+
+    def setUp(self):
+        self.conn = db.oppna(":memory:")
+        self.conn.execute("INSERT INTO tavling(id, namn, typ, sport) "
+                          "VALUES('t1', 'SM', 'cup', 'friidrott')")
+        self.conn.execute("INSERT INTO disciplin(id, tavling_id, namn) "
+                          "VALUES('d1', 't1', '3000 m hinder')")
+
+    def _pass(self, did="d1"):
+        return [dict(r) for r in self.conn.execute(
+            "SELECT namn, tid FROM pass WHERE disciplin_id=?", (did,))]
+
+    def test_eko_efter_riktigt_pass_slas_ihop(self):
+        store.upsert_pass(self.conn, "d1", "Final", "2026-07-24", tid="17:35")
+        pid = store.upsert_pass(self.conn, "d1", "3000m hinder", "2026-07-24",
+                                tid="17:35")
+        self.assertEqual(len(self._pass()), 1, "ekot får inte bli eget pass")
+        self.assertEqual(self._pass()[0]["namn"], "Final")
+        self.assertIsNotNone(pid, "anroparen ska få riktiga passets id")
+
+    def test_riktigt_pass_efter_eko_uppgraderar(self):
+        store.upsert_pass(self.conn, "d1", "3000m hinder", "2026-07-24",
+                          tid="17:35")
+        store.upsert_pass(self.conn, "d1", "Final", "2026-07-24", tid="17:35")
+        self.assertEqual(len(self._pass()), 1)
+        self.assertEqual(self._pass()[0]["namn"], "Final",
+                         "ekot ska uppgraderas till riktiga namnet")
+
+    def test_tva_riktiga_pass_pa_olika_tider_bevaras(self):
+        store.upsert_pass(self.conn, "d1", "Försök", "2026-07-24", tid="12:30")
+        store.upsert_pass(self.conn, "d1", "Final", "2026-07-24", tid="17:35")
+        self.assertEqual(len(self._pass()), 2)
+
+    def test_utan_tid_dedupas_inte(self):
+        # Otidsatta rader kan inte säkert paras — rör dem inte.
+        store.upsert_pass(self.conn, "d1", "Final", "2026-07-24")
+        store.upsert_pass(self.conn, "d1", "3000m hinder", "2026-07-24")
+        self.assertEqual(len(self._pass()), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

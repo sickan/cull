@@ -1198,15 +1198,48 @@ def lista_pass(conn, disciplin_id):
         (disciplin_id,))]
 
 
+def _pass_eko(namn, gren_namn):
+    """Passnamnet är bara ett EKO av grennamnet ("3000m hinder" på grenen
+    "3000 m hinder") — mellanslag/skiftläge ignoreras. Tidsprogrammet skriver
+    ofta grenrubriken som passrad; den är inget eget pass."""
+    a = "".join((namn or "").lower().split())
+    b = "".join((gren_namn or "").lower().split())
+    return bool(a) and a == b
+
+
 def upsert_pass(conn, disciplin_id, namn, datum, *, tid=None, plats=None,
                 id=None, ordning=None):
     """Skapar/uppdaterar ett pass. Returnerar id (None om namn/datum saknas).
 
-    `tid` är valfri — arrangörens program listar ibland bara dagen."""
+    `tid` är valfri — arrangörens program listar ibland bara dagen.
+
+    Dedup (Stigs fynd 24/7, dubbletter i appen): finns redan ett pass på SAMMA
+    disciplin+datum+tid slås de ihop i stället för att dubbleras — ett gren-eko
+    ("3000m hinder") viker sig för ett riktigt passnamn ("Final"), oavsett
+    vilket av dem som importeras först."""
     if not (namn or "").strip() or not (datum or "").strip() or not disciplin_id:
         return None
     pid = (id or "").strip() or ny_id()
     fin = conn.execute("SELECT 1 FROM pass WHERE id=?", (pid,)).fetchone()
+    if fin is None and (tid or "").strip():
+        gren_rad = conn.execute("SELECT namn FROM disciplin WHERE id=?",
+                                (disciplin_id,)).fetchone()
+        gren_namn = gren_rad["namn"] if gren_rad else ""
+        for e in conn.execute(
+                "SELECT id, namn FROM pass WHERE disciplin_id=? AND datum=? "
+                "AND tid=?", (disciplin_id, datum.strip(), tid.strip())):
+            if _pass_eko(namn, gren_namn):
+                # Nya raden är bara grenrubriken igen → befintliga passet
+                # (t.ex. "Final") är sanningen. Inget nytt skapas.
+                return e["id"]
+            if _pass_eko(e["namn"], gren_namn):
+                # Befintliga är ekot → uppgradera det med riktiga namnet.
+                conn.execute("UPDATE pass SET namn=?, plats=COALESCE(?, plats) "
+                             "WHERE id=?",
+                             (namn.strip(), (plats or "").strip() or None,
+                              e["id"]))
+                conn.commit()
+                return e["id"]
     if fin is None:
         if ordning is None:
             ordning = conn.execute(
