@@ -1018,8 +1018,8 @@ def lista_discipliner(conn, tavling_id):
         # gren (dam/herr) följer med — overlayens kantfärg ska följa INDIVIDEN,
         # inte mästerskapet (SM är mixed men man tävlar i dam-/herrklass).
         d["deltagare"] = [dict(r) for r in conn.execute(
-            "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, "
-            "dd.resultat, dd.placering, dd.medalj FROM lag l "
+            "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, l.favorit, "
+            "dd.resultat, dd.placering, dd.medalj, dd.nr FROM lag l "
             "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
             "WHERE dd.disciplin_id=? "
             "ORDER BY dd.placering IS NULL, dd.placering, l.namn", (d["id"],))]
@@ -1251,7 +1251,7 @@ def _pass_deltagare(conn, disciplin_id):
     så dagen går att tagga direkt ur programmet."""
     ut = {}
     for r in conn.execute(
-            "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, "
+            "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, l.favorit, "
             "dd.resultat, dd.placering, dd.medalj, dd.nr FROM lag l "
             "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
             "WHERE dd.disciplin_id=?", (disciplin_id,)):
@@ -1262,7 +1262,10 @@ def _pass_deltagare(conn, disciplin_id):
                        "resultat": r["resultat"], "placering": r["placering"],
                        "medalj": r["medalj"],
                        # v47: startnumret — programvägens deltagare till iOS.
-                       "nr": r["nr"] or ""}
+                       "nr": r["nr"] or "",
+                       # M-16: ★-utövaren följer med till fältflödet (förfyller
+                       # telefonens favoriter — kommentaren i FaltflodeModel).
+                       "favorit": bool(r["favorit"])}
     # Individregistret: grenar[] är en json-lista med disciplin-id:n.
     rad = conn.execute("SELECT tavling_id FROM disciplin WHERE id=?",
                        (disciplin_id,)).fetchone()

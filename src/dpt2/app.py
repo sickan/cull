@@ -258,6 +258,7 @@ class Api:
                 {"id": d["id"], "namn": d["namn"], "typ": d["typ"],
                  "gren": d.get("gren") or "",
                  "deltagare": [{"namn": p["namn"], "nr": p.get("nr") or "",
+                            "favorit": bool(p.get("favorit")),
                             "klubb": p.get("klubb") or "",
                                 "gren": p.get("gren") or "",
                                 "handle": p.get("handle") or "",
@@ -325,6 +326,7 @@ class Api:
             {"id": d["id"], "namn": d["namn"], "typ": d["typ"],
              "gren": d.get("gren") or "",
              "deltagare": [{"namn": p["namn"], "nr": p.get("nr") or "",
+                            "favorit": bool(p.get("favorit")),
                             "klubb": p.get("klubb") or "",
                             "gren": p.get("gren") or "",
                             "handle": p.get("handle") or ""}
