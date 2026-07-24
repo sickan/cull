@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 
 # Schemaversion. Höj vid migrering och lägg migreringssteg i _migrera().
-SCHEMA_VERSION = 46
+SCHEMA_VERSION = 47
 
 # Standardplats för datalagret. Eget config-träd så gamla dpt rörs inte.
 DB_DEFAULT = Path.home() / ".config" / "dpt2" / "dpt.db"
@@ -1003,6 +1003,19 @@ def _migrera(conn, fran_version):
                 if not _har_kolumn(conn, "disciplin_deltagare", kol):
                     conn.execute(
                         f"ALTER TABLE disciplin_deltagare ADD COLUMN {kol} TEXT")
+
+    if fran_version < 47:
+        # v47 (M-16, Stig 24/7): ★-utövare — favoriten bor på PERSONEN i
+        # registret (lag kind='individ') och följer över grenar, som iOS-
+        # fältflödets utövar-stjärnor. Additivt.
+        if (_har_tabell(conn, "lag")
+                and not _har_kolumn(conn, "lag", "favorit")):
+            conn.execute("ALTER TABLE lag ADD COLUMN favorit "
+                         "INTEGER NOT NULL DEFAULT 0")
+        # + startnummer ur startlistan (Stig 24/7: följa utövare i iOS).
+        if (_har_tabell(conn, "disciplin_deltagare")
+                and not _har_kolumn(conn, "disciplin_deltagare", "nr")):
+            conn.execute("ALTER TABLE disciplin_deltagare ADD COLUMN nr TEXT")
 
 
 def _har_kolumn(conn, tabell, kolumn):

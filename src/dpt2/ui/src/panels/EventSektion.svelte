@@ -7,7 +7,7 @@
   import { listaEventer, listaTavlingar, hamtaEventDetalj, sattEventPagangLage,
     kopplaMatchEvent, sparaIndivid, listaIndividKandidater, kopplaEventIndivid,
     kopplaEventIndividGren, kopplaBortEventIndivid, sattDeltagareHandle, sattDisciplinResultat,
-    sparaDisciplin, raderaDisciplin, raderaDiscipliner, sattDisciplinFavorit, sparaTavling, sportprofiler,
+    sparaDisciplin, raderaDisciplin, raderaDiscipliner, sattDisciplinFavorit, sattUtovareFavorit, sparaTavling, sportprofiler,
     hamtaMasterskapGrenar, hamtaGrenDetalj, hamtaMasterskapProgram,
     hamtaProgram, sparaPass, raderaPass, fotojobbForTavling } from '../lib/api.js'
   import LasInTavling from '../lib/LasInTavling.svelte'
@@ -109,7 +109,7 @@
     }
     dagIx = 0
     // M-3: arbetsytan börjar om per tävling (läge, gruppering, sök, val).
-    laget = 'grenar'; gruppera = 'klass'; grenSok = ''; baraFavoriter = false
+    laget = 'grenar'; gruppera = 'dag'; grenSok = ''; baraFavoriter = false
     valdGren = null; grenDetalj = null; allaDeltagare = false
     mastDag = 1; tidsaxel = null
     if (detalj) await laddaProgram()
@@ -184,7 +184,7 @@
   // här komponenten ritar bara.
   let mast = null                 // navigator-svaret (grupper + arbetsyta-flagga)
   let laget = 'grenar'            // grenar | program
-  let gruppera = 'klass'          // klass (default) | typ | dag
+  let gruppera = 'dag'            // dag (default, Stig 24/7) | klass | typ
   let grenSok = ''
   let valdGren = null
   let grenDetalj = null
@@ -774,6 +774,11 @@
                         <option value="silver">🥈</option>
                         <option value="brons">🥉</option>
                       </select>
+                      <!-- M-16: ★-utövare — favoriten bor på personen och
+                           följer över grenar (som iOS-fältflödets stjärnor). -->
+                      <button class="stjarna" class:pa={p.favorit}
+                        title={p.favorit ? 'Favorit-utövare' : 'Stjärnmärk utövaren'}
+                        on:click={async () => { p.favorit = !p.favorit; await sattUtovareFavorit(p.id, p.favorit) }}>★</button>
                     </div>
                   {:else}
                     <p class="tomkort">Inga deltagare kopplade till grenen än.</p>

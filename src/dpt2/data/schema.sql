@@ -168,6 +168,7 @@ CREATE TABLE lag (
   stall_tredje TEXT,
   profilfarg   TEXT,                     -- hex-färg (individ: en enda)
   klubb        TEXT,                     -- individ: klubb/land (ersätter trupp)
+  favorit      INTEGER NOT NULL DEFAULT 0, -- ★-utövare (M-16: följer personen över grenar)
   trupp_kalla  TEXT,                     -- senaste trupp-inläsningens källa
                                          --   ('från hemsida'/'CSV'/'bild'/'PDF')
   arkiverad    INTEGER NOT NULL DEFAULT 0, -- gömt i registret men bevarat: gamla
@@ -220,6 +221,8 @@ CREATE TABLE disciplin_deltagare (
   resultat     TEXT,
   placering    INTEGER,
   medalj       TEXT CHECK (medalj IN ('guld','silver','brons')),
+  nr           TEXT,                    -- v47: startnummer ur startlistan
+
   -- v46 (#8): säsongs-/personbästa ur startlistan (easyrecord) — visas i
   -- deltagarlistan. Text (tid "14.93" eller poäng "5401"); årtal strippat.
   sb           TEXT,

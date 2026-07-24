@@ -1101,14 +1101,23 @@ def disciplin_deltagare(conn, disciplin_id):
     M-6: bär resultat/placering/medalj per deltagare; sorterat på PLACERING
     (rankade först, nulls sist) → F20-5-scoringen får listan färdigordnad."""
     ut = [dict(r) for r in conn.execute(
-        "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, "
-        "dd.resultat, dd.placering, dd.medalj, dd.sb, dd.pb FROM lag l "
+        "SELECT l.id, l.namn, l.klubb, l.gren, l.instagram, l.favorit, "
+        "dd.resultat, dd.placering, dd.medalj, dd.sb, dd.pb, dd.nr FROM lag l "
         "JOIN disciplin_deltagare dd ON dd.lag_id=l.id "
         "WHERE dd.disciplin_id=? "
         "ORDER BY dd.placering IS NULL, dd.placering, l.namn", (disciplin_id,))]
     for p in ut:
         p["handle"] = _handle(p.pop("instagram"))
     return ut
+
+
+def satt_utovare_favorit(conn, utovare_id, pa):
+    """★-utövare (M-16): favoriten bor på personen i registret och följer
+    över grenar. Returnerar True om raden fanns."""
+    cur = conn.execute("UPDATE lag SET favorit=? WHERE id=?",
+                       (1 if pa else 0, utovare_id))
+    conn.commit()
+    return cur.rowcount > 0
 
 
 def satt_disciplin_resultat(conn, disciplin_id, lag_id, *, resultat=None,
@@ -1147,7 +1156,7 @@ def radera_discipliner(conn, ids):
 
 
 def koppla_disciplin_deltagare(conn, disciplin_id, lag_id, pa=True,
-                               sb=None, pb=None):
+                               sb=None, pb=None, nr=None):
     """Kopplar i/ur en deltagare för en disciplin. Kopplar också in deltagaren
     i tävlingen (tavling_lag) så hen syns i tävlingens deltagarlista.
     #8: sb/pb (ur startlistan) sätts när de finns — skriver aldrig över med tomt."""
@@ -1163,6 +1172,9 @@ def koppla_disciplin_deltagare(conn, disciplin_id, lag_id, pa=True,
         if pb:
             conn.execute("UPDATE disciplin_deltagare SET pb=? "
                          "WHERE disciplin_id=? AND lag_id=?", (pb, disciplin_id, lag_id))
+        if nr:
+            conn.execute("UPDATE disciplin_deltagare SET nr=? "
+                         "WHERE disciplin_id=? AND lag_id=?", (nr, disciplin_id, lag_id))
         rad = conn.execute("SELECT tavling_id FROM disciplin WHERE id=?",
                            (disciplin_id,)).fetchone()
         if rad:
@@ -1553,7 +1565,8 @@ def importera_startlista(conn, event_id, rader, sport=None):
         if not lid:
             continue
         koppla_disciplin_deltagare(conn, did, lid,
-                                   sb=rad.get("sb") or None, pb=rad.get("pb") or None)
+                                   sb=rad.get("sb") or None, pb=rad.get("pb") or None,
+                                   nr=rad.get("nr") or None)
         if fanns:
             befintliga += 1
         else:

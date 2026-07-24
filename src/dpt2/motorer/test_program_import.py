@@ -309,6 +309,15 @@ class TestStartlistaMedTider(unittest.TestCase):
         self.assertEqual(per["Ellen Westling"], "R-stående 100 m")
         self.assertEqual(per["Filippa Ivarsson"], "I-20 100 m")
 
+    def test_startnummer_fangas(self):
+        # v47 (Stig 24/7): numret i kolumn 0 följer med deltagaren — och får
+        # SAKNAS (Oscar Holmin-fallet) utan att raden tappas.
+        r = PI.tolka_startlista_med_tider(self.MIXAD, fran="2026-07-24", till="2026-07-26")
+        per = {d["namn"]: d.get("nr") for d in r["deltagare"]}
+        self.assertEqual(per["Nyakuan Kang Gai"], "45")
+        self.assertEqual(per["Ellen Westling"], "57")
+        self.assertEqual(per["Filippa Ivarsson"], "292")
+
     def test_sb_pb_fangas_med_arstrippat_pb(self):
         # #8: SB/PB ur kolumnerna. PB bär årtal i svansen ("14.932025") som ska
         # bort så bara värdet ("14.93") lagras. Tom SB ska bli tom, inte krascha.

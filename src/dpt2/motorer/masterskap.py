@@ -262,6 +262,8 @@ def deltagarrad(p):
     return {
         "id": p.get("id"),
         "namn": p.get("namn") or "",
+        # M-16: ★-utövare — personens favorit-flagga ur registret.
+        "favorit": bool(p.get("favorit")),
         "klubb": p.get("klubb") or "",
         "initialer": initialer(p.get("namn")),
         "handle": handle,

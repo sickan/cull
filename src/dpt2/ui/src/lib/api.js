@@ -472,6 +472,12 @@ export async function sparaDisciplin(d) {
 // M-7: favoritmarkering per gren — persistent, scopad per tävling. Nyckeln är
 // disciplin-raden (tävling + namn + klass), så "Diskus dam" och "Diskus herr"
 // stjärnmärks var för sig.
+export async function sattUtovareFavorit(utovareId, pa) {
+  const api = brygga()
+  if (api) return api.satt_utovare_favorit(utovareId, pa)
+  return wait({ ok: true })
+}
+
 export async function sattDisciplinFavorit(disciplinId, pa = true) {
   const api = brygga()
   if (api) return api.satt_disciplin_favorit(disciplinId, pa)

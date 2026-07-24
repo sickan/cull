@@ -257,7 +257,8 @@ class Api:
             "friidrott": {"discipliner": [
                 {"id": d["id"], "namn": d["namn"], "typ": d["typ"],
                  "gren": d.get("gren") or "",
-                 "deltagare": [{"namn": p["namn"], "klubb": p.get("klubb") or "",
+                 "deltagare": [{"namn": p["namn"], "nr": p.get("nr") or "",
+                            "klubb": p.get("klubb") or "",
                                 "gren": p.get("gren") or "",
                                 "handle": p.get("handle") or "",
                                 "resultat": p.get("resultat"),
@@ -323,7 +324,8 @@ class Api:
         return {"friidrott": {"discipliner": [
             {"id": d["id"], "namn": d["namn"], "typ": d["typ"],
              "gren": d.get("gren") or "",
-             "deltagare": [{"namn": p["namn"], "klubb": p.get("klubb") or "",
+             "deltagare": [{"namn": p["namn"], "nr": p.get("nr") or "",
+                            "klubb": p.get("klubb") or "",
                             "gren": p.get("gren") or "",
                             "handle": p.get("handle") or ""}
                            for p in d.get("deltagare", [])]}
@@ -819,6 +821,12 @@ class Api:
                 rader, efter=efter, sok=sok,
                 bara_favoriter=bool(bara_favoriter), sortera=sortera),
         }
+
+    def satt_utovare_favorit(self, utovare_id, pa):
+        """★-utövare (M-16, Stig 24/7): favoriten bor på PERSONEN i registret
+        och följer över grenar — som iOS-fältflödets utövar-stjärnor."""
+        ok = store.satt_utovare_favorit(self.conn, utovare_id, bool(pa))
+        return {"ok": ok}
 
     def hamta_gren_detalj(self, disciplin_id, alla=False):
         """Höger panel: rubrikblock + PASS + DELTAGARE I {gren}."""

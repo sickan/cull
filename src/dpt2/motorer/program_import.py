@@ -495,6 +495,9 @@ def tolka_startlista_med_tider(text, fran=None, till=None):
                 pb = re.sub(r"\s*(20\d\d)\s*$", "", pb_rå).strip() if pb_rå else ""
                 delt.append({
                     "gren": g, "klass": klass, "namn": d[1],
+                    # Startnumret (kolumn 0) — får saknas; följer med till
+                    # deltagarlistan + iOS (Stig 24/7: lättare följa utövare).
+                    "nr": (d[0] or "").strip(),
                     "klubb": d[3] if len(d) > 3 else "", "handle": "",
                     "sb": sb, "pb": pb,
                     "varning": "" if g else "Ingen gren — välj i listan",
