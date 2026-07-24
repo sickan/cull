@@ -232,6 +232,7 @@ class Api:
         """Paket för en TÄVLING med discipliner (friidrott): heldagsevent-form —
         tävlingsnamnet är rubriken, ingen motståndare, grenarna + deltagarna
         följer med så telefonen kan bygga story-overlayn på plats."""
+        self._vav_in_utovarfavoriter()   # M-16: molnets ★ före serialisering
         pr = sportprofil.profil(t.get("sport") or "") or {}
         fran = t.get("fran") or ""
         return {
@@ -319,6 +320,7 @@ class Api:
     def _paket_friidrott(self, m):
         if not m.get("tavling_id"):
             return {}
+        self._vav_in_utovarfavoriter()
         disc = store.lista_discipliner(self.conn, m["tavling_id"])
         if not disc:
             return {}
@@ -826,12 +828,49 @@ class Api:
 
     def satt_utovare_favorit(self, utovare_id, pa):
         """★-utövare (M-16, Stig 24/7): favoriten bor på PERSONEN i registret
-        och följer över grenar — som iOS-fältflödets utövar-stjärnor."""
+        och följer över grenar. Pushas till molnets utovarfavorit (EN sanning)
+        så iPhone/iPad ser stjärnan inom sekunder via ändringskanalen —
+        best-effort: lokala togglingen gäller även utan nät."""
         ok = store.satt_utovare_favorit(self.conn, utovare_id, bool(pa))
+        if ok:
+            rad = self.conn.execute("SELECT namn FROM lag WHERE id=?",
+                                    (utovare_id,)).fetchone()
+            if rad and rad["namn"]:
+                self._utovarfav_cache = None   # nästa väv läser färskt
+                threading.Thread(
+                    target=self.live_synk.pusha_utovarfavorit,
+                    args=(rad["namn"], bool(pa)), daemon=True).start()
         return {"ok": ok}
+
+    def _vav_in_utovarfavoriter(self):
+        """Väver in molnets ★-utövare i lag.favorit (M-16) — samma tänk som
+        _vav_in_platsoverrides: molnet är sanningen, db:n spegeln. Kör före
+        favorit-läsningar (paketbyggen + gren-detalj), cachad ~30 s, och får
+        ALDRIG hänga på nätet — utan svar behålls db:ns nuvarande läge."""
+        try:
+            import time
+            nu = time.monotonic()
+            cache = getattr(self, "_utovarfav_cache", None)
+            if cache is not None and nu - cache[0] <= 30:
+                return
+            karta = self.live_synk.hamta_utovarfavoriter()
+            if karta is None:
+                return
+            self._utovarfav_cache = (nu, karta)
+        except Exception:
+            return
+        namn_pa = {n.strip().lower() for n, v in karta.items() if v and n}
+        for rad in self.conn.execute(
+                "SELECT id, namn, favorit FROM lag WHERE kind='individ'"):
+            ska = 1 if (rad["namn"] or "").strip().lower() in namn_pa else 0
+            if ska != (rad["favorit"] or 0):
+                self.conn.execute("UPDATE lag SET favorit=? WHERE id=?",
+                                  (ska, rad["id"]))
+        self.conn.commit()
 
     def hamta_gren_detalj(self, disciplin_id, alla=False):
         """Höger panel: rubrikblock + PASS + DELTAGARE I {gren}."""
+        self._vav_in_utovarfavoriter()
         g = store.hamta_disciplin(self.conn, disciplin_id)
         if not g:
             return None

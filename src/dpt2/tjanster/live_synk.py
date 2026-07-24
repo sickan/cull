@@ -260,6 +260,31 @@ class LiveSynk:
             return {}
         return data
 
+    def hamta_utovarfavoriter(self):
+        """★-utövare ur molnet (M-16): {namn: True, ...} — EN sanning som
+        DPT2 väver in i lag.favorit. None vid fel/utan nyckel."""
+        if not self.har_nyckel():
+            return None
+        try:
+            status, data = self._anrop("GET", "/api/utovarfavorit")
+        except Exception:
+            return None
+        if status != 200 or not isinstance(data, dict):
+            return None
+        return data.get("favoriter") or {}
+
+    def pusha_utovarfavorit(self, namn, pa):
+        """Sätter/tar bort en ★-utövare i molnet — iOS-fältflödet ser den
+        via ändringskanalen inom sekunder. Returnerar True vid 200."""
+        if not self.har_nyckel() or not (namn or "").strip():
+            return False
+        try:
+            status, _ = self._anrop("PUT", "/api/utovarfavorit", body={
+                "namn": str(namn).strip(), "favorit": bool(pa)})
+        except Exception:
+            return False
+        return status == 200
+
     def pusha_jobbplats(self, jobb_id, namn, lat, lon):
         """SÄTTER en plats-override för ett jobb (samma väg som iOS PlatsSync).
         Skriver till molnets `jobbplats` = EN sanning → iOS + DPT2 ser samma
