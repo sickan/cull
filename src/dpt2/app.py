@@ -290,6 +290,12 @@ class Api:
                     "gren_farg": GREN_FARG.get(r.get("gren_kant") or "", ""),
                     "resultat": r.get("resultat") or "",
                     "deltagare": [{"namn": d["namn"],
+                                   # v47/M-16: nr + favorit — programvägen ÄR
+                                   # fältflödets startlista; vitlistan här
+                                   # släppte dem trots att källan bar dem
+                                   # (Stigs fynd 24/7: inga nummer i telefonen).
+                                   "nr": d.get("nr") or "",
+                                   "favorit": bool(d.get("favorit")),
                                    "klubb": d.get("klubb") or "",
                                    "handle": d.get("handle") or "",
                                    "resultat": d.get("resultat"),
